@@ -1,0 +1,298 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:animate_do/animate_do.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/CustomButton.dart';
+import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/SnackBar.dart';
+import 'package:next_fi/Services/secure_storage.dart';
+import 'package:next_fi/Services/wallet_service.dart';
+
+import 'wallet_home_screen.dart';
+
+class SeedPhraseScreen extends StatefulWidget {
+  const SeedPhraseScreen({super.key});
+
+  @override
+  State<SeedPhraseScreen> createState() => _SeedPhraseScreenState();
+}
+
+class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
+  late String _mnemonic;
+  late List<String> _words;
+  bool _isLoading = false; // ✅ Loading flag
+
+  @override
+  void initState() {
+    super.initState();
+    _generateMnemonic();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final colors = AppColor.of(context);
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: colors.surface,
+          statusBarIconBrightness: Brightness.dark,
+        ),
+      );
+    });
+  }
+
+  void _generateMnemonic() {
+    _mnemonic = WalletService.generateMnemonic();
+    _words = _mnemonic.split(' ');
+    setState(() {});
+  }
+
+  void _copySeedPhrase() {
+    Clipboard.setData(ClipboardData(text: _mnemonic));
+    final colors = AppColor.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Copied seed phrase (keep it safe!)',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: colors.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
+
+    // ✅ Show loading overlay if _isLoading is true
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: colors.surface,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: colors.surface,
+        leading: IconButton(
+          icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Your Recovery Phrase',
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: false,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 650),
+                      child: _warningBox(colors),
+                    ),
+                    const SizedBox(height: 24),
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 700),
+                      delay: const Duration(milliseconds: 200),
+                      child: _seedGrid(colors),
+                    ),
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: _copySeedPhrase,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Copy to Clipboard',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Divider(color: colors.border.withOpacity(0.2), height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: Column(
+                children: [
+                  SlideInUp(
+                    delay: const Duration(milliseconds: 300),
+                    child: CustomButton(
+                      text: "Secure & Continue",
+                      icon: LucideIcons.arrowRight,
+                      type: ButtonType.filled,
+                      onPressed: () async {
+                        setState(() => _isLoading = true); // ✅ Show loading
+                        await SeedStorage.saveSeed(_mnemonic);
+
+                        String? storedMnemonic = await SeedStorage.getSeed();
+                        if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
+                          if (mounted) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                            );
+                          }
+                        } else {
+                          showFloatingSnackBar(
+                            context,
+                            message: "Failed to save your wallet. Please try again.",
+                            type: SnackBarType.error,
+                          );
+                        }
+                        setState(() => _isLoading = false); // ✅ Hide loading
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SlideInUp(
+                    delay: const Duration(milliseconds: 450),
+                    child: CustomButton(
+                      text: "Get a New Phrase",
+                      icon: LucideIcons.refreshCw,
+                      type: ButtonType.outlined,
+                      onPressed: _generateMnemonic,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    "💡 Tip: Keep this phrase safe! Store it offline or in a secure place. Never share it.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColor.of(context).textSecondary,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _warningBox(AppColor colors) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.warning.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: colors.warning.withOpacity(0.35)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(LucideIcons.alertTriangle, color: colors.warning, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+              children: [
+                TextSpan(
+                  text: "Keep your recovery phrase safe.\n",
+                  style: TextStyle(
+                    color: colors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                TextSpan(
+                  text:
+                  "Anyone with it can access your funds. Memorize or store it securely — your responsibility. NextFI never holds your keys; you control your funds.",
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _seedGrid(AppColor colors) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 5),
+    decoration: BoxDecoration(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: colors.border.withOpacity(0.25)),
+    ),
+    child: GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 10,
+        childAspectRatio: 3,
+      ),
+      itemCount: _words.length,
+      itemBuilder: (context, index) {
+        final idx = index + 1;
+        final word = _words[index];
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: colors.background,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.border.withOpacity(0.25)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '$idx.',
+                style: TextStyle(
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  word,
+                  softWrap: true,
+                  overflow: TextOverflow.visible,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
