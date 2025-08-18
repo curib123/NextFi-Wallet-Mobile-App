@@ -4,8 +4,8 @@ import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Helper/SnackBar.dart';
-import 'package:next_fi/Services/secure_storage.dart';
+import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/wallet_service.dart';
 
 import 'wallet_home_screen.dart';
@@ -108,21 +108,24 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                       child: _seedGrid(colors),
                     ),
                     const SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: _copySeedPhrase,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Copy to Clipboard',
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              decoration: TextDecoration.underline,
+                    FadeInUp(
+                      delay: const Duration(milliseconds: 300),
+                      child: GestureDetector(
+                        onTap: _copySeedPhrase,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Copy to Clipboard',
+                              style: TextStyle(
+                                color: colors.textSecondary,
+                                decoration: TextDecoration.underline,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -174,13 +177,16 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    "💡 Tip: Keep this phrase safe! Store it offline or in a secure place. Never share it.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColor.of(context).textSecondary,
-                      fontSize: 13,
-                      height: 1.5,
+                  FadeInUp(
+                    delay: const Duration(milliseconds: 300),
+                    child: Text(
+                      "💡 Tip: Keep this phrase safe! Store it offline or in a secure place. Never share it.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColor.of(context).textSecondary,
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
                     ),
                   ),
                 ],
@@ -223,12 +229,15 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                 ),
                 TextSpan(
                   text:
-                  "Anyone with it can access your funds. Memorize or store it securely — your responsibility. NextFI never holds your keys; you control your funds.",
+                      "Keep it private and secure — NextFI never stores your keys, "
+                      "so you are always in control of your funds.",
                   style: TextStyle(
                     color: colors.textSecondary,
                     fontWeight: FontWeight.w400,
+                    height: 1.5,
                   ),
                 ),
+
               ],
             ),
           ),
@@ -250,9 +259,9 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 10,
-        childAspectRatio: 3,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 5,
+        childAspectRatio: 2.3,
       ),
       itemCount: _words.length,
       itemBuilder: (context, index) {

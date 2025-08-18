@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/SnackBar.dart';
+import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/wallet_creation_screen.dart';
 import 'package:next_fi/Screen/wallet_home_screen.dart';
-import 'package:next_fi/Services/secure_storage.dart';
+import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/Screen/auth_gate_screen.dart'; // 👈 import your auth gate
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -25,9 +26,19 @@ class _HomeState extends State<Home> {
 
     if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
       if (mounted) {
+        // 👇 Wrap WalletHomeScreen with AuthGateScreen
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+          MaterialPageRoute(
+            builder: (_) => AuthGateScreen(
+              goNext: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                );
+              },
+            ),
+          ),
         );
       }
     } else {

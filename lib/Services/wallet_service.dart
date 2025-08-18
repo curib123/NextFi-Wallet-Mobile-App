@@ -63,6 +63,17 @@ class WalletService {
     return address.hexEip55; // checksummed Ethereum address
   }
 
+  /// Import wallet either from mnemonic phrase or raw private key
+  static EthPrivateKey importWallet({String? mnemonic, String? privateKeyHex}) {
+    if (mnemonic != null && mnemonic.isNotEmpty) {
+      return deriveEthKeyFromMnemonic(mnemonic);
+    } else if (privateKeyHex != null && privateKeyHex.isNotEmpty) {
+      return EthPrivateKey.fromHex(privateKeyHex);
+    } else {
+      throw ArgumentError('You must provide either a mnemonic or a private key');
+    }
+  }
+
   /// (Optional) Send ETH — you must provide a working RPC URL and chain info
   /// Example only; add gas configuration and error handling in prod.
   static Future<String> sendEth({
