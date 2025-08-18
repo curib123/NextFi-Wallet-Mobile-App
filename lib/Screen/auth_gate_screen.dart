@@ -21,8 +21,6 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   String? _savedPin;
   bool _isNewUser = false;
   bool _canCheckBiometrics = false;
-
-  // Toggle for showing/hiding PIN
   bool _obscurePin = true;
 
   @override
@@ -42,9 +40,6 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       _canCheckBiometrics = canCheck && available.isNotEmpty;
     });
 
-    if (!_isNewUser && _canCheckBiometrics) {
-      _authenticateWithBiometrics();
-    }
   }
 
   Future<void> _authenticateWithBiometrics() async {
@@ -134,9 +129,9 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       appBar: AppBar(
         backgroundColor: colors.background,
         elevation: 0,
-        centerTitle: true, // Fintech style = centered title
+        centerTitle: true,
         title: Text(
-          "Security", // <- Add your screen title here
+          "Security",
           style: TextStyle(
             color: colors.textPrimary,
             fontSize: 18,
@@ -163,7 +158,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Circle lock icon
+
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(

@@ -5,10 +5,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/wallet_service.dart';
 import 'package:bip39/src/wordlists/english.dart' as english;
-
 
 import 'wallet_home_screen.dart';
 
@@ -21,9 +21,7 @@ class ImportWalletScreen extends StatefulWidget {
 
 class _ImportWalletScreenState extends State<ImportWalletScreen> {
   final TextEditingController _mnemonicController = TextEditingController();
-  bool _isLoading = false;
 
-  // ✅ suggestion words
   List<String> _suggestions = [];
 
   @override
@@ -45,6 +43,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
         .where((w) => w.startsWith(lastWord))
         .take(6)
         .toList();
+
     setState(() => _suggestions = matches);
   }
 
@@ -53,12 +52,12 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
     final words = text.split(RegExp(r'\s+'));
 
     if (words.isNotEmpty) {
-      words[words.length - 1] = word; // replace last word
+      words[words.length - 1] = word;
     } else {
       words.add(word);
     }
 
-    _mnemonicController.text = words.join(" ") + " ";
+    _mnemonicController.text = "${words.join(" ")} ";
     _mnemonicController.selection = TextSelection.fromPosition(
       TextPosition(offset: _mnemonicController.text.length),
     );
@@ -78,38 +77,38 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (!mounted) return;
 
-    await SeedStorage.saveSeed(mnemonic);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AuthGateScreen(
+          goNext: () async {
+            try {
+              await SeedStorage.saveSeed(mnemonic);
 
-    final stored = await SeedStorage.getSeed();
-    if (stored != null && stored.isNotEmpty) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-        );
-      }
-    } else {
-      showFloatingSnackBar(
-        context,
-        message: "Failed to import wallet. Try again.",
-        type: SnackBarType.error,
-      );
-    }
-
-    setState(() => _isLoading = false);
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                );
+              }
+            } catch (e) {
+              showFloatingSnackBar(
+                context,
+                message: "⚠️ Failed to import wallet. Please try again.",
+                type: SnackBarType.error,
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -127,7 +126,6 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        centerTitle: false,
       ),
       body: SafeArea(
         child: Column(
@@ -150,6 +148,8 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                         controller: _mnemonicController,
                         onChanged: _onTextChanged,
                         maxLines: 3,
+                        autocorrect: false,
+                        enableSuggestions: false,
                         textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
                           hintText: "Enter your 12 or 24 word recovery phrase",
@@ -157,25 +157,24 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                           fillColor: colors.background,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: colors.border.withOpacity(0.2)),
+                            borderSide: BorderSide(
+                              color: colors.border.withOpacity(0.2),
+                            ),
                           ),
                         ),
                       ),
                     ),
 
-                    // ✅ suggestion chips
                     if (_suggestions.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Wrap(
-                        spacing: 5,
-                        runSpacing: 2,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: _suggestions.map((s) {
-                          return GestureDetector(
-                            onTap: () => _insertSuggestion(s),
-                            child: Chip(
-                              label: Text(s),
-                              backgroundColor: colors.background,
-                            ),
+                          return ActionChip(
+                            label: Text(s),
+                            backgroundColor: colors.background,
+                            onPressed: () => _insertSuggestion(s),
                           );
                         }).toList(),
                       ),
@@ -184,7 +183,8 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                     const SizedBox(height: 12),
                     GestureDetector(
                       onTap: () async {
-                        final data = await Clipboard.getData(Clipboard.kTextPlain);
+                        final data =
+                        await Clipboard.getData(Clipboard.kTextPlain);
                         if (data?.text != null && data!.text!.isNotEmpty) {
                           _mnemonicController.text = data.text!.trim();
                         }
@@ -193,7 +193,8 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Icon(LucideIcons.clipboardPaste, size: 16, color: colors.textSecondary),
+                            Icon(LucideIcons.clipboardPaste,
+                                size: 16, color: colors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Paste from Clipboard',
@@ -226,7 +227,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                   ),
                   const SizedBox(height: 10),
                   SlideInUp(
-                    delay: const Duration(milliseconds: 300),
+                    delay: const Duration(milliseconds: 450),
                     child: Text(
                       "💡 Tip: Keep this phrase safe! Store it offline or in a secure place. Never share it.",
                       textAlign: TextAlign.center,
@@ -248,7 +249,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
 
   Widget _warningBox(AppColor colors) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 10,horizontal: 16),
+    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
     decoration: BoxDecoration(
       color: colors.warning.withOpacity(0.12),
       borderRadius: BorderRadius.circular(14),

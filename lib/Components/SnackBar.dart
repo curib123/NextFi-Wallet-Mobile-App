@@ -16,7 +16,7 @@ void showFloatingSnackBar(
 
   switch (type) {
     case SnackBarType.success:
-      bgColor = colors.success;
+      bgColor = colors.primary;
       iconData = Icons.check_circle_rounded;
       break;
     case SnackBarType.warning:
@@ -24,8 +24,7 @@ void showFloatingSnackBar(
       iconData = Icons.warning_amber_rounded;
       break;
     case SnackBarType.error:
-    default:
-      bgColor = colors.error;
+    bgColor = colors.error;
       iconData = Icons.error_rounded;
       break;
   }

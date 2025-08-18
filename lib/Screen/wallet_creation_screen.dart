@@ -5,7 +5,6 @@ import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Screen/import_wallet_screen.dart';
 import 'package:next_fi/Screen/seed_phrase_screen.dart';
-import 'package:next_fi/Screen/auth_gate_screen.dart';
 
 class WalletCreationScreen extends StatefulWidget {
   const WalletCreationScreen({super.key});
@@ -34,7 +33,7 @@ class _WalletCreationScreenState extends State<WalletCreationScreen> {
                     children: [
                       // Moving Icon
                       Bounce(
-                        infinite: true, // keeps bouncing forever
+                        infinite: true,
                         duration: const Duration(seconds: 3),
                         child: Container(
                           padding: const EdgeInsets.all(28),
@@ -100,16 +99,7 @@ class _WalletCreationScreenState extends State<WalletCreationScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => AuthGateScreen(
-                          goNext: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SeedPhraseScreen(),
-                              ),
-                            );
-                          },
-                        ),
+                        builder: (_) => const SeedPhraseScreen(),
                       ),
                     );
                   },
@@ -127,16 +117,7 @@ class _WalletCreationScreenState extends State<WalletCreationScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => AuthGateScreen(
-                          goNext: () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ImportWalletScreen(),
-                              ),
-                            );
-                          },
-                        ),
+                        builder: (_) => const ImportWalletScreen(),
                       ),
                     );
                   },

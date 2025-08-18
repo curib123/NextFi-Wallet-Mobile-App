@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/wallet_service.dart';
 
@@ -18,9 +19,9 @@ class SeedPhraseScreen extends StatefulWidget {
 }
 
 class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
-  late String _mnemonic;
-  late List<String> _words;
-  bool _isLoading = false; // ✅ Loading flag
+  String _mnemonic = "";
+  List<String> _words = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -41,7 +42,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
   void _generateMnemonic() {
     _mnemonic = WalletService.generateMnemonic();
     _words = _mnemonic.split(' ');
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   void _copySeedPhrase() {
@@ -59,11 +60,50 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
     );
   }
 
+  Future<void> _secureAndContinue() async {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AuthGateScreen(
+          goNext: () async {
+            try {
+              setState(() => _isLoading = true);
+
+              await SeedStorage.saveSeed(_mnemonic);
+
+              final storedMnemonic = await SeedStorage.getSeed();
+              if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
+                if (mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+                  );
+                }
+              } else {
+                showFloatingSnackBar(
+                  context,
+                  message: "Failed to save your wallet. Please try again.",
+                  type: SnackBarType.error,
+                );
+              }
+            } catch (e) {
+              showFloatingSnackBar(
+                context,
+                message: "Unexpected error: $e",
+                type: SnackBarType.error,
+              );
+            } finally {
+              if (mounted) setState(() => _isLoading = false);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
 
-    // ✅ Show loading overlay if _isLoading is true
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -93,7 +133,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -115,7 +156,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
+                            Icon(LucideIcons.copy,
+                                size: 16, color: colors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Copy to Clipboard',
@@ -143,27 +185,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                       text: "Secure & Continue",
                       icon: LucideIcons.arrowRight,
                       type: ButtonType.filled,
-                      onPressed: () async {
-                        setState(() => _isLoading = true); // ✅ Show loading
-                        await SeedStorage.saveSeed(_mnemonic);
-
-                        String? storedMnemonic = await SeedStorage.getSeed();
-                        if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
-                          if (mounted) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-                            );
-                          }
-                        } else {
-                          showFloatingSnackBar(
-                            context,
-                            message: "Failed to save your wallet. Please try again.",
-                            type: SnackBarType.error,
-                          );
-                        }
-                        setState(() => _isLoading = false); // ✅ Hide loading
-                      },
+                      onPressed: _secureAndContinue,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -229,7 +251,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                 ),
                 TextSpan(
                   text:
-                      "Keep it private and secure — NextFI never stores your keys, "
+                  "Keep it private and secure — NextFI never stores your keys, "
                       "so you are always in control of your funds.",
                   style: TextStyle(
                     color: colors.textSecondary,
@@ -237,7 +259,6 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                     height: 1.5,
                   ),
                 ),
-
               ],
             ),
           ),
@@ -268,7 +289,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
         final idx = index + 1;
         final word = _words[index];
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: colors.background,
             borderRadius: BorderRadius.circular(12),

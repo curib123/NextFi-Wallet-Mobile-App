@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/wallet_creation_screen.dart';
-import 'package:next_fi/Screen/wallet_home_screen.dart';
+import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Screen/auth_gate_screen.dart'; // 👈 import your auth gate
+import 'package:next_fi/Screen/wallet_home_screen.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -14,6 +14,7 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   bool _isLoading = true;
+  bool _hasMnemonic = false;
 
   @override
   void initState() {
@@ -22,37 +23,30 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> _checkMnemonic() async {
-    String? storedMnemonic = await SeedStorage.getSeed();
+    final storedMnemonic = await SeedStorage.getSeed();
 
     if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
       if (mounted) {
-        // 👇 Wrap WalletHomeScreen with AuthGateScreen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AuthGateScreen(
-              goNext: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-                );
-              },
-            ),
-          ),
-        );
+        setState(() {
+          _hasMnemonic = true;
+          _isLoading = false;
+        });
       }
     } else {
       if (mounted) {
-        showFloatingSnackBar(
-          context,
-          message: "Failed to save your wallet. Please try again.",
-          type: SnackBarType.error,
-        );
-      }
-    }
+        setState(() => _isLoading = false);
 
-    if (mounted) {
-      setState(() => _isLoading = false);
+        // Delay snackbar until after build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            showFloatingSnackBar(
+              context,
+              message: "No wallet found. Please create one.",
+              type: SnackBarType.error,
+            );
+          }
+        });
+      }
     }
   }
 
@@ -64,8 +58,20 @@ class _HomeState extends State<Home> {
       );
     }
 
-    return const Scaffold(
-      body: WalletCreationScreen(),
+    return Scaffold(
+      body: _hasMnemonic
+          ? AuthGateScreen(
+        goNext: () async {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+            );
+          }
+        },
+      )
+          : const WalletCreationScreen(),
     );
+
   }
 }
