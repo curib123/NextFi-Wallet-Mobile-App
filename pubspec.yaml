@@ -46,6 +46,9 @@ dependencies:
   http: ^1.5.0
   intl: ^0.18.0
   local_auth: ^2.3.0
+  account_abstraction_alchemy: ^0.1.6
+
+
 
 dev_dependencies:
   flutter_test:
@@ -57,7 +60,7 @@ dev_dependencies:
 flutter_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon.png"
+  image_path: "assets/icon/icon.png"
   min_sdk_android: 21
 
 
