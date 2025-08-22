@@ -44,10 +44,9 @@ dependencies:
   bip32: ^2.0.0
   hex: ^0.2.0
   http: ^1.5.0
-  intl: ^0.18.0
+  stellar_flutter_sdk: ^2.1.2
+  intl: ^0.20.2
   local_auth: ^2.3.0
-  account_abstraction_alchemy: ^0.1.6
-  hashlib: ^2.2.0
 
 
 

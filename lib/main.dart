@@ -10,7 +10,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider<CurrencyProvider>(
-            create: (_) => CurrencyProvider()..fetchRate(),
+            create: (_) => CurrencyProvider()..fetchRates(),
           ),
           // Add more providers here if needed
         ],

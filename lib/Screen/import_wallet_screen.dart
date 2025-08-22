@@ -7,8 +7,8 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
+import 'package:bip39/bip39.dart' as bip39;
 import 'package:bip39/src/wordlists/english.dart' as english;
-import 'package:next_fi/Services/tron_wallet_services.dart';
 
 import 'wallet_home_screen.dart';
 
@@ -21,7 +21,6 @@ class ImportWalletScreen extends StatefulWidget {
 
 class _ImportWalletScreenState extends State<ImportWalletScreen> {
   final TextEditingController _mnemonicController = TextEditingController();
-
   List<String> _suggestions = [];
 
   @override
@@ -68,8 +67,8 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   Future<void> _importWallet() async {
     final mnemonic = _mnemonicController.text.trim().toLowerCase();
 
-    // Use TronWalletService for validation
-    if (!TronWalletService.validateMnemonic(mnemonic)) {
+    // Validate mnemonic using bip39
+    if (!bip39.validateMnemonic(mnemonic)) {
       showFloatingSnackBar(
         context,
         message: "Invalid seed phrase. Please check again.",
@@ -86,6 +85,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
         builder: (_) => AuthGateScreen(
           goNext: () async {
             try {
+              // Save the mnemonic securely
               await SeedStorage.saveSeed(mnemonic);
 
               if (mounted) {
@@ -165,7 +165,6 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                         ),
                       ),
                     ),
-
                     if (_suggestions.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Wrap(
@@ -180,7 +179,6 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                         }).toList(),
                       ),
                     ],
-
                     const SizedBox(height: 12),
                     GestureDetector(
                       onTap: () async {

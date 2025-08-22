@@ -7,7 +7,7 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_services.dart';
+import 'package:next_fi/Services/stellar_wallet_services.dart';
 import 'wallet_home_screen.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
@@ -38,8 +38,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
     });
   }
 
-  void _generateMnemonic() {
-    _mnemonic = TronWalletService.generateMnemonic(); // using TronWalletService
+  Future<void> _generateMnemonic() async {
+    _mnemonic = await StellarWalletService.generateMnemonic(); // async
     _words = _mnemonic.split(' ');
     if (mounted) setState(() {});
   }
@@ -132,8 +132,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -155,8 +154,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(LucideIcons.copy,
-                                size: 16, color: colors.textSecondary),
+                            Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Copy to Clipboard',

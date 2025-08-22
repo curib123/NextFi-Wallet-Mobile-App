@@ -1,14 +1,15 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
-import 'package:next_fi/Screen/WalletHomeScreen/wallet_home_widget.dart';
-import 'package:next_fi/Services/coingecko_services.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_services.dart';
+import 'package:next_fi/Services/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
+
+import 'WalletHomeScreen/wallet_home_widget.dart';
 
 class WalletHomeScreen extends StatefulWidget {
   const WalletHomeScreen({super.key});
@@ -19,99 +20,96 @@ class WalletHomeScreen extends StatefulWidget {
 
 class _WalletHomeScreenState extends State<WalletHomeScreen> {
   bool _hideBalance = false;
-  double _usdtBalance = 0.0;
-  double _trxBalance = 0.0;
+  double _xlmBalance = 0.0;
   bool _loadingBalances = true;
 
-  String? _trxImageUrl;
-  String? _tetherImageUrl;
+  String? _userSecretSeed;
+  String? _userAccountId;
 
-  String? _userAddress;
+  List<PaymentOperationResponse> _transactionHistory = [];
+  bool _loadingHistory = true;
 
   @override
   void initState() {
     super.initState();
-    _loadWalletAddress();
-    _fetchTrxImage();
-    _fetchTetherImage();
+    _loadWallet();
   }
 
-  Future<void> _loadWalletAddress() async {
+  Future<void> _loadWallet() async {
     final storedMnemonic = await SeedStorage.getSeed();
-    if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
-      try {
-        // Derive private key
-        final privKey = TronWalletService.derivePrivateKey(storedMnemonic);
+    if (storedMnemonic == null || storedMnemonic.isEmpty) return;
 
-        // Derive public key
-        final pubKey = TronWalletService.publicKeyFromPrivateKey(privKey);
+    try {
+      final wallet = await Wallet.from(storedMnemonic);
+      final keyPair = await wallet.getKeyPair(index: 0);
 
-        // Get Tron address
-        final address = TronWalletService.tronAddressFromPublicKey(pubKey);
+      setState(() {
+        _userAccountId = keyPair.accountId;
+        _userSecretSeed = keyPair.secretSeed;
+      });
 
-        setState(() {
-          _userAddress = address; // update the state variable
-        });
+      // Fetch balance and history after wallet load
+      await _fetchBalance();
+      await _fetchTransactionHistory();
 
-        // Optionally fetch balances after getting address
-        await _fetchBalances();
-      } catch (e) {
-        debugPrint('Error deriving wallet: $e');
-        showFloatingSnackBar(
-          context,
-          message: "Failed to derive wallet. Please try again.",
-          type: SnackBarType.error,
-        );
-      }
-    } else {
+    } catch (e) {
+      debugPrint("Failed to load wallet: $e");
       showFloatingSnackBar(
         context,
-        message: "No stored wallet found. Please create or import one.",
+        message: "Failed to load wallet. Please check your seed/mnemonic.",
         type: SnackBarType.error,
       );
     }
   }
 
-  Future<void> _fetchTrxImage() async {
-    final imageUrl = await CoinGeckoService.getTrxImage();
-    if (mounted) {
-      setState(() => _trxImageUrl = imageUrl);
-    }
-  }
-
-  Future<void> _fetchTetherImage() async {
-    final imageUrl = await CoinGeckoService.getUsdtImage();
-    if (mounted) {
-      setState(() => _tetherImageUrl = imageUrl);
-    }
-  }
-  Future<void> _fetchBalances() async {
-    if (_userAddress == null) return; // do nothing if address not ready
+  Future<void> _fetchBalance() async {
+    if (_userAccountId == null) return;
     setState(() => _loadingBalances = true);
-    try {
-      final trxSun = await TronWalletService.getTrxBalance(_userAddress!);
-      final usdt = await TronWalletService.getUsdtBalance(_userAddress!);
 
-      setState(() {
-        _trxBalance = trxSun / 1e6; // convert SUN to TRX
-        _usdtBalance = usdt;
-      });
+    try {
+      final balance = await StellarWalletService(profitAddress: "").getXlmBalance(_userAccountId!);
+      setState(() => _xlmBalance = balance);
     } catch (e) {
-      debugPrint("Error fetching balances: $e");
+      // Handle unactivated account (404 error)
+      if (e.toString().contains("404")) {
+        debugPrint("Account not yet activated. Setting balance to 0 XLM.");
+        setState(() => _xlmBalance = 0.0);
+      } else {
+        debugPrint("Error fetching XLM balance: $e");
+      }
     } finally {
       setState(() => _loadingBalances = false);
     }
   }
 
 
+  Future<void> _fetchTransactionHistory() async {
+    if (_userAccountId == null) return;
+    setState(() => _loadingHistory = true);
+
+    try {
+      final walletService = StellarWalletService(profitAddress: "");
+      final Page<OperationResponse> payments = await walletService.sdk.payments
+          .forAccount(_userAccountId!)
+          .order(RequestBuilderOrder.DESC)
+          .execute();
+
+      setState(() {
+        _transactionHistory = payments.records
+            .whereType<PaymentOperationResponse>()
+            .toList();
+      });
+    } catch (e) {
+      debugPrint("Error fetching transaction history: $e");
+    } finally {
+      setState(() => _loadingHistory = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppColor colors = AppColor.of(context);
     final currency = Provider.of<CurrencyProvider>(context);
-
-    // Total balance in USDT including TRX converted to USDT (optional)
-    final double totalBalance = _usdtBalance; // primary token
-    final double trxAsUsd = 0; // optional conversion if you want TRX -> USDT
 
     return DefaultTabController(
       length: 2,
@@ -126,267 +124,165 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon:  Icon(LucideIcons.fileText, color: colors.textPrimary,size: 28,),
+                icon: Icon(LucideIcons.fileText, color: colors.textPrimary, size: 28),
                 onPressed: () {},
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Text('Default Wallet',
-                      style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text('Default Wallet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   SizedBox(width: 4),
                   Icon(LucideIcons.chevronDown, size: 20),
                 ],
               ),
               IconButton(
-                icon:  Icon(LucideIcons.settings, color: colors.textPrimary,size: 28,),
+                icon: Icon(LucideIcons.settings, color: colors.textPrimary, size: 28),
                 onPressed: () {},
               ),
             ],
           ),
         ),
-        body: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-              child: Column(
+        body: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          child: Column(
+            children: [
+              // Balance Section
+              _loadingBalances
+                  ? SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator()),
+              )
+               : Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Balance Section
-                  _loadingBalances
-                      ? SizedBox(
-                    height: 120,
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                      : Column(
+                  // USD equivalent (top line)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Primary Balance = USDT
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(LucideIcons.dollarSign,
-                              color: colors.textPrimary, size: 30),
-                          const SizedBox(width: 4),
-                          Text(
-                            _hideBalance
-                                ? '••••••'
-                                : NumberFormat("#,##0.00", "en_US")
-                                .format(totalBalance),
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w500,
-                              color: colors.textPrimary,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _hideBalance = !_hideBalance;
-                              });
-                            },
-                            child: Icon(
-                              _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
-                              color: colors.textSecondary,
-                              size: 25,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
+                      Icon(LucideIcons.dollarSign, color: colors.textPrimary, size: 28),
+                      const SizedBox(width: 6),
                       Text(
                         _hideBalance
-                            ? '${currency.fiat.toUpperCase()} ••••'
-                            : '${currency.fiat.toUpperCase()} ${NumberFormat("#,##0.00", "en_US").format(currency.convert(totalBalance))}',
+                            ? '••••••'
+                            : NumberFormat("#,##0.00", "en_US").format(currency.convertXlm(_xlmBalance)),
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textSecondary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w600,
+                          color: colors.textPrimary,
+                          letterSpacing: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      // TRX Balance as gas
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _trxImageUrl != null
-                              ? Image.network(_trxImageUrl!, width: 20, height: 20)
-                              : Icon(LucideIcons.triangle, color: colors.primary, size: 20),
-                          const SizedBox(width: 6),
-                          Text(
-                            "TRX ${NumberFormat("#,##0.0000", "en_US").format(_trxBalance)} (for gas fees)",
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => setState(() => _hideBalance = !_hideBalance),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: colors.surface.withOpacity(0.15),
+                            shape: BoxShape.circle,
                           ),
-                        ],
+                          child: Icon(
+                            _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
+                            color: colors.textSecondary,
+                            size: 22,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Action Buttons
+                  const SizedBox(height: 6),
+                  // XLM amount (bottom line)
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      actionButton(colors, Icons.send, 'Send'),
-                      actionButton(colors, Icons.call_received, 'Receive'),
-                      actionButton(colors, Icons.account_balance_wallet, 'Deposit'),
-                      actionButton(colors, Icons.arrow_upward, 'Withdraw'),
+                      Text(
+                        'XLM',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: colors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _hideBalance
+                            ? '••••••'
+                            : NumberFormat("#,##0.0000", "en_US").format(_xlmBalance),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: colors.textPrimary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
                     ],
                   ),
-
-                  const SizedBox(height: 16),
-
-                  // TabBar
-                  TabBar(
-                    indicatorColor: colors.textPrimary,
-                    dividerColor: Colors.transparent,
-                    indicatorWeight: 2,
-                    labelColor: colors.textPrimary,
-                    unselectedLabelColor: colors.textSecondary,
-                    labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      letterSpacing: 0.5,
-                    ),
-                    tabs: const [
-                      Tab(text: 'Recipient Address'),
-                      Tab(text: 'Chain Network'),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Tab Content
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        recipientList(colors),
-                        _userAddress == null
-                            ? const Center(child: CircularProgressIndicator())
-                            : chainListView(colors,_userAddress!)
-
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: 12),
                 ],
               ),
-            ),
 
-            // Floating Scan Button with Label
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+
+              const SizedBox(height: 24),
+
+              // Action Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Label/Icon Above FAB
-                  const Text(
-                    "Scan",
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Floating Button
-                  GestureDetector(
-                    onTap: () {},
-                    child: Container(
-                      padding: const EdgeInsets.all(13),
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        LucideIcons.scanLine,
-                        color: Colors.white,
-                        size: 30,
-                      ),
-                    ),
-                  ),
+                  actionButton(colors, Icons.send, 'Send'),
+                  actionButton(colors, Icons.call_received, 'Receive'),
+                  actionButton(colors, Icons.account_balance_wallet, 'Deposit'),
+                  actionButton(colors, Icons.arrow_upward, 'Withdraw'),
                 ],
               ),
-            ),
 
-            // Two Floating Buttons
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 2nd Floating Button (new icon)
-                  GestureDetector(
-                    onTap: () {
-                      // Action for the 2nd button
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(13),
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        LucideIcons.plus, // 👈 replace with any icon you like
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                  ),
+              const SizedBox(height: 16),
 
-                  // Main Scan Floating Button
-                  GestureDetector(
-                    onTap: () {},
-                    child: Container(
-                      padding: const EdgeInsets.all(13),
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        LucideIcons.scanLine,
-                        color: Colors.white,
-                        size: 30,
-                      ),
-                    ),
-                  ),
+              // TabBar
+              TabBar(
+                indicatorColor: colors.textPrimary,
+                dividerColor: Colors.transparent,
+                indicatorWeight: 2,
+                labelColor: colors.textPrimary,
+                unselectedLabelColor: colors.textSecondary,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, letterSpacing: 0.5),
+                tabs: const [
+                  Tab(text: 'Recipient Address'),
+                  Tab(text: 'Transaction History'),
                 ],
               ),
-            ),
+              const SizedBox(height: 8),
 
-          ],
+              // Tab Content
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    recipientList(colors), // Your existing recipient list widget
+                    _loadingHistory
+                        ? const Center(child: CircularProgressIndicator())
+                        : ListView.builder(
+                      itemCount: _transactionHistory.length,
+                      itemBuilder: (context, index) {
+                        final tx = _transactionHistory[index];
+                        final amount = double.parse(tx.amount);
+                        final from = tx.sourceAccount;
+                        final to = tx.to;
+
+                        return ListTile(
+                          leading: Icon(LucideIcons.arrowRightCircle, color: colors.primary),
+                          title: Text('$amount XLM'),
+                          subtitle: Text('From: $from\nTo: $to'),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
 }
