@@ -7,8 +7,7 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/wallet_service.dart';
-
+import 'package:next_fi/Services/tron_wallet_services.dart';
 import 'wallet_home_screen.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
@@ -40,7 +39,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
   }
 
   void _generateMnemonic() {
-    _mnemonic = WalletService.generateMnemonic();
+    _mnemonic = TronWalletService.generateMnemonic(); // using TronWalletService
     _words = _mnemonic.split(' ');
     if (mounted) setState(() {});
   }
@@ -251,8 +250,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                 ),
                 TextSpan(
                   text:
-                  "Keep it private and secure — NextFI never stores your keys, "
-                      "so you are always in control of your funds.",
+                  "Keep it private and secure — NextFI never stores your keys, so you are always in control of your funds.",
                   style: TextStyle(
                     color: colors.textSecondary,
                     fontWeight: FontWeight.w400,
@@ -289,8 +287,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
         final idx = index + 1;
         final word = _words[index];
         return Container(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: colors.background,
             borderRadius: BorderRadius.circular(12),

@@ -1,19 +1,18 @@
-// 📂 lib/helper/app_color.dart
 import 'package:flutter/material.dart';
 
-/// Centralized color palette for the Fintech app.
+/// Centralized color palette for the Fintech/Web3 app.
 /// Supports Light & Dark mode themes.
 class AppColor {
   // ─── Brand Colors (same for both themes) ─────────────────────────────
-  final Color primary = const Color(0xFF1A73E8); // Fintech Blue
-  final Color primaryDark = const Color(0xFF0D47A1); // Darker Blue
-  final Color accent = const Color(0xFF00C853); // Growth Green
+  final Color primary = const Color(0xFF1A73E8);      // Vivid Blue
+  final Color primaryDark = const Color(0xFF4285F4);  // Lighter Blue for Gradients
+  final Color accent = const Color(0xFF9C27B0);       // Purple Accent for Actions
 
   // ─── Status Colors ────────────────────────────
-  final Color success = const Color(0xFF00E676);
-  final Color warning = const Color(0xFFFFA000);
+  final Color success = const Color(0xFF00C853);
+  final Color warning = const Color(0xFFFFC107);
   final Color error = const Color(0xFFD32F2F);
-  final Color info = const Color(0xFF0288D1);
+  final Color info = const Color(0xFF29B6F6);
 
   // ─── Neutral Palette (changes with theme) ─────
   final Color background;
@@ -24,7 +23,13 @@ class AppColor {
 
   // ─── Gradients ─────────────────────────────────
   final LinearGradient primaryGradient = const LinearGradient(
-    colors: [Color(0xFF1A73E8), Color(0xFF0D47A1)],
+    colors: [Color(0xFF1A73E8), Color(0xFF4285F4)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  final LinearGradient accentGradient = const LinearGradient(
+    colors: [Color(0xFF9C27B0), Color(0xFFE040FB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -46,17 +51,17 @@ class AppColor {
 
   /// Light mode colors
   static const AppColor light = AppColor._(
-    background: Color(0xFFF5F7FA),
+    background: Color(0xFFF4F6FA),
     surface: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF212121),
-    textSecondary: Color(0xFF757575),
-    border: Color(0xFFE0E0E0),
+    textPrimary: Color(0xFF1E1E1E),
+    textSecondary: Color(0xFF616161),
+    border: Color(0xFFBDBDBD),
   );
 
   /// Dark mode colors
   static const AppColor dark = AppColor._(
-    background: Color(0xFF121212),
-    surface: Color(0xFF1E1E1E),
+    background: Color(0xFF0B0E1A),
+    surface: Color(0xFF1B1F2A),
     textPrimary: Color(0xFFFFFFFF),
     textSecondary: Color(0xFFB0B0B0),
     border: Color(0xFF2C2C2C),

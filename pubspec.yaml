@@ -47,6 +47,7 @@ dependencies:
   intl: ^0.18.0
   local_auth: ^2.3.0
   account_abstraction_alchemy: ^0.1.6
+  hashlib: ^2.2.0
 
 
 

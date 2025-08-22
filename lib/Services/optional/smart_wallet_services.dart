@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import 'dart:convert';
+import 'package:hashlib/hashlib.dart';
 import 'package:next_fi/Model/NetworkConfigModel.dart';
 import 'package:next_fi/Model/wallet_transaction_model.dart';
 import 'package:web3dart/web3dart.dart';
@@ -22,6 +25,8 @@ class SmartWalletService {
     required EthereumAddress profitWallet,
     required String walletFactoryAbi,
     required EthereumAddress walletFactoryAddress,
+    required String pin,
+    required int chainId,
   }) async {
     final config = _networks[networkName];
     if (config == null) throw Exception("Network not found");
@@ -36,7 +41,7 @@ class SmartWalletService {
     final userWalletFn = factoryContract.function("userWallets");
     final createWalletFn = factoryContract.function("createWallet");
 
-    // Check if wallet exists
+    // Check if wallet exists for this EOA
     final walletAddrList = await client.call(
       contract: factoryContract,
       function: userWalletFn,
@@ -45,7 +50,8 @@ class SmartWalletService {
 
     final walletAddress = walletAddrList.first as EthereumAddress;
 
-    if (walletAddress.hex != '0x0000000000000000000000000000000000000000') {
+    if (walletAddress.hex !=
+        '0x0000000000000000000000000000000000000000') {
       return walletAddress; // Already exists
     }
 
@@ -57,7 +63,7 @@ class SmartWalletService {
         userEOA,
         EthereumAddress.fromHex(config.usdtAddress),
         profitWallet,
-        EthereumAddress.fromHex(config.paymasterAddress),
+        pin,
       ],
       maxGas: 500000,
     );
@@ -69,24 +75,23 @@ class SmartWalletService {
     );
 
     // Wait for receipt
-    final receipt = await client.getTransactionReceipt(txHash);
-    if (receipt == null) throw Exception("Transaction not mined yet");
+    TransactionReceipt? receipt;
+    while (receipt == null) {
+      receipt = await client.getTransactionReceipt(txHash);
+      await Future.delayed(const Duration(seconds: 2));
+    }
 
     // Extract wallet address from WalletCreated event
-    final walletCreatedEvent = receipt.logs
-        .map((log) {
-      if (log.data == null || log.topics == null) return null;
-      return factoryContract
-          .event("WalletCreated")
-          .decodeResults(log.topics!, log.data!);
-    })
-        .where((event) => event != null && event.isNotEmpty)
+    final event = factoryContract.event("WalletCreated");
+    final logs = receipt.logs
+        .map((log) => event.decodeResults(log.topics!, log.data!))
+        .where((decoded) => decoded.isNotEmpty)
         .cast<List<dynamic>>()
         .firstOrNull;
 
-    if (walletCreatedEvent == null) throw Exception("WalletCreated event not found");
+    if (logs == null) throw Exception("WalletCreated event not found");
 
-    return walletCreatedEvent[1] as EthereumAddress;
+    return logs[1] as EthereumAddress;
   }
 
   /// Send ERC20 token gaslessly via SC wallet
@@ -113,7 +118,11 @@ class SmartWalletService {
     final tx = Transaction.callContract(
       contract: walletContract,
       function: sendFn,
-      parameters: [to, amount, gasFee],
+      parameters: [
+        to,
+        amount,
+        gasFee ?? BigInt.zero,
+      ],
       maxGas: 300000,
     );
 
@@ -153,7 +162,7 @@ class SmartWalletService {
     return balanceList.first as BigInt;
   }
 
-  /// 🔥 Get transaction history from SC wallet (using getTransaction + count)
+  /// Get transaction history from SC wallet
   Future<List<WalletTransactionModel>> getTransactionHistory({
     required EthereumAddress scWalletAddress,
     required String tokenWalletAbi,
@@ -200,5 +209,56 @@ class SmartWalletService {
     }
 
     return history;
+  }
+
+  /// Get stored hashed PIN from SC wallet
+  Future<String> getWalletPinHash({
+    required EthereumAddress scWalletAddress,
+    required String tokenWalletAbi,
+    required String networkName,
+  }) async {
+    final config = _networks[networkName];
+    if (config == null) throw Exception("Network not found");
+
+    final client = Web3Client(config.rpcUrl, Client());
+
+    final walletContract = DeployedContract(
+      ContractAbi.fromJson(tokenWalletAbi, "USDTWalletGasless"),
+      scWalletAddress,
+    );
+
+    final getPinHashFn = walletContract.function("getPinHash");
+
+    final result = await client.call(
+      contract: walletContract,
+      function: getPinHashFn,
+      params: [],
+    );
+
+    final bytes = result.first as Uint8List;
+
+    return "0x${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}";
+  }
+
+  /// Verify a user-input PIN against the stored hash
+  Future<bool> verifyPin({
+    required EthereumAddress scWalletAddress,
+    required String tokenWalletAbi,
+    required String networkName,
+    required String inputPin,
+  }) async {
+    final storedHashHex = await getWalletPinHash(
+      scWalletAddress: scWalletAddress,
+      tokenWalletAbi: tokenWalletAbi,
+      networkName: networkName,
+    );
+
+    final inputBytes = utf8.encode(inputPin);
+    final inputHash = sha3_256.convert(inputBytes).bytes;
+
+    final inputHashHex =
+    inputHash.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+    return storedHashHex.replaceFirst('0x', '') == inputHashHex;
   }
 }

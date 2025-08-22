@@ -7,8 +7,8 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/wallet_service.dart';
 import 'package:bip39/src/wordlists/english.dart' as english;
+import 'package:next_fi/Services/tron_wallet_services.dart';
 
 import 'wallet_home_screen.dart';
 
@@ -68,7 +68,8 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   Future<void> _importWallet() async {
     final mnemonic = _mnemonicController.text.trim().toLowerCase();
 
-    if (!WalletService.validateMnemonic(mnemonic)) {
+    // Use TronWalletService for validation
+    if (!TronWalletService.validateMnemonic(mnemonic)) {
       showFloatingSnackBar(
         context,
         message: "Invalid seed phrase. Please check again.",

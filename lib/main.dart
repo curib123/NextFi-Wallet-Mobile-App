@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:next_fi/Provider/ChainProvider.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/home.dart';
 import 'package:next_fi/Helper/AppColor.dart';
@@ -12,9 +11,6 @@ void main() {
         providers: [
           ChangeNotifierProvider<CurrencyProvider>(
             create: (_) => CurrencyProvider()..fetchRate(),
-          ),
-          ChangeNotifierProvider<ChainProvider>(
-            create: (_) => ChainProvider()..fetchChains(), // call the updated method
           ),
           // Add more providers here if needed
         ],
