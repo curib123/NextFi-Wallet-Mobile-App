@@ -1,4 +1,5 @@
 import 'package:next_fi/Model/NetworkConfigModel.dart';
+import 'package:next_fi/Model/wallet_transaction_model.dart';
 import 'package:web3dart/web3dart.dart';
 import 'package:http/http.dart';
 
@@ -10,12 +11,10 @@ class SmartWalletService {
 
   SmartWalletService({required this.userEOA, required this.credentials});
 
-
   /// Add or update a network dynamically
   void addNetwork(NetworkConfigModel config) {
     _networks[config.name] = config;
   }
-
 
   /// Get existing wallet or create a new one for the user
   Future<EthereumAddress> getOrCreateWallet({
@@ -94,7 +93,7 @@ class SmartWalletService {
   Future<String> sendTokenGasless({
     required EthereumAddress scWalletAddress,
     required EthereumAddress to,
-    required BigInt amount, // smallest units
+    required BigInt amount,
     required String tokenWalletAbi,
     required String networkName,
     BigInt? gasFee,
@@ -152,5 +151,54 @@ class SmartWalletService {
     );
 
     return balanceList.first as BigInt;
+  }
+
+  /// 🔥 Get transaction history from SC wallet (using getTransaction + count)
+  Future<List<WalletTransactionModel>> getTransactionHistory({
+    required EthereumAddress scWalletAddress,
+    required String tokenWalletAbi,
+    required String networkName,
+  }) async {
+    final config = _networks[networkName];
+    if (config == null) throw Exception("Network not found");
+
+    final client = Web3Client(config.rpcUrl, Client());
+
+    final walletContract = DeployedContract(
+      ContractAbi.fromJson(tokenWalletAbi, "USDTWalletGasless"),
+      scWalletAddress,
+    );
+
+    final countFn = walletContract.function("getTransactionCount");
+    final txFn = walletContract.function("getTransaction");
+
+    final countList = await client.call(
+      contract: walletContract,
+      function: countFn,
+      params: [],
+    );
+    final txCount = (countList.first as BigInt).toInt();
+
+    List<WalletTransactionModel> history = [];
+    for (int i = 0; i < txCount; i++) {
+      final txData = await client.call(
+        contract: walletContract,
+        function: txFn,
+        params: [BigInt.from(i)],
+      );
+
+      history.add(
+        WalletTransactionModel(
+          sender: txData[0] as EthereumAddress,
+          recipient: txData[1] as EthereumAddress,
+          netAmount: txData[2] as BigInt,
+          gasFee: txData[3] as BigInt,
+          profitFee: txData[4] as BigInt,
+          timestamp: txData[5] as BigInt,
+        ),
+      );
+    }
+
+    return history;
   }
 }
