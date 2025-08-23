@@ -4,10 +4,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 class StellarWalletService {
   final StellarSDK sdk;
 
-  /// Profit address for 1% fee
-  final String profitAddress;
-
-  StellarWalletService({required this.profitAddress, bool testnet = false})
+  StellarWalletService({ bool testnet = false})
       : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC;
 
   /// Generate a 24-word mnemonic
@@ -42,6 +39,7 @@ class StellarWalletService {
 
   /// Send XLM with 1% profit fee
   Future<List<String>> sendXlmWithFee({
+    required String profitAddress,
     required String secretSeed,
     required String destination,
     required double amount,
@@ -115,31 +113,84 @@ class StellarWalletService {
     }
   }
 
-  /// Create trustline for an asset (if missing)
+  /// Helper: format amounts to max 7 decimals (Stellar limit)
+  String _formatAmount(double value) {
+    return value
+        .toStringAsFixed(7) // force 7 decimal places max
+        .replaceFirst(RegExp(r'0+$'), '') // strip trailing zeros
+        .replaceFirst(RegExp(r'\.$'), ''); // remove trailing dot
+  }
   Future<void> createTrustLine({
     required String secretSeed,
     required Asset asset,
-    double limit = double.maxFinite,
+    String limit = "922337203685.4775807",
+    bool isTestnet = false,
   }) async {
     try {
-      KeyPair keyPair = KeyPair.fromSecretSeed(secretSeed);
-      AccountResponse account = await sdk.accounts.account(keyPair.accountId);
+      print("Step 1: Validating secret seed...");
+      if (secretSeed.isEmpty) throw Exception("Secret seed is empty");
 
-      ChangeTrustOperationBuilder trustOp = ChangeTrustOperationBuilder(asset, limit.toString());
-      Transaction tx = TransactionBuilder(account)
-          .addOperation(trustOp.build())
-          .build();
+      // Trim whitespace
+      secretSeed = secretSeed.trim();
+      print("Secret seed: $secretSeed");
+      print("Secret seed length: ${secretSeed.length}, starts with: ${secretSeed[0]}");
 
-      tx.sign(keyPair, sdk == StellarSDK.TESTNET ? Network.TESTNET : Network.PUBLIC);
-
-      SubmitTransactionResponse response = await sdk.submitTransaction(tx);
-      if (!response.success) {
-        throw Exception('Trustline creation failed: ${response.resultXdr}');
+      KeyPair trustorKeyPair;
+      try {
+        print("Step 2: Generating KeyPair from secret seed...");
+        trustorKeyPair = KeyPair.fromSecretSeed(secretSeed);
+        print("KeyPair generated: ${trustorKeyPair.accountId}");
+      } catch (e) {
+        print("Error generating KeyPair: $e");
+        throw Exception("Invalid secret seed format or checksum");
       }
+
+      String trustorAccountId = trustorKeyPair.accountId;
+
+      // Load account
+      AccountResponse trustor;
+      try {
+        print("Step 3: Loading account $trustorAccountId...");
+        trustor = await sdk.accounts.account(trustorAccountId);
+        print("Account loaded successfully");
+      } catch (e) {
+        print("Error loading account: $e");
+        throw Exception("Failed to load trustor account: $e");
+      }
+
+      // Prepare ChangeTrust operation
+      print("Step 4: Preparing ChangeTrust operation for asset )...");
+      ChangeTrustOperationBuilder changeTrustOp = ChangeTrustOperationBuilder(asset, limit);
+
+      // Build transaction
+      print("Step 5: Building transaction...");
+      Transaction transaction = TransactionBuilder(trustor)
+          .addOperation(changeTrustOp.build())
+          .build();
+      print("Transaction built successfully");
+
+      // Sign transaction
+      print("Step 6: Signing transaction on network: ${isTestnet ? "TESTNET" : "PUBLIC"}");
+      transaction.sign(trustorKeyPair, isTestnet ? Network.TESTNET : Network.PUBLIC);
+      print("Transaction signed successfully");
+
+      // Submit transaction
+      print("Step 7: Submitting transaction...");
+      SubmitTransactionResponse response = await sdk.submitTransaction(transaction);
+
+      if (!response.success) {
+        print("Transaction failed: ${response.resultXdr}");
+        throw Exception("Trustline creation failed: ${response.resultXdr}");
+      }
+      print("Trustline created successfully!");
     } catch (e) {
-      throw Exception('Failed to create trustline: $e');
+      print("Error caught in createTrustLine: $e");
+      throw Exception("Failed to create trustline: $e");
     }
   }
+
+
+
 
   /// Swap XLM ↔ USDT (or any assets) with auto trustline creation
   Future<String> swap({
@@ -169,10 +220,10 @@ class StellarWalletService {
       PathPaymentStrictSendOperationBuilder pathPaymentOp =
       PathPaymentStrictSendOperationBuilder(
         sendAsset,
-        sendAmount.toString(),
+        _formatAmount(sendAmount), // clamp here
         sender.accountId,
         receiveAsset,
-        minReceive.toString(),
+        _formatAmount(minReceive), // clamp here
       );
 
       Transaction tx = TransactionBuilder(account)

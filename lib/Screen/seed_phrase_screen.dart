@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar_wallet_services.dart';
+import 'package:provider/provider.dart';
 import 'wallet_home_screen.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
@@ -73,9 +76,10 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
               final storedMnemonic = await SeedStorage.getSeed();
               if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
                 if (mounted) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-                  );
+                  final  tabProvider = context.read<TabProvider>();
+                  tabProvider.setTab(1);
+                  Phoenix.rebirth(context);
+
                 }
               } else {
                 showFloatingSnackBar(

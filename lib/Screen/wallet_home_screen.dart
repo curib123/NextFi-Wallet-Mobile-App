@@ -10,8 +10,6 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar_wallet_services.dart';
 import 'WalletHomeScreenWidgets/action_button.dart';
-import 'WalletHomeScreenWidgets/build_balance_shimmers.dart';
-import 'WalletHomeScreenWidgets/build_history_shimmers.dart';
 import 'WalletHomeScreenWidgets/build_transaction_history.dart';
 import 'WalletHomeScreenWidgets/floating_circle_button.dart';
 import 'WalletHomeScreenWidgets/incoming_payment_hints.dart';
@@ -37,8 +35,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
   final List<Widget> _incomingPayments = [];
 
   // Services
-  final StellarWalletService walletService =
-  StellarWalletService(profitAddress: '');
+  final StellarWalletService walletService = StellarWalletService();
 
   @override
   void initState() {
@@ -184,9 +181,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       child: Column(
         children: [
-          _loadingBalances
-              ? buildBalanceShimmer(colors)
-              : _buildBalanceCard(colors, currency),
+          _buildBalanceCard(colors, currency),
           const SizedBox(height: 24),
           _buildActionButtons(colors),
           const SizedBox(height: 20),
@@ -201,10 +196,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             child: TabBarView(
               children: [
                 recipientList(colors),
-                recipientList(colors),
-                _loadingHistory
-                    ? buildHistoryShimmer()
-                    : buildTransactionHistory(colors, _transactionHistory),
+               buildTransactionHistory(colors, _transactionHistory),
               ],
             ),
           ),
@@ -242,7 +234,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             Text(
               'Total Balance',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
                 color: colors.textSecondary,
               ),
@@ -269,7 +261,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
                   : NumberFormat("#,##0.00", "en_US")
                   .format(currency.convertXlm(_xlmBalance)),
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 23,
                 fontWeight: FontWeight.bold,
                 color: colors.textPrimary,
               ),

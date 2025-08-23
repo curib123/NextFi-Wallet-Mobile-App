@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
+import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/home.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:provider/provider.dart';
 
 void main() {
   runApp(
-      MultiProvider(
+    Phoenix( // ✅ Wrap your app with Phoenix
+      child: MultiProvider(
         providers: [
           ChangeNotifierProvider<CurrencyProvider>(
             create: (_) => CurrencyProvider()..fetchRates(),
           ),
+          ChangeNotifierProvider<TabProvider>(
+            create: (_) => TabProvider(),
+          ),
           // Add more providers here if needed
         ],
         child: const MyApp(),
-      )
-
+      ),
+    ),
   );
 }
 

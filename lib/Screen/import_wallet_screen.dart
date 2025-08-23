@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:bip39/bip39.dart' as bip39;
 import 'package:bip39/src/wordlists/english.dart' as english;
-
-import 'wallet_home_screen.dart';
+import 'package:provider/provider.dart';
 
 class ImportWalletScreen extends StatefulWidget {
   const ImportWalletScreen({super.key});
@@ -89,10 +90,9 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
               await SeedStorage.saveSeed(mnemonic);
 
               if (mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
-                );
+                final  tabProvider = context.read<TabProvider>();
+                tabProvider.setTab(1);
+                Phoenix.rebirth(context);
               }
             } catch (e) {
               showFloatingSnackBar(
