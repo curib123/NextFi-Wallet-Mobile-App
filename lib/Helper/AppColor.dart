@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// Supports Light & Dark mode themes.
 class AppColor {
   // ─── Brand Colors (same for both themes) ─────────────────────────────
-  final Color primary = const Color(0xFF1A73E8);      // Vivid Blue
+  final Color primary = const Color(0xFF1A7389);      // Teal
   final Color primaryDark = const Color(0xFF4285F4);  // Lighter Blue for Gradients
   final Color accent = const Color(0xFF9C27B0);       // Purple Accent for Actions
 

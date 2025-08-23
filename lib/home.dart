@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/wallet_creation_screen.dart';
-import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Screen/wallet_home_screen.dart';
+import 'package:next_fi/Provider/TabProvider.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -36,7 +37,6 @@ class _HomeState extends State<Home> {
       if (mounted) {
         setState(() => _isLoading = false);
 
-        // Delay snackbar until after build
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             showFloatingSnackBar(
@@ -58,20 +58,45 @@ class _HomeState extends State<Home> {
       );
     }
 
-    return Scaffold(
-      body: _hasMnemonic
-          ? AuthGateScreen(
-        goNext: () async {
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const WalletHomeScreen()),
+    return ChangeNotifierProvider(
+      create: (_) => TabProvider(),
+      child: Consumer<TabProvider>(
+        builder: (context, tabProvider, _) {
+          if (_hasMnemonic) {
+            return Scaffold(
+              body: tabProvider.screens[tabProvider.currentIndex],
+              bottomNavigationBar: BottomNavigationBar(
+                currentIndex: tabProvider.currentIndex,
+                onTap: tabProvider.setTab,
+                type: BottomNavigationBarType.fixed,
+                selectedItemColor: Colors.teal,
+                unselectedItemColor: Colors.grey,
+                showUnselectedLabels: true,
+                items: const [
+                  BottomNavigationBarItem(
+                    icon: Icon(LucideIcons.wallet),
+                    label: 'Wallet',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(LucideIcons.package),
+                    label: 'Transaction',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(LucideIcons.shuffle),
+                    label: 'Swap',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(LucideIcons.settings),
+                    label: 'Settings',
+                  ),
+                ],
+              ),
             );
+          } else {
+            return const WalletCreationScreen();
           }
         },
-      )
-          : const WalletCreationScreen(),
+      ),
     );
-
   }
 }

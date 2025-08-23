@@ -98,6 +98,101 @@ class StellarWalletService {
     }
   }
 
+  /// Check if an account has a trustline for a given asset
+  Future<bool> hasTrustline(String accountId, Asset asset) async {
+    try {
+      AccountResponse account = await sdk.accounts.account(accountId);
+      for (Balance balance in account.balances) {
+        if (balance.assetType != Asset.TYPE_NATIVE &&
+            balance.assetCode == (asset as AssetTypeCreditAlphaNum).code &&
+            balance.assetIssuer == asset.issuerId) {
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      throw Exception('Failed to check trustline: $e');
+    }
+  }
+
+  /// Create trustline for an asset (if missing)
+  Future<void> createTrustLine({
+    required String secretSeed,
+    required Asset asset,
+    double limit = double.maxFinite,
+  }) async {
+    try {
+      KeyPair keyPair = KeyPair.fromSecretSeed(secretSeed);
+      AccountResponse account = await sdk.accounts.account(keyPair.accountId);
+
+      ChangeTrustOperationBuilder trustOp = ChangeTrustOperationBuilder(asset, limit.toString());
+      Transaction tx = TransactionBuilder(account)
+          .addOperation(trustOp.build())
+          .build();
+
+      tx.sign(keyPair, sdk == StellarSDK.TESTNET ? Network.TESTNET : Network.PUBLIC);
+
+      SubmitTransactionResponse response = await sdk.submitTransaction(tx);
+      if (!response.success) {
+        throw Exception('Trustline creation failed: ${response.resultXdr}');
+      }
+    } catch (e) {
+      throw Exception('Failed to create trustline: $e');
+    }
+  }
+
+  /// Swap XLM ↔ USDT (or any assets) with auto trustline creation
+  Future<String> swap({
+    required String secretSeed,
+    required Asset sendAsset,
+    required Asset receiveAsset,
+    required double sendAmount,
+    double slippagePercent = 0.5, // 0.5% default slippage
+    String? memoText,
+  }) async {
+    KeyPair sender = KeyPair.fromSecretSeed(secretSeed);
+
+    // Auto-create trustline if missing (only needed for non-native assets)
+    if (receiveAsset.type != Asset.TYPE_NATIVE) {
+      bool hasLine = await hasTrustline(sender.accountId, receiveAsset);
+      if (!hasLine) {
+        await createTrustLine(secretSeed: secretSeed, asset: receiveAsset);
+      }
+    }
+
+    try {
+      AccountResponse account = await sdk.accounts.account(sender.accountId);
+
+      // Min receive considering slippage
+      double minReceive = sendAmount * (1 - slippagePercent / 100);
+
+      PathPaymentStrictSendOperationBuilder pathPaymentOp =
+      PathPaymentStrictSendOperationBuilder(
+        sendAsset,
+        sendAmount.toString(),
+        sender.accountId,
+        receiveAsset,
+        minReceive.toString(),
+      );
+
+      Transaction tx = TransactionBuilder(account)
+          .addOperation(pathPaymentOp.build())
+          .build();
+
+      tx.sign(sender, sdk == StellarSDK.TESTNET ? Network.TESTNET : Network.PUBLIC);
+
+      SubmitTransactionResponse response = await sdk.submitTransaction(tx);
+
+      if (!response.success) {
+        throw Exception('Swap failed: ${response.resultXdr}');
+      }
+
+      return response.hash!;
+    } catch (e) {
+      throw Exception('Swap operation failed: $e');
+    }
+  }
+
   /// Resolve a Stellar Federation address
   Future<FederationResponse> resolveFederationAddress(String stellarAddress) async {
     return await Federation.resolveStellarAddress(stellarAddress);
