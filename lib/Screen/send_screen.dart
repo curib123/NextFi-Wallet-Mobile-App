@@ -70,7 +70,6 @@ class _SendScreenState extends State<SendScreen> {
     });
   }
 
-
   Future<void> _scanQRCode() async {
     final code = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const QRScannerScreen()),
@@ -80,7 +79,6 @@ class _SendScreenState extends State<SendScreen> {
       _recipientController.text = code;
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +111,34 @@ class _SendScreenState extends State<SendScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+
+          // ===== Realtime Price Display =====
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  "1 ${widget.token} ≈ ${NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase()).format(
+                      (widget.token == "TRX")
+                          ? currency.trxToFiat(1)
+                          : currency.usdtToFiat(1)
+                  )}",
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // ===== Balance Card =====
           Container(
             padding: const EdgeInsets.all(16),
@@ -143,13 +169,7 @@ class _SendScreenState extends State<SendScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  "Your ${widget.token} balance",
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
+
               ],
             ),
           ),
@@ -224,7 +244,7 @@ class _SendScreenState extends State<SendScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _amountController,
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: "Amount",
                     prefixIcon: Icon(LucideIcons.coins, color: colors.primary),

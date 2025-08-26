@@ -269,8 +269,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
         const SizedBox(height: 6),
         Row(
           children: [
-            Icon(LucideIcons.dollarSign, color: colors.textPrimary, size: 23),
-            const SizedBox(width: 2),
             Text(
               _hideBalance
                   ? '••••'
