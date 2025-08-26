@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:next_fi/Components/qr_code_scanner.dart';
+import 'package:next_fi/Screen/qr_code_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:ai_barcode_scanner/ai_barcode_scanner.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
@@ -13,12 +14,14 @@ class SendScreen extends StatefulWidget {
   final String address; // User's own address
   final String token;   // TRX or USDT
   final double balance;
+  final bool autoOpenScanner; // New flag
 
   const SendScreen({
     super.key,
     required this.address,
     required this.token,
     required this.balance,
+    this.autoOpenScanner = false, // default false
   });
 
   @override
@@ -29,8 +32,15 @@ class _SendScreenState extends State<SendScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _recipientController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
-
   bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoOpenScanner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scanQRCode());
+    }
+  }
 
   void _sendToken() {
     if (!_formKey.currentState!.validate()) return;
@@ -49,7 +59,6 @@ class _SendScreenState extends State<SendScreen> {
 
     setState(() => _isSending = true);
 
-    // TODO: Implement actual send logic here
     Future.delayed(const Duration(seconds: 1), () {
       setState(() => _isSending = false);
       showFloatingSnackBar(
@@ -61,17 +70,17 @@ class _SendScreenState extends State<SendScreen> {
     });
   }
 
+
   Future<void> _scanQRCode() async {
-    final result = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => QRScannerScreen(),
-      ),
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QRScannerScreen()),
     );
-    if (result != null) {
-      _recipientController.text = result;
+
+    if (code != null) {
+      _recipientController.text = code;
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -260,5 +269,3 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 }
-
-
