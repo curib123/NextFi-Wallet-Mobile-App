@@ -9,9 +9,8 @@ import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/stellar_wallet_services.dart';
+import 'package:next_fi/Services/tron_wallet_service.dart';
 import 'package:provider/provider.dart';
-import 'wallet_home_screen.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
   const SeedPhraseScreen({super.key});
@@ -42,7 +41,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
   }
 
   Future<void> _generateMnemonic() async {
-    _mnemonic = await StellarWalletService.generateMnemonic(); // async
+    _mnemonic = TronWalletService.generateMnemonic(); // ✅ Tron service
     _words = _mnemonic.split(' ');
     if (mounted) setState(() {});
   }
@@ -76,10 +75,9 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
               final storedMnemonic = await SeedStorage.getSeed();
               if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
                 if (mounted) {
-                  final  tabProvider = context.read<TabProvider>();
+                  final tabProvider = context.read<TabProvider>();
                   tabProvider.setTab(1);
                   Phoenix.rebirth(context);
-
                 }
               } else {
                 showFloatingSnackBar(
@@ -136,7 +134,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -158,7 +157,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
+                            Icon(LucideIcons.copy,
+                                size: 16, color: colors.textSecondary),
                             const SizedBox(width: 6),
                             Text(
                               'Copy to Clipboard',
@@ -269,7 +269,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
 
   Widget _seedGrid(AppColor colors) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 5),
+    padding:
+    const EdgeInsets.symmetric(vertical: 16, horizontal: 5),
     decoration: BoxDecoration(
       color: colors.surface,
       borderRadius: BorderRadius.circular(16),
@@ -289,11 +290,13 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> {
         final idx = index + 1;
         final word = _words[index];
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: colors.background,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border.withOpacity(0.25)),
+            border:
+            Border.all(color: colors.border.withOpacity(0.25)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,

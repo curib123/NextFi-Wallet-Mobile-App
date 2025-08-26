@@ -1,14 +1,19 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/token_chooser_receiver.dart';
+import 'package:next_fi/Screen/receive_screen.dart';
+import 'package:next_fi/Screen/send_screen.dart';
 import 'package:provider/provider.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/stellar_wallet_services.dart';
+import 'package:next_fi/Services/tron_wallet_service.dart'; // <-- use the Tron service we built
+
 import 'WalletHomeScreenWidgets/action_button.dart';
 import 'WalletHomeScreenWidgets/build_transaction_history.dart';
 import 'WalletHomeScreenWidgets/floating_circle_button.dart';
@@ -23,19 +28,20 @@ class WalletHomeScreen extends StatefulWidget {
 }
 
 class _WalletHomeScreenState extends State<WalletHomeScreen> {
-  // Wallet & Balances
-  String? _userAccountId;
-  double _xlmBalance = 0.0;
+  // Wallet
+  String? _tronAddress;
+  Uint8List? _privateKey;
+
+  // Balances
+  double _trxBalance = 0.0;
+  double _usdtBalance = 0.0;
   bool _hideBalance = false;
   bool _loadingBalances = true;
 
-  // Transactions
-  List<PaymentOperationResponse> _transactionHistory = [];
+  // Transactions (Tron API returns events/logs, you can adapt it)
+  final List<Map<String, dynamic>> _transactionHistory = [];
   bool _loadingHistory = true;
   final List<Widget> _incomingPayments = [];
-
-  // Services
-  final StellarWalletService walletService = StellarWalletService();
 
   @override
   void initState() {
@@ -50,18 +56,22 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
     if (storedMnemonic == null || storedMnemonic.isEmpty) return;
 
     try {
-      final wallet = await Wallet.from(storedMnemonic);
-      final keyPair = await wallet.getKeyPair(index: 0);
+      final privKey = TronWalletService.derivePrivateKey(storedMnemonic);
+      final pubKey = TronWalletService.publicKeyFromPrivateKey(privKey);
+      final address = TronWalletService.tronAddressFromPublicKey(pubKey);
 
-      setState(() => _userAccountId = keyPair.accountId);
+      setState(() {
+        _privateKey = privKey;
+        _tronAddress = address;
+      });
 
-      await _fetchBalance();
+      await _fetchBalances();
       await _fetchTransactionHistory();
     } catch (e) {
-      debugPrint("Failed to load wallet: $e");
+      debugPrint("Failed to load Tron wallet: $e");
       showFloatingSnackBar(
         context,
-        message: "Failed to load wallet. Please check your seed/mnemonic.",
+        message: "Failed to load wallet. Please check your mnemonic.",
         type: SnackBarType.error,
       );
     }
@@ -69,20 +79,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
 
   // ------------------- BALANCE -------------------
 
-  Future<void> _fetchBalance() async {
-    if (_userAccountId == null) return;
+  Future<void> _fetchBalances() async {
+    if (_tronAddress == null) return;
     setState(() => _loadingBalances = true);
 
     try {
-      final balance = await walletService.getXlmBalance(_userAccountId!);
-      setState(() => _xlmBalance = balance);
+      final trxSun = await TronWalletService.getTrxBalance(_tronAddress!);
+      final usdt = await TronWalletService.getUsdtBalance(_tronAddress!);
+
+      setState(() {
+        _trxBalance = trxSun / 1e6; // convert SUN → TRX
+        _usdtBalance = usdt;
+      });
     } catch (e) {
-      if (e.toString().contains("404")) {
-        debugPrint("Account not yet activated. Setting balance to 0 XLM.");
-        setState(() => _xlmBalance = 0.0);
-      } else {
-        debugPrint("Error fetching XLM balance: $e");
-      }
+      debugPrint("Error fetching balances: $e");
     } finally {
       setState(() => _loadingBalances = false);
     }
@@ -91,35 +101,38 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
   // ------------------- TRANSACTIONS -------------------
 
   Future<void> _fetchTransactionHistory() async {
-    if (_userAccountId == null) return;
+    if (_tronAddress == null) return;
     setState(() => _loadingHistory = true);
 
     try {
-      final Page<OperationResponse> payments = await walletService.sdk.payments
-          .forAccount(_userAccountId!)
-          .order(RequestBuilderOrder.DESC)
-          .execute();
+      final history = await TronWalletService.getTransactionHistory(_tronAddress!);
 
       setState(() {
-        _transactionHistory =
-            payments.records.whereType<PaymentOperationResponse>().toList();
+        _transactionHistory
+          ..clear()
+          ..addAll(history);
+
+        _incomingPayments
+          ..clear()
+          ..addAll(
+            history
+                .where((tx) {
+              final contract = tx['raw_data']?['contract']?[0];
+              final value = contract?['parameter']?['value'] ?? {};
+              final to = value['to_address'] ?? '';
+              return to == _tronAddress; // only incoming
+            })
+                .map((tx) => incomingPaymentHint(tx, _tronAddress!)),
+          );
       });
     } catch (e) {
-      debugPrint("Error fetching transaction history: $e");
+      debugPrint("Error fetching Tron transaction history: $e");
     } finally {
       setState(() => _loadingHistory = false);
     }
   }
 
-  Future<void> incomingPayments() async {
-    if (_userAccountId == null) return;
 
-    walletService.streamPayments(_userAccountId!, (payment) {
-      setState(() {
-        _incomingPayments.add(incomingPaymentHint(payment));
-      });
-    });
-  }
 
   // ------------------- UI -------------------
 
@@ -160,7 +173,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: const [
               Text(
-                'Main Wallet',
+                'Tron Wallet',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               SizedBox(width: 4),
@@ -186,20 +199,23 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
           _buildActionButtons(colors),
           const SizedBox(height: 20),
           if (_incomingPayments.isNotEmpty)
-             ListView.builder(
-                itemCount: _incomingPayments.length,
-                itemBuilder: (_, index) => _incomingPayments[index],
-              ),
+            ListView.builder(
+              shrinkWrap: true,
+              itemCount: _incomingPayments.length,
+              itemBuilder: (_, index) => _incomingPayments[index],
+            ),
           _buildTabBar(colors),
           const SizedBox(height: 12),
-          Expanded(
-            child: TabBarView(
-              children: [
-                recipientList(colors),
-               buildTransactionHistory(colors, _transactionHistory),
-              ],
-            ),
-          ),
+    Expanded(
+    child: TabBarView(
+    children: [
+    _loadingHistory
+    ? const Center(child: CircularProgressIndicator())
+        : buildTransactionHistory(colors, _transactionHistory, _tronAddress ?? ""),
+    recipientList(colors),
+    ],
+    ),
+    ),
         ],
       ),
     );
@@ -258,8 +274,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             Text(
               _hideBalance
                   ? '••••'
-                  : NumberFormat("#,##0.00", "en_US")
-                  .format(currency.convertXlm(_xlmBalance)),
+                  : NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase()).format(
+                (currency.fiatToTrx(_trxBalance) + currency.fiatToUsdt(_usdtBalance)),
+              ),
               style: TextStyle(
                 fontSize: 23,
                 fontWeight: FontWeight.bold,
@@ -268,17 +285,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          _hideBalance
-              ? '••••'
-              : "${NumberFormat("#,##0.0000", "en_US").format(_xlmBalance)} XLM",
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: colors.textSecondary,
-          ),
-        ),
+
       ],
     );
   }
@@ -312,10 +319,75 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        actionButton(colors, Icons.send, 'Send', gradient: true),
-        actionButton(colors, Icons.call_received, 'Receive', gradient: true),
-        actionButton(colors, LucideIcons.wallet, 'Deposit', gradient: true),
-        actionButton(colors, Icons.arrow_upward, 'Withdraw', gradient: true),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            actionButton(
+              colors,
+              Icons.send,
+              'Send',
+              gradient: true,
+              onTap: () {
+                showTokenSelector(
+                  context,
+                  _tronAddress!,
+                  _trxBalance,
+                  _usdtBalance,
+                  title: "Send Token",
+                  screenBuilder: (address, token, balance) => SendScreen(
+                    address: address,
+                    token: token,
+                    balance: balance,
+                  ),
+                );
+
+              },
+            ),
+            actionButton(
+              colors,
+              Icons.call_received,
+              'Receive',
+              gradient: true,
+              onTap: () {
+                // Open bottom modal to choose TRX or USDT dynamically
+                showTokenSelector(
+                  context,
+                  _tronAddress!,
+                  _trxBalance,
+                  _usdtBalance,
+                  title: "Receive Token",
+                  screenBuilder: (address, token, balance) => ReceiveScreen(
+                    address: address,
+                    token: token,
+                    balance: balance,
+                  ),
+                );
+
+              },
+            ),
+            actionButton(
+              colors,
+              LucideIcons.wallet,
+              'Deposit',
+              gradient: true,
+              onTap: () {
+                // TODO: Deposit action
+                print("Deposit clicked");
+              },
+            ),
+            actionButton(
+              colors,
+              Icons.arrow_upward,
+              'Withdraw',
+              gradient: true,
+              onTap: () {
+                // TODO: Withdraw action
+                print("Withdraw clicked");
+              },
+            ),
+          ],
+        )
+
       ],
     );
   }
@@ -335,7 +407,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
           Tab(text: 'Assets & Holdings'),
           Tab(text: 'Recipient Address'),
         ],
-
       ),
     );
   }
@@ -349,7 +420,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
         children: [
           floatingCircleButton(
             onTap: () {
-              // TODO: Add action
+              // TODO: Add send TRX/USDT action
             },
             icon: LucideIcons.plus,
             color: colors.primary,
@@ -357,7 +428,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
           const SizedBox(height: 16),
           floatingCircleButton(
             onTap: () {
-              // TODO: Scan action
+              // TODO: Add QR scan
             },
             icon: LucideIcons.scanLine,
             color: colors.primary,

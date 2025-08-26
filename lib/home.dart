@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/wallet_creation_screen.dart';
+import 'package:next_fi/Screen/auth_gate_screen.dart';
+import 'package:next_fi/Screen/wallet_home_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 
@@ -16,6 +18,7 @@ class Home extends StatefulWidget {
 class _HomeState extends State<Home> {
   bool _isLoading = true;
   bool _hasMnemonic = false;
+  bool _isAuthenticated = false;
 
   @override
   void initState() {
@@ -26,27 +29,28 @@ class _HomeState extends State<Home> {
   Future<void> _checkMnemonic() async {
     final storedMnemonic = await SeedStorage.getSeed();
 
-    if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
-      if (mounted) {
+    if (mounted) {
+      if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
         setState(() {
           _hasMnemonic = true;
           _isLoading = false;
         });
-      }
-    } else {
-      if (mounted) {
+      } else {
         setState(() => _isLoading = false);
-
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            showFloatingSnackBar(
-              context,
-              message: "No wallet found. Please create one.",
-              type: SnackBarType.error,
-            );
-          }
+          showFloatingSnackBar(
+            context,
+            message: "No wallet found. Please create one.",
+            type: SnackBarType.error,
+          );
         });
       }
+    }
+  }
+
+  void _onAuthSuccess() {
+    if (mounted) {
+      setState(() => _isAuthenticated = true);
     }
   }
 
@@ -58,43 +62,52 @@ class _HomeState extends State<Home> {
       );
     }
 
+    // If no wallet, show WalletCreationScreen
+    if (!_hasMnemonic) {
+      return const WalletCreationScreen();
+    }
+
+    // If wallet exists but not authenticated, show AuthGate
+    if (!_isAuthenticated) {
+      return AuthGateScreen(
+        goNext: _onAuthSuccess,
+      );
+    }
+
+    // If authenticated and wallet exists, show main home with tabs
     return ChangeNotifierProvider(
       create: (_) => TabProvider(),
       child: Consumer<TabProvider>(
         builder: (context, tabProvider, _) {
-          if (_hasMnemonic) {
-            return Scaffold(
-              body: tabProvider.screens[tabProvider.currentIndex],
-              bottomNavigationBar: BottomNavigationBar(
-                currentIndex: tabProvider.currentIndex,
-                onTap: tabProvider.setTab,
-                type: BottomNavigationBarType.fixed,
-                selectedItemColor: Colors.teal,
-                unselectedItemColor: Colors.grey,
-                showUnselectedLabels: true,
-                items: const [
-                  BottomNavigationBarItem(
-                    icon: Icon(LucideIcons.wallet),
-                    label: 'Wallet',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(LucideIcons.package),
-                    label: 'Transaction',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(LucideIcons.shuffle),
-                    label: 'Swap',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(LucideIcons.settings),
-                    label: 'Settings',
-                  ),
-                ],
-              ),
-            );
-          } else {
-            return const WalletCreationScreen();
-          }
+          return Scaffold(
+            body: tabProvider.screens[tabProvider.currentIndex],
+            bottomNavigationBar: BottomNavigationBar(
+              currentIndex: tabProvider.currentIndex,
+              onTap: tabProvider.setTab,
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: Colors.teal,
+              unselectedItemColor: Colors.grey,
+              showUnselectedLabels: true,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(LucideIcons.wallet),
+                  label: 'Wallet',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(LucideIcons.package),
+                  label: 'Transaction',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(LucideIcons.shuffle),
+                  label: 'Swap',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(LucideIcons.settings),
+                  label: 'Settings',
+                ),
+              ],
+            ),
+          );
         },
       ),
     );

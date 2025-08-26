@@ -1,18 +1,38 @@
-// In WalletHomeScreenWidgets class (or a helper class)
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-Widget buildTransactionHistory(AppColor colors, List<PaymentOperationResponse> _transactionHistory) {
+/// Build Tron transaction history list
+/// [transactions] = List<Map<String, dynamic>> parsed from TronGrid/Node API
+/// [userAddress] = current wallet address (to know incoming/outgoing)
+Widget buildTransactionHistory(AppColor colors, List<Map<String, dynamic>> transactions, String userAddress) {
   return ListView.separated(
     padding: const EdgeInsets.symmetric(vertical: 8),
-    itemCount: _transactionHistory.length,
+    itemCount: transactions.length,
     separatorBuilder: (_, __) => const SizedBox(height: 8),
     itemBuilder: (context, index) {
-      final tx = _transactionHistory[index];
-      final amount = double.parse(tx.amount);
-      final from = tx.sourceAccount;
-      final to = tx.to;
+      final tx = transactions[index];
+      final contract = tx['raw_data']?['contract']?[0];
+      final type = contract?['type'] ?? '';
+      final value = contract?['parameter']?['value'] ?? {};
+
+      String from = value['owner_address'] ?? '';
+      String to = value['to_address'] ?? '';
+      String token = 'TRX';
+      double amount = 0;
+
+      // Handle TRX transfer
+      if (type == 'TransferContract') {
+        final rawAmt = value['amount'] ?? 0;
+        amount = rawAmt / 1e6; // TRX has 6 decimals
+      }
+
+      // Handle TRC20 (basic placeholder)
+      if (type == 'TriggerSmartContract') {
+        token = 'USDT'; // could decode further
+        amount = 0; // parsing hex needed
+      }
+
+      final isIncoming = to == userAddress;
 
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -37,7 +57,7 @@ Widget buildTransactionHistory(AppColor colors, List<PaymentOperationResponse> _
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${amount.toStringAsFixed(2)} XLM',
+                    '${amount.toStringAsFixed(2)} $token',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -46,8 +66,10 @@ Widget buildTransactionHistory(AppColor colors, List<PaymentOperationResponse> _
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'From: $from\nTo: $to',
-                    style:  TextStyle(
+                    isIncoming
+                        ? 'From: $from\nTo: You'
+                        : 'From: You\nTo: $to',
+                    style: TextStyle(
                       fontSize: 12,
                       color: colors.textSecondary,
                       height: 1.3,

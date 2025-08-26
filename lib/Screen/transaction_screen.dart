@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
-import 'package:next_fi/Components/AppAlert.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Services/stellar_wallet_services.dart';
 import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/Services/tron_wallet_service.dart';
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
@@ -15,23 +14,23 @@ class TransactionScreen extends StatefulWidget {
 }
 
 class _TransactionScreenState extends State<TransactionScreen> {
-  final StellarWalletService walletService = StellarWalletService();
   final ScrollController _scrollController = ScrollController();
 
-  String? _userAccountId;
+  String? _userAddress;
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
 
-  String? _cursor; // for pagination
-  List<PaymentOperationResponse> _transactions = [];
+  int _start = 0; // pagination offset
+  final int _limit = 20;
+  List<Map<String, dynamic>> _transactions = [];
 
   @override
   void initState() {
     super.initState();
     _loadWalletAndData();
 
-    // listen for infinite scroll
+    // infinite scroll
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >=
           _scrollController.position.maxScrollExtent - 200 &&
@@ -50,13 +49,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
 
     try {
-      final wallet = await Wallet.from(storedMnemonic);
-      final keyPair = await wallet.getKeyPair(index: 0);
+      // Derive Tron address from mnemonic
+      final priv = TronWalletService.derivePrivateKey(storedMnemonic);
+      final pub = TronWalletService.publicKeyFromPrivateKey(priv);
+      final address = TronWalletService.tronAddressFromPublicKey(pub);
 
-      setState(() => _userAccountId = keyPair.accountId);
+      setState(() => _userAddress = address);
 
       await _fetchTransactions();
-      _listenIncoming();
     } catch (e) {
       debugPrint("Error loading wallet: $e");
       setState(() => _loading = false);
@@ -64,30 +64,23 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   Future<void> _fetchTransactions({bool loadMore = false}) async {
-    if (_userAccountId == null) return;
+    if (_userAddress == null) return;
 
     setState(() {
       if (loadMore) {
         _loadingMore = true;
       } else {
         _loading = true;
+        _start = 0; // reset pagination if not loadMore
       }
     });
 
     try {
-      var request = walletService.sdk.payments
-          .forAccount(_userAccountId!)
-          .order(RequestBuilderOrder.DESC)
-          .limit(20);
-
-      if (_cursor != null) {
-        request = request.cursor(_cursor!);
-      }
-
-      final Page<OperationResponse> page = await request.execute();
-
-      final newTx =
-      page.records.whereType<PaymentOperationResponse>().toList();
+      final newTx = await TronWalletService.getTransactionHistory(
+        _userAddress!,
+        limit: _limit,
+        start: _start,
+      );
 
       setState(() {
         if (loadMore) {
@@ -96,13 +89,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
           _transactions = newTx;
         }
 
-        // Update cursor for next page
-        if (page.records.isNotEmpty) {
-          _cursor = page.records.last.pagingToken;
+        if (newTx.isNotEmpty) {
+          _start += _limit;
         }
 
-        // If less than limit, means no more pages
-        _hasMore = newTx.length == 20;
+        _hasMore = newTx.length == _limit;
       });
     } catch (e) {
       debugPrint("Error fetching history: $e");
@@ -114,16 +105,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
   }
 
-  void _listenIncoming() {
-    if (_userAccountId == null) return;
-
-    walletService.streamPayments(_userAccountId!, (payment) {
-      setState(() {
-        _transactions.insert(0, payment); // prepend new incoming
-      });
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
@@ -133,14 +114,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: colors.surface,
-        title: const Text("Transactions",
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Transactions",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
         onRefresh: () async {
-          _cursor = null;
+          _start = 0;
           _hasMore = true;
           await _fetchTransactions();
         },
@@ -156,9 +139,21 @@ class _TransactionScreenState extends State<TransactionScreen> {
             }
 
             final tx = _transactions[index];
+            final txId = tx['txID'];
+            final timestamp = tx['timestamp'];
+            final type = tx['type'] ?? "Unknown";
+            final contract = tx['contract'] ?? {};
+
+            // determine direction & amount
+            final from = contract['owner_address'] ?? '';
+            final to = contract['to_address'] ?? '';
+            final rawAmount = contract['amount'] ?? 0;
+            final amount = rawAmount is int
+                ? rawAmount / 1e6
+                : double.tryParse(rawAmount.toString()) ?? 0.0;
+
             final isIncoming =
-                tx.to.isNotEmpty && tx.to == _userAccountId;
-            final amount = double.tryParse(tx.amount) ?? 0.0;
+                _userAddress != null && to == _userAddress;
 
             return ListTile(
               leading: CircleAvatar(
@@ -166,21 +161,20 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     ? colors.success.withOpacity(0.15)
                     : colors.error.withOpacity(0.15),
                 child: Icon(
-                  isIncoming
-                      ? Icons.arrow_downward
-                      : Icons.arrow_upward,
+                  isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
                   color: isIncoming ? colors.success : colors.error,
                 ),
               ),
               title: Text(
-                "${amount.toStringAsFixed(2)} ${tx.assetCode ?? 'XLM'}",
+                "${amount.toStringAsFixed(2)} TRX/USDT",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: colors.textPrimary,
                 ),
               ),
               subtitle: Text(
-                "From: ${tx.from.substring(0, 6)}... • ${DateFormat('MMM d, h:mm a').format(DateTime.parse(tx.createdAt))}",
+                "From: ${from.isNotEmpty ? from.substring(0, 6) : '???'}... • "
+                    "${timestamp != null ? DateFormat('MMM d, h:mm a').format(DateTime.fromMillisecondsSinceEpoch(timestamp)) : ''}",
                 style: TextStyle(color: colors.textSecondary),
               ),
               trailing: Icon(LucideIcons.chevronRight,
@@ -190,15 +184,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   context: context,
                   title: "Transaction Details",
                   description:
-                  "Date :  ${DateFormat('MMM d, yyyy • h:mm a').format(DateTime.parse(tx.createdAt))}.\n\n"
-                      "Sender: ${tx.from}\n\n"
-                      "Receiver: ${tx.to}\n\n"
-                      "Amount: ${double.tryParse(tx.amount)?.toStringAsFixed(2) ?? tx.amount} ${tx.assetCode ?? 'XLM'}\n\n"
-                      "Status: Completed successfully on the Stellar network.",
+                  "TxID: $txId\n\n"
+                      "Date : ${timestamp != null ? DateFormat('MMM d, yyyy • h:mm a').format(DateTime.fromMillisecondsSinceEpoch(timestamp)) : 'N/A'}\n\n"
+                      "From: $from\n\n"
+                      "To: $to\n\n"
+                      "Amount: ${amount.toStringAsFixed(2)}\n\n"
+                      "Type: $type",
                   confirmText: "Close",
                 );
               },
-
             );
           },
         ),
