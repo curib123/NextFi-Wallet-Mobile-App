@@ -23,11 +23,11 @@ class _AssetWidgetState extends State<AssetWidget> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
+    Future.microtask(() async {
       final provider = context.read<AssetProvider>();
-      provider.fetchLogos();
-      provider.fetchPriceChangePercent();
-      provider.startRealtimeUpdates();
+      await provider.fetchLogos();
+      await provider.fetchPriceChangePercent();
+       provider.startRealtimeUpdates();
     });
   }
 
