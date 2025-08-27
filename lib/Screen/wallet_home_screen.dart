@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' hide Page;
+import 'package:flutter/material.dart' ;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/token_chooser_receiver.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
 import 'package:next_fi/Screen/receive_screen.dart';
 import 'package:next_fi/Screen/send_screen.dart';
 import 'package:provider/provider.dart';
@@ -12,13 +14,11 @@ import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart'; // <-- use the Tron service we built
+import 'package:next_fi/Services/tron_wallet_service.dart';
 
 import 'WalletHomeScreenWidgets/action_button.dart';
-import 'WalletHomeScreenWidgets/build_transaction_history.dart';
 import 'WalletHomeScreenWidgets/floating_circle_button.dart';
 import 'WalletHomeScreenWidgets/incoming_payment_hints.dart';
-import 'WalletHomeScreenWidgets/recipient_list.dart';
 
 class WalletHomeScreen extends StatefulWidget {
   const WalletHomeScreen({super.key});
@@ -209,10 +209,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
     Expanded(
     child: TabBarView(
     children: [
-    _loadingHistory
-    ? const Center(child: CircularProgressIndicator())
-        : buildTransactionHistory(colors, _transactionHistory, _tronAddress ?? ""),
-    recipientList(colors),
+     AssetWidget(colors: colors,),
+     RecipientListWidget(colors: colors,),
     ],
     ),
     ),

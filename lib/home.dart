@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/Helper/AppColor.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/SnackBar.dart';
@@ -56,6 +57,8 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -85,8 +88,8 @@ class _HomeState extends State<Home> {
               currentIndex: tabProvider.currentIndex,
               onTap: tabProvider.setTab,
               type: BottomNavigationBarType.fixed,
-              selectedItemColor: Colors.teal,
-              unselectedItemColor: Colors.grey,
+              selectedItemColor: colors.primary,
+              unselectedItemColor: colors.textSecondary,
               showUnselectedLabels: true,
               items: const [
                 BottomNavigationBarItem(
