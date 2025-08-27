@@ -6,7 +6,6 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 class AssetWidget extends StatefulWidget {
   final AppColor colors;
@@ -28,6 +27,7 @@ class _AssetWidgetState extends State<AssetWidget> {
       final provider = context.read<AssetProvider>();
       provider.fetchLogos();
       provider.fetchPriceChangePercent();
+      provider.startRealtimeUpdates();
     });
   }
 

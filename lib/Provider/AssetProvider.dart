@@ -102,7 +102,7 @@ class AssetProvider with ChangeNotifier {
   }
 
   /// Start auto-updating price changes every interval
-  void startRealtimeUpdates({Duration interval = const Duration(minutes: 5)}) {
+  void startRealtimeUpdates({Duration interval = const Duration(seconds: 1)}) {
     Future.doWhile(() async {
       await fetchPriceChangePercent();
       await Future.delayed(interval);
