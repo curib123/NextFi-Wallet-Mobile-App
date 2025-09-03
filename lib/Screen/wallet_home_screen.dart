@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' ;
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/token_chooser_receiver.dart';
@@ -28,6 +28,9 @@ class WalletHomeScreen extends StatefulWidget {
 }
 
 class _WalletHomeScreenState extends State<WalletHomeScreen> {
+  // Service (NEW)
+  late final TronWalletService _tron;
+
   // Wallet
   String? _tronAddress;
   Uint8List? _privateKey;
@@ -38,7 +41,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
   bool _hideBalance = false;
   bool _loadingBalances = true;
 
-  // Transactions (Tron API returns events/logs, you can adapt it)
+  // Transactions
   final List<Map<String, dynamic>> _transactionHistory = [];
   bool _loadingHistory = true;
   final List<Widget> _incomingPayments = [];
@@ -46,6 +49,13 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize service (configure API key/baseUrl here if needed)
+    _tron = TronWalletService(
+      TronClientConfig(
+        baseUrl: 'https://api.trongrid.io',
+        // tronProApiKey: '<TRON-PRO-API-KEY>', // optional
+      ),
+    );
     _loadWallet();
   }
 
@@ -53,6 +63,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
 
   Future<void> _loadWallet() async {
     final storedMnemonic = await SeedStorage.getSeed();
+    if (!mounted) return;
     if (storedMnemonic == null || storedMnemonic.isEmpty) return;
 
     try {
@@ -69,6 +80,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
       await _fetchTransactionHistory();
     } catch (e) {
       debugPrint("Failed to load Tron wallet: $e");
+      if (!mounted) return;
       showFloatingSnackBar(
         context,
         message: "Failed to load wallet. Please check your mnemonic.",
@@ -84,17 +96,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
     setState(() => _loadingBalances = true);
 
     try {
-      final trxSun = await TronWalletService.getTrxBalance(_tronAddress!);
-      final usdt = await TronWalletService.getUsdtBalance(_tronAddress!);
+      // UPDATED: instance methods
+      final trxSun = await _tron.getTrxBalance(_tronAddress!);
+      final usdt = await _tron.getUsdtBalance(_tronAddress!);
 
       setState(() {
-        _trxBalance = trxSun / 1e6; // convert SUN → TRX
-        _usdtBalance = usdt;
+        _trxBalance = trxSun / 1e6; // SUN → TRX
+        _usdtBalance = usdt;        // already decimal (6 dp)
       });
     } catch (e) {
       debugPrint("Error fetching balances: $e");
     } finally {
-      setState(() => _loadingBalances = false);
+      if (mounted) setState(() => _loadingBalances = false);
     }
   }
 
@@ -105,7 +118,29 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
     setState(() => _loadingHistory = true);
 
     try {
-      final history = await TronWalletService.getTransactionHistory(_tronAddress!);
+      // UPDATED: instance method
+      final history = await _tron.getTransactionHistory(_tronAddress!);
+
+      // Robust incoming filter:
+      // Our normalized tx has 'contract' = value map; raw Tron tx often uses hex 'to_address'
+      final myBase58 = _tronAddress!;
+      String? myHex41;
+      try {
+        myHex41 = TronWalletService.tronBase58ToHex(myBase58);
+      } catch (_) {
+        myHex41 = null;
+      }
+
+      final incoming = history.where((tx) {
+        final contractVal = tx['contract'] as Map<String, dynamic>?;
+        if (contractVal == null) return false;
+        final to = (contractVal['to_address'] ?? contractVal['to'] ?? '').toString();
+        if (to.isEmpty) return false;
+        // match either base58 directly or hex(41...)
+        final matchBase58 = to == myBase58;
+        final matchHex = myHex41 != null && to.toUpperCase() == myHex41!.toUpperCase();
+        return matchBase58 || matchHex;
+      });
 
       setState(() {
         _transactionHistory
@@ -114,25 +149,14 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
 
         _incomingPayments
           ..clear()
-          ..addAll(
-            history
-                .where((tx) {
-              final contract = tx['raw_data']?['contract']?[0];
-              final value = contract?['parameter']?['value'] ?? {};
-              final to = value['to_address'] ?? '';
-              return to == _tronAddress; // only incoming
-            })
-                .map((tx) => incomingPaymentHint(tx, _tronAddress!)),
-          );
+          ..addAll(incoming.map((tx) => incomingPaymentHint(tx, myBase58)));
       });
     } catch (e) {
       debugPrint("Error fetching Tron transaction history: $e");
     } finally {
-      setState(() => _loadingHistory = false);
+      if (mounted) setState(() => _loadingHistory = false);
     }
   }
-
-
 
   // ------------------- UI -------------------
 
@@ -201,19 +225,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
           if (_incomingPayments.isNotEmpty)
             ListView.builder(
               shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: _incomingPayments.length,
               itemBuilder: (_, index) => _incomingPayments[index],
             ),
           _buildTabBar(colors),
           const SizedBox(height: 12),
-    Expanded(
-    child: TabBarView(
-    children: [
-     AssetWidget(colors: colors,),
-     RecipientListWidget(colors: colors,),
-    ],
-    ),
-    ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                AssetWidget(colors: colors),
+                RecipientListWidget(colors: colors),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -281,7 +306,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
             ),
           ],
         ),
-
       ],
     );
   }
@@ -324,6 +348,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
               'Send',
               gradient: true,
               onTap: () {
+                if (_tronAddress == null) {
+                  showFloatingSnackBar(context, message: "Wallet not loaded yet", type: SnackBarType.warning);
+                  return;
+                }
                 showTokenSelector(
                   context,
                   _tronAddress!,
@@ -336,7 +364,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
                     balance: balance,
                   ),
                 );
-
               },
             ),
             actionButton(
@@ -345,7 +372,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
               'Receive',
               gradient: true,
               onTap: () {
-                // Open bottom modal to choose TRX or USDT dynamically
+                if (_tronAddress == null) {
+                  showFloatingSnackBar(context, message: "Wallet not loaded yet", type: SnackBarType.warning);
+                  return;
+                }
                 showTokenSelector(
                   context,
                   _tronAddress!,
@@ -358,7 +388,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
                     balance: balance,
                   ),
                 );
-
               },
             ),
             actionButton(
@@ -367,8 +396,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
               'Deposit',
               gradient: true,
               onTap: () {
-                // TODO: Deposit action
-                print("Deposit clicked");
+                debugPrint("Deposit clicked");
               },
             ),
             actionButton(
@@ -377,13 +405,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
               'Withdraw',
               gradient: true,
               onTap: () {
-                // TODO: Withdraw action
-                print("Withdraw clicked");
+                debugPrint("Withdraw clicked");
               },
             ),
           ],
         )
-
       ],
     );
   }
@@ -416,7 +442,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
         children: [
           floatingCircleButton(
             onTap: () {
-              // TODO: Add send TRX/USDT action
+              if (_tronAddress == null) {
+                showFloatingSnackBar(context, message: "Wallet not loaded yet", type: SnackBarType.warning);
+                return;
+              }
+              // Optionally open Send screen directly
             },
             icon: LucideIcons.plus,
             color: colors.primary,

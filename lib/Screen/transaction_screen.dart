@@ -16,18 +16,26 @@ class TransactionScreen extends StatefulWidget {
 class _TransactionScreenState extends State<TransactionScreen> {
   final ScrollController _scrollController = ScrollController();
 
+  late final TronWalletService _tron;
+
   String? _userAddress;
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
 
-  int _start = 0; // pagination offset
+  int _start = 0; // pagination offset (TronGrid uses start)
   final int _limit = 20;
   List<Map<String, dynamic>> _transactions = [];
 
   @override
   void initState() {
     super.initState();
+    _tron = TronWalletService(
+      TronClientConfig(
+        baseUrl: 'https://api.trongrid.io',
+        // tronProApiKey: '<TRON-PRO-API-KEY>', // optional
+      ),
+    );
     _loadWalletAndData();
 
     // infinite scroll
@@ -43,13 +51,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   Future<void> _loadWalletAndData() async {
     final storedMnemonic = await SeedStorage.getSeed();
+    if (!mounted) return;
+
     if (storedMnemonic == null || storedMnemonic.isEmpty) {
       setState(() => _loading = false);
       return;
     }
 
     try {
-      // Derive Tron address from mnemonic
       final priv = TronWalletService.derivePrivateKey(storedMnemonic);
       final pub = TronWalletService.publicKeyFromPrivateKey(priv);
       final address = TronWalletService.tronAddressFromPublicKey(pub);
@@ -71,12 +80,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _loadingMore = true;
       } else {
         _loading = true;
-        _start = 0; // reset pagination if not loadMore
+        _start = 0;
       }
     });
 
     try {
-      final newTx = await TronWalletService.getTransactionHistory(
+      final newTx = await _tron.getUnifiedTransactions(
         _userAddress!,
         limit: _limit,
         start: _start,
@@ -98,6 +107,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     } catch (e) {
       debugPrint("Error fetching history: $e");
     } finally {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _loadingMore = false;
@@ -139,21 +149,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
             }
 
             final tx = _transactions[index];
-            final txId = tx['txID'];
-            final timestamp = tx['timestamp'];
-            final type = tx['type'] ?? "Unknown";
-            final contract = tx['contract'] ?? {};
+            final txId = (tx['id'] ?? '').toString();
+            final ts = (tx['timestamp'] as num?)?.toInt();
+            final dt = ts != null
+                ? DateTime.fromMillisecondsSinceEpoch(ts)
+                : null;
 
-            // determine direction & amount
-            final from = contract['owner_address'] ?? '';
-            final to = contract['to_address'] ?? '';
-            final rawAmount = contract['amount'] ?? 0;
-            final amount = rawAmount is int
-                ? rawAmount / 1e6
-                : double.tryParse(rawAmount.toString()) ?? 0.0;
+            final asset = (tx['asset'] ?? 'TRX').toString();
+            final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+            final from = (tx['from'] ?? '').toString();
+            final to = (tx['to'] ?? '').toString();
+            final direction = (tx['direction'] ?? 'other').toString();
 
-            final isIncoming =
-                _userAddress != null && to == _userAddress;
+            final isIncoming = direction == 'in';
 
             return ListTile(
               leading: CircleAvatar(
@@ -166,30 +174,29 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 ),
               ),
               title: Text(
-                "${amount.toStringAsFixed(2)} TRX/USDT",
+                "${amount.toStringAsFixed(2)} $asset",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: colors.textPrimary,
                 ),
               ),
               subtitle: Text(
-                "From: ${from.isNotEmpty ? from.substring(0, 6) : '???'}... • "
-                    "${timestamp != null ? DateFormat('MMM d, h:mm a').format(DateTime.fromMillisecondsSinceEpoch(timestamp)) : ''}",
+                "From: ${from.isNotEmpty ? '${from.substring(0, 6)}...' : '???'} • "
+                    "${dt != null ? DateFormat('MMM d, h:mm a').format(dt) : ''}",
                 style: TextStyle(color: colors.textSecondary),
               ),
-              trailing: Icon(LucideIcons.chevronRight,
-                  color: colors.textSecondary),
+              trailing: Icon(LucideIcons.chevronRight, color: colors.textSecondary),
               onTap: () {
                 AppAlert.show(
                   context: context,
                   title: "Transaction Details",
                   description:
                   "TxID: $txId\n\n"
-                      "Date : ${timestamp != null ? DateFormat('MMM d, yyyy • h:mm a').format(DateTime.fromMillisecondsSinceEpoch(timestamp)) : 'N/A'}\n\n"
+                      "Date : ${dt != null ? DateFormat('MMM d, yyyy • h:mm a').format(dt) : 'N/A'}\n\n"
                       "From: $from\n\n"
                       "To: $to\n\n"
-                      "Amount: ${amount.toStringAsFixed(2)}\n\n"
-                      "Type: $type",
+                      "Amount: ${amount.toStringAsFixed(6)} $asset\n\n"
+                      "Direction: $direction",
                   confirmText: "Close",
                 );
               },

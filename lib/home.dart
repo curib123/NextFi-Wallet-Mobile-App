@@ -5,7 +5,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Screen/wallet_creation_screen.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
-import 'package:next_fi/Screen/wallet_home_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 
