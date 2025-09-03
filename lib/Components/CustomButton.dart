@@ -21,7 +21,7 @@ class CustomButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context); // 🎯 Get colors based on theme
+    final colors = AppColor.of(context);
 
     final Widget child = Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -30,20 +30,17 @@ class CustomButton extends StatelessWidget {
         if (icon != null) ...[
           Icon(
             icon,
-            color: type == ButtonType.filled
-                ? colors.surface // text on primary
-                : colors.primary, // primary for outline text/icon
+            size: 18, // smaller icon
+            color: type == ButtonType.filled ? Colors.white : colors.primary,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
         ],
         Text(
           text,
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: type == ButtonType.filled
-                ? colors.surface
-                : colors.primary,
+            fontSize: 14, // slimmer font size
+            fontWeight: FontWeight.w600,
+            color: type == ButtonType.filled ? Colors.white : colors.primary,
           ),
         ),
       ],
@@ -55,11 +52,13 @@ class CustomButton extends StatelessWidget {
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: colors.primary,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14), // slimmer padding
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            elevation: 0,
+            elevation: Theme.of(context).brightness == Brightness.light ? 1 : 0,
+            minimumSize: const Size(0, 36), // ensures slim height
           ),
           onPressed: onPressed,
           child: child,
@@ -70,11 +69,13 @@ class CustomButton extends StatelessWidget {
         width: fullWidth ? double.infinity : null,
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            side: BorderSide(color: colors.primary, width: 1.5),
+            foregroundColor: colors.primary,
+            side: BorderSide(color: colors.primary, width: 1.3),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14), // slimmer padding
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
+            minimumSize: const Size(0, 36),
           ),
           onPressed: onPressed,
           child: child,

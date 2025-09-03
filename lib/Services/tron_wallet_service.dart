@@ -812,4 +812,60 @@ class TronWalletService {
     return t.toLowerCase();
   }
 
+  // ── NEW: Stream watcher for *incoming* transactions only ────────────────
+  Stream<Map<String, dynamic>> watchIncoming(
+      String address, {
+        Duration interval = const Duration(seconds: 12),
+        int pageLimit = 20,
+      }) {
+    final controller = StreamController<Map<String, dynamic>>.broadcast();
+    final seen = <String>{}; // track tx IDs we've already emitted
+    Timer? timer;
+    bool isFetching = false;
+
+    Future<void> _tick() async {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        final batch = await getUnifiedTransactions(address, limit: pageLimit, start: 0);
+        // only IN transactions to this address
+        final incoming = batch.where((t) => (t['direction']?.toString() ?? '') == 'in');
+
+        // newest first, but emit oldest first for natural order
+        final newOnes = incoming.where((t) => !seen.contains('${t['id']}')).toList()
+          ..sort((a, b) {
+            final ta = (a['timestamp'] as num?)?.toInt() ?? 0;
+            final tb = (b['timestamp'] as num?)?.toInt() ?? 0;
+            return ta.compareTo(tb);
+          });
+
+        for (final tx in newOnes) {
+          final id = '${tx['id']}';
+          seen.add(id);
+          controller.add(tx);
+        }
+
+        // keep seen set bounded
+        if (seen.length > 2000) {
+          // simple pruning—keeps memory tight for long sessions
+          seen.removeWhere((_) => seen.length > 1500);
+        }
+      } catch (e, _) {
+        // swallow errors to keep stream alive; consumers can handle UI
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    // initial prime + schedule
+    _tick();
+    timer = Timer.periodic(interval, (_) => _tick());
+
+    controller.onCancel = () {
+      timer?.cancel();
+      timer = null;
+    };
+
+    return controller.stream;
+  }
 }
