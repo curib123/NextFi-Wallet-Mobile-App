@@ -3,9 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Components/token_chooser.dart';
 import 'package:provider/provider.dart';
 
+import 'package:next_fi/Components/token_chooser.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
 import 'package:next_fi/Screen/receive_screen.dart';
@@ -24,8 +24,7 @@ import 'WalletHomeScreenWidgets/floating_circle_button.dart';
 import 'WalletHomeScreenWidgets/incoming_payment_hints.dart';
 
 class WalletHomeScreen extends StatefulWidget {
-  const WalletHomeScreen({super.key, this.isTest = false});
-  final bool isTest;
+  const WalletHomeScreen({super.key});
 
   @override
   State<WalletHomeScreen> createState() => _WalletHomeScreenState();
@@ -49,21 +48,24 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   // Loading flags
   bool _loadingBalances = true;
-  bool _loadingHistory = true;
 
-  // Data
-  final List<Map<String, dynamic>> _transactionHistory = [];
+  // Incoming hints only (no history kept)
   final List<Map<String, dynamic>> _incomingHints = [];
   final Set<String> _dismissedHintIds = {};
   final Set<String> _knownTxIds = {};
 
-  // Realtime
+// ---- Throttling config (prod-safe) ----
+  static const Duration _minBalancesGap = Duration(minutes: 10);
+  static const Duration _minHintsGap    = Duration(minutes: 10);
+
+
+  // Realtime / last-run trackers
   Timer? _pollBalancesTimer;
-  Timer? _pollHistoryTimer;
+  Timer? _pollHintsTimer;
   bool _balancesInFlight = false;
-  bool _historyInFlight = false;
-  DateTime? _lastBalancesAt;
-  DateTime? _lastHistoryAt;
+  bool _hintsInFlight = false;
+  DateTime? _lastBalancesAt; // updated on success
+  DateTime? _lastHintsAt; // updated on success
 
   // Anim helpers
   late final AnimationController _livePulse = AnimationController(
@@ -77,19 +79,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     WidgetsBinding.instance.addObserver(this);
 
     // Start asset-provider realtime (logos + % changes).
-    // Microtask to ensure context is available.
     Future.microtask(() {
       if (!mounted) return;
       context.read<AssetProvider>().startRealtimeUpdates();
     });
 
-    widget.isTest ? _loadTestMode() : _loadWallet();
+    _loadWallet();
   }
 
   @override
   void dispose() {
     _pollBalancesTimer?.cancel();
-    _pollHistoryTimer?.cancel();
+    _pollHintsTimer?.cancel();
     _livePulse.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -100,7 +101,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _pollBalancesTimer?.cancel();
-      _pollHistoryTimer?.cancel();
+      _pollHintsTimer?.cancel();
     } else if (state == AppLifecycleState.resumed) {
       _startRealtime();
     }
@@ -134,125 +135,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     return false;
   }
 
+  bool _shouldFetch(DateTime? last, Duration gap) {
+    if (last == null) return true;
+    return DateTime.now().difference(last) >= gap;
+  }
+
   void _dismissIncoming(String txId) {
     setState(() {
       _dismissedHintIds.add(txId);
       _incomingHints.removeWhere((t) => _txIdOf(t) == txId);
-    });
-  }
-
-  // ---------- Test Mode ----------
-
-  void _loadTestMode() {
-    final me = 'TPuTestModeD3moAddr3ssZZZ111';
-    _tronAddress = me;
-    try {
-      _tronAddressHex41 = TronWalletService.tronBase58ToHex(me);
-    } catch (_) {
-      _tronAddressHex41 = null;
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    final demo = <Map<String, dynamic>>[
-      {
-        'txID': '0xDEMO_USDT_01',
-        'token': 'USDT',
-        'decimals': 6,
-        'timestamp': now - 60 * 1000,
-        'contract_type': 'TriggerSmartContract',
-        'confirmed': true,
-        'contract': {
-          'from_address': 'TUxSender1111111111111111111',
-          'to_address': me,
-          'symbol': 'USDT',
-          'amount': 2_534_999,
-          'decimals': 6,
-        },
-      },
-      {
-        'txID': '0xDEMO_TRX_02',
-        'token': 'TRX',
-        'decimals': 6,
-        'timestamp': now - 5 * 60 * 1000,
-        'contract_type': 'TransferContract',
-        'confirmed': true,
-        'contract': {
-          'from_address': 'TVySender2222222222222222222',
-          'to_address': me,
-          'symbol': 'TRX',
-          'amount': 1_250_000,
-          'decimals': 6,
-        },
-      },
-    ];
-
-    final incoming = demo.where((tx) {
-      final success = _isSuccessTx(tx);
-      final incomingToMe = _isIncomingToMe(tx);
-      final notDismissed = !_dismissedHintIds.contains(_txIdOf(tx));
-      return success && incomingToMe && notDismissed;
-    }).toList();
-
-    setState(() {
-      _trxBalance = 123.456789;
-      _usdtBalance = 789.012345;
-      _loadingBalances = false;
-
-      _transactionHistory
-        ..clear()
-        ..addAll(demo);
-      _incomingHints
-        ..clear()
-        ..addAll(incoming);
-
-      _knownTxIds.addAll(demo.map(_txIdOf));
-      _loadingHistory = false;
-      _lastBalancesAt = DateTime.now();
-      _lastHistoryAt = DateTime.now();
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        message: 'Test mode: showing demo balances & transactions',
-        type: SnackBarType.warning,
-      );
-    });
-
-    _startRealtime();
-
-    // Simulate a new incoming TX in test mode after 6s
-    Future.delayed(const Duration(seconds: 6), () {
-      if (!mounted || _tronAddress == null) return;
-      final tx = {
-        'txID': '0xDEMO_USDT_NEW',
-        'token': 'USDT',
-        'decimals': 6,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'contract_type': 'TriggerSmartContract',
-        'confirmed': true,
-        'contract': {
-          'from_address': 'TDemoSenderNEW',
-          'to_address': _tronAddress!,
-          'symbol': 'USDT',
-          'amount': 5_000_000,
-          'decimals': 6,
-        },
-      };
-      if (!mounted) return;
-      setState(() {
-        _transactionHistory.insert(0, tx);
-        _knownTxIds.add(_txIdOf(tx));
-        _incomingHints.insert(0, tx);
-      });
-      if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        message: 'Incoming 5 USDT',
-        type: SnackBarType.success,
-      );
     });
   }
 
@@ -281,7 +172,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _tronAddressHex41 = hex41;
       });
 
-      await Future.wait([_fetchBalances(), _fetchTransactionHistory()]);
+      // initial fetches
+      await Future.wait([
+        _fetchBalances(),
+        _fetchIncomingHints(),
+      ]);
+
       _startRealtime();
     } catch (e) {
       debugPrint('Failed to load Tron wallet: $e');
@@ -295,7 +191,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 
   Future<void> _fetchBalances() async {
-    if (_tronAddress == null || _balancesInFlight) return;
+    if (_tronAddress == null) return;
+    if (_balancesInFlight) return;
+    if (!_shouldFetch(_lastBalancesAt, _minBalancesGap)) return;
+
     _balancesInFlight = true;
 
     final prevTrx = _trxBalance;
@@ -309,53 +208,55 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _trxBalance = trxSun / 1e6;
         _usdtBalance = usdt;
         _loadingBalances = false;
-        _lastBalancesAt = DateTime.now();
+        _lastBalancesAt = DateTime.now(); // success time
       });
 
       final changedTrx = (prevTrx - _trxBalance).abs() >= 0.000001;
       final changedUsdt = (prevUsdt - _usdtBalance).abs() >= 0.000001;
       if (changedTrx || changedUsdt) {
-        // reserved for subtle UI animations/haptics
+        // optional: gentle animation/haptic
       }
     } catch (e) {
       debugPrint('Error fetching balances: $e');
+      // keep _lastBalancesAt unchanged on error
     } finally {
       _balancesInFlight = false;
     }
   }
 
-  Future<void> _fetchTransactionHistory() async {
-    if (_tronAddress == null || _historyInFlight) return;
-    _historyInFlight = true;
+  /// Fetch **incoming** successful transactions and surface them as hints only.
+  /// No transaction history is stored; throttled to avoid redundant calls.
+  Future<void> _fetchIncomingHints() async {
+    if (_tronAddress == null) return;
+    if (_hintsInFlight) return;
+    if (!_shouldFetch(_lastHintsAt, _minHintsGap)) return;
 
+    _hintsInFlight = true;
     try {
       final history = await _tron.getTransactionHistory(_tronAddress!);
-      if (!mounted) return;
 
       final incomingAll = history.where((tx) {
         final success = _isSuccessTx(tx);
         final incomingToMe = _isIncomingToMe(tx);
         return success && incomingToMe;
-      }).toList();
+      }).toList(growable: false);
 
-      final newOnes =
-      incomingAll.where((tx) => !_knownTxIds.contains(_txIdOf(tx))).toList(growable: false);
+      final newOnes = incomingAll
+          .where((tx) => !_knownTxIds.contains(_txIdOf(tx)))
+          .toList(growable: false);
 
+      if (!mounted) return;
       setState(() {
-        _transactionHistory
-          ..clear()
-          ..addAll(history);
-
         final undismissed = incomingAll
             .where((tx) => !_dismissedHintIds.contains(_txIdOf(tx)))
             .toList(growable: false);
+
         _incomingHints
           ..clear()
           ..addAll(undismissed);
 
-        _knownTxIds.addAll(history.map(_txIdOf));
-        _loadingHistory = false;
-        _lastHistoryAt = DateTime.now();
+        _knownTxIds.addAll(incomingAll.map(_txIdOf));
+        _lastHintsAt = DateTime.now(); // success time
       });
 
       for (final tx in newOnes) {
@@ -372,25 +273,26 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         );
       }
     } catch (e) {
-      debugPrint('Error fetching Tron transaction history: $e');
+      debugPrint('Error fetching incoming hints: $e');
+      // keep _lastHintsAt unchanged on error
     } finally {
-      _historyInFlight = false;
+      _hintsInFlight = false;
     }
   }
 
   // start/stop periodic polling
   void _startRealtime() {
     _pollBalancesTimer?.cancel();
-    _pollHistoryTimer?.cancel();
+    _pollHintsTimer?.cancel();
 
-    unawaited(_fetchBalances());
-    unawaited(_fetchTransactionHistory());
+    // No immediate fetch here; initial fetch already done in _loadWallet()
 
-    _pollBalancesTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+    // Poll at cadence >= min gap. Each fetch also self-gates.
+    _pollBalancesTimer = Timer.periodic(_minBalancesGap, (_) {
       if (mounted) unawaited(_fetchBalances());
     });
-    _pollHistoryTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) unawaited(_fetchTransactionHistory());
+    _pollHintsTimer = Timer.periodic(_minHintsGap, (_) {
+      if (mounted) unawaited(_fetchIncomingHints());
     });
   }
 
@@ -400,7 +302,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final currency = context.watch<CurrencyProvider>(); // centralized conversion
-    final assetProv = context.watch<AssetProvider>();   // percent changes + logos
+    final assetProv = context.watch<AssetProvider>(); // percent changes + logos
 
     return DefaultTabController(
       length: 2,
@@ -414,7 +316,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                   backgroundColor: colors.surface,
                   elevation: innerScrolled ? 2 : 0,
                   pinned: true,
-                  title: _TopBar(isTest: widget.isTest, colors: colors),
+                  title: _TopBar(colors: colors),
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
@@ -537,8 +439,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 // ---------- Small, focused widgets ----------
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.isTest, required this.colors});
-  final bool isTest;
+  const _TopBar({required this.colors});
   final AppColor colors;
 
   @override
@@ -553,28 +454,12 @@ class _TopBar extends StatelessWidget {
         ),
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Tron Wallet',
+          children: const [
+            Text('Tron Wallet',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-            const SizedBox(width: 6),
-            if (isTest)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colors.warning.withOpacity(.14),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: colors.warning.withOpacity(.25)),
-                ),
-                child: Text(
-                  'TEST',
-                  style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w800, color: colors.warning),
-                ),
-              ),
-            const SizedBox(width: 4),
-            const Icon(LucideIcons.chevronDown, size: 18),
-          ],
-        ),
+            SizedBox(width: 4),
+            Icon(LucideIcons.chevronDown, size: 18),
+          ],),
         IconButton(
           icon: Icon(LucideIcons.settings, color: colors.textPrimary, size: 26),
           onPressed: () {},
@@ -623,10 +508,8 @@ class _HeaderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFmt =
-    NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final totalFiat =
-        currency.trxToFiat(trxBalance) + currency.usdtToFiat(usdtBalance);
+    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final totalFiat = currency.trxToFiat(trxBalance) + currency.usdtToFiat(usdtBalance);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

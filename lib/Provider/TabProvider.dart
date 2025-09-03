@@ -13,10 +13,10 @@ class TabProvider extends ChangeNotifier {
   bool get isFirstTime => _isFirstTime;
 
   final List<Widget> screens = const [
-    WalletHomeScreen(isTest: false,),
+    WalletHomeScreen(),
     TransactionScreen(),
     TransactionScreen(),
-    WalletHomeScreen(isTest: false,),
+    WalletHomeScreen(),
   ];
 
   TabProvider() {
