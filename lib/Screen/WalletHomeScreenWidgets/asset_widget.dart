@@ -1,4 +1,4 @@
-// lib/Screen/WalletHomeScreenWidgets/asset_widget.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -69,7 +69,7 @@ class AssetWidget extends StatelessWidget {
         final logoUrl = logos[a.id];
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 6),
           child: Row(
             children: [
               _logo(logoUrl),

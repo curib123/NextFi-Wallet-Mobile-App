@@ -485,30 +485,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   Widget _buildFloatingButtons(AppColor colors) {
     return Positioned(
-      bottom: 24,
+      bottom: 10,
       right: 24,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          floatingCircleButton(
-            onTap: () {
-              if (_tronAddress == null) {
-                showFloatingSnackBar(
-                  context,
-                  message: 'Wallet not loaded yet',
-                  type: SnackBarType.warning,
-                );
-                return;
-              }
-              // placeholder for quick action (e.g., new contact, buy crypto)
-            },
-            icon: LucideIcons.plus,
-            color: colors.primary,
-          ),
           const SizedBox(height: 16),
           floatingCircleButton(
             onTap: () {
-              // TODO: QR scan
+
             },
             icon: LucideIcons.scanLine,
             color: colors.primary,
@@ -768,12 +753,12 @@ class _HeaderSection extends StatelessWidget {
           ],
         ),
 
+        SizedBox(height: 20,),
         // Incoming payment hints directly below action buttons
         if (tronAddress != null && incomingHints.isNotEmpty) ...[
-          const SizedBox(height: 16),
           for (final tx in incomingHints)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 0),
               child: incomingPaymentHint(
                 tx,
                 tronAddress!,
