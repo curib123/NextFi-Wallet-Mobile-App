@@ -3,40 +3,35 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+/// CoinGecko-free rates using Binance (TRX/USDT), Coinbase (USDT->fiat),
+/// and Frankfurter (USD->fiat history as proxy for USDT history)
 class CurrencyProvider extends ChangeNotifier {
-  /// Default base fiat
   String _fiat = "usd";
 
-  /// Latest rates (current)
-  double _usdtRate = 0;   // fallback so test mode isn't zero
-  double _trxRate  = 0;  // fallback so test mode isn't zero
+  double _usdtRate = 0;   // current USDT->fiat
+  double _trxRate  = 0;   // current TRX->fiat
 
-  /// Previous good rates (used as fallback on failures)
   double _prevUsdtRate = 0;
   double _prevTrxRate  = 0;
 
-  /// Price history (for charts)
   List<double> _trxHistory = [];
   List<double> _usdtHistory = [];
 
-  /// Loading state
   bool _loading = true;
-
   Timer? _pollingTimer;
 
-  /// Streams for realtime updates
-  final StreamController<double> _trxPriceController = StreamController.broadcast();
-  final StreamController<double> _usdtPriceController = StreamController.broadcast();
+  final _trxPriceController  = StreamController<double>.broadcast();
+  final _usdtPriceController = StreamController<double>.broadcast();
 
   String get fiat => _fiat;
   double get usdtRate => _usdtRate;
-  double get trxRate => _trxRate;
+  double get trxRate  => _trxRate;
   bool get loading => _loading;
 
   List<double> get trxHistory => _trxHistory;
   List<double> get usdtHistory => _usdtHistory;
 
-  Stream<double> get trxPriceStream => _trxPriceController.stream;
+  Stream<double> get trxPriceStream  => _trxPriceController.stream;
   Stream<double> get usdtPriceStream => _usdtPriceController.stream;
 
   CurrencyProvider() {
@@ -49,7 +44,6 @@ class CurrencyProvider extends ChangeNotifier {
     final lower = newFiat.toLowerCase();
     if (lower != _fiat) {
       _fiat = lower;
-      // Keep current/previous as is; fetch will replace them atomically when ready.
       fetchRates();
       fetchHistory();
     }
@@ -71,48 +65,33 @@ class CurrencyProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  /// Fetch latest rates with "previous-as-fallback" semantics
   Future<void> fetchRates() async {
     _loading = true;
     notifyListeners();
 
     try {
-      final url = Uri.parse(
-        'https://api.coingecko.com/api/v3/simple/price?ids=tether,tron&vs_currencies=$_fiat',
-      );
-      final response = await http.get(url).timeout(const Duration(seconds: 12));
+      // 1) TRX/USDT from Binance
+      final trxUsdt = await _fetchTrxUsdtFromBinance();
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>?;
+      // 2) USDT -> selected fiat from Coinbase (many fiats supported)
+      final usdtToFiat = await _fetchUsdtToFiatFromCoinbase(_fiat);
 
-        final tether = (data?['tether'] as Map?)?.cast<String, dynamic>();
-        final tron   = (data?['tron']   as Map?)?.cast<String, dynamic>();
+      bool gotAny = false;
 
-        final double? usdtVal = (tether?[_fiat] as num?)?.toDouble();
-        final double? trxVal  = (tron?[_fiat]   as num?)?.toDouble();
-
-        bool gotAny = false;
-
-        if (usdtVal != null && usdtVal > 0) {
-          // move current → previous, then apply new as current
-          _prevUsdtRate = _usdtRate;
-          _usdtRate = usdtVal;
-          gotAny = true;
-        }
-        if (trxVal != null && trxVal > 0) {
-          _prevTrxRate = _trxRate;
-          _trxRate = trxVal;
-          gotAny = true;
-        }
-
-        // If API returned nothing usable, fall back to previous/current (do nothing).
-        if (!gotAny) {
-          // no-op: keep current; they already hold last good or fallback values
-        }
-      } else {
-        // Non-200: keep current; if somehow current is bad, revert to previous
-        _applyPreviousIfCurrentInvalid();
+      if (usdtToFiat != null && usdtToFiat > 0) {
+        _prevUsdtRate = _usdtRate;
+        _usdtRate = usdtToFiat;
+        gotAny = true;
       }
+
+      if (trxUsdt != null && trxUsdt > 0 && (_usdtRate > 0 || _prevUsdtRate > 0)) {
+        final fx = (_usdtRate > 0) ? _usdtRate : _prevUsdtRate; // multiply by USDT->fiat
+        _prevTrxRate = _trxRate;
+        _trxRate = trxUsdt * fx;
+        gotAny = true;
+      }
+
+      if (!gotAny) _applyPreviousIfCurrentInvalid();
     } on TimeoutException {
       _applyPreviousIfCurrentInvalid();
     } catch (e) {
@@ -120,53 +99,97 @@ class CurrencyProvider extends ChangeNotifier {
       _applyPreviousIfCurrentInvalid();
     } finally {
       _loading = false;
-
-      // push whatever we ended up with (new/current or previous/fallback) to streams
       _trxPriceController.add(_trxRate);
       _usdtPriceController.add(_usdtRate);
-
       notifyListeners();
     }
   }
 
   void _applyPreviousIfCurrentInvalid() {
-    if (_usdtRate <= 0 && _prevUsdtRate > 0) {
-      _usdtRate = _prevUsdtRate;
-    }
-    if (_trxRate <= 0 && _prevTrxRate > 0) {
-      _trxRate = _prevTrxRate;
-    }
-    // If both current and previous were invalid (shouldn't happen with our seeded fallbacks),
-    // keep the seeded fallbacks already in _usdtRate/_trxRate.
+    if (_usdtRate <= 0 && _prevUsdtRate > 0) _usdtRate = _prevUsdtRate;
+    if (_trxRate  <= 0 && _prevTrxRate  > 0) _trxRate  = _prevTrxRate;
   }
 
-  /// Fetch 7-day history for charts
+  Future<double?> _fetchTrxUsdtFromBinance() async {
+    final url = Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=TRXUSDT');
+    final r = await http.get(url).timeout(const Duration(seconds: 10));
+    if (r.statusCode == 200) {
+      final m = jsonDecode(r.body) as Map<String, dynamic>;
+      final p = (m['price'] as String?) ?? '';
+      return double.tryParse(p);
+    }
+    return null;
+  }
+
+  Future<double?> _fetchUsdtToFiatFromCoinbase(String fiat) async {
+    // Coinbase returns a big map of rates for a base currency.
+    // We want 1 USDT -> X FIAT (e.g., PHP, USD, EUR)
+    final url = Uri.parse('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
+    final r = await http.get(url).timeout(const Duration(seconds: 10));
+    if (r.statusCode == 200) {
+      final m = jsonDecode(r.body) as Map<String, dynamic>;
+      final rates = (m['data']?['rates'] as Map?)?.cast<String, dynamic>();
+      final val = rates?[fiat.toUpperCase()];
+      if (val is String) return double.tryParse(val);
+      if (val is num) return val.toDouble();
+    }
+    // Fallback: treat USDT≈1 USD when fiat is USD
+    if (fiat.toLowerCase() == 'usd') return 1.0;
+    return null;
+  }
+
   Future<void> fetchHistory() async {
     try {
-      // TRX history
-      final trxUrl = Uri.parse(
-          'https://api.coingecko.com/api/v3/coins/tron/market_chart?vs_currency=$_fiat&days=7');
-      final trxResponse = await http.get(trxUrl).timeout(const Duration(seconds: 12));
-      if (trxResponse.statusCode == 200) {
-        final data = jsonDecode(trxResponse.body) as Map<String, dynamic>?;
-        final prices = (data?['prices'] as List?) ?? const [];
-        _trxHistory = prices
-            .map((e) => (e is List && e.length > 1) ? (e[1] as num?)?.toDouble() : null)
-            .whereType<double>()
-            .toList();
-      }
+      // A) USDT history ≈ USD->FIAT history over the last 7 days
+      final now = DateTime.now();
+      final from = now.subtract(const Duration(days: 7));
+      final ymd = (DateTime d) =>
+      "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
-      // USDT history
-      final usdtUrl = Uri.parse(
-          'https://api.coingecko.com/api/v3/coins/tether/market_chart?vs_currency=$_fiat&days=7');
-      final usdtResponse = await http.get(usdtUrl).timeout(const Duration(seconds: 12));
-      if (usdtResponse.statusCode == 200) {
-        final data = jsonDecode(usdtResponse.body) as Map<String, dynamic>?;
-        final prices = (data?['prices'] as List?) ?? const [];
-        _usdtHistory = prices
-            .map((e) => (e is List && e.length > 1) ? (e[1] as num?)?.toDouble() : null)
+      List<double> usdToFiatSeries = [];
+      if (_fiat.toLowerCase() == 'usd') {
+        // If fiat is USD, USDT≈1 => series of 1.0
+        usdToFiatSeries = List<double>.filled(7, 1.0);
+      } else {
+        final fUrl = Uri.parse(
+          'https://api.frankfurter.app/${ymd(from)}..${ymd(now)}?from=USD&to=${_fiat.toUpperCase()}',
+        );
+        final r = await http.get(fUrl).timeout(const Duration(seconds: 10));
+        if (r.statusCode == 200) {
+          final m = jsonDecode(r.body) as Map<String, dynamic>;
+          final rates = (m['rates'] as Map?)?.cast<String, dynamic>() ?? {};
+          final keys = rates.keys.toList()..sort(); // chronological by date string
+          usdToFiatSeries = keys.map((k) {
+            final v = (rates[k] as Map?)?[_fiat.toUpperCase()];
+            if (v is num) return v.toDouble();
+            return 1.0;
+          }).toList();
+          // Ensure exactly 7 points (pad/trim)
+          if (usdToFiatSeries.length > 7) {
+            usdToFiatSeries = usdToFiatSeries.sublist(usdToFiatSeries.length - 7);
+          } else if (usdToFiatSeries.length < 7 && usdToFiatSeries.isNotEmpty) {
+            usdToFiatSeries = List<double>.filled(7 - usdToFiatSeries.length, usdToFiatSeries.first)
+              ..addAll(usdToFiatSeries);
+          }
+        } else {
+          usdToFiatSeries = List<double>.filled(7, _usdtRate > 0 ? _usdtRate : 1.0);
+        }
+      }
+      _usdtHistory = usdToFiatSeries;
+
+      // B) TRX history: Binance daily closes for 7 days * latest USDT->FIAT
+      final trxUrl = Uri.parse(
+          'https://api.binance.com/api/v3/klines?symbol=TRXUSDT&interval=1d&limit=7');
+      final trxRes = await http.get(trxUrl).timeout(const Duration(seconds: 10));
+      if (trxRes.statusCode == 200) {
+        final list = jsonDecode(trxRes.body) as List<dynamic>;
+        final closesUsdt = list
+            .map((e) => (e is List && e.length > 4) ? e[4] : null) // index 4 = close
+            .map((v) => (v is String) ? double.tryParse(v) : (v as num?)?.toDouble())
             .whereType<double>()
             .toList();
+        final usdtFx = (_usdtRate > 0) ? _usdtRate : (_prevUsdtRate > 0 ? _prevUsdtRate : 1.0);
+        _trxHistory = closesUsdt.map((c) => c * usdtFx).toList();
       }
 
       notifyListeners();
@@ -177,25 +200,11 @@ class CurrencyProvider extends ChangeNotifier {
     }
   }
 
-  /// Convert TRX amount to selected fiat
+  // Converters
   double trxToFiat(double trxAmount) => trxAmount * _trxRate;
-
-  /// Convert USDT amount to selected fiat
   double usdtToFiat(double usdtAmount) => usdtAmount * _usdtRate;
-
-  /// Convert fiat amount to USDT
-  double fiatToUsdt(double fiatAmount) =>
-      (_usdtRate != 0) ? fiatAmount / _usdtRate : 0.0;
-
-  /// Convert fiat amount to TRX
-  double fiatToTrx(double fiatAmount) =>
-      (_trxRate != 0) ? fiatAmount / _trxRate : 0.0;
-
-  /// Convert TRX amount to USDT
-  double trxToUsdt(double trxAmount) =>
-      (_trxRate != 0 && _usdtRate != 0) ? (trxAmount * _trxRate) / _usdtRate : 0.0;
-
-  /// Convert USDT amount to TRX
-  double usdtToTrx(double usdtAmount) =>
-      (_usdtRate != 0 && _trxRate != 0) ? (usdtAmount * _usdtRate) / _trxRate : 0.0;
+  double fiatToUsdt(double fiatAmount) => (_usdtRate != 0) ? fiatAmount / _usdtRate : 0.0;
+  double fiatToTrx(double fiatAmount)  => (_trxRate  != 0) ? fiatAmount / _trxRate  : 0.0;
+  double trxToUsdt(double trxAmount)   => (_trxRate  != 0 && _usdtRate != 0) ? (trxAmount * _trxRate) / _usdtRate : 0.0;
+  double usdtToTrx(double usdtAmount)  => (_trxRate  != 0 && _usdtRate != 0) ? (usdtAmount * _usdtRate) / _trxRate : 0.0;
 }

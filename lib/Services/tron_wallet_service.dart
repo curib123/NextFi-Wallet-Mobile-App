@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -42,7 +40,7 @@ class TronClientConfig {
 
   const TronClientConfig({
     this.baseUrl = 'https://api.trongrid.io',
-    this.tronProApiKey,
+    this.tronProApiKey = 'fe46f008-ba3b-4117-ae10-3043aaf04bc2',
     this.timeout = const Duration(seconds: 15),
     this.maxRetries = 2,
   });
@@ -52,7 +50,11 @@ class TronClientConfig {
 
 class TronWalletService {
   static const String defaultPath = "m/44'/195'/0'/0/0";
-  static const String USDT_TRC20_MAINNET = 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj';
+
+// Add/replace these constants near the top
+  static const String USDT_TRC20_MAINNET = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+  static const String USDT_TRC20_SHASTA  = 'TG3XXyExBkPp9nzdajDZsozEu4BkaSJozs';
+
 
   final TronClientConfig _cfg;
   final http.Client _http;
@@ -134,20 +136,98 @@ class TronWalletService {
     return (bal as num).toInt();
   }
 
-  /// USDT balance as a decimal double (6 dp)
-  Future<double> getUsdtBalance(
-      String base58Address, {
-        String contractAddress = USDT_TRC20_MAINNET,
-      }) async {
-    _ensureAddress(base58Address);
-    final uri = Uri.parse(
-        '${_cfg.baseUrl}/v1/accounts/$base58Address/contracts/$contractAddress');
-    final resp = await _get(uri);
-    final data = _safeJson(resp);
-    final bal = (data['data'] is List && data['data'].isNotEmpty)
-        ? (data['data'][0]['balance'] ?? 0)
-        : 0;
-    return (bal as num) / 1e6;
+  /// Read TRC20 `decimals()` via triggerconstantcontract (works on mainnet & testnets).
+  Future<int> getTrc20Decimals(String contractAddress) async {
+    _ensureAddress(contractAddress);
+    final uri = Uri.parse('${_cfg.baseUrl}/wallet/triggerconstantcontract');
+    final res = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'contract_address': contractAddress,
+        'function_selector': 'decimals()',
+        // any valid Tron address is fine as owner for constant calls:
+        'owner_address': 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', // foundation addr
+        'visible': true,
+      }),
+    ).timeout(_cfg.timeout);
+    final j = _safeJson(res);
+    final hex = (j['constant_result'] is List && j['constant_result'].isNotEmpty)
+        ? (j['constant_result'][0] as String)
+        : '0';
+    try {
+      return int.parse(hex, radix: 16);
+    } catch (_) {
+      return 6; // sensible default for USDT
+    }
+  }
+
+  /// Scan the "holders" list for a single address’s raw balance (BigInt).
+  /// Uses GET /v1/contracts/{contract}/tokens with fingerprint pagination.
+  /// NOTE: This endpoint is optimized for listing holders (top balances first).
+  /// For per-address lookups, it's less efficient than `balanceOf` or
+  /// `/v1/accounts/{addr}/tokens`. :contentReference[oaicite:3]{index=3}
+  Future<BigInt> getHolderRawBalance({
+    required String contractAddress,
+    required String holderAddress,
+    int limit = 200,                 // max allowed by API
+    int maxPages = 5,                // safety cap; increase if you must
+    bool onlyConfirmed = true,
+  }) async {
+    _ensureAddress(contractAddress);
+    _ensureAddress(holderAddress);
+
+    String? fingerprint;
+    for (int page = 0; page < maxPages; page++) {
+      final qs = [
+        if (onlyConfirmed) 'only_confirmed=true',
+        'order_by=balance,desc',
+        'limit=$limit',
+        if (fingerprint != null) 'fingerprint=$fingerprint',
+      ].join('&');
+
+      final uri = Uri.parse(
+        '${_cfg.baseUrl}/v1/contracts/$contractAddress/tokens?$qs',
+      );
+
+      final resp = await _get(uri);
+      final json = _safeJson(resp);
+
+      final List data = (json['data'] as List?) ?? const [];
+      for (final row in data) {
+        final m = (row as Map).cast<String, dynamic>();
+        if ((m['address'] ?? '') == holderAddress) {
+          final balStr = (m['balance'] ?? '0').toString();
+          return BigInt.tryParse(balStr) ?? BigInt.zero;
+        }
+      }
+
+      final meta = (json['meta'] as Map?) ?? const {};
+      fingerprint = meta['fingerprint']?.toString();
+      if (fingerprint == null || data.isEmpty) break; // no more pages
+    }
+    return BigInt.zero; // not found (likely zero balance or low-ranked holder)
+  }
+
+  /// Public: Get a wallet’s USDT (or any TRC20) balance using the *holders* endpoint.
+  /// Returns human units (double), fetching token decimals automatically.
+  Future<double> getTrc20BalanceViaHolders({
+    required String walletBase58,
+    String contractAddress = USDT_TRC20_MAINNET,  // override with USDT_TRC20_SHASTA on Shasta
+    int pageLimit = 200,
+    int maxPages = 5,
+  }) async {
+    _ensureAddress(walletBase58);
+    final raw = await getHolderRawBalance(
+      contractAddress: contractAddress,
+      holderAddress: walletBase58,
+      limit: pageLimit,
+      maxPages: maxPages,
+      onlyConfirmed: true,
+    );
+    if (raw == BigInt.zero) return 0.0;
+    final decimals = await getTrc20Decimals(contractAddress);
+    return raw.toDouble() / pow10(decimals);
   }
 
   /// Mixed (TRX + TRC20) raw tx list (normalized minimal view)
@@ -217,7 +297,7 @@ class TronWalletService {
       final j = _safeJson(res);
       energyRequired = (j['energy_required'] as num?)?.toInt();
       estimateOk = j['result']?['result'] == true;
-    } catch (_) {/* ignore */}
+    } catch (_) {/* ignore */ }
 
     // Fallback: /wallet/triggerconstantcontract
     int? energyUsed;
@@ -248,7 +328,7 @@ class TronWalletService {
         readableMsg = _decodeB64OrText(msg);
       }
       energyRequired ??= energyUsed;
-    } catch (_) {/* ignore */}
+    } catch (_) {/* ignore */ }
 
     if (energyRequired == null && energyUsed == null) {
       throw TronError('Unable to estimate energy on this node');
@@ -341,7 +421,7 @@ class TronWalletService {
     final owner = tronAddressFromPrivateKey(privateKey);
 
     // 1) USDT balance guard
-    final usdtBal = await getUsdtBalance(owner, contractAddress: contractAddress);
+    final usdtBal = await getTrc20BalanceViaHolders( walletBase58: contractAddress);
     if (usdtBal + 1e-9 < amount) {
       throw TronError('Insufficient USDT: need $amount, have ${usdtBal.toStringAsFixed(6)}');
     }

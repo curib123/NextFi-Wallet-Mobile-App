@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +6,8 @@ import 'package:shimmer/shimmer.dart';
 import 'package:next_fi/Model/asset_model.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
+
+enum PriceWindow { h24, d7, d30, y1 }
 
 class AssetWidget extends StatelessWidget {
   const AssetWidget({
@@ -18,35 +19,48 @@ class AssetWidget extends StatelessWidget {
     required this.usdtBalance,
     this.loading = false,
     this.onRefresh,
+    this.window = PriceWindow.h24, // NEW: choose which % to show
   });
 
   final AppColor colors;
   final List<AssetModel> assets;
   final Map<String, String> logos;
-  final double trxBalance;   // passed from Home
-  final double usdtBalance;  // passed from Home
+  final double trxBalance;
+  final double usdtBalance;
   final bool loading;
-  final Future<void> Function()? onRefresh; // optional pull-to-refresh
+  final Future<void> Function()? onRefresh;
+  final PriceWindow window;
 
   double _balanceFor(AssetModel a) {
-    final sym = a.symbol.toUpperCase();
-    if (sym == 'TRX') return trxBalance;
-    if (sym == 'USDT') return usdtBalance;
-    return 0.0;
+    switch (a.symbol.toUpperCase()) {
+      case 'TRX': return trxBalance;
+      case 'USDT': return usdtBalance;
+      default: return 0.0;
+    }
   }
 
   double _fiatFor(BuildContext ctx, AssetModel a) {
-    final sym = a.symbol.toUpperCase();
     final cur = ctx.read<CurrencyProvider>();
-    if (sym == 'TRX')  return cur.trxToFiat(trxBalance);
-    if (sym == 'USDT') return cur.usdtToFiat(usdtBalance);
-    return 0.0;
-    // If you add more assets later, add conversion here.
+    switch (a.symbol.toUpperCase()) {
+      case 'TRX':  return cur.trxToFiat(trxBalance);
+      case 'USDT': return cur.usdtToFiat(usdtBalance);
+      default: return 0.0;
+    }
+  }
+
+  double _pctFor(AssetModel a) {
+    switch (window) {
+      case PriceWindow.h24: return a.priceChangePercent24h;
+      case PriceWindow.d7:  return a.priceChangePercent7d;
+      case PriceWindow.d30: return a.priceChangePercent30d;
+      case PriceWindow.y1:  return a.priceChangePercent1y;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final currencyCode = context.watch<CurrencyProvider>().fiat.toUpperCase();
+    final money = NumberFormat.simpleCurrency(name: currencyCode);
 
     if (loading) {
       return ListView.separated(
@@ -65,7 +79,7 @@ class AssetWidget extends StatelessWidget {
         final a = assets[index];
         final bal = _balanceFor(a);
         final fiat = _fiatFor(context, a);
-        final pct  = a.priceChangePercent24h ?? 0.0;
+        final pct  = _pctFor(a);
         final logoUrl = logos[a.id];
 
         return Padding(
@@ -78,7 +92,8 @@ class AssetWidget extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(a.name, style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary)),
+                    Text(a.name,
+                        style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary)),
                     const SizedBox(height: 2),
                     Text("$bal ${a.symbol}", style: TextStyle(color: colors.textSecondary)),
                   ],
@@ -87,10 +102,8 @@ class AssetWidget extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    NumberFormat.simpleCurrency(name: currencyCode).format(fiat),
-                    style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary),
-                  ),
+                  Text(money.format(fiat),
+                      style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary)),
                   const SizedBox(height: 2),
                   _pctBadge(pct),
                 ],
@@ -102,11 +115,7 @@ class AssetWidget extends StatelessWidget {
     );
 
     return onRefresh != null
-        ? RefreshIndicator(
-      onRefresh: onRefresh!,
-      color: colors.primary,
-      child: listView,
-    )
+        ? RefreshIndicator(onRefresh: onRefresh!, color: colors.primary, child: listView)
         : listView;
   }
 
@@ -124,7 +133,15 @@ class AssetWidget extends StatelessWidget {
         gaplessPlayback: true,
         errorBuilder: (_, __, ___) => _logoFallback(size),
         loadingBuilder: (ctx, child, progress) =>
-        progress == null ? child : SizedBox(width: size, height: size, child: const Center(child: SizedBox(width:16, height:16, child: CircularProgressIndicator(strokeWidth: 2)))),
+        progress == null
+            ? child
+            : SizedBox(
+          width: size,
+          height: size,
+          child: const Center(
+            child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        ),
       ),
     );
   }
@@ -146,11 +163,7 @@ class AssetWidget extends StatelessWidget {
             color: positive ? Colors.green : Colors.red, size: 18),
         Text(
           "${pct.abs().toStringAsFixed(2)}%",
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: positive ? Colors.green : Colors.red,
-          ),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: positive ? Colors.green : Colors.red),
         ),
       ],
     );

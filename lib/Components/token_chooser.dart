@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+
 import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Provider/AssetProvider.dart';
+import 'package:next_fi/Model/asset_model.dart';
 
 Future<void> showTokenSelector(
     BuildContext context,
@@ -11,6 +15,21 @@ Future<void> showTokenSelector(
       String title = "Select Token",
     }) async {
   final colors = AppColor.of(context);
+
+  // Read once (no rebuilds needed here)
+  final assetProv = context.read<AssetProvider>();
+  final List<AssetModel> assets = assetProv.assets;
+  final Map<String, String> logos = assetProv.logos;
+
+  String? logoForSymbol(String symbol) {
+    final sym = symbol.toUpperCase();
+    final asset = assets.firstWhere(
+          (a) => a.symbol.toUpperCase() == sym,
+      orElse: () => AssetModel(id: '', name: '', symbol: ''),
+    );
+    if (asset.id.isEmpty) return null;
+    return logos[asset.id];
+  }
 
   showModalBottomSheet(
     context: context,
@@ -46,11 +65,11 @@ Future<void> showTokenSelector(
             ),
             const SizedBox(height: 16),
 
-            // ===== Option: TRX =====
+            // ===== TRX =====
             _buildTokenTile(
               context,
               colors,
-              icon: LucideIcons.coins,
+              logoUrl: logoForSymbol('TRX'),
               token: "TRX",
               balance: trxBalance,
               onTap: () {
@@ -65,11 +84,11 @@ Future<void> showTokenSelector(
             ),
             const SizedBox(height: 12),
 
-            // ===== Option: USDT (TRC20) =====
+            // ===== USDT (TRC20) =====
             _buildTokenTile(
               context,
               colors,
-              icon: LucideIcons.dollarSign,
+              logoUrl: logoForSymbol('USDT'),
               token: "USDT (TRC20)",
               balance: usdtBalance,
               onTap: () {
@@ -92,7 +111,7 @@ Future<void> showTokenSelector(
 Widget _buildTokenTile(
     BuildContext context,
     AppColor colors, {
-      required IconData icon,
+      required String? logoUrl,
       required String token,
       required double balance,
       required VoidCallback onTap,
@@ -109,10 +128,7 @@ Widget _buildTokenTile(
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: colors.primary.withOpacity(0.1),
-            child: Icon(icon, color: colors.primary, size: 20),
-          ),
+          _logoView(logoUrl, colors),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -140,6 +156,61 @@ Widget _buildTokenTile(
           Icon(LucideIcons.chevronRight, color: colors.textSecondary),
         ],
       ),
+    ),
+  );
+}
+
+Widget _logoView(String? url, AppColor colors, {double size = 32}) {
+  if (url == null || url.isEmpty) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: colors.border.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(size / 2),
+      ),
+      child: Icon(
+        LucideIcons.helpCircle,
+        size: size * 0.6,
+        color: colors.textSecondary.withOpacity(0.6),
+      ),
+    );
+  }
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(size / 2),
+    child: Image.network(
+      url,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      gaplessPlayback: true,
+      errorBuilder: (_, __, ___) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: colors.border.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(size / 2),
+        ),
+        child: Icon(
+          LucideIcons.helpCircle,
+          size: size * 0.6,
+          color: colors.textSecondary.withOpacity(0.6),
+        ),
+      ),
+      loadingBuilder: (ctx, child, progress) {
+        if (progress == null) return child;
+        return SizedBox(
+          width: size,
+          height: size,
+          child: const Center(
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      },
     ),
   );
 }

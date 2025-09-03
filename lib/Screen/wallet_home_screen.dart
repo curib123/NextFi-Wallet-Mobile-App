@@ -3,9 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/token_chooser.dart';
 import 'package:provider/provider.dart';
 
-import 'package:next_fi/Components/token_chooser_receiver.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
 import 'package:next_fi/Screen/receive_screen.dart';
@@ -39,7 +39,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   // Wallet
   String? _tronAddress;
-  String? _tronAddressHex41; // cached 41-hex for efficient comparisons
+  String? _tronAddressHex41;
   Uint8List? _privateKey;
 
   // Balances
@@ -55,7 +55,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   final List<Map<String, dynamic>> _transactionHistory = [];
   final List<Map<String, dynamic>> _incomingHints = [];
   final Set<String> _dismissedHintIds = {};
-  final Set<String> _knownTxIds = {}; // for detecting new incoming
+  final Set<String> _knownTxIds = {};
 
   // Realtime
   Timer? _pollBalancesTimer;
@@ -76,9 +76,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Start asset-provider realtime (logos + 24h %), independent of wallet.
-    // Use microtask so context is ready.
-    Future.microtask(() => context.read<AssetProvider>().startRealtimeUpdates());
+    // Start asset-provider realtime (logos + % changes).
+    // Microtask to ensure context is available.
+    Future.microtask(() {
+      if (!mounted) return;
+      context.read<AssetProvider>().startRealtimeUpdates();
+    });
 
     widget.isTest ? _loadTestMode() : _loadWallet();
   }
@@ -108,31 +111,27 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   static String _txIdOf(Map<String, dynamic> tx) =>
       (tx['txID'] ?? tx['hash'] ?? '').toString();
 
-  bool _isIncomingToMe(
-      Map<String, dynamic> tx,
-      ) {
+  bool _isIncomingToMe(Map<String, dynamic> tx) {
     if (_tronAddress == null) return false;
     final c = (tx['contract'] as Map?)?.cast<String, dynamic>() ?? const {};
     final to = (c['to_address'] ?? c['to'] ?? '').toString();
     if (to.isEmpty) return false;
     final matchBase58 = to == _tronAddress;
-    final matchHex = _tronAddressHex41 != null &&
-        to.toUpperCase() == _tronAddressHex41!.toUpperCase();
+    final matchHex =
+        _tronAddressHex41 != null && to.toUpperCase() == _tronAddressHex41!.toUpperCase();
     return matchBase58 || matchHex;
   }
 
   bool _isSuccessTx(Map<String, dynamic> tx) {
     if (tx['confirmed'] == true) return true;
-    final status = (tx['status'] ?? tx['receipt_status'] ?? '')
-        .toString()
-        .toUpperCase();
+    final status = (tx['status'] ?? tx['receipt_status'] ?? '').toString().toUpperCase();
     if (status == 'SUCCESS') return true;
     final ret = tx['ret'];
     if (ret is List && ret.isNotEmpty) {
       final s = (ret.first['contractRet'] ?? '').toString().toUpperCase();
       if (s == 'SUCCESS') return true;
     }
-    return false; // <- previously always true; fixes false-positive success
+    return false;
   }
 
   void _dismissIncoming(String txId) {
@@ -238,7 +237,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
           'from_address': 'TDemoSenderNEW',
           'to_address': _tronAddress!,
           'symbol': 'USDT',
-          'amount': 5_000_000, // 5 USDT
+          'amount': 5_000_000,
           'decimals': 6,
         },
       };
@@ -282,10 +281,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _tronAddressHex41 = hex41;
       });
 
-      await Future.wait([
-        _fetchBalances(),
-        _fetchTransactionHistory(),
-      ]);
+      await Future.wait([_fetchBalances(), _fetchTransactionHistory()]);
       _startRealtime();
     } catch (e) {
       debugPrint('Failed to load Tron wallet: $e');
@@ -307,7 +303,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     try {
       final trxSun = await _tron.getTrxBalance(_tronAddress!);
-      final usdt = await _tron.getUsdtBalance(_tronAddress!);
+      final usdt = await _tron.getTrc20BalanceViaHolders(walletBase58: _tronAddress!);
       if (!mounted) return;
       setState(() {
         _trxBalance = trxSun / 1e6;
@@ -316,11 +312,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _lastBalancesAt = DateTime.now();
       });
 
-      // Optional: detect noticeable changes (kept silent to avoid spam)
       final changedTrx = (prevTrx - _trxBalance).abs() >= 0.000001;
       final changedUsdt = (prevUsdt - _usdtBalance).abs() >= 0.000001;
       if (changedTrx || changedUsdt) {
-        // could animate UI or lightly haptic; we avoid toasts here
+        // reserved for subtle UI animations/haptics
       }
     } catch (e) {
       debugPrint('Error fetching balances: $e');
@@ -343,17 +338,14 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         return success && incomingToMe;
       }).toList();
 
-      // Detect new incoming since last poll
-      final newOnes = incomingAll
-          .where((tx) => !_knownTxIds.contains(_txIdOf(tx)))
-          .toList(growable: false);
+      final newOnes =
+      incomingAll.where((tx) => !_knownTxIds.contains(_txIdOf(tx))).toList(growable: false);
 
       setState(() {
         _transactionHistory
           ..clear()
           ..addAll(history);
 
-        // keep hints that aren’t dismissed + add any new ones
         final undismissed = incomingAll
             .where((tx) => !_dismissedHintIds.contains(_txIdOf(tx)))
             .toList(growable: false);
@@ -391,11 +383,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     _pollBalancesTimer?.cancel();
     _pollHistoryTimer?.cancel();
 
-    // Initial tick
     unawaited(_fetchBalances());
     unawaited(_fetchTransactionHistory());
 
-    // Poll cadences
     _pollBalancesTimer = Timer.periodic(const Duration(seconds: 7), (_) {
       if (mounted) unawaited(_fetchBalances());
     });
@@ -409,8 +399,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final currency = context.watch<CurrencyProvider>();
-    final assetProv = context.watch<AssetProvider>();
+    final currency = context.watch<CurrencyProvider>(); // centralized conversion
+    final assetProv = context.watch<AssetProvider>();   // percent changes + logos
 
     return DefaultTabController(
       length: 2,
@@ -442,7 +432,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       onAcknowledge: (tx) => _dismissIncoming(_txIdOf(tx)),
                       onSend: _onSend,
                       onReceive: _onReceive,
-                      // live indicators
                       isUpdatingBalances: _balancesInFlight,
                       lastBalancesAt: _lastBalancesAt,
                       livePulse: _livePulse,
@@ -465,12 +454,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                     trxBalance: _trxBalance,
                     usdtBalance: _usdtBalance,
                     loading: assetProv.loading || currency.loading || _loadingBalances,
-                    onRefresh: () async {
-                      await Future.wait([
-                        _fetchBalances(),
-                        context.read<AssetProvider>().fetchLogosAndPriceChange(),
-                      ]);
-                    },
                   ),
                   RecipientListWidget(colors: colors),
                 ],
@@ -493,7 +476,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
           const SizedBox(height: 16),
           floatingCircleButton(
             onTap: () {
-
+              // TODO: scanner / quick action
             },
             icon: LucideIcons.scanLine,
             color: colors.primary,
@@ -576,8 +559,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(width: 6),
             if (isTest)
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: colors.warning.withOpacity(.14),
                   borderRadius: BorderRadius.circular(8),
@@ -586,9 +568,7 @@ class _TopBar extends StatelessWidget {
                 child: Text(
                   'TEST',
                   style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: colors.warning),
+                      fontSize: 11, fontWeight: FontWeight.w800, color: colors.warning),
                 ),
               ),
             const SizedBox(width: 4),
@@ -715,8 +695,7 @@ class _HeaderSection extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
                   elevation: 3,
                 ),
                 onPressed: () {},
@@ -753,7 +732,8 @@ class _HeaderSection extends StatelessWidget {
           ],
         ),
 
-        SizedBox(height: 20,),
+        const SizedBox(height: 20),
+
         // Incoming payment hints directly below action buttons
         if (tronAddress != null && incomingHints.isNotEmpty) ...[
           for (final tx in incomingHints)
@@ -791,8 +771,7 @@ class _LivePill extends StatelessWidget {
       child: Container(
         width: 8,
         height: 8,
-        decoration:
-        BoxDecoration(color: colors.success, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: colors.success, shape: BoxShape.circle),
       ),
     );
     return AnimatedOpacity(

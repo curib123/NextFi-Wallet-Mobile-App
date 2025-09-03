@@ -11,20 +11,22 @@ import 'package:provider/provider.dart';
 void main() {
   runApp(
     Phoenix( // ✅ Wrap your app with Phoenix
-      child: MultiProvider(
+      child:MultiProvider(
         providers: [
           ChangeNotifierProvider<CurrencyProvider>(
-            create: (_) => CurrencyProvider()..fetchRates(),
+            create: (_) => CurrencyProvider(), // already starts polling in ctor
           ),
           ChangeNotifierProvider<TabProvider>(
             create: (_) => TabProvider(),
           ),
-          ChangeNotifierProvider<AssetProvider>(
-            create: (_) => AssetProvider(),
+          ChangeNotifierProxyProvider<CurrencyProvider, AssetProvider>(
+            create: (ctx) => AssetProvider(ctx.read<CurrencyProvider>()),
+            update: (ctx, currency, previous) => previous ?? AssetProvider(currency),
           ),
         ],
         child: const MyApp(),
-      ),
+      )
+
     ),
   );
 }
