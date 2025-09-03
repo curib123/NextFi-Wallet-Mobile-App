@@ -1,30 +1,33 @@
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+// lib/Provider/AssetProvider.dart
+import 'dart:async';
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:next_fi/Model/asset_model.dart';
 
 class AssetProvider with ChangeNotifier {
-  final List<AssetModel> _assets = [
-    AssetModel(
-      id: "tron",
-      name: "Tron",
-      symbol: "TRX",
-      balance: 1000,
-      coingeckoId: "tron",
-    ),
-    AssetModel(
-      id: "tether_trc20",
-      name: "Tether (TRC20)",
-      symbol: "USDT",
-      balance: 10000,
-      coingeckoId: "tether",
-    ),
+  AssetProvider({
+    String vsCurrency = 'usd',
+    Duration requestTimeout = const Duration(seconds: 6),
+  })  : _vsCurrency = vsCurrency.toLowerCase(),
+        _requestTimeout = requestTimeout;
+
+  static const String _base = 'https://api.coingecko.com/api/v3';
+  final String _vsCurrency;
+  final Duration _requestTimeout;
+
+  // No balances here.
+  final List<AssetModel> _assets = <AssetModel>[
+    AssetModel(id: "tron",         name: "Tron",           symbol: "TRX",  coingeckoId: "tron"),
+    AssetModel(id: "tether_trc20", name: "Tether (TRC20)", symbol: "USDT", coingeckoId: "tether"),
   ];
 
-  Map<String, String> _logos = {};
+  Map<String, String> _logos = <String, String>{};
   bool _loading = true;
+
+  Timer? _timer;
   bool _isDisposed = false;
+  bool _inFlight = false;
 
   List<AssetModel> get assets => _assets;
   Map<String, String> get logos => _logos;
@@ -33,98 +36,86 @@ class AssetProvider with ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _timer?.cancel();
     super.dispose();
   }
 
-  void safeNotifyListeners() {
+  void _safeNotify() {
     if (!_isDisposed) notifyListeners();
   }
 
-  /// Fetch logos for all assets
-  Future<void> fetchLogos() async {
+  Future<void> fetchLogosAndPriceChange() async {
+    if (_inFlight) return;
+    _inFlight = true;
     _loading = true;
-    safeNotifyListeners();
+    _safeNotify();
 
     try {
-      final futures = _assets.map((asset) async {
-        try {
-          final url =
-          Uri.parse("https://api.coingecko.com/api/v3/coins/${asset.coingeckoId}");
-          final response = await http.get(url);
+      final ids = _assets.map((a) => a.coingeckoId.trim()).where((s) => s.isNotEmpty).join(',');
+      if (ids.isEmpty) {
+        _loading = false; _inFlight = false; _safeNotify(); return;
+      }
 
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body);
-            final logoUrl = (data["image"]?["small"] ?? "") as String;
-            return MapEntry(asset.id, logoUrl);
+      final uri = Uri.parse(
+        '$_base/coins/markets?vs_currency=$_vsCurrency&ids=$ids&price_change_percentage=24h',
+      );
+      final resp = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(_requestTimeout);
+
+      if (resp.statusCode == 200) {
+        final List<dynamic> list = json.decode(resp.body) as List<dynamic>;
+        final Map<String, String> newLogos = <String, String>{};
+
+        for (final item in list) {
+          if (item is! Map<String, dynamic>) continue;
+          final String id = (item['id'] ?? '').toString();
+          final String image = (item['image'] ?? '').toString();
+          final double pct =
+              _toDouble(item['price_change_percentage_24h_in_currency']) ??
+                  _toDouble(item['price_change_percentage_24h']) ??
+                  0.0;
+
+          final idx = _assets.indexWhere((a) => a.coingeckoId == id);
+          if (idx != -1) {
+            _assets[idx].priceChangePercent24h = pct;
+            newLogos[_assets[idx].id] = image; // key by our id
           }
-        } catch (e) {
-          debugPrint("Error fetching logo for ${asset.name}: $e");
         }
-        return MapEntry(asset.id, "");
-      }).toList();
-
-      final results = await Future.wait(futures);
-      _logos = Map.fromEntries(results);
+        _logos = newLogos;
+      } else {
+        debugPrint('CoinGecko error ${resp.statusCode}: ${resp.body}');
+      }
     } catch (e) {
-      debugPrint("Error fetching logos: $e");
-    }
-
-    _loading = false;
-    safeNotifyListeners();
-  }
-
-  /// Fetch real-time 24h price change percent
-  Future<void> fetchPriceChangePercent() async {
-    try {
-      final futures = _assets.map((asset) async {
-        try {
-          final url =
-          Uri.parse("https://api.coingecko.com/api/v3/coins/${asset.coingeckoId}");
-          final response = await http.get(url);
-
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body);
-            final percentChange =
-            (data["market_data"]?["price_change_percentage_24h"] ?? 0.0) as double;
-            asset.priceChangePercent24h = percentChange;
-          }
-        } catch (e) {
-          debugPrint("Error fetching price change for ${asset.name}: $e");
-          asset.priceChangePercent24h = 0.0;
-        }
-      }).toList();
-
-      await Future.wait(futures);
-      safeNotifyListeners();
-    } catch (e) {
-      debugPrint("Error fetching price changes: $e");
+      debugPrint('fetchLogosAndPriceChange error: $e');
+    } finally {
+      _loading = false;
+      _inFlight = false;
+      _safeNotify();
     }
   }
 
-  /// Start auto-updating price changes every interval
-  void startRealtimeUpdates({Duration interval = const Duration(seconds: 1)}) {
-    Future.doWhile(() async {
-      await fetchPriceChangePercent();
-      await Future.delayed(interval);
-      return !_isDisposed;
+  void startRealtimeUpdates({Duration interval = const Duration(seconds: 30)}) {
+    _timer?.cancel();
+    unawaited(fetchLogosAndPriceChange());
+    _timer = Timer.periodic(interval, (_) {
+      if (!_isDisposed) {
+        unawaited(fetchLogosAndPriceChange());
+      }
     });
   }
 
-  /// Update balance for a specific asset by id
-  void updateBalance(String assetId, double amount) {
-    final index = _assets.indexWhere((a) => a.id == assetId);
-    if (index != -1) {
-      _assets[index].balance += amount;
-      safeNotifyListeners();
-    }
+  void stopRealtimeUpdates() {
+    _timer?.cancel();
+    _timer = null;
   }
 
-  /// Set balance for a specific asset by id
-  void setBalance(String assetId, double amount) {
-    final index = _assets.indexWhere((a) => a.id == assetId);
-    if (index != -1) {
-      _assets[index].balance = amount;
-      safeNotifyListeners();
-    }
+  double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return null;
   }
 }
+
+void unawaited(Future<void> f) {}

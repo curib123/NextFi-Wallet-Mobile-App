@@ -2,7 +2,6 @@ class AssetModel {
   final String id;
   final String name;
   final String symbol;
-  double balance;
   final String coingeckoId;
   double priceChangePercent24h; // real-time up/down percent
 
@@ -10,7 +9,6 @@ class AssetModel {
     required this.id,
     required this.name,
     required this.symbol,
-    required this.balance,
     required this.coingeckoId,
     this.priceChangePercent24h = 0.0,
   });
@@ -21,7 +19,6 @@ class AssetModel {
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       symbol: json['symbol'] ?? '',
-      balance: (json['balance'] ?? 0).toDouble(),
       coingeckoId: json['coingeckoId'] ?? '',
       priceChangePercent24h: (json['priceChangePercent24h'] ?? 0).toDouble(),
     );
@@ -33,20 +30,9 @@ class AssetModel {
       'id': id,
       'name': name,
       'symbol': symbol,
-      'balance': balance,
       'coingeckoId': coingeckoId,
       'priceChangePercent24h': priceChangePercent24h,
     };
-  }
-
-  /// Update balance safely
-  void updateBalance(double amount) {
-    balance += amount;
-  }
-
-  /// Set balance directly
-  void setBalance(double amount) {
-    balance = amount;
   }
 
   /// Update price change percent safely
