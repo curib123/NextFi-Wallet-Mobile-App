@@ -10,16 +10,22 @@ class AssetProvider with ChangeNotifier {
     AssetModel(id: 'tron', name: 'Tron', symbol: 'TRX'),
     AssetModel(id: 'tether_trc20', name: 'Tether (TRC20)', symbol: 'USDT'),
   ] {
+    // Primary logo map (first-choice URLs). Kept as Map<String,String> to avoid breaking callers.
+    // - TRX uses Trust Wallet's tron/info logo (stable).
+    // - USDT (TRC20 on TRON) switches to GitHub-hosted icon packs via jsDelivr CDN.
+    // inside AssetProvider constructor:
     _logos = const {
-      'tron':
-      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png',
-      // ✅ USDT (TRC20) mainnet correct contract folder
-      'USDT':
-      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/assets/TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/logo.png',
-      // (Optional extra key if some UI looks up by symbol)
-      // 'USDT':
-      //     'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/assets/TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/logo.png',
+      // TRON (via jsDelivr CDN)
+      'tron': 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/tron/info/logo.png',
+      'trx' : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/tron/info/logo.png',
+
+      // USDT (TRC20) via CDN icon pack
+      'tether_trc20': 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdt.png',
+      'USDT'        : 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdt.png',
+      'usdt'        : 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdt.png',
     };
+
+
     startRealtimeUpdates(); // idempotent
     _recompute();
   }
@@ -35,11 +41,39 @@ class AssetProvider with ChangeNotifier {
   StreamSubscription<double>? _trxSub, _usdtSub;
   VoidCallback? _currencyListener; // listens to CurrencyProvider.notifyListeners
 
+  // Optional: public fallback candidates you can try in your Image.errorBuilder
+  static const List<String> usdtLogoFallbacks = [
+    'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdt.png',
+    'https://cdn.jsdelivr.net/gh/Cryptofonts/cryptoicons@master/128/usdt.png',
+    // SVGs work if your widget supports them (e.g., flutter_svg)
+    'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/usdt.svg',
+  ];
+
   // Public getters
   List<AssetModel> get assets => _assets;
   Map<String, String> get logos => _logos;
   String get vsCurrency => currency.fiat;
   bool get loading => currency.loading;
+
+  /// Returns the best-known logo URL for a given asset key.
+  /// Accepts id or symbol (case-insensitive), with a few aliases.
+  String logoFor(String key) {
+    final k = key.trim();
+    final aliases = <String>[
+      k,
+      k.toLowerCase(),
+      k.toUpperCase(),
+      // convenience aliases:
+      if (k.toLowerCase().contains('usdt') || k.toLowerCase().contains('tether')) 'tether_trc20',
+      if (k.toLowerCase().contains('trx') || k.toLowerCase().contains('tron')) 'tron',
+    ];
+    for (final a in aliases) {
+      final url = _logos[a];
+      if (url != null && url.isNotEmpty) return url;
+    }
+    // safe default
+    return _logos['tron']!;
+  }
 
   // ---- lifecycle -----------------------------------------------------------
 
