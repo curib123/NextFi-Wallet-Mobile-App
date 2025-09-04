@@ -14,27 +14,36 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 
 import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
 
-
-
+// === ReceiveScreen with TRX/USDT tabs ======================================
 class ReceiveScreen extends StatefulWidget {
   final String address;
-  final String token; // "TRX" | "USDT"
-  final double balance;
+  final double trxBalance;
+  final double usdtBalance;
+
+  /// Optional initial token for the tab (defaults to TRX).
+  final String initialToken; // 'TRX' | 'USDT'
 
   const ReceiveScreen({
     super.key,
     required this.address,
-    required this.token,
-    required this.balance,
+    required this.trxBalance,
+    required this.usdtBalance,
+    this.initialToken = 'TRX',
   });
 
   @override
   State<ReceiveScreen> createState() => _ReceiveScreenState();
 }
 
-class _ReceiveScreenState extends State<ReceiveScreen> {
+class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProviderStateMixin {
   // Range state (shared)
   PriceRange _selected = PriceRange.h24;
+
+  // ---- Tabs ----
+  late final TabController _tabController;
+
+  bool get isTRX => _tabController.index == 0;
+  String get currentToken => isTRX ? 'TRX' : 'USDT';
 
   // ---- Resources (Bandwidth/Energy) ----
   static const String _baseUrl = 'https://api.trongrid.io'; // adjust for Shasta/custom
@@ -46,7 +55,21 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialToken.toUpperCase() == 'USDT' ? 1 : 0,
+    )..addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
+
     _fetchResources();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   // Pick the right history series from provider given token + range
@@ -108,19 +131,17 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     final colors = AppColor.of(context);
     final currency = Provider.of<CurrencyProvider>(context, listen: true);
 
-    final isTRX = widget.token.toUpperCase() == 'TRX';
-    final balanceFiat = isTRX
-        ? currency.trxToFiat(widget.balance)
-        : currency.usdtToFiat(widget.balance);
-
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final numFmt = NumberFormat("#,##0.00");
 
-    // streams
+    // streams / prices based on selected token
     final priceStream = isTRX ? currency.trxPriceStream : currency.usdtPriceStream;
-    final lastPrice = isTRX ? currency.trxRate : currency.usdtRate;
-
+    final lastPrice   = isTRX ? currency.trxRate        : currency.usdtRate;
     final oneTokenInFiat = isTRX ? currency.trxToFiat(1) : currency.usdtToFiat(1);
+
+    // selected balances & history
+    final double tokenBalance = isTRX ? widget.trxBalance : widget.usdtBalance;
+    final double balanceFiat  = isTRX ? currency.trxToFiat(tokenBalance) : currency.usdtToFiat(tokenBalance);
 
     // derived for resource bars
     final bwLimitTotal = _freeNetLimit + _netLimit;
@@ -135,13 +156,9 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TokenPill(token: widget.token, colors: colors),
-            const SizedBox(width: 8),
-            Text("Receive", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
-          ],
+        title: Text(
+          "Receive",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary),
         ),
         centerTitle: true,
         actions: [
@@ -162,6 +179,36 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
             },
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.primary.withOpacity(0.1)),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: colors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: colors.textSecondary,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(text: 'TRX'),
+                  Tab(text: 'USDT'),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
       body: StreamBuilder<double>(
         stream: priceStream,
@@ -178,7 +225,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
             children: [
               // Price header
               PriceHeader(
-                token: widget.token,
+                token: currentToken,
                 oneTokenInFiat: oneTokenInFiat,
                 changePct: changePct,
                 rangeLabel: kRangeLabel[_selected]!,
@@ -186,9 +233,11 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 fiatFmt: fiatFmt,
               ),
               const SizedBox(height: 16),
+
+              // Balance
               BalanceHeader(
-                token: widget.token,
-                amountToken: widget.balance,
+                token: currentToken,
+                amountToken: tokenBalance,
                 amountFiat: balanceFiat,
                 colors: colors,
                 numFmt: numFmt,
@@ -213,7 +262,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Resources
+              // Resources (token-aware visibility)
               ResourcesCard(
                 loading: _resLoading,
                 errorText: _resError,
@@ -223,7 +272,11 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 bandwidthUsed: bwUsedTotal,
                 bandwidthLimit: bwLimitTotal,
                 colors: colors,
+                showGuide: false,
+                showEnergy:    !isTRX, // USDT only
+                showBandwidth:  isTRX, // TRX only
               ),
+
               const SizedBox(height: 24),
 
               // QR card
@@ -290,8 +343,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               ),
               const SizedBox(height: 16),
 
-
-              // Safety
+              // Safety (token-aware)
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -305,8 +357,9 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        "Send only ${widget.token.toUpperCase()} on TRON (TRC20) to this address. "
-                            "Sending other networks or tokens may result in permanent loss.",
+                        isTRX
+                            ? "Send only TRX (native TRON coin) to this address. Sending other networks or tokens may result in permanent loss."
+                            : "Send only USDT on TRON (TRC20) to this address. Sending other networks or tokens may result in permanent loss.",
                         style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.28),
                       ),
                     ),
@@ -333,7 +386,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("Receive ${widget.token.toUpperCase()}",
+                Text("Receive $currentToken",
                     style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 QrImageView(

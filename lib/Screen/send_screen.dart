@@ -542,6 +542,8 @@ class _SendScreenState extends State<SendScreen> {
 
     final fromAddress = _tronAddress ?? widget.address;
 
+    final t = (widget.token).toUpperCase();
+
     return Scaffold(
       backgroundColor: colors.surface,
       appBar: AppBar(
@@ -660,6 +662,8 @@ class _SendScreenState extends State<SendScreen> {
             bandwidthLimit: bwLimitTotal,
             colors: colors,
             showGuide: false,
+            showEnergy:    t == 'USDT' || (t != 'TRX' && t != 'USDT'), // default to true
+            showBandwidth: t == 'TRX'  || (t != 'TRX' && t != 'USDT'), // default to true
           ),
           const SizedBox(height: 16),
 

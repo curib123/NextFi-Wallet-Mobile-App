@@ -445,7 +445,10 @@ class ResourcesCard extends StatelessWidget {
     required this.bandwidthLimit,
     required this.colors,
     this.showGuide = true,
-  });
+    this.showEnergy = true,       // NEW
+    this.showBandwidth = true,    // NEW
+  }) : assert(showEnergy || showBandwidth,
+  'At least one of showEnergy or showBandwidth must be true.');
 
   final bool loading;
   final String? errorText;
@@ -455,6 +458,10 @@ class ResourcesCard extends StatelessWidget {
   final AppColor colors;
   final bool showGuide;
 
+  /// NEW: control which resources to show
+  final bool showEnergy;
+  final bool showBandwidth;
+
   @override
   Widget build(BuildContext context) {
     final nf = NumberFormat.decimalPattern();
@@ -462,8 +469,26 @@ class ResourcesCard extends StatelessWidget {
     final energyRemain    = (energyLimit - energyUsed).clamp(0, energyLimit);
     final bandwidthRemain = (bandwidthLimit - bandwidthUsed).clamp(0, bandwidthLimit);
 
+    final bothBars = showEnergy && showBandwidth;
+
+    // Build dynamic guide text based on what's visible
+    final String guideText = () {
+      final List<String> parts = [];
+      if (showEnergy) {
+        parts.add("• Energy: Consumed when executing smart contracts (e.g., sending USDT). "
+            "If Energy is insufficient, TRX is burned up to the fee_limit. "
+            "Gain more by freezing/staking TRX for Energy.");
+      }
+      if (showBandwidth) {
+        parts.add("• Bandwidth: Covers transaction byte size (e.g., TRX transfers). "
+            "You get some free daily; if it runs out, TRX is burned. "
+            "Gain more by freezing/staking TRX for Bandwidth.");
+      }
+      return parts.join("\n\n");
+    }();
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 5,horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
       decoration: BoxDecoration(
         color: colors.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
@@ -496,8 +521,10 @@ class ResourcesCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text("Resources",
-                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800)),
+              Text(
+                "Resources",
+                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
+              ),
               const Spacer(),
               IconButton(
                 tooltip: "What are Energy & Bandwidth?",
@@ -507,56 +534,64 @@ class ResourcesCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _ResBar(
-            icon: LucideIcons.zap, // Energy = zap
-            label: "Energy",
-            used: energyUsed,
-            total: energyLimit,
-            colors: colors,
-            valueColor: Colors.green,
-          ),
-          const SizedBox(height: 8),
-          _ResBar(
-            icon: LucideIcons.activity, // Bandwidth = activity
-            label: "Bandwidth",
-            used: bandwidthUsed,
-            total: bandwidthLimit,
-            colors: colors,
-            valueColor: Colors.blueAccent,
-          ),
+
+          // Bars (conditionally rendered)
+          if (showEnergy)
+            _ResBar(
+              icon: LucideIcons.zap, // Energy = zap
+              label: "Energy",
+              used: energyUsed,
+              total: energyLimit,
+              colors: colors,
+              valueColor: Colors.green,
+            ),
+          if (bothBars) const SizedBox(height: 8),
+          if (showBandwidth)
+            _ResBar(
+              icon: LucideIcons.activity, // Bandwidth = activity
+              label: "Bandwidth",
+              used: bandwidthUsed,
+              total: bandwidthLimit,
+              colors: colors,
+              valueColor: Colors.blueAccent,
+            ),
+
           const SizedBox(height: 10),
+
+          // Chips (only show for visible resources)
           Row(
             children: [
-              _ChipStat(
-                icon: LucideIcons.zap, // ⚡ Energy chip
-                label: "Energy left",
-                value: nf.format(energyRemain),
-                bg: Colors.green.withOpacity(0.10),
-                fg: Colors.green,
-                border: Colors.green.withOpacity(0.30),
-              ),
-              const SizedBox(width: 8),
-              _ChipStat(
-                icon: LucideIcons.activity, // 🌐 Bandwidth chip
-                label: "Bandwidth left",
-                value: nf.format(bandwidthRemain),
-                bg: Colors.blueAccent.withOpacity(0.10),
-                fg: Colors.blueAccent,
-                border: Colors.blueAccent.withOpacity(0.30),
-              ),
+              if (showEnergy)
+                _ChipStat(
+                  icon: LucideIcons.zap,
+                  label: "Energy left",
+                  value: nf.format(energyRemain),
+                  bg: Colors.green.withOpacity(0.10),
+                  fg: Colors.green,
+                  border: Colors.green.withOpacity(0.30),
+                ),
+              if (showEnergy && showBandwidth) const SizedBox(width: 8),
+              if (showBandwidth)
+                _ChipStat(
+                  icon: LucideIcons.activity,
+                  label: "Bandwidth left",
+                  value: nf.format(bandwidthRemain),
+                  bg: Colors.blueAccent.withOpacity(0.10),
+                  fg: Colors.blueAccent,
+                  border: Colors.blueAccent.withOpacity(0.30),
+                ),
             ],
           ),
-          if (showGuide) ...[
+
+          if (showGuide && guideText.isNotEmpty) ...[
             const SizedBox(height: 10),
             _GuideBlock(
-              title: "Energy & Bandwidth",
-              description:
-              "• Energy: Consumed when executing smart contracts (e.g., sending USDT). "
-                  "If Energy is insufficient, TRX is burned up to the fee_limit. "
-                  "Gain more by freezing/staking TRX for Energy.\n\n"
-                  "• Bandwidth: Covers transaction byte size (e.g., TRX transfers). "
-                  "You get some free daily; if it runs out, TRX is burned. "
-                  "Gain more by freezing/staking TRX for Bandwidth.",
+              title: showEnergy && showBandwidth
+                  ? "Energy & Bandwidth"
+                  : showEnergy
+                  ? "Energy"
+                  : "Bandwidth",
+              description: guideText,
               colors: colors,
             ),
           ],
@@ -564,6 +599,8 @@ class ResourcesCard extends StatelessWidget {
       ),
     );
   }
+}
+
 
   void _showFullExplanation(BuildContext context, AppColor colors) {
     showModalBottomSheet(
@@ -656,7 +693,7 @@ class ResourcesCard extends StatelessWidget {
       },
     );
   }
-}
+
 
 // Progress bar for Energy/Bandwidth usage
 class _ResBar extends StatelessWidget {

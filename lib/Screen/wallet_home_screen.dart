@@ -361,18 +361,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       );
       return;
     }
-    showTokenSelector(
-      context,
-      _tronAddress!,
-      _trxBalance,
-      _usdtBalance,
-      title: 'Receive Token',
-      screenBuilder: (address, token, balance) => ReceiveScreen(
-        address: address,
-        token: token,
-        balance: balance,
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => ReceiveScreen(
+        address: _tronAddress!,
+        trxBalance: _trxBalance,
+        usdtBalance: _usdtBalance,
+        initialToken: 'TRX', // or 'USDT'
       ),
-    );
+    ));
+
   }
 }
 
