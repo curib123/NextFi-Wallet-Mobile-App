@@ -1,19 +1,24 @@
-import 'dart:math' as math;
+// lib/Screen/receive_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
+import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
-import 'package:next_fi/Components/SnackBar.dart';
+
+import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
+
+
 
 class ReceiveScreen extends StatefulWidget {
   final String address;
-  final String token; // "TRX" or "USDT"
+  final String token; // "TRX" | "USDT"
   final double balance;
 
   const ReceiveScreen({
@@ -28,33 +33,74 @@ class ReceiveScreen extends StatefulWidget {
 }
 
 class _ReceiveScreenState extends State<ReceiveScreen> {
-  // Range options (days) for price change + chart
-  static const _ranges = <String, int>{
-    '24H': 1,
-    '7D': 7,
-    '30D': 30,
-    '1Y': 365,
-  };
+  // Range state (shared)
+  PriceRange _selected = PriceRange.h24;
 
-  String _selectedRange = '24H';
+  // ---- Resources (Bandwidth/Energy) ----
+  static const String _baseUrl = 'https://api.trongrid.io'; // adjust for Shasta/custom
+  bool _resLoading = true;
+  String? _resError;
+  int _freeNetLimit = 0, _freeNetUsed = 0, _netLimit = 0, _netUsed = 0;
+  int _energyLimit = 0, _energyUsed = 0;
 
-  double _computeChangePct(List<double> history, int days) {
-    if (history.isEmpty || days <= 0) return 0.0;
-    // Need at least 2 points to compute change
-    if (history.length < 2) return 0.0;
-
-    // Compare the last point to the point N days back, or the earliest if insufficient
-    final last = history.last;
-    final idx = math.max(0, history.length - 1 - days);
-    final ref = history[idx];
-    if (ref <= 0) return 0.0;
-    return ((last / ref) - 1.0) * 100.0;
+  @override
+  void initState() {
+    super.initState();
+    _fetchResources();
   }
 
-  List<double> _sliceForRange(List<double> history, int days) {
-    if (history.isEmpty) return history;
-    final start = math.max(0, history.length - (days + 1));
-    return history.sublist(start);
+  // Pick the right history series from provider given token + range
+  List<double> _historyFor(CurrencyProvider c, {required bool isTRX, required PriceRange r}) {
+    if (isTRX) {
+      return switch (r) {
+        PriceRange.h24 => c.trxHistory24h,
+        PriceRange.d7 => c.trxHistory7,
+        PriceRange.d30 => c.trxHistory30,
+        PriceRange.y1 => c.trxHistory365,
+      };
+    } else {
+      return switch (r) {
+        PriceRange.h24 => c.usdtHistory24h,
+        PriceRange.d7 => c.usdtHistory7,
+        PriceRange.d30 => c.usdtHistory30,
+        PriceRange.y1 => c.usdtHistory365,
+      };
+    }
+  }
+
+  // ---- Fetch account resources for the displayed address ----
+  Future<void> _fetchResources() async {
+    final addr = widget.address;
+    if (addr.isEmpty) return;
+    setState(() {
+      _resLoading = true;
+      _resError = null;
+    });
+
+    try {
+      final headers = {'Content-Type': 'application/json'};
+      final body = jsonEncode({'address': addr, 'visible': true});
+
+      // Bandwidth
+      final netUri = Uri.parse('$_baseUrl/wallet/getaccountnet');
+      final netRes = await http.post(netUri, headers: headers, body: body).timeout(const Duration(seconds: 15));
+      final netJ = jsonDecode(netRes.body) as Map<String, dynamic>;
+      _freeNetLimit = (netJ['freeNetLimit'] as num?)?.toInt() ?? 0;
+      _freeNetUsed  = (netJ['freeNetUsed']  as num?)?.toInt() ?? 0;
+      _netLimit     = (netJ['NetLimit']     as num?)?.toInt() ?? 0;
+      _netUsed      = (netJ['NetUsed']      as num?)?.toInt() ?? 0;
+
+      // Energy
+      final resUri = Uri.parse('$_baseUrl/wallet/getaccountresource');
+      final resRes = await http.post(resUri, headers: headers, body: body).timeout(const Duration(seconds: 15));
+      final resJ = jsonDecode(resRes.body) as Map<String, dynamic>;
+      _energyLimit = (resJ['EnergyLimit'] as num?)?.toInt() ?? 0;
+      _energyUsed  = (resJ['EnergyUsed']  as num?)?.toInt() ?? 0;
+    } catch (e) {
+      _resError = "Failed to load resources";
+    } finally {
+      if (mounted) setState(() => _resLoading = false);
+    }
   }
 
   @override
@@ -66,19 +112,15 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final numFmt = NumberFormat("#,##0.00");
 
-    // pick stream & history by token
+    // streams
     final priceStream = isTRX ? currency.trxPriceStream : currency.usdtPriceStream;
-    final history = isTRX ? currency.trxHistory : currency.usdtHistory;
+    final lastPrice = isTRX ? currency.trxRate : currency.usdtRate;
 
-    final selectedDays = _ranges[_selectedRange]!;
-    final changePct = _computeChangePct(history, selectedDays);
-    final changeUp = changePct >= 0;
-    final changeColor = changeUp ? Colors.green : Colors.red;
-    final changeIcon = changeUp ? LucideIcons.arrowUpRight : LucideIcons.arrowDownRight;
-
-    // last price (fallback to current rate)
-    final lastPrice = (isTRX ? currency.trxRate : currency.usdtRate);
     final oneTokenInFiat = isTRX ? currency.trxToFiat(1) : currency.usdtToFiat(1);
+
+    // derived for resource bars
+    final bwLimitTotal = _freeNetLimit + _netLimit;
+    final bwUsedTotal  = _freeNetUsed + _netUsed;
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -92,27 +134,27 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _TokenPill(token: widget.token, colors: colors),
+            TokenPill(token: widget.token, colors: colors),
             const SizedBox(width: 8),
-            Text(
-              "Receive",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: colors.textPrimary,
-              ),
-            ),
+            Text("Receive", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
           ],
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: "Refresh resources",
+            icon: Icon(LucideIcons.refreshCcw, color: colors.textPrimary),
+            onPressed: _fetchResources,
+          ),
           IconButton(
             tooltip: "Copy address",
             icon: Icon(LucideIcons.copy, color: colors.textPrimary),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: widget.address));
               HapticFeedback.lightImpact();
-              showFloatingSnackBar(context, message: "Address copied", type: SnackBarType.success);
+              if (mounted) {
+                showFloatingSnackBar(context, message: "Address copied", type: SnackBarType.success);
+              }
             },
           ),
         ],
@@ -120,174 +162,58 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       body: StreamBuilder<double>(
         stream: priceStream,
         builder: (context, snapshot) {
-          // live price if available
-          final livePrice = snapshot.data ?? lastPrice;
+          final _ = snapshot.data ?? lastPrice;
+          final series = _historyFor(currency, isTRX: isTRX, r: _selected);
 
-          // history slice for chart
-          final chartHistory = _sliceForRange(history, selectedDays);
+          final changePct = pctChangeFromSeries(series);
+          final changeUp = changePct >= 0;
+          final changeColor = changeUp ? Colors.green : Colors.red;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
             children: [
-              // ===== Price row with change pill =====
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.primary.withOpacity(0.10)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.wallet, size: 18, color: colors.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "1 ${widget.token.toUpperCase()} ≈ ${fiatFmt.format(oneTokenInFiat)}",
-                        style: TextStyle(
-                          color: colors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: changeColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: changeColor.withOpacity(0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(changeIcon, size: 14, color: changeColor),
-                          const SizedBox(width: 6),
-                          Text(
-                            "${changeUp ? '+' : ''}${changePct.toStringAsFixed(2)}%",
-                            style: TextStyle(
-                              color: changeColor,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _selectedRange,
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              // Price header
+              PriceHeader(
+                token: widget.token,
+                oneTokenInFiat: oneTokenInFiat,
+                changePct: changePct,
+                rangeLabel: kRangeLabel[_selected]!,
+                colors: colors,
+                fiatFmt: fiatFmt,
               ),
               const SizedBox(height: 16),
 
-              // ===== Range selector =====
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _ranges.keys.map((label) {
-                  final selected = _selectedRange == label;
-                  return ChoiceChip(
-                    label: Text(label, style: TextStyle(fontWeight: FontWeight.w700)),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _selectedRange = label),
-                    backgroundColor: colors.surface,
-                    selectedColor: colors.primary.withOpacity(0.15),
-                    labelStyle: TextStyle(
-                      color: selected ? colors.primary : colors.textSecondary,
-                    ),
-                    side: BorderSide(
-                      color: selected ? colors.primary.withOpacity(0.35) : colors.primary.withOpacity(0.15),
-                    ),
-                  );
-                }).toList(),
+              // Range segmented
+              RangeSegmented(
+                selected: _selected,
+                onChanged: (r) => setState(() => _selected = r),
+                colors: colors,
               ),
               const SizedBox(height: 12),
 
-              // ===== Chart =====
-              Container(
-                height: 180,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.primary.withOpacity(0.08)),
-                ),
-                child: (chartHistory.isEmpty || chartHistory.length < 2)
-                    ? Center(child: CircularProgressIndicator(color: colors.primary))
-                    : LineChart(
-                  LineChartData(
-                    gridData: FlGridData(show: false),
-                    titlesData: FlTitlesData(show: false),
-                    borderData: FlBorderData(show: false),
-                    minY: chartHistory.reduce(math.min) * 0.995,
-                    maxY: chartHistory.reduce(math.max) * 1.005,
-                    lineTouchData: LineTouchData(
-                      handleBuiltInTouches: true,
-                      touchTooltipData: LineTouchTooltipData(
-                        fitInsideHorizontally: true,
-                        fitInsideVertically: true,
-                        getTooltipItems: (touchedSpots) => touchedSpots
-                            .map((s) => LineTooltipItem(
-                          fiatFmt.format(s.y),
-                          TextStyle(
-                            color: colors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ))
-                            .toList(),
-                      ),
-                    ),
-                    lineBarsData: [
-                      LineChartBarData(
-                        isCurved: true,
-                        spots: [
-                          for (int i = 0; i < chartHistory.length; i++)
-                            FlSpot(i.toDouble(), chartHistory[i]),
-                        ],
-                        gradient: LinearGradient(
-                          colors: [
-                            changeColor,
-                            changeColor.withOpacity(0.55),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          gradient: LinearGradient(
-                            colors: [changeColor.withOpacity(0.18), Colors.transparent],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                        ),
-                        dotData: FlDotData(
-                          show: true,
-                          getDotPainter: (spot, percent, barData, index) {
-                            final isLast = index == chartHistory.length - 1;
-                            return FlDotCirclePainter(
-                              radius: isLast ? 3.6 : 0,
-                              color: isLast ? changeColor : Colors.transparent,
-                              strokeWidth: isLast ? 2 : 0,
-                              strokeColor: Colors.white,
-                            );
-                          },
-                        ),
-                        barWidth: 3,
-                      ),
-                    ],
-                  ),
-                ),
+              // Main chart
+              MainLineChart(
+                history: series,
+                changeColor: changeColor,
+                fiatFmt: fiatFmt,
+                colors: colors,
+              ),
+              const SizedBox(height: 14),
+
+              // Resources
+              ResourcesCard(
+                loading: _resLoading,
+                errorText: _resError,
+                onRetry: _fetchResources,
+                energyUsed: _energyUsed,
+                energyLimit: _energyLimit,
+                bandwidthUsed: bwUsedTotal,
+                bandwidthLimit: bwLimitTotal,
+                colors: colors,
               ),
               const SizedBox(height: 24),
 
-              // ===== QR Code (tap to enlarge) =====
+              // QR card
               GestureDetector(
                 onTap: () => _showQrDialog(context, colors),
                 child: Container(
@@ -306,21 +232,15 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                         backgroundColor: Colors.white,
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        "Tap to enlarge QR",
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      Text("Tap to enlarge QR",
+                          style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // ===== Address Card =====
+              // Address card
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
@@ -357,7 +277,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ===== Balance Card (token + fiat) =====
+              // Balance card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -368,37 +288,21 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      "${numFmt.format(widget.balance)} ${widget.token.toUpperCase()}",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: colors.textPrimary,
-                      ),
-                    ),
+                    Text("${numFmt.format(widget.balance)} ${widget.token.toUpperCase()}",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: colors.textPrimary)),
                     const SizedBox(height: 6),
                     Text(
                       "≈ ${fiatFmt.format(isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance))}",
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(color: colors.textSecondary, fontSize: 13.5, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      "Current balance",
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 12.5,
-                      ),
-                    ),
+                    Text("Current balance", style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
 
-              // ===== Safety Notice (TRON network) =====
+              // Safety
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -414,11 +318,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                       child: Text(
                         "Send only ${widget.token.toUpperCase()} on TRON (TRC20) to this address. "
                             "Sending other networks or tokens may result in permanent loss.",
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 13,
-                          height: 1.28,
-                        ),
+                        style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.28),
                       ),
                     ),
                   ],
@@ -444,14 +344,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  "Receive ${widget.token.toUpperCase()}",
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                Text("Receive ${widget.token.toUpperCase()}",
+                    style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 QrImageView(
                   data: widget.address,
@@ -463,12 +357,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 SelectableText(
                   widget.address,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontFamily: 'monospace',
-                    fontSize: 12.5,
-                    height: 1.2,
-                  ),
+                  style: TextStyle(color: colors.textSecondary, fontFamily: 'monospace', fontSize: 12.5, height: 1.2),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -511,43 +400,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class _TokenPill extends StatelessWidget {
-  const _TokenPill({required this.token, required this.colors});
-  final String token;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colors.primary.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.primary.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            token.toUpperCase() == 'TRX' ? LucideIcons.sparkle : LucideIcons.banknote,
-            size: 14,
-            color: colors.primary,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            token.toUpperCase(),
-            style: TextStyle(
-              color: colors.primary,
-              fontWeight: FontWeight.w800,
-              fontSize: 12.5,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

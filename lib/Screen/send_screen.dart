@@ -1,28 +1,29 @@
+// lib/Screen/send_screen.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
-import 'package:next_fi/Screen/qr_code_scanner.dart';
+import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
-import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Screen/qr_code_scanner.dart';
 
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/tron_wallet_service.dart';
 
+// Shared UI kit
+import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
+
 class SendScreen extends StatefulWidget {
-  final String address; // fallback (will be replaced by derived)
-  final String token;   // TRX or USDT
+  final String address; // fallback (replaced by derived)
+  final String token;   // TRX | USDT
   final double balance;
   final bool autoOpenScanner;
 
@@ -50,9 +51,8 @@ class _SendScreenState extends State<SendScreen> {
 
   bool _isSending = false;
 
-  // Price UI
-  static const _ranges = <String, int>{ '24H': 1, '7D': 7, '30D': 30, '1Y': 365 };
-  String _selectedRange = '24H';
+  // Price range state (shared)
+  PriceRange _selected = PriceRange.h24;
 
   // Tron service
   late final TronWalletService _tron = TronWalletService(const TronClientConfig());
@@ -76,7 +76,7 @@ class _SendScreenState extends State<SendScreen> {
   @override
   void initState() {
     super.initState();
-    _loadWallet(); // ← load like your sample
+    _loadWallet();
     if (widget.autoOpenScanner) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scanQRCode());
     }
@@ -91,9 +91,7 @@ class _SendScreenState extends State<SendScreen> {
     super.dispose();
   }
 
-  // ----------------------------------------------------------
-  // Load wallet (your pattern)
-  // ----------------------------------------------------------
+  // ---------------- Wallet & Resources ----------------
   Future<void> _loadWallet() async {
     final storedMnemonic = await SeedStorage.getSeed();
     if (!mounted) return;
@@ -117,11 +115,9 @@ class _SendScreenState extends State<SendScreen> {
         _tronAddressHex41 = hex41;
       });
 
-      // Kick off resources + maybe an initial estimate if fields are prefilled
       await _fetchResources();
       _scheduleEstimate();
     } catch (e) {
-      debugPrint('Failed to load Tron wallet: $e');
       if (!mounted) return;
       showFloatingSnackBar(
         context,
@@ -131,9 +127,6 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ----------------------------------------------------------
-  // Resource fetchers (Bandwidth + Energy) for current address
-  // ----------------------------------------------------------
   Future<void> _fetchResources() async {
     final addr = _tronAddress ?? widget.address;
     if (addr.isEmpty) return;
@@ -168,9 +161,7 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ----------------------------------------------------------
-  // USDT preflight (estimate)
-  // ----------------------------------------------------------
+  // ---------------- Estimate (USDT) ----------------
   void _scheduleEstimate() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), _estimateIfNeeded);
@@ -221,9 +212,7 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ----------------------------------------------------------
-  // Send
-  // ----------------------------------------------------------
+  // ---------------- Send ----------------
   Future<void> _sendTokenNow() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -342,9 +331,7 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ----------------------------------------------------------
-  // UI helpers
-  // ----------------------------------------------------------
+  // ---------------- UI helpers ----------------
   Future<void> _scanQRCode() async {
     final code = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const QRScannerScreen()));
     if (!mounted) return;
@@ -370,21 +357,6 @@ class _SendScreenState extends State<SendScreen> {
 
   bool _looksLikeTron(String s) => s.isNotEmpty && s.startsWith('T') && s.length >= 30 && s.length <= 45;
 
-  double _computeChangePct(List<double> history, int days) {
-    if (history.length < 2 || days <= 0) return 0.0;
-    final last = history.last;
-    final refIdx = math.max(0, history.length - 1 - days);
-    final ref = history[refIdx];
-    if (ref <= 0) return 0.0;
-    return ((last / ref) - 1.0) * 100.0;
-  }
-
-  List<double> _sliceForRange(List<double> history, int days) {
-    if (history.isEmpty) return history;
-    final start = math.max(0, history.length - (days + 1));
-    return history.sublist(start);
-  }
-
   void _onTapMax() {
     _amountController.text = widget.balance.toStringAsFixed(6);
     HapticFeedback.selectionClick();
@@ -393,9 +365,9 @@ class _SendScreenState extends State<SendScreen> {
 
   void _confirmAndSend(CurrencyProvider currency, bool isTRX) {
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final fiat = isTRX ? currency.trxToFiat(amount) : currency.usdtToFiat(amount);
     final colors = AppColor.of(context);
-    final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
 
     showModalBottomSheet(
       context: context,
@@ -421,7 +393,8 @@ class _SendScreenState extends State<SendScreen> {
                   Icon(LucideIcons.info, size: 16, color: colors.textSecondary),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text("Network: TRON (TRC20). Fees are paid in TRX.", style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
+                    child: Text("Network: TRON (TRC20). Fees are paid in TRX.",
+                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
                   ),
                 ],
               ),
@@ -466,38 +439,35 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  // ----------------------------------------------------------
-  // Build
-  // ----------------------------------------------------------
+  // ---------------- Build ----------------
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final currency = Provider.of<CurrencyProvider>(context, listen: true);
 
     final isTRX = widget.token.toUpperCase() == 'TRX';
-    final history = isTRX ? currency.trxHistory : currency.usdtHistory;
+    final history = switch (_selected) {
+      PriceRange.h24 => isTRX ? currency.trxHistory24h : currency.usdtHistory24h,
+      PriceRange.d7  => isTRX ? currency.trxHistory7   : currency.usdtHistory7,
+      PriceRange.d30 => isTRX ? currency.trxHistory30  : currency.usdtHistory30,
+      PriceRange.y1  => isTRX ? currency.trxHistory365 : currency.usdtHistory365,
+    };
     final priceStream = isTRX ? currency.trxPriceStream : currency.usdtPriceStream;
 
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final numFmt = NumberFormat("#,##0.00");
 
-    final selectedDays = _ranges[_selectedRange]!;
-    final changePct = _computeChangePct(history, selectedDays);
+    final changePct = pctChangeFromSeries(history);
     final changeUp = changePct >= 0;
     final changeColor = changeUp ? Colors.green : Colors.red;
-    final changeIcon = changeUp ? LucideIcons.arrowUpRight : LucideIcons.arrowDownRight;
 
-    final chartHistory = _sliceForRange(history, selectedDays);
     final oneTokenInFiat = isTRX ? currency.trxToFiat(1) : currency.usdtToFiat(1);
-
     final typedAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
     final typedFiat = isTRX ? currency.trxToFiat(typedAmount) : currency.usdtToFiat(typedAmount);
 
     // Derived resource values
     final bwLimitTotal = _freeNetLimit + _netLimit;
     final bwUsedTotal  = _freeNetUsed + _netUsed;
-    final bwRemain     = math.max(0, bwLimitTotal - bwUsedTotal);
-    final enRemain     = math.max(0, _energyLimit - _energyUsed);
 
     final fromAddress = _tronAddress ?? widget.address;
 
@@ -513,7 +483,7 @@ class _SendScreenState extends State<SendScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _TokenPill(token: widget.token, colors: colors),
+            TokenPill(token: widget.token, colors: colors),
             const SizedBox(width: 8),
             Text("Send", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
           ],
@@ -534,27 +504,26 @@ class _SendScreenState extends State<SendScreen> {
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
             children: [
               // Wallet banner if not loaded
-              if (_privateKey == null) Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.withOpacity(0.25)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(LucideIcons.key, color: Colors.orange, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Wallet not loaded yet. Please ensure your mnemonic is stored.",
-                        style: TextStyle(color: colors.textSecondary),
+              if (_privateKey == null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.withOpacity(0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.key, color: Colors.orange, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text("Wallet not loaded yet. Please ensure your mnemonic is stored.",
+                            style: TextStyle(color: colors.textSecondary)),
                       ),
-                    ),
-                    TextButton(onPressed: _loadWallet, child: const Text("Load")),
-                  ],
+                      TextButton(onPressed: _loadWallet, child: const Text("Load")),
+                    ],
+                  ),
                 ),
-              ),
 
               // From address chip (derived)
               if (fromAddress.isNotEmpty) ...[
@@ -579,10 +548,7 @@ class _SendScreenState extends State<SendScreen> {
                       ),
                       if (_tronAddressHex41 != null) ...[
                         const SizedBox(width: 8),
-                        Tooltip(
-                          message: _tronAddressHex41!,
-                          child: const Icon(LucideIcons.info, size: 16),
-                        ),
+                        Tooltip(message: _tronAddressHex41!, child: const Icon(LucideIcons.info, size: 16)),
                       ]
                     ],
                   ),
@@ -590,72 +556,40 @@ class _SendScreenState extends State<SendScreen> {
               ],
               const SizedBox(height: 10),
 
-              // Price + change
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.primary.withOpacity(0.10)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.wallet, size: 18, color: colors.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "1 ${widget.token.toUpperCase()} ≈ ${fiatFmt.format(oneTokenInFiat)}",
-                        style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: changeColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: changeColor.withOpacity(0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(changeIcon, size: 14, color: changeColor),
-                          const SizedBox(width: 6),
-                          Text("${changeUp ? '+' : ''}${changePct.toStringAsFixed(2)}%",
-                              style: TextStyle(color: changeColor, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                          const SizedBox(width: 6),
-                          Text(_selectedRange,
-                              style: TextStyle(color: colors.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              // Price + change header
+              PriceHeader(
+                token: widget.token,
+                oneTokenInFiat: oneTokenInFiat,
+                changePct: changePct,
+                rangeLabel: kRangeLabel[_selected]!,
+                colors: colors,
+                fiatFmt: fiatFmt,
               ),
               const SizedBox(height: 12),
 
               // Range selector
-              Wrap(
-                spacing: 8, runSpacing: 8,
-                children: _ranges.keys.map((label) {
-                  final selected = _selectedRange == label;
-                  return ChoiceChip(
-                    label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _selectedRange = label),
-                    backgroundColor: colors.surface,
-                    selectedColor: colors.primary.withOpacity(0.15),
-                    labelStyle: TextStyle(color: selected ? colors.primary : colors.textSecondary),
-                    side: BorderSide(color: selected ? colors.primary.withOpacity(0.35) : colors.primary.withOpacity(0.15)),
-                  );
-                }).toList(),
+              RangeSegmented(
+                selected: _selected,
+                onChanged: (r) => setState(() => _selected = r),
+                colors: colors,
               ),
               const SizedBox(height: 12),
 
               // Chart
-              _buildChart(colors, history, fiatFmt, changeUp),
+              MainLineChart(history: history, changeColor: changeColor, fiatFmt: fiatFmt, colors: colors),
               const SizedBox(height: 14),
 
               // Resources card
-              _buildResourcesCard(colors, enRemain),
+              ResourcesCard(
+                loading: _resLoading,
+                errorText: _resError,
+                onRetry: _fetchResources,
+                energyUsed: _energyUsed,
+                energyLimit: _energyLimit,
+                bandwidthUsed: bwUsedTotal,
+                bandwidthLimit: bwLimitTotal,
+                colors: colors,
+              ),
               const SizedBox(height: 16),
 
               // Balance
@@ -671,10 +605,8 @@ class _SendScreenState extends State<SendScreen> {
                     Text("${numFmt.format(widget.balance)} ${widget.token.toUpperCase()}",
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: colors.textPrimary)),
                     const SizedBox(height: 6),
-                    Text(
-                      "≈ ${fiatFmt.format(isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance))}",
-                      style: TextStyle(color: colors.textSecondary, fontSize: 13.5, fontWeight: FontWeight.w600),
-                    ),
+                    Text("≈ ${fiatFmt.format(isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance))}",
+                        style: TextStyle(color: colors.textSecondary, fontSize: 13.5, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -824,183 +756,9 @@ class _SendScreenState extends State<SendScreen> {
       ),
     );
   }
-
-  // --- UI sub-widgets ---
-  Widget _buildChart(AppColor colors, List<double> chartHistory, NumberFormat fiatFmt, bool changeUp) {
-    if (chartHistory.isEmpty || chartHistory.length < 2) {
-      return Container(
-        height: 180,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.primary.withOpacity(0.08)),
-        ),
-        child: CircularProgressIndicator(color: colors.primary),
-      );
-    }
-
-    final c = changeUp ? Colors.green : Colors.red;
-    return Container(
-      height: 180,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.primary.withOpacity(0.08)),
-      ),
-      child: LineChart(
-        LineChartData(
-          gridData: FlGridData(show: false),
-          titlesData: FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          minY: chartHistory.reduce(math.min) * 0.995,
-          maxY: chartHistory.reduce(math.max) * 1.005,
-          lineTouchData: LineTouchData(
-            handleBuiltInTouches: true,
-            touchTooltipData: LineTouchTooltipData(
-              fitInsideHorizontally: true,
-              fitInsideVertically: true,
-              getTooltipItems: (spots) => spots.map((s) => LineTooltipItem(
-                fiatFmt.format(s.y),
-                TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
-              )).toList(),
-            ),
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              isCurved: true,
-              spots: [for (int i = 0; i < chartHistory.length; i++) FlSpot(i.toDouble(), chartHistory[i])],
-              gradient: LinearGradient(colors: [c, c.withOpacity(0.55)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(colors: [c.withOpacity(0.18), Colors.transparent], begin: Alignment.topCenter, end: Alignment.bottomCenter),
-              ),
-              dotData: FlDotData(
-                show: true,
-                getDotPainter: (spot, p, bar, index) {
-                  final isLast = index == chartHistory.length - 1;
-                  return FlDotCirclePainter(
-                    radius: isLast ? 3.6 : 0,
-                    color: isLast ? c : Colors.transparent,
-                    strokeWidth: isLast ? 2 : 0,
-                    strokeColor: Colors.white,
-                  );
-                },
-              ),
-              barWidth: 3,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResourcesCard(AppColor colors, int enRemain) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.primary.withOpacity(0.08)),
-      ),
-      child: _resLoading
-          ? Row(
-        children: [
-          const SizedBox(width: 4),
-          SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary)),
-          const SizedBox(width: 12),
-          Text("Loading resources…", style: TextStyle(color: colors.textSecondary)),
-        ],
-      )
-          : (_resError != null)
-          ? Row(
-        children: [
-          Icon(LucideIcons.alertCircle, color: Colors.red, size: 18),
-          const SizedBox(width: 8),
-          Expanded(child: Text(_resError!, style: const TextStyle(color: Colors.red))),
-          TextButton(onPressed: _fetchResources, child: const Text("Retry")),
-        ],
-      )
-          : Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ResBar(
-            icon: LucideIcons.activity,
-            label: "Energy",
-            used: _energyUsed,
-            total: _energyLimit,
-            colors: colors,
-          ),
-          const SizedBox(height: 8),
-          _ResBar(
-            icon: LucideIcons.zap,
-            label: "Bandwidth",
-            used: _freeNetUsed + _netUsed,
-            total: _freeNetLimit + _netLimit,
-            colors: colors,
-          ),
-          if (widget.token.toUpperCase() == 'USDT') ...[
-            const SizedBox(height: 10),
-            _usdtEstimateBlock(colors, enRemain),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _usdtEstimateBlock(AppColor colors, int enRemain) {
-    final rec = _recommendedFeeLimitSun;
-    final req = _estEnergyRequired;
-    final status = _estimating
-        ? Row(children: [
-      SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary)),
-      const SizedBox(width: 8),
-      Text("Estimating USDT transfer…", style: TextStyle(color: colors.textSecondary)),
-    ])
-        : (req == null && rec == null)
-        ? Text("Enter a valid recipient and amount to estimate energy.", style: TextStyle(color: colors.textSecondary, fontSize: 12.5))
-        : Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _KV("Est. Energy", req?.toString() ?? "—", colors),
-        _KV("Recommended fee_limit (SUN)", rec?.toString() ?? "—", colors),
-        if (req != null)
-          Row(
-            children: [
-              Icon(req <= enRemain ? LucideIcons.check : LucideIcons.alertTriangle,
-                  size: 16, color: req <= enRemain ? Colors.green : Colors.orange),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  req <= enRemain
-                      ? "Sufficient energy available."
-                      : "Energy may be insufficient; TRX will be burned up to fee_limit.",
-                  style: TextStyle(color: req <= enRemain ? Colors.green : Colors.orange, fontSize: 12.5),
-                ),
-              ),
-            ],
-          ),
-        if (_estimateMsg != null && _estimateMsg!.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(_estimateMsg!, style: TextStyle(color: colors.textSecondary, fontSize: 12)),
-        ],
-      ],
-    );
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.primary.withOpacity(0.08)),
-      ),
-      child: status,
-    );
-  }
 }
 
-// --- Small UI helpers ---
+// Small UI helper kept locally (review rows)
 class _ReviewRow extends StatelessWidget {
   const _ReviewRow({required this.label, required this.value, this.mono = false});
   final String label;
@@ -1031,88 +789,4 @@ class _ReviewRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _TokenPill extends StatelessWidget {
-  const _TokenPill({required this.token, required this.colors});
-  final String token;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colors.primary.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colors.primary.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(token.toUpperCase() == 'TRX' ? LucideIcons.sparkle : LucideIcons.banknote, size: 14, color: colors.primary),
-          const SizedBox(width: 6),
-          Text(token.toUpperCase(), style: TextStyle(color: colors.primary, fontWeight: FontWeight.w800, fontSize: 12.5)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResBar extends StatelessWidget {
-  const _ResBar({
-    required this.icon,
-    required this.label,
-    required this.used,
-    required this.total,
-    required this.colors,
-  });
-
-  final IconData icon;
-  final String label;
-  final int used;
-  final int total;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final remain = math.max(0, total - used);
-    final pct = total > 0 ? remain / total : 0.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Icon(icon, size: 16, color: colors.textSecondary),
-          const SizedBox(width: 8),
-          Text(label, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-          const Spacer(),
-          Text("$remain / $total",
-              style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontFeatures: const [FontFeature.tabularFigures()])),
-        ]),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: pct.clamp(0.0, 1.0),
-            minHeight: 8,
-            backgroundColor: colors.primary.withOpacity(0.12),
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-Widget _KV(String k, String v, AppColor colors) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(
-      children: [
-        Text(k, style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
-        const Spacer(),
-        Text(v, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-      ],
-    ),
-  );
 }
