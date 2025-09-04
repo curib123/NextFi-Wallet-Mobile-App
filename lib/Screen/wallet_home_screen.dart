@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -20,8 +21,7 @@ import 'package:next_fi/Services/tron_wallet_service.dart';
 
 import 'WalletHomeScreenWidgets/action_button.dart';
 import 'WalletHomeScreenWidgets/build_tab_bar.dart';
-import 'WalletHomeScreenWidgets/floating_circle_button.dart';
-import 'WalletHomeScreenWidgets/incoming_payment_hints.dart';
+import 'WalletHomeScreenWidgets/home_fab_and_hints.dart'; 
 
 class WalletHomeScreen extends StatefulWidget {
   const WalletHomeScreen({super.key});
@@ -49,25 +49,24 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   // Loading flags
   bool _loadingBalances = true;
 
-  // Incoming hints only (no history kept)
+  // Incoming hints
   final List<Map<String, dynamic>> _incomingHints = [];
   final Set<String> _dismissedHintIds = {};
   final Set<String> _knownTxIds = {};
 
-// ---- Throttling config (prod-safe) ----
+  // Throttling
   static const Duration _minBalancesGap = Duration(minutes: 10);
-  static const Duration _minHintsGap    = Duration(minutes: 10);
+  static const Duration _minHintsGap = Duration(minutes: 10);
 
-
-  // Realtime / last-run trackers
+  // Timers / state
   Timer? _pollBalancesTimer;
   Timer? _pollHintsTimer;
   bool _balancesInFlight = false;
   bool _hintsInFlight = false;
-  DateTime? _lastBalancesAt; // updated on success
-  DateTime? _lastHintsAt; // updated on success
+  DateTime? _lastBalancesAt;
+  DateTime? _lastHintsAt;
 
-  // Anim helpers
+  // Anim
   late final AnimationController _livePulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -78,7 +77,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Start asset-provider realtime (logos + % changes).
     Future.microtask(() {
       if (!mounted) return;
       context.read<AssetProvider>().startRealtimeUpdates();
@@ -96,7 +94,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     super.dispose();
   }
 
-  // Pause/resume polling when app goes background/foreground
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
@@ -107,7 +104,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     }
   }
 
-  // ---------- Helpers ----------
+  // ---------- Helpers / fetch ----------
 
   static String _txIdOf(Map<String, dynamic> tx) =>
       (tx['txID'] ?? tx['hash'] ?? '').toString();
@@ -147,8 +144,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     });
   }
 
-  // ---------- Wallet / Data ----------
-
   Future<void> _loadWallet() async {
     final storedMnemonic = await SeedStorage.getSeed();
     if (!mounted) return;
@@ -172,7 +167,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _tronAddressHex41 = hex41;
       });
 
-      // initial fetches
       await Future.wait([
         _fetchBalances(),
         _fetchIncomingHints(),
@@ -180,7 +174,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
       _startRealtime();
     } catch (e) {
-      debugPrint('Failed to load Tron wallet: $e');
       if (!mounted) return;
       showFloatingSnackBar(
         context,
@@ -196,10 +189,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (!_shouldFetch(_lastBalancesAt, _minBalancesGap)) return;
 
     _balancesInFlight = true;
-
-    final prevTrx = _trxBalance;
-    final prevUsdt = _usdtBalance;
-
     try {
       final trxSun = await _tron.getTrxBalance(_tronAddress!);
       final usdt = await _tron.getTrc20BalanceViaHolders(walletBase58: _tronAddress!);
@@ -208,24 +197,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _trxBalance = trxSun / 1e6;
         _usdtBalance = usdt;
         _loadingBalances = false;
-        _lastBalancesAt = DateTime.now(); // success time
+        _lastBalancesAt = DateTime.now();
       });
-
-      final changedTrx = (prevTrx - _trxBalance).abs() >= 0.000001;
-      final changedUsdt = (prevUsdt - _usdtBalance).abs() >= 0.000001;
-      if (changedTrx || changedUsdt) {
-        // optional: gentle animation/haptic
-      }
-    } catch (e) {
-      debugPrint('Error fetching balances: $e');
-      // keep _lastBalancesAt unchanged on error
+    } catch (_) {
+      // ignore errors -> keep timestamps for next attempt
     } finally {
       _balancesInFlight = false;
     }
   }
 
-  /// Fetch **incoming** successful transactions and surface them as hints only.
-  /// No transaction history is stored; throttled to avoid redundant calls.
   Future<void> _fetchIncomingHints() async {
     if (_tronAddress == null) return;
     if (_hintsInFlight) return;
@@ -241,10 +221,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         return success && incomingToMe;
       }).toList(growable: false);
 
-      final newOnes = incomingAll
-          .where((tx) => !_knownTxIds.contains(_txIdOf(tx)))
-          .toList(growable: false);
-
       if (!mounted) return;
       setState(() {
         final undismissed = incomingAll
@@ -255,45 +231,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
           ..clear()
           ..addAll(undismissed);
 
-        _knownTxIds.addAll(incomingAll.map(_txIdOf));
-        _lastHintsAt = DateTime.now(); // success time
+        _lastHintsAt = DateTime.now();
       });
-
-      for (final tx in newOnes) {
-        final c = (tx['contract'] as Map?)?.cast<String, dynamic>() ?? const {};
-        final sym = (c['symbol'] ?? '').toString();
-        final dec = (c['decimals'] ?? 6) as int;
-        final amt = (c['amount'] ?? 0) as int;
-        final value = amt / pow10(dec);
-        if (!mounted) break;
-        showFloatingSnackBar(
-          context,
-          message: 'Incoming ${value.toStringAsFixed(4)} $sym',
-          type: SnackBarType.success,
-        );
-      }
-    } catch (e) {
-      debugPrint('Error fetching incoming hints: $e');
-      // keep _lastHintsAt unchanged on error
+    } catch (_) {
+      // ignore errors
     } finally {
       _hintsInFlight = false;
     }
   }
 
-  // start/stop periodic polling
   void _startRealtime() {
     _pollBalancesTimer?.cancel();
     _pollHintsTimer?.cancel();
-
-    // No immediate fetch here; initial fetch already done in _loadWallet()
-
-    // Poll at cadence >= min gap. Each fetch also self-gates.
-    _pollBalancesTimer = Timer.periodic(_minBalancesGap, (_) {
-      if (mounted) unawaited(_fetchBalances());
-    });
-    _pollHintsTimer = Timer.periodic(_minHintsGap, (_) {
-      if (mounted) unawaited(_fetchIncomingHints());
-    });
+    _pollBalancesTimer = Timer.periodic(_minBalancesGap, (_) => unawaited(_fetchBalances()));
+    _pollHintsTimer = Timer.periodic(_minHintsGap, (_) => unawaited(_fetchIncomingHints()));
   }
 
   // ---------- UI ----------
@@ -301,8 +252,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final currency = context.watch<CurrencyProvider>(); // centralized conversion
-    final assetProv = context.watch<AssetProvider>(); // percent changes + logos
+    final currency = context.watch<CurrencyProvider>();
+    final assetProv = context.watch<AssetProvider>();
 
     return DefaultTabController(
       length: 2,
@@ -330,8 +281,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       tronAddress: _tronAddress,
                       trxBalance: _trxBalance,
                       usdtBalance: _usdtBalance,
-                      incomingHints: _incomingHints,
-                      onAcknowledge: (tx) => _dismissIncoming(_txIdOf(tx)),
+                      // drop-in new strip (only 2 latest)
+                      incomingStrip: (_tronAddress != null)
+                          ? IncomingHintsStrip(
+                        colors: colors,
+                        tronAddress: _tronAddress!,
+                        incomingHints: _incomingHints,
+                        onAcknowledge: (tx) => _dismissIncoming(_txIdOf(tx)),
+                      )
+                          : const SizedBox.shrink(),
                       onSend: _onSend,
                       onReceive: _onReceive,
                       isUpdatingBalances: _balancesInFlight,
@@ -361,29 +319,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                 ],
               ),
             ),
-            _buildFloatingButtons(colors),
+
+            // === Dynamic FAB (scan on assets, plus on recipients)
+            HomeFab(colors: colors, incomingHints: _incomingHints),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFloatingButtons(AppColor colors) {
-    return Positioned(
-      bottom: 10,
-      right: 24,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 16),
-          floatingCircleButton(
-            onTap: () {
-              // TODO: scanner / quick action
-            },
-            icon: LucideIcons.scanLine,
-            color: colors.primary,
-          ),
-        ],
       ),
     );
   }
@@ -459,7 +399,8 @@ class _TopBar extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
             SizedBox(width: 4),
             Icon(LucideIcons.chevronDown, size: 18),
-          ],),
+          ],
+        ),
         IconButton(
           icon: Icon(LucideIcons.settings, color: colors.textPrimary, size: 26),
           onPressed: () {},
@@ -480,8 +421,7 @@ class _HeaderSection extends StatelessWidget {
     required this.tronAddress,
     required this.trxBalance,
     required this.usdtBalance,
-    required this.incomingHints,
-    required this.onAcknowledge,
+    required this.incomingStrip,
     required this.onSend,
     required this.onReceive,
     required this.isUpdatingBalances,
@@ -497,8 +437,7 @@ class _HeaderSection extends StatelessWidget {
   final String? tronAddress;
   final double trxBalance;
   final double usdtBalance;
-  final List<Map<String, dynamic>> incomingHints;
-  final void Function(Map<String, dynamic> tx) onAcknowledge;
+  final Widget incomingStrip; // <— now injected
   final VoidCallback onSend;
   final VoidCallback onReceive;
 
@@ -617,24 +556,14 @@ class _HeaderSection extends StatelessWidget {
 
         const SizedBox(height: 20),
 
-        // Incoming payment hints directly below action buttons
-        if (tronAddress != null && incomingHints.isNotEmpty) ...[
-          for (final tx in incomingHints)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 0),
-              child: incomingPaymentHint(
-                tx,
-                tronAddress!,
-                onAcknowledge: () => onAcknowledge(tx),
-              ),
-            ),
-        ],
+        // Injected incoming strip (shows 2 latest if any)
+        incomingStrip,
       ],
     );
   }
 }
 
-// ---------- tiny UI helpers for "live" feel ----------
+// ---------- tiny UI helpers ----------
 
 class _LivePill extends StatelessWidget {
   const _LivePill({
@@ -753,13 +682,5 @@ class _UpdatedAgoLabelState extends State<_UpdatedAgoLabel> {
   }
 }
 
-// ---------- math util ----------
-
-double pow10(int n) {
-  double x = 1;
-  for (int i = 0; i < n; i++) x *= 10;
-  return x;
-}
-
-// ---------- unawaited helper ----------
+// ---------- helpers ----------
 void unawaited(Future<void> f) {}
