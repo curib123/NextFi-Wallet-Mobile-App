@@ -1,5 +1,18 @@
+// lib/Screen/StakeScreenWidgets/stake_v2_main_screen.dart
+//
+// Realtime auto-refresh added:
+// - Periodic poller with throttling (_minReloadGap/_minResGap)
+// - Debounced "immediate" refresh scheduler for bursts
+// - Clean teardown in dispose()
+// - Manual refresh still works
+//
+// NOTE: If your TronWalletService exposes a `watchIncoming(...)` stream,
+// you can hook it in _startRealtime() (see commented section).
+
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -11,6 +24,7 @@ import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Components/confirm_action_sheet.dart';
 
 import 'package:next_fi/Screen/SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
+import 'package:next_fi/Screen/StakeScreenWidgets/stake_guide_modal.dart';
 import 'package:next_fi/Screen/StakeScreenWidgets/stake_widgets.dart';
 import 'package:next_fi/Screen/StakeScreenWidgets/stake_v2_screens.dart';
 import 'package:next_fi/Screen/StakeScreenWidgets/stake_v2_unstake_screens.dart';
@@ -32,7 +46,7 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
 
   final _nf = NumberFormat('#,##0.######');
   bool _loading = true;
-  bool _reloading = false; // <-- prevents overlapping reloads without blocking first load
+  bool _reloading = false; // prevent overlapping reloads
   String? _error;
 
   int _spendableSun = 0;
@@ -53,6 +67,20 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
   int _freeNetLimit = 0, _freeNetUsed = 0, _netLimit = 0, _netUsed = 0;
   int _energyLimit = 0, _energyUsed = 0;
 
+  /* ========================= Realtime (auto-refresh) ========================= */
+  // Throttling / cadence
+  static const Duration _minReloadGap = Duration(seconds: 20); // balances & stakes
+  static const Duration _minResGap = Duration(seconds: 45);    // resource gauges
+
+  Timer? _pollTimer;
+  Timer? _debounceRefresh;
+  DateTime _lastReloadAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastResAt = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _autoRefresh = true;
+
+  // Optional: if your service offers incoming tx watcher (commented out to avoid compile issues)
+  // StreamSubscription? _incomingSub;
+
   @override
   void initState() {
     super.initState();
@@ -63,11 +91,16 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
   @override
   void dispose() {
     _tron.dispose();
+    _pollTimer?.cancel();
+    _debounceRefresh?.cancel();
+    // _incomingSub?.cancel();
     super.dispose();
   }
 
   String _fmtTrx(int sun) => _nf.format(sun / 1e6);
   String _short(String s) => s.length <= 10 ? s : '${s.substring(0, 6)}…${s.substring(s.length - 4)}';
+
+  /* ========================= Wallet Load + Realtime start ========================= */
 
   Future<void> _loadWallet() async {
     final mn = await SeedStorage.getSeed();
@@ -84,8 +117,10 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
         _pk = pk;
         _addr = addr;
       });
-      // First load should NOT be blocked by the overlapping guard.
+      // First load
       await Future.wait([_reload(), _fetchResources()]);
+      // Then start realtime loop
+      _startRealtime();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -95,10 +130,58 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
     }
   }
 
+  void _startRealtime() {
+    _pollTimer?.cancel();
+    if (!_autoRefresh || _addr == null) return;
+
+    // Periodic poller (gentle cadence)
+    _pollTimer = Timer.periodic(const Duration(seconds: 25), (_) => _tickRealtime());
+
+    // Optional: hook to incoming watcher for instant updates (uncomment & adapt signature)
+    /*
+    try {
+      _incomingSub?.cancel();
+      _incomingSub = _tron.watchIncoming(
+        address: _addr!,
+        tokens: const ['TRX', 'USDT'],
+        onEvent: (dynamic _) => _scheduleImmediateRefresh(),
+      );
+    } catch (_) {
+      // watcher not available; polling still keeps UI fresh
+    }
+    */
+  }
+
+  Future<void> _tickRealtime() async {
+    if (!mounted || _addr == null) return;
+    final now = DateTime.now();
+
+    if (now.difference(_lastReloadAt) >= _minReloadGap) {
+      await _reload();
+      _lastReloadAt = DateTime.now(); // after await to reflect completion time
+    }
+    if (now.difference(_lastResAt) >= _minResGap) {
+      await _fetchResources();
+      _lastResAt = DateTime.now();
+    }
+  }
+
+  void _scheduleImmediateRefresh({Duration delay = const Duration(milliseconds: 800)}) {
+    _debounceRefresh?.cancel();
+    _debounceRefresh = Timer(delay, () async {
+      await _reload();
+      await _fetchResources();
+      _lastReloadAt = DateTime.now();
+      _lastResAt = DateTime.now();
+    });
+  }
+
+  /* ========================= Core Reloads ========================= */
+
   Future<void> _reload() async {
     final addr = _addr;
     if (addr == null) return;
-    if (_reloading) return; // prevent overlaps without relying on _loading
+    if (_reloading) return; // prevent overlaps
     _reloading = true;
 
     if (mounted) {
@@ -110,9 +193,9 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
 
     try {
       final results = await Future.wait([
-        _tron.getTrxBalance(addr),          // may be int/num/BigInt/String
-        _tron.getAllStakesV2(addr),         // shape may vary (v1 vs v2)
-        _tron.getWithdrawableSun(addr),     // sun
+        _tron.getTrxBalance(addr),
+        _tron.getAllStakesV2(addr),
+        _tron.getWithdrawableSun(addr),
         _tron.getAvailableUnfreezeSlots(addr),
       ]);
 
@@ -121,7 +204,6 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
       final withdrawable = _asIntSun(results[2]);
       final slots = (results[3] as num?)?.toInt() ?? 0;
 
-      // Accept multiple possible keys from different endpoints/versions:
       final frozenRaw = (stakeMap['frozen'] ??
           stakeMap['frozenV2'] ??
           stakeMap['stakes'] ??
@@ -133,16 +215,12 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
           stakeMap['pending'] ??
           const []) as List?;
 
-      // Normalize to consistent maps:
-      // { type: 'ENERGY'|'BANDWIDTH', amount_sun: int, expire_time_ms?: int, ... }
       final frozen = _normalizeStakeList(frozenRaw ?? const []);
       final unfrozen = _normalizeUnfreezeList(unfrozenRaw ?? const []);
 
-      // Sort for nicer grouping/timeline reads
       frozen.sort((a, b) => (a['type'] as String).compareTo(b['type'] as String));
       unfrozen.sort((a, b) => ((a['expire_time_ms'] ?? 0) as int).compareTo((b['expire_time_ms'] ?? 0) as int));
 
-      // Compute active stake totals
       int energySun = 0, bandwidthSun = 0;
       for (final e in frozen) {
         final amt = (e['amount_sun'] as int?) ?? 0;
@@ -154,12 +232,10 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
         }
       }
 
-      // Fallback for APIs that only expose v1 totals via account_resource
       if (energySun == 0 && bandwidthSun == 0) {
         final ar = (stakeMap['account_resource'] ??
             stakeMap['accountResource'] ??
             stakeMap['resources']) as Map<String, dynamic>?;
-
         if (ar != null) {
           final bwDirect = _asIntSun(ar['frozen_balance_for_bandwidth']);
           final bwDeleg = _asIntSun(ar['delegated_frozen_balance_for_bandwidth']);
@@ -196,8 +272,6 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
     }
   }
 
-  /* ========================= Helpers ========================= */
-
   int _asIntSun(dynamic v) {
     if (v == null) return 0;
     if (v is int) return v;
@@ -209,11 +283,10 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
 
   String _normalizeType(dynamic raw) {
     final s = (raw ?? '').toString().toUpperCase();
-    if (s == 'NET') return 'BANDWIDTH'; // old label → new
+    if (s == 'NET') return 'BANDWIDTH';
     if (s == 'BANDWIDTH' || s == 'ENERGY') return s;
     if (s.contains('BAND')) return 'BANDWIDTH';
     if (s.contains('ENERG')) return 'ENERGY';
-    // default safely to BANDWIDTH if unclear
     return 'BANDWIDTH';
   }
 
@@ -227,7 +300,6 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
     return null;
   }
 
-  /// Try multiple common keys and `{amount: X}` nested shapes for SUN amounts.
   int _pickAmountSun(Map m) {
     const candidates = [
       'amount_sun',
@@ -235,14 +307,12 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
       'balance',
       'value',
       'sun',
-      // v1/v2 bandwidth/energy buckets + delegated:
       'frozen_balance',
       'frozenBalance',
       'frozen_balance_for_energy',
       'delegated_frozen_balance_for_energy',
       'frozen_balance_for_bandwidth',
       'delegated_frozen_balance_for_bandwidth',
-      // other common variants:
       'balance_sun',
       'stake_amount',
       'amountSun',
@@ -257,7 +327,6 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
         if (v is Map && v.containsKey('amount')) return _asIntSun(v['amount']);
         return _asIntSun(v);
       }
-      // case-insensitive fallback
       final hit = m.entries.firstWhere(
             (e) => e.key.toString().toLowerCase() == k.toLowerCase(),
         orElse: () => const MapEntry('', null),
@@ -276,13 +345,10 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
       final m = Map<String, dynamic>.from(raw as Map);
       final type = _normalizeType(m['type'] ?? m['resource'] ?? m['category']);
       int amtSun = _pickAmountSun(m);
-
-      // If a TRX unit sneaks in (rare), convert using explicit hint key:
       if (amtSun == 0 && m['amount_trx'] != null) {
         final trx = (m['amount_trx'] as num?) ?? 0;
         amtSun = (trx * 1e6).toInt();
       }
-
       final expireMs = _pickExpireMs(m);
       return {
         ...m,
@@ -368,6 +434,8 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
     }
   }
 
+  /* ========================= UI Actions ========================= */
+
   Future<void> _withdrawMatured() async {
     if (_pk == null) return;
     if (_withdrawableSun <= 0) {
@@ -385,11 +453,23 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
     try {
       final tx = await _tron.withdrawExpireUnfreeze(privateKey: _pk!);
       showFloatingSnackBar(context, message: 'Withdrawn. tx: ${_short(tx)}', type: SnackBarType.success);
-      await _reload();
+      // immediate refresh, but debounced to protect rate limits if chained
+      _scheduleImmediateRefresh();
     } catch (e) {
       showFloatingSnackBar(context, message: e.toString(), type: SnackBarType.error);
     }
   }
+
+  // put these in your State class
+  void _openStakeGuide() {
+    _doOpenStakeGuide(); // don't await inside onPressed
+  }
+
+  Future<void> _doOpenStakeGuide() async {
+    await showStakeGuideSheet(context); // returns StakeGuideChoice.v2 or null
+  }
+
+  /* ========================= Build ========================= */
 
   @override
   Widget build(BuildContext context) {
@@ -406,6 +486,21 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
       appBar: AppBar(
         title: const Text('Stake 2.0'),
         actions: [
+
+        // Toggle auto-refresh (optional)
+          IconButton(
+            tooltip: _autoRefresh ? 'Auto-refresh: ON' : 'Auto-refresh: OFF',
+            icon: Icon(_autoRefresh ? LucideIcons.radio : LucideIcons.radioReceiver),
+            onPressed: () {
+              setState(() => _autoRefresh = !_autoRefresh);
+              if (_autoRefresh) {
+                _startRealtime();
+              } else {
+                _pollTimer?.cancel();
+                // _incomingSub?.cancel();
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(LucideIcons.refreshCw),
             onPressed: _loading
@@ -413,6 +508,16 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
                 : () async {
               await _reload();
               await _fetchResources();
+              _lastReloadAt = DateTime.now();
+              _lastResAt = DateTime.now();
+            },
+          ),
+          IconButton(
+            tooltip: 'Staking Guide (2.0)',
+            icon: const Icon(LucideIcons.info),
+            onPressed: () {
+              // sync wrapper to satisfy VoidCallback
+              _openStakeGuide();
             },
           ),
         ],
@@ -421,6 +526,8 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
         onRefresh: () async {
           await _reload();
           await _fetchResources();
+          _lastReloadAt = DateTime.now();
+          _lastResAt = DateTime.now();
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -510,10 +617,7 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
                         spendableSun: _spendableSun,
                       ),
                     ),
-                  ).then((_) async {
-                    await _reload();
-                    await _fetchResources();
-                  }),
+                  ).then((_) => _scheduleImmediateRefresh()),
                 ),
               ),
               const SizedBox(width: 10),
@@ -537,11 +641,7 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
                         availableSlots: _availableSlots,
                         withdrawableSun: _withdrawableSun,
                         unfrozen: _unfrozen,
-                        onDataChanged: () async {
-                          await _reload();
-                          await _fetchResources();
-                          if (mounted) setState(() {});
-                        },
+                        onDataChanged: () => _scheduleImmediateRefresh(),
                       ),
                     ),
                   ),
