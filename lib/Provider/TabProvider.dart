@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:next_fi/Screen/stake_v2_main_screen.dart';
 import 'package:next_fi/Screen/transaction_screen.dart';
 import 'package:next_fi/Screen/wallet_home_screen.dart';
 
@@ -15,6 +16,7 @@ class TabProvider extends ChangeNotifier {
   final List<Widget> screens = const [
     WalletHomeScreen(),
     TransactionScreen(),
+    StakeV2MainScreen(),
     TransactionScreen(),
     WalletHomeScreen(),
   ];

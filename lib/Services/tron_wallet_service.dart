@@ -660,6 +660,261 @@ class TronWalletService {
     }
   }
 
+  /* ========================= Stake 2.0 (Freeze/Unfreeze) ========================= */
+
+  /// Resource type for Stake 2.0
+  static const String _RES_ENERGY = 'ENERGY';
+  static const String _RES_BANDWIDTH = 'BANDWIDTH';
+
+  String _normResource(String resource) {
+    final r = resource.trim().toUpperCase();
+    if (r != _RES_ENERGY && r != _RES_BANDWIDTH) {
+      throw TronError('resource must be ENERGY or BANDWIDTH');
+    }
+    return r;
+  }
+
+  /// Stake TRX (Stake 2.0) to get ENERGY or BANDWIDTH.
+  /// - amountSun: TRX in SUN (1 TRX = 1_000_000 SUN)
+  /// Returns txid on success.
+  Future<String> freezeBalanceV2({
+    required Uint8List privateKey,
+    required int amountSun,
+    required String resource,         // 'ENERGY' | 'BANDWIDTH'
+    int permissionId = 0,
+    int minFeeBufferSun = 100_000,    // keep tiny buffer for fees
+  }) async {
+    if (amountSun <= 0) throw TronError('amountSun must be > 0');
+    final res = _normResource(resource);
+    final owner = tronAddressFromPrivateKey(privateKey);
+
+    // simple balance guard
+    final bal = await getTrxBalance(owner);
+    final need = amountSun + (minFeeBufferSun > 0 ? minFeeBufferSun : 0);
+    if (bal < need) {
+      throw TronError('Insufficient TRX. Need at least $need SUN (amount + buffer), have $bal.');
+    }
+
+    // 1) Build (freezebalancev2)
+    final uri = Uri.parse('${_cfg.baseUrl}/wallet/freezebalancev2');
+    final build = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'owner_address': owner,
+        'frozen_balance': amountSun,
+        'resource': res,
+        'visible': true,
+        if (permissionId != 0) 'permission_id': permissionId,
+      }),
+    ).timeout(_cfg.timeout);
+
+    final tx = _extractTxOrThrow(_safeJson(build));
+    if (permissionId != 0) tx['permission_id'] = permissionId;
+
+    // 2) Sign → 3) Broadcast
+    final signed = _signTransaction(tx, privateKey);
+    return _broadcast(signed);
+  }
+
+  /// Start an unstake (Stake 2.0). After this, you must wait ~14 days,
+  /// then call [withdrawExpireUnfreeze] to move matured TRX back to balance.
+  /// Returns txid on success.
+  Future<String> unfreezeBalanceV2({
+    required Uint8List privateKey,
+    required int amountSun,
+    required String resource,       // 'ENERGY' | 'BANDWIDTH'
+    int permissionId = 0,
+  }) async {
+    if (amountSun <= 0) throw TronError('amountSun must be > 0');
+    final res = _normResource(resource);
+    final owner = tronAddressFromPrivateKey(privateKey);
+
+    // Optional: check remaining "unstake operations" available (slots)
+    try {
+      final slots = await getAvailableUnfreezeSlots(owner);
+      if (slots <= 0) {
+        // Not fatal: Some nodes count per-day limits; surface a clear error instead of a vague revert.
+        _log?.call('No available unfreeze slots reported by node; attempting anyway.');
+      }
+    } catch (_) {/* non-fatal */}
+
+    // 1) Build (unfreezebalancev2)
+    final uri = Uri.parse('${_cfg.baseUrl}/wallet/unfreezebalancev2');
+    final build = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'owner_address': owner,
+        'unfreeze_balance': amountSun,
+        'resource': res,
+        'visible': true,
+        if (permissionId != 0) 'permission_id': permissionId,
+      }),
+    ).timeout(_cfg.timeout);
+
+    final tx = _extractTxOrThrow(_safeJson(build));
+    if (permissionId != 0) tx['permission_id'] = permissionId;
+
+    // 2) Sign → 3) Broadcast
+    final signed = _signTransaction(tx, privateKey);
+    return _broadcast(signed);
+  }
+
+  /// Withdraw all *matured* (≥ lock period) unstaked TRX back to balance.
+  /// (For Stake 2.0 unstakes after ~14 days.)
+  Future<String> withdrawExpireUnfreeze({
+    required Uint8List privateKey,
+    int permissionId = 0,
+  }) async {
+    final owner = tronAddressFromPrivateKey(privateKey);
+    final uri = Uri.parse('${_cfg.baseUrl}/wallet/withdrawexpireunfreeze');
+    final build = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'owner_address': owner,
+        'visible': true,
+        if (permissionId != 0) 'permission_id': permissionId,
+      }),
+    ).timeout(_cfg.timeout);
+
+    final tx = _extractTxOrThrow(_safeJson(build));
+    if (permissionId != 0) tx['permission_id'] = permissionId;
+
+    final signed = _signTransaction(tx, privateKey);
+    return _broadcast(signed);
+  }
+
+  /// Cancel all Stake 2.0 unstakes still in the waiting period.
+  /// (They become re-staked; any already-matured portion is auto-withdrawn.)
+  Future<String> cancelAllUnfreezeV2({
+    required Uint8List privateKey,
+    int permissionId = 0,
+  }) async {
+    final owner = tronAddressFromPrivateKey(privateKey);
+    final uri = Uri.parse('${_cfg.baseUrl}/wallet/cancelallunfreezev2');
+    final build = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({
+        'owner_address': owner,
+        'visible': true,
+        if (permissionId != 0) 'permission_id': permissionId,
+      }),
+    ).timeout(_cfg.timeout);
+
+    final tx = _extractTxOrThrow(_safeJson(build));
+    if (permissionId != 0) tx['permission_id'] = permissionId;
+
+    final signed = _signTransaction(tx, privateKey);
+    return _broadcast(signed);
+  }
+
+  /// Query: how many *remaining* Unfreeze (unstake) operations are available now.
+  Future<int> getAvailableUnfreezeSlots(String base58Address) async {
+    _ensureAddress(base58Address);
+    final uri = Uri.parse('${_cfg.baseUrl}/walletsolidity/getavailableunfreezecount');
+    final res = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({'owner_address': base58Address, 'visible': true}),
+    ).timeout(_cfg.timeout);
+    final j = _safeJson(res);
+    // Nodes return either { "count": N } or { "number": N } depending on version.
+    final n = (j['count'] ?? j['number'] ?? 0);
+    return (n as num).toInt();
+  }
+
+  /// Query withdrawable amount (in SUN) at a given timestamp (default = now).
+  Future<int> getWithdrawableSun(String base58Address, {int? atTimestampMs}) async {
+    _ensureAddress(base58Address);
+    final ts = atTimestampMs ?? DateTime.now().millisecondsSinceEpoch;
+    final uri = Uri.parse('${_cfg.baseUrl}/walletsolidity/getcanwithdrawunfreezeamount');
+    final res = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({'owner_address': base58Address, 'timestamp': ts, 'visible': true}),
+    ).timeout(_cfg.timeout);
+    final j = _safeJson(res);
+    // Common field names: amount / balance / can_withdraw_unfreeze_amount depending on node.
+    final v = (j['amount'] ?? j['balance'] ?? j['can_withdraw_unfreeze_amount'] ?? 0);
+    return (v as num).toInt();
+  }
+
+  /// Get Stake 2.0 details for an account (confirmed state).
+  /// Returns:
+  /// {
+  ///   "frozen": [ { "type": "ENERGY|BANDWIDTH", "amount_sun": int } ],
+  ///   "unfrozen": [ { "type": "ENERGY|BANDWIDTH", "amount_sun": int, "expire_time_ms": int } ],
+  ///   "totals": { "energy_sun": int, "bandwidth_sun": int }
+  /// }
+  Future<Map<String, dynamic>> getAllStakesV2(String base58Address) async {
+    _ensureAddress(base58Address);
+    final uri = Uri.parse('${_cfg.baseUrl}/walletsolidity/getaccount');
+    final res = await _http.post(
+      uri,
+      headers: _headers(),
+      body: jsonEncode({'address': base58Address, 'visible': true}),
+    ).timeout(_cfg.timeout);
+    final j = _safeJson(res);
+
+    final List frozenV2 = (j['frozenV2'] as List?) ?? const [];
+    final List unfrozenV2 = (j['unfrozenV2'] as List?) ?? const [];
+
+    int energySum = 0, bandwidthSum = 0;
+
+    String _normType(String t) {
+      final up = (t).toUpperCase();
+      if (up == 'NET') return _RES_BANDWIDTH;   // ← normalize NET → BANDWIDTH
+      return up;
+    }
+
+    final frozen = <Map<String, dynamic>>[];
+    for (final e in frozenV2) {
+      if (e is Map) {
+        final rawType = (e['type'] ?? '').toString();
+        final type = _normType(rawType);
+        final amt = (e['frozen_balance'] as num?)?.toInt()
+            ?? (e['amount'] as num?)?.toInt()
+            ?? 0;
+        if (type == _RES_ENERGY) energySum += amt;
+        if (type == _RES_BANDWIDTH) bandwidthSum += amt;
+        frozen.add({'type': type, 'amount_sun': amt});
+      }
+    }
+
+    final unfrozen = <Map<String, dynamic>>[];
+    for (final e in unfrozenV2) {
+      if (e is Map) {
+        final rawType = (e['type'] ?? '').toString();
+        final type = _normType(rawType);
+        final amt = (e['unfreeze_amount'] as num?)?.toInt() ?? 0;
+        final t  = (e['unfreeze_expire_time'] as num?)?.toInt() ?? 0;
+        unfrozen.add({'type': type, 'amount_sun': amt, 'expire_time_ms': t});
+      }
+    }
+
+    return {
+      'frozen': frozen,
+      'unfrozen': unfrozen,
+      'totals': {'energy_sun': energySum, 'bandwidth_sun': bandwidthSum},
+      'raw': j,
+    };
+  }
+
+  Future<int> getTotalStakedSun(String addr) async {
+    final m = await getAllStakesV2(addr);
+    final t = (m['totals'] as Map).cast<String, dynamic>();
+    return (t['energy_sun'] as int) + (t['bandwidth_sun'] as int);
+  }
+
+  Future<int> getTotalUnstakingSun(String addr) async {
+    final m = await getAllStakesV2(addr);
+    final List list = (m['unfrozen'] as List?) ?? const [];
+    return list.fold<int>(0, (sum, e) => sum + ((e as Map)['amount_sun'] as int? ?? 0));
+  }
+
   /* ---------------- Base58 / ABI utils ---------------- */
 
   /// Tron base58 -> 21-byte payload hex ("41" + 20-byte address)

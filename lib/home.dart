@@ -100,6 +100,10 @@ class _HomeState extends State<Home> {
                   label: 'Transaction',
                 ),
                 BottomNavigationBarItem(
+                  icon: Icon(LucideIcons.package),
+                  label: 'Stake',
+                ),
+                BottomNavigationBarItem(
                   icon: Icon(LucideIcons.shuffle),
                   label: 'Swap',
                 ),

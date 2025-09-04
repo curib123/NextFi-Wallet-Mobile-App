@@ -447,8 +447,9 @@ class ResourcesCard extends StatelessWidget {
     this.showGuide = true,
     this.showEnergy = true,
     this.showBandwidth = true,
-    this.onGetEnergy,      // NEW
-    this.onGetBandwidth,   // NEW
+    this.onGetEnergy,
+    this.onGetBandwidth,
+    this.showActions = false, // <- NEW (default: hidden)
   }) : assert(showEnergy || showBandwidth,
   'At least one of showEnergy or showBandwidth must be true.');
 
@@ -458,15 +459,20 @@ class ResourcesCard extends StatelessWidget {
   final int energyUsed, energyLimit;
   final int bandwidthUsed, bandwidthLimit;
   final AppColor colors;
+
+  /// Extra info block at the bottom
   final bool showGuide;
 
-  /// control which resources to show
+  /// Control which resource sections are visible
   final bool showEnergy;
   final bool showBandwidth;
 
-  /// optional actions
+  /// Optional external handlers for CTAs
   final VoidCallback? onGetEnergy;
   final VoidCallback? onGetBandwidth;
+
+  /// Show "Get Free Energy/Bandwidth" CTAs
+  final bool showActions; // <- NEW
 
   @override
   Widget build(BuildContext context) {
@@ -524,8 +530,7 @@ class ResourcesCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text("Resources",
-                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800)),
+              Text("Resources", style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800)),
               const Spacer(),
               IconButton(
                 tooltip: bothBars
@@ -588,9 +593,9 @@ class ResourcesCard extends StatelessWidget {
             ],
           ),
 
-          // Actions (clean pill layout)
-          const SizedBox(height: 10),
-          if (showEnergy || showBandwidth)
+          // CTAs (hidden by default)
+          if (showActions && (showEnergy || showBandwidth)) ...[
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -615,6 +620,7 @@ class ResourcesCard extends StatelessWidget {
                   ),
               ],
             ),
+          ],
 
           if (showGuide && guideText.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -629,7 +635,7 @@ class ResourcesCard extends StatelessWidget {
     );
   }
 
-  // --- Actions --------------------------------------------------------------
+  // --- Actions (unchanged) --------------------------------------------------
 
   void _onActionTap(BuildContext context, _Kind kind) {
     if (kind == _Kind.energy) {

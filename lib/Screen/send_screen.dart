@@ -652,6 +652,7 @@ class _SendScreenState extends State<SendScreen> {
             showGuide: false,
             showEnergy:    t == 'USDT' || (t != 'TRX' && t != 'USDT'), // default to true
             showBandwidth: t == 'TRX'  || (t != 'TRX' && t != 'USDT'), // default to true
+            showActions: true,
           ),
           const SizedBox(height: 16),
 

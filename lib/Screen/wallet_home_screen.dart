@@ -271,7 +271,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                    padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
                     child: _HeaderSection(
                       colors: colors,
                       currency: currency,
@@ -300,7 +300,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                 ),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
                     child: buildTabBar(colors),
                   ),
                 ),
@@ -313,7 +313,22 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                     logos: assetProv.logos,
                     trxBalance: _trxBalance,
                     usdtBalance: _usdtBalance,
+                    address: _tronAddress ?? '', // safe default
                     loading: assetProv.loading || currency.loading || _loadingBalances,
+                    onItemTap: (token) {
+                      if (_tronAddress == null) {
+                        showFloatingSnackBar(context, message: "No address available", type: SnackBarType.error);
+                        return;
+                      }
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => ReceiveScreen(
+                          address: _tronAddress!,
+                          trxBalance: _trxBalance,
+                          usdtBalance: _usdtBalance,
+                          initialToken: token, // 'TRX' or 'USDT' based on clicked tile
+                        ),
+                      ));
+                    },
                   ),
                   RecipientListWidget(colors: colors),
                 ],
