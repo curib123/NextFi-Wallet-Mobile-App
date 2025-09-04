@@ -109,6 +109,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     final currency = Provider.of<CurrencyProvider>(context, listen: true);
 
     final isTRX = widget.token.toUpperCase() == 'TRX';
+    final balanceFiat = isTRX
+        ? currency.trxToFiat(widget.balance)
+        : currency.usdtToFiat(widget.balance);
+
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final numFmt = NumberFormat("#,##0.00");
 
@@ -179,6 +183,15 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 changePct: changePct,
                 rangeLabel: kRangeLabel[_selected]!,
                 colors: colors,
+                fiatFmt: fiatFmt,
+              ),
+              const SizedBox(height: 16),
+              BalanceHeader(
+                token: widget.token,
+                amountToken: widget.balance,
+                amountFiat: balanceFiat,
+                colors: colors,
+                numFmt: numFmt,
                 fiatFmt: fiatFmt,
               ),
               const SizedBox(height: 16),
@@ -277,30 +290,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Balance card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.primary.withOpacity(0.08)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text("${numFmt.format(widget.balance)} ${widget.token.toUpperCase()}",
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: colors.textPrimary)),
-                    const SizedBox(height: 6),
-                    Text(
-                      "≈ ${fiatFmt.format(isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance))}",
-                      style: TextStyle(color: colors.textSecondary, fontSize: 13.5, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Text("Current balance", style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
 
               // Safety
               Container(

@@ -44,22 +44,18 @@ class _SendScreenState extends State<SendScreen> {
   final TextEditingController _recipientController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
 
-  // Wallet (loaded like your snippet)
+  // Wallet
   Uint8List? _privateKey;
   String? _tronAddress;
   String? _tronAddressHex41;
 
   bool _isSending = false;
 
-  // Price range state (shared)
-  PriceRange _selected = PriceRange.h24;
-
   // Tron service
   late final TronWalletService _tron = TronWalletService(const TronClientConfig());
-  // If custom: TronClientConfig(baseUrl: 'https://api.trongrid.io', tronProApiKey: '...')
 
   // Resources (Bandwidth/Energy)
-  static const String _baseUrl = 'https://api.trongrid.io'; // change for Shasta/custom
+  static const String _baseUrl = 'https://api.trongrid.io';
   bool _resLoading = true;
   String? _resError;
   int _freeNetLimit = 0, _freeNetUsed = 0, _netLimit = 0, _netUsed = 0;
@@ -91,7 +87,7 @@ class _SendScreenState extends State<SendScreen> {
     super.dispose();
   }
 
-  // ---------------- Wallet & Resources ----------------
+  /* ---------------- Wallet & Resources ---------------- */
   Future<void> _loadWallet() async {
     final storedMnemonic = await SeedStorage.getSeed();
     if (!mounted) return;
@@ -117,7 +113,7 @@ class _SendScreenState extends State<SendScreen> {
 
       await _fetchResources();
       _scheduleEstimate();
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       showFloatingSnackBar(
         context,
@@ -161,7 +157,7 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ---------------- Estimate (USDT) ----------------
+  /* ---------------- Estimate (USDT) ---------------- */
   void _scheduleEstimate() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), _estimateIfNeeded);
@@ -172,6 +168,7 @@ class _SendScreenState extends State<SendScreen> {
     final from = _tronAddress ?? widget.address;
     final recipient = _recipientController.text.trim();
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+
     if (!isUSDT || amount <= 0 || !_looksLikeTron(recipient) || from.isEmpty) {
       setState(() {
         _estimating = false;
@@ -212,7 +209,7 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ---------------- Send ----------------
+  /* ---------------- Send ---------------- */
   Future<void> _sendTokenNow() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -235,6 +232,7 @@ class _SendScreenState extends State<SendScreen> {
       String txId;
 
       if (isTRX) {
+        // leave a small buffer for fees when sending TRX (burn if no bandwidth)
         final int sun = (amount * 1e6).round();
         txId = await _tron.sendTrx(
           privateKey: _privateKey!,
@@ -242,82 +240,26 @@ class _SendScreenState extends State<SendScreen> {
           amountSun: sun,
         );
       } else {
+        // USDT needs energy (fee_limit in SUN)
         txId = await _tron.sendUsdt(
           privateKey: _privateKey!,
           toAddress: recipient,
           amount: amount,
+          feeLimitSun: (_recommendedFeeLimitSun ?? 5_000_000),
         );
       }
 
       if (!mounted) return;
       HapticFeedback.mediumImpact();
 
-      await showModalBottomSheet(
-        context: context,
-        backgroundColor: AppColor.of(context).surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        builder: (_) {
-          final colors = AppColor.of(context);
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 40, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(LucideIcons.checkCircle2, color: Colors.green, size: 22),
-                    const SizedBox(width: 8),
-                    Text("Transfer submitted", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                SelectableText(txId, textAlign: TextAlign.center, style: TextStyle(color: colors.textSecondary, fontFamily: 'monospace', fontSize: 12.5)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await Clipboard.setData(ClipboardData(text: txId));
-                          HapticFeedback.lightImpact();
-                          if (mounted) showFloatingSnackBar(context, message: "TxID copied", type: SnackBarType.success);
-                        },
-                        icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
-                        label: Text("Copy TxID", style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
-                        label: const Text("Done"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      );
+      await _showTxSubmittedModal(txId);
 
       if (mounted) {
-        showFloatingSnackBar(context, message: "${amount.toStringAsFixed(6)} ${widget.token} sent", type: SnackBarType.success);
+        showFloatingSnackBar(
+          context,
+          message: "${amount.toStringAsFixed(6)} ${widget.token} sent",
+          type: SnackBarType.success,
+        );
         Navigator.pop(context);
       }
     } on TronError catch (e) {
@@ -331,9 +273,11 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ---------------- UI helpers ----------------
+  /* ---------------- UI helpers ---------------- */
   Future<void> _scanQRCode() async {
-    final code = await Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const QRScannerScreen()));
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QRScannerScreen()),
+    );
     if (!mounted) return;
     if (code != null && code.isNotEmpty) {
       _recipientController.text = code.trim();
@@ -355,12 +299,106 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
+  Future<void> _pickFromAddressBook() async {
+    // Route should return a String (the chosen TRON address) via Navigator.pop(context, address);
+    final picked = await Navigator.of(context).pushNamed<String>('/address-book');
+    if (!mounted) return;
+    if (picked != null && picked.trim().isNotEmpty) {
+      _recipientController.text = picked.trim();
+      HapticFeedback.selectionClick();
+      showFloatingSnackBar(context, message: "Address selected", type: SnackBarType.success);
+      _scheduleEstimate();
+    }
+  }
+
   bool _looksLikeTron(String s) => s.isNotEmpty && s.startsWith('T') && s.length >= 30 && s.length <= 45;
 
-  void _onTapMax() {
-    _amountController.text = widget.balance.toStringAsFixed(6);
+  void _onTapPercent(double pct, {required bool isTRX}) {
+    // For TRX, keep a tiny fee buffer so confirm/send won’t fail
+    final bufferTrx = isTRX ? 0.2 : 0.0; // ~0.2 TRX buffer
+    final maxSpend = isTRX ? (widget.balance - bufferTrx).clamp(0.0, widget.balance) : widget.balance;
+    final v = (maxSpend * pct).clamp(0.0, widget.balance);
+    _amountController.text = v.toStringAsFixed(6);
     HapticFeedback.selectionClick();
     _scheduleEstimate();
+  }
+
+  void _onTapMax({required bool isTRX}) => _onTapPercent(1.0, isTRX: isTRX);
+
+  Future<void> _showTxSubmittedModal(String txId) {
+    final colors = AppColor.of(context);
+    return showModalBottomSheet(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.checkCircle2, color: Colors.green, size: 22),
+                  const SizedBox(width: 8),
+                  Text("Transfer submitted", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SelectableText(
+                txId,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.textSecondary, fontFamily: 'monospace', fontSize: 12.5),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: txId));
+                        HapticFeedback.lightImpact();
+                        if (mounted) {
+                          showFloatingSnackBar(context, message: "TxID copied", type: SnackBarType.success);
+                        }
+                      },
+                      icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
+                      label: Text("Copy TxID", style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: colors.primary.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
+                      label: const Text("Done"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _confirmAndSend(CurrencyProvider currency, bool isTRX) {
@@ -368,6 +406,9 @@ class _SendScreenState extends State<SendScreen> {
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final fiat = isTRX ? currency.trxToFiat(amount) : currency.usdtToFiat(amount);
     final colors = AppColor.of(context);
+
+    final feeLimitSun = _recommendedFeeLimitSun ?? 5_000_000; // default ~5 TRX cap
+    final estFeeTrx = feeLimitSun / 1e6;
 
     showModalBottomSheet(
       context: context,
@@ -383,21 +424,61 @@ class _SendScreenState extends State<SendScreen> {
               const SizedBox(height: 12),
               Text("Review Transfer", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
               const SizedBox(height: 8),
-              _ReviewRow(label: "From", value: (_tronAddress ?? widget.address), mono: true),
-              _ReviewRow(label: "To", value: _recipientController.text, mono: true),
-              _ReviewRow(label: "Amount", value: "${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}"),
-              _ReviewRow(label: "≈ Fiat", value: fiatFmt.format(fiat)),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(LucideIcons.info, size: 16, color: colors.textSecondary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text("Network: TRON (TRC20). Fees are paid in TRX.",
-                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
+              ReviewRow(label: "From", value: (_tronAddress ?? widget.address), mono: true),
+              ReviewRow(label: "To", value: _recipientController.text, mono: true),
+              ReviewRow(label: "Amount", value: "${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}"),
+              ReviewRow(label: "≈ Fiat", value: fiatFmt.format(fiat)),
+              const SizedBox(height: 8),
+
+              if (!isTRX) ...[
+                // USDT specifics
+                Row(
+                  children: [
+                    Icon(LucideIcons.zap, size: 16, color: colors.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _estimating
+                            ? "Estimating Energy & fee limit…"
+                            : (_willSucceed == true
+                            ? "Est. Energy: ${_estEnergyRequired ?? 0} | Fee limit: ${feeLimitSun.toString()} SUN (~${estFeeTrx.toStringAsFixed(3)} TRX)"
+                            : "Estimation suggests higher energy may be required. Fee limit: ${feeLimitSun.toString()} SUN (~${estFeeTrx.toStringAsFixed(3)} TRX)"),
+                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_estimateMsg?.isNotEmpty == true) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(LucideIcons.info, size: 14, color: colors.textSecondary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _estimateMsg!,
+                          style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
+              ] else ...[
+                // TRX specifics
+                Row(
+                  children: [
+                    Icon(LucideIcons.flame, size: 16, color: colors.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "TRX transfers consume Bandwidth first. If insufficient, a small amount of TRX will be burned as fees.",
+                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -439,33 +520,23 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  // ---------------- Build ----------------
+  /* ---------------- Build ---------------- */
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final currency = Provider.of<CurrencyProvider>(context, listen: true);
 
     final isTRX = widget.token.toUpperCase() == 'TRX';
-    final history = switch (_selected) {
-      PriceRange.h24 => isTRX ? currency.trxHistory24h : currency.usdtHistory24h,
-      PriceRange.d7  => isTRX ? currency.trxHistory7   : currency.usdtHistory7,
-      PriceRange.d30 => isTRX ? currency.trxHistory30  : currency.usdtHistory30,
-      PriceRange.y1  => isTRX ? currency.trxHistory365 : currency.usdtHistory365,
-    };
-    final priceStream = isTRX ? currency.trxPriceStream : currency.usdtPriceStream;
+    final balanceFiat = isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance);
 
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final numFmt = NumberFormat("#,##0.00");
-
-    final changePct = pctChangeFromSeries(history);
-    final changeUp = changePct >= 0;
-    final changeColor = changeUp ? Colors.green : Colors.red;
 
     final oneTokenInFiat = isTRX ? currency.trxToFiat(1) : currency.usdtToFiat(1);
     final typedAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
     final typedFiat = isTRX ? currency.trxToFiat(typedAmount) : currency.usdtToFiat(typedAmount);
 
-    // Derived resource values
+    // Derived resources
     final bwLimitTotal = _freeNetLimit + _netLimit;
     final bwUsedTotal  = _freeNetUsed + _netUsed;
 
@@ -497,292 +568,274 @@ class _SendScreenState extends State<SendScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<double>(
-        stream: priceStream,
-        builder: (context, _) {
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-            children: [
-              // Wallet banner if not loaded
-              if (_privateKey == null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.25)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        children: [
+          // Wallet banner if not loaded
+          if (_privateKey == null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.25)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.key, color: Colors.orange, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Wallet not loaded yet. Please ensure your mnemonic is stored.",
+                      style: TextStyle(color: colors.textSecondary),
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(LucideIcons.key, color: Colors.orange, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text("Wallet not loaded yet. Please ensure your mnemonic is stored.",
-                            style: TextStyle(color: colors.textSecondary)),
-                      ),
-                      TextButton(onPressed: _loadWallet, child: const Text("Load")),
-                    ],
-                  ),
-                ),
+                  TextButton(onPressed: _loadWallet, child: const Text("Load")),
+                ],
+              ),
+            ),
 
-              // From address chip (derived)
-              if (fromAddress.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: colors.primary.withOpacity(0.2)),
+          // From address chip
+          if (fromAddress.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: colors.primary.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.badgeCheck, size: 16, color: colors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      fromAddress,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(LucideIcons.badgeCheck, size: 16, color: colors.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          fromAddress,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, fontWeight: FontWeight.w700),
+                  if (_tronAddressHex41 != null) ...[
+                    const SizedBox(width: 8),
+                    Tooltip(message: _tronAddressHex41!, child: const Icon(LucideIcons.info, size: 16)),
+                  ]
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+
+          // Price header (no day chips / no chart)
+          PriceHeader(
+            token: widget.token,
+            oneTokenInFiat: oneTokenInFiat,
+            changePct: 0, // no chart context; omit change or pass your own percent if available
+            rangeLabel: 'NOW',
+            colors: colors,
+            fiatFmt: fiatFmt,
+          ),
+          const SizedBox(height: 12),
+
+          // Balance header
+          BalanceHeader(
+            token: widget.token,
+            amountToken: widget.balance,
+            amountFiat: balanceFiat,
+            colors: colors,
+            numFmt: numFmt,
+            fiatFmt: fiatFmt,
+          ),
+
+          const SizedBox(height: 14),
+
+          // Resources (Energy/Bandwidth)
+          ResourcesCard(
+            loading: _resLoading,
+            errorText: _resError,
+            onRetry: _fetchResources,
+            energyUsed: _energyUsed,
+            energyLimit: _energyLimit,
+            bandwidthUsed: bwUsedTotal,
+            bandwidthLimit: bwLimitTotal,
+            colors: colors,
+            showGuide: false,
+          ),
+          const SizedBox(height: 16),
+
+          // Form
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Recipient (modern input)
+                TextFormField(
+                  controller: _recipientController,
+                  decoration: InputDecoration(
+                    labelText: "Recipient Address",
+                    hintText: "T... (TRON address)",
+                    filled: true,
+                    fillColor: colors.primary.withOpacity(0.04),
+                    prefixIcon: Icon(LucideIcons.contact, color: colors.primary),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: "Pick from address book",
+                          icon: Icon(LucideIcons.contact, color: colors.primary),
+                          onPressed: _pickFromAddressBook,
                         ),
-                      ),
-                      if (_tronAddressHex41 != null) ...[
-                        const SizedBox(width: 8),
-                        Tooltip(message: _tronAddressHex41!, child: const Icon(LucideIcons.info, size: 16)),
-                      ]
-                    ],
+                        IconButton(
+                          tooltip: "Paste",
+                          icon: Icon(LucideIcons.clipboardPaste, color: colors.primary),
+                          onPressed: _pasteFromClipboard,
+                        ),
+                        IconButton(
+                          tooltip: "Scan QR",
+                          icon: Icon(LucideIcons.qrCode, color: colors.primary),
+                          onPressed: _scanQRCode,
+                        ),
+                      ],
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: colors.primary.withOpacity(0.15)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: colors.primary.withOpacity(0.35), width: 1.3),
+                    ),
                   ),
+                  onChanged: (_) => _scheduleEstimate(),
+                  validator: (value) {
+                    final v = value?.trim() ?? '';
+                    if (v.isEmpty) return "Enter recipient address";
+                    if (!_looksLikeTron(v)) return "Invalid TRON address";
+                    return null;
+                  },
                 ),
-              ],
-              const SizedBox(height: 10),
+                const SizedBox(height: 12),
 
-              // Price + change header
-              PriceHeader(
-                token: widget.token,
-                oneTokenInFiat: oneTokenInFiat,
-                changePct: changePct,
-                rangeLabel: kRangeLabel[_selected]!,
-                colors: colors,
-                fiatFmt: fiatFmt,
-              ),
-              const SizedBox(height: 12),
-
-              // Range selector
-              RangeSegmented(
-                selected: _selected,
-                onChanged: (r) => setState(() => _selected = r),
-                colors: colors,
-              ),
-              const SizedBox(height: 12),
-
-              // Chart
-              MainLineChart(history: history, changeColor: changeColor, fiatFmt: fiatFmt, colors: colors),
-              const SizedBox(height: 14),
-
-              // Resources card
-              ResourcesCard(
-                loading: _resLoading,
-                errorText: _resError,
-                onRetry: _fetchResources,
-                energyUsed: _energyUsed,
-                energyLimit: _energyLimit,
-                bandwidthUsed: bwUsedTotal,
-                bandwidthLimit: bwLimitTotal,
-                colors: colors,
-              ),
-              const SizedBox(height: 16),
-
-              // Balance
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.primary.withOpacity(0.08)),
+                // Amount (modern input)
+                TextFormField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: "Amount (${widget.token.toUpperCase()})",
+                    filled: true,
+                    fillColor: colors.primary.withOpacity(0.04),
+                    prefixIcon: Icon(LucideIcons.coins, color: colors.primary),
+                    suffixIcon: null,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: colors.primary.withOpacity(0.15)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: colors.primary.withOpacity(0.35), width: 1.3),
+                    ),
+                  ),
+                  onChanged: (_) => _scheduleEstimate(),
+                  validator: (value) {
+                    final v = double.tryParse(value?.trim() ?? "") ?? 0;
+                    if (v <= 0) return "Enter amount";
+                    if (v > widget.balance) return "Amount exceeds balance";
+                    return null;
+                  },
                 ),
-                child: Column(
+
+                // Quick ranges under amount
+                const SizedBox(height: 8),
+                Row(
                   children: [
-                    Text("${numFmt.format(widget.balance)} ${widget.token.toUpperCase()}",
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: colors.textPrimary)),
-                    const SizedBox(height: 6),
-                    Text("≈ ${fiatFmt.format(isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance))}",
-                        style: TextStyle(color: colors.textSecondary, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                    PctChip(label: "25%", onTap: () => _onTapPercent(0.25, isTRX: isTRX), colors: colors),
+                    const SizedBox(width: 8),
+                    PctChip(label: "50%", onTap: () => _onTapPercent(0.50, isTRX: isTRX), colors: colors),
+                    const SizedBox(width: 8),
+                    PctChip(label: "75%", onTap: () => _onTapPercent(0.75, isTRX: isTRX), colors: colors),
+                    const SizedBox(width: 8),
+                    PctChip(label: "MAX", onTap: () => _onTapMax(isTRX: isTRX), colors: colors),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
 
-              // Form
-              Form(
-                key: _formKey,
-                child: Column(
+                // Fiat preview + fees note
+                const SizedBox(height: 8),
+                Row(
                   children: [
-                    TextFormField(
-                      controller: _recipientController,
-                      decoration: InputDecoration(
-                        labelText: "Recipient Address",
-                        hintText: "T... (TRON address)",
-                        prefixIcon: Icon(LucideIcons.user, color: colors.primary),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: "Paste",
-                              icon: Icon(LucideIcons.clipboardPaste, color: colors.primary),
-                              onPressed: _pasteFromClipboard,
-                            ),
-                            IconButton(
-                              tooltip: "Scan QR",
-                              icon: Icon(LucideIcons.qrCode, color: colors.primary),
-                              onPressed: _scanQRCode,
-                            ),
-                          ],
-                        ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onChanged: (_) => _scheduleEstimate(),
-                      validator: (value) {
-                        final v = value?.trim() ?? '';
-                        if (v.isEmpty) return "Enter recipient address";
-                        if (!_looksLikeTron(v)) return "Invalid TRON address";
-                        return null;
-                      },
+                    Icon(LucideIcons.banknote, size: 16, color: colors.textSecondary),
+                    const SizedBox(width: 6),
+                    Text(
+                      "≈ ${fiatFmt.format(typedFiat)}",
+                      style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: "Amount (${widget.token.toUpperCase()})",
-                        prefixIcon: Icon(LucideIcons.coins, color: colors.primary),
-                        suffixIcon: InkWell(
-                          onTap: _onTapMax,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: colors.primary.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: colors.primary.withOpacity(0.25)),
-                              ),
-                              child: Text("MAX", style: TextStyle(color: colors.primary, fontWeight: FontWeight.w800)),
-                            ),
-                          ),
-                        ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onChanged: (_) => _scheduleEstimate(),
-                      validator: (value) {
-                        final v = double.tryParse(value?.trim() ?? "") ?? 0;
-                        if (v <= 0) return "Enter amount";
-                        if (v > widget.balance) return "Amount exceeds balance";
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 6),
+                    const Spacer(),
                     Row(
                       children: [
-                        Icon(LucideIcons.banknote, size: 16, color: colors.textSecondary),
+                        Icon(LucideIcons.info, size: 14, color: colors.textSecondary),
                         const SizedBox(width: 6),
-                        Text("≈ ${fiatFmt.format(typedFiat)}",
-                            style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                        const Spacer(),
-                        Row(
-                          children: [
-                            Icon(LucideIcons.info, size: 14, color: colors.textSecondary),
-                            const SizedBox(width: 6),
-                            Text("Fees paid in TRX", style: TextStyle(color: colors.textSecondary, fontSize: 12)),
-                          ],
+                        Text(
+                          isTRX ? "Bandwidth first, else TRX burned" : "Fees (Energy) paid in TRX",
+                          style: TextStyle(color: colors.textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
 
-              // Send button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSending || _privateKey == null
-                      ? null
-                      : () {
-                    if (_formKey.currentState!.validate()) {
-                      HapticFeedback.selectionClick();
-                      _confirmAndSend(currency, isTRX);
-                    }
-                  },
-                  icon: _isSending ? const SizedBox.shrink() : const Icon(LucideIcons.send, color: Colors.white, size: 18),
-                  label: _isSending
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text("Send ${widget.token.toUpperCase()}",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: colors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
+          // Send button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isSending || _privateKey == null
+                  ? null
+                  : () {
+                if (_formKey.currentState!.validate()) {
+                  HapticFeedback.selectionClick();
+                  _confirmAndSend(currency, isTRX);
+                }
+              },
+              icon: _isSending ? const SizedBox.shrink() : const Icon(LucideIcons.send, color: Colors.white, size: 18),
+              label: _isSending
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(
+                "Send ${widget.token.toUpperCase()}",
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: colors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Safety note
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(LucideIcons.alertTriangle, color: colors.primary, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Double-check the recipient address. Transfers on TRON are irreversible.",
+                    style: TextStyle(color: colors.textSecondary, fontSize: 12.5, height: 1.28),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-
-              // Safety note
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(LucideIcons.alertTriangle, color: colors.primary, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        "Double-check the recipient address. Transfers on TRON are irreversible.",
-                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5, height: 1.28),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-// Small UI helper kept locally (review rows)
-class _ReviewRow extends StatelessWidget {
-  const _ReviewRow({required this.label, required this.value, this.mono = false});
-  final String label;
-  final String value;
-  final bool mono;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(width: 88, child: Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12.5))),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: colors.textPrimary,
-                fontSize: 13.5,
-                fontFamily: mono ? 'monospace' : null,
-                fontWeight: FontWeight.w700,
-              ),
+              ],
             ),
           ),
         ],
@@ -790,3 +843,5 @@ class _ReviewRow extends StatelessWidget {
     );
   }
 }
+
+
