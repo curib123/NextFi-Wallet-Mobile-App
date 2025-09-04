@@ -262,22 +262,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 14),
 
-              // Resources (token-aware visibility)
-              ResourcesCard(
-                loading: _resLoading,
-                errorText: _resError,
-                onRetry: _fetchResources,
-                energyUsed: _energyUsed,
-                energyLimit: _energyLimit,
-                bandwidthUsed: bwUsedTotal,
-                bandwidthLimit: bwLimitTotal,
-                colors: colors,
-                showGuide: false,
-                showEnergy:    !isTRX, // USDT only
-                showBandwidth:  isTRX, // TRX only
-              ),
-
-              const SizedBox(height: 24),
 
               // QR card
               GestureDetector(

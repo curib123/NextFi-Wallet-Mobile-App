@@ -287,18 +287,6 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData('text/plain');
-    final text = data?.text?.trim() ?? '';
-    if (text.isNotEmpty) {
-      _recipientController.text = text;
-      HapticFeedback.selectionClick();
-      if (!mounted) return;
-      showFloatingSnackBar(context, message: "Pasted from clipboard", type: SnackBarType.success);
-      _scheduleEstimate();
-    }
-  }
-
   Future<void> _pickFromAddressBook() async {
     // Route should return a String (the chosen TRON address) via Navigator.pop(context, address);
     final picked = await Navigator.of(context).pushNamed<String>('/address-book');
@@ -689,11 +677,7 @@ class _SendScreenState extends State<SendScreen> {
                           icon: Icon(LucideIcons.contact, color: colors.primary),
                           onPressed: _pickFromAddressBook,
                         ),
-                        IconButton(
-                          tooltip: "Paste",
-                          icon: Icon(LucideIcons.clipboardPaste, color: colors.primary),
-                          onPressed: _pasteFromClipboard,
-                        ),
+
                         IconButton(
                           tooltip: "Scan QR",
                           icon: Icon(LucideIcons.qrCode, color: colors.primary),

@@ -445,8 +445,10 @@ class ResourcesCard extends StatelessWidget {
     required this.bandwidthLimit,
     required this.colors,
     this.showGuide = true,
-    this.showEnergy = true,       // NEW
-    this.showBandwidth = true,    // NEW
+    this.showEnergy = true,
+    this.showBandwidth = true,
+    this.onGetEnergy,      // NEW
+    this.onGetBandwidth,   // NEW
   }) : assert(showEnergy || showBandwidth,
   'At least one of showEnergy or showBandwidth must be true.');
 
@@ -458,22 +460,23 @@ class ResourcesCard extends StatelessWidget {
   final AppColor colors;
   final bool showGuide;
 
-  /// NEW: control which resources to show
+  /// control which resources to show
   final bool showEnergy;
   final bool showBandwidth;
+
+  /// optional actions
+  final VoidCallback? onGetEnergy;
+  final VoidCallback? onGetBandwidth;
 
   @override
   Widget build(BuildContext context) {
     final nf = NumberFormat.decimalPattern();
-
     final energyRemain    = (energyLimit - energyUsed).clamp(0, energyLimit);
     final bandwidthRemain = (bandwidthLimit - bandwidthUsed).clamp(0, bandwidthLimit);
-
     final bothBars = showEnergy && showBandwidth;
 
-    // Build dynamic guide text based on what's visible
     final String guideText = () {
-      final List<String> parts = [];
+      final parts = <String>[];
       if (showEnergy) {
         parts.add("• Energy: Consumed when executing smart contracts (e.g., sending USDT). "
             "If Energy is insufficient, TRX is burned up to the fee_limit. "
@@ -521,13 +524,15 @@ class ResourcesCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                "Resources",
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
-              ),
+              Text("Resources",
+                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800)),
               const Spacer(),
               IconButton(
-                tooltip: "What are Energy & Bandwidth?",
+                tooltip: bothBars
+                    ? "What are Energy & Bandwidth?"
+                    : showEnergy
+                    ? "What is Energy?"
+                    : "What is Bandwidth?",
                 icon: Icon(LucideIcons.info, size: 18, color: colors.primary),
                 onPressed: () => _showFullExplanation(context, colors),
               ),
@@ -535,10 +540,10 @@ class ResourcesCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Bars (conditionally rendered)
+          // Bars
           if (showEnergy)
             _ResBar(
-              icon: LucideIcons.zap, // Energy = zap
+              icon: LucideIcons.zap,
               label: "Energy",
               used: energyUsed,
               total: energyLimit,
@@ -548,7 +553,7 @@ class ResourcesCard extends StatelessWidget {
           if (bothBars) const SizedBox(height: 8),
           if (showBandwidth)
             _ResBar(
-              icon: LucideIcons.activity, // Bandwidth = activity
+              icon: LucideIcons.activity,
               label: "Bandwidth",
               used: bandwidthUsed,
               total: bandwidthLimit,
@@ -558,7 +563,7 @@ class ResourcesCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Chips (only show for visible resources)
+          // Chips
           Row(
             children: [
               if (showEnergy)
@@ -583,18 +588,187 @@ class ResourcesCard extends StatelessWidget {
             ],
           ),
 
+          // Actions (clean pill layout)
+          const SizedBox(height: 10),
+          if (showEnergy || showBandwidth)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (showEnergy)
+                  _ActionBtn(
+                    label: "Get Free Energy",
+                    icon: LucideIcons.zap,
+                    bg: Colors.green,
+                    expand: !showBandwidth,
+                    onPressed: () => _onActionTap(context, _Kind.energy),
+                    colors: colors,
+                  ),
+                if (showBandwidth)
+                  _ActionBtn(
+                    label: "Get Free Bandwidth",
+                    icon: LucideIcons.activity,
+                    bg: Colors.blueAccent,
+                    expand: !showEnergy,
+                    onPressed: () => _onActionTap(context, _Kind.bandwidth),
+                    colors: colors,
+                  ),
+              ],
+            ),
+
           if (showGuide && guideText.isNotEmpty) ...[
             const SizedBox(height: 10),
             _GuideBlock(
-              title: showEnergy && showBandwidth
-                  ? "Energy & Bandwidth"
-                  : showEnergy
-                  ? "Energy"
-                  : "Bandwidth",
+              title: bothBars ? "Energy & Bandwidth" : (showEnergy ? "Energy" : "Bandwidth"),
               description: guideText,
               colors: colors,
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // --- Actions --------------------------------------------------------------
+
+  void _onActionTap(BuildContext context, _Kind kind) {
+    if (kind == _Kind.energy) {
+      if (onGetEnergy != null) return onGetEnergy!();
+      _showFreezeSheet(
+        context,
+        title: "Get Free Energy",
+        subtitle: "Freeze TRX to receive Energy for smart-contract execution.",
+        bullet1: "Choose Energy as the resource.",
+        bullet2: "Enter the TRX amount to freeze.",
+        bullet3: "Confirm to receive Energy credits.",
+      );
+    } else {
+      if (onGetBandwidth != null) return onGetBandwidth!();
+      _showFreezeSheet(
+        context,
+        title: "Get Free Bandwidth",
+        subtitle: "Freeze TRX to receive Bandwidth for byte-size fees.",
+        bullet1: "Choose Bandwidth as the resource.",
+        bullet2: "Enter the TRX amount to freeze.",
+        bullet3: "Confirm to receive Bandwidth credits.",
+      );
+    }
+  }
+
+  void _showFreezeSheet(
+      BuildContext context, {
+        required String title,
+        required String subtitle,
+        required String bullet1,
+        required String bullet2,
+        required String bullet3,
+      }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(LucideIcons.snowflake, color: colors.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(title, style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(LucideIcons.x, size: 18),
+                  color: colors.textSecondary,
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(subtitle, style: TextStyle(color: colors.textSecondary, height: 1.25)),
+            const SizedBox(height: 12),
+            _Bullet(text: bullet1, colors: colors),
+            _Bullet(text: bullet2, colors: colors),
+            _Bullet(text: bullet3, colors: colors),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(LucideIcons.check, size: 18),
+                label: const Text("Got it"),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- tiny helpers -----------------------------------------------------------
+
+enum _Kind { energy, bandwidth }
+
+class _ActionBtn extends StatelessWidget {
+  const _ActionBtn({
+    required this.label,
+    required this.icon,
+    required this.bg,
+    required this.onPressed,
+    required this.colors,
+    this.expand = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color bg;
+  final VoidCallback onPressed;
+  final AppColor colors;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      style: FilledButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        elevation: 0,
+      ),
+    );
+    return expand ? SizedBox(width: double.infinity, child: btn) : btn;
+  }
+}
+
+class _Bullet extends StatelessWidget {
+  const _Bullet({required this.text, required this.colors});
+  final String text;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(LucideIcons.dot, size: 18, color: colors.primary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: colors.textPrimary, height: 1.28))),
         ],
       ),
     );
