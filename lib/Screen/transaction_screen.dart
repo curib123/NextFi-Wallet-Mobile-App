@@ -14,9 +14,12 @@ import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/model/recipient_address.dart';
 
+typedef Tx = Map<String, dynamic>;
+
+enum _TxFilter { all, receive, send }
+
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
-
   @override
   State<TransactionScreen> createState() => _TransactionScreenState();
 }
@@ -33,9 +36,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   int _start = 0;
   final int _limit = 20;
-  List<Map<String, dynamic>> _transactions = [];
+  List<Tx> _transactions = [];
+  final Set<String> _seenIds = <String>{};
 
-  StreamSubscription<Map<String, dynamic>>? _incomingSub;
+  StreamSubscription<Tx>? _incomingSub;
+  int _fetchGen = 0;
+
+  _TxFilter _filter = _TxFilter.all;
+
+  static final DateFormat _listFmt = DateFormat('MMM d, h:mm a');
+  static final DateFormat _detailFmt = DateFormat('MMM d, yyyy • h:mm a');
 
   @override
   void initState() {
@@ -44,10 +54,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
     _loadWalletAndData();
 
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >=
-          _scrollController.position.maxScrollExtent - 200 &&
-          !_loadingMore &&
-          _hasMore) {
+      final pos = _scrollController.position;
+      if (pos.pixels >= pos.maxScrollExtent - 200 && !_loadingMore && _hasMore) {
         _fetchTransactions(loadMore: true);
       }
     });
@@ -60,12 +68,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
     super.dispose();
   }
 
+  void _set(void Function() fn) {
+    if (mounted) setState(fn);
+  }
+
   Future<void> _loadWalletAndData() async {
     final storedMnemonic = await SeedStorage.getSeed();
     if (!mounted) return;
 
     if (storedMnemonic == null || storedMnemonic.isEmpty) {
-      setState(() {
+      _set(() {
         _loading = false;
         _errorMsg = 'No wallet found. Please import or create a wallet.';
       });
@@ -77,7 +89,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       final pub = TronWalletService.publicKeyFromPrivateKey(priv);
       final address = TronWalletService.tronAddressFromPublicKey(pub!);
 
-      setState(() => _userAddress = address);
+      _set(() => _userAddress = address);
 
       await _fetchTransactions();
 
@@ -85,39 +97,41 @@ class _TransactionScreenState extends State<TransactionScreen> {
           .watchIncoming(_userAddress!, interval: const Duration(seconds: 12))
           .listen(_handleIncomingTx, onError: (_) {});
     } catch (e) {
-      setState(() {
+      _set(() {
         _loading = false;
         _errorMsg = 'Failed to load wallet: $e';
       });
     }
   }
 
-  void _handleIncomingTx(Map<String, dynamic> tx) {
+  void _handleIncomingTx(Tx tx) {
     if (!mounted) return;
-
     final id = (tx['id'] ?? '').toString();
-    final already = _transactions.any((t) => (t['id'] ?? '').toString() == id);
-    if (!already) {
-      setState(() {
-        _transactions.insert(0, tx);
-      });
+    if (id.isEmpty || _seenIds.contains(id)) return;
 
-      final asset = (tx['asset'] ?? 'TRX').toString();
-      final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-      AppAlert.show(
-        context: context,
-        title: "Incoming $asset",
-        description:
-        "You received ${amount.toStringAsFixed(6)} $asset.\nTap to view the transaction details.",
-        confirmText: "OK",
-      );
-    }
+    _set(() {
+      _seenIds.add(id);
+      _transactions.insert(0, tx);
+    });
+
+    final asset = (tx['asset'] ?? 'TRX').toString();
+    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+    AppAlert.show(
+      context: context,
+      title: "Incoming $asset",
+      description:
+      "You received ${amount.toStringAsFixed(6)} $asset.\nTap to view the transaction details.",
+      confirmText: "OK",
+    );
   }
 
   Future<void> _fetchTransactions({bool loadMore = false}) async {
-    if (_userAddress == null) return;
+    final addr = _userAddress;
+    if (addr == null) return;
 
-    setState(() {
+    final myToken = ++_fetchGen;
+
+    _set(() {
       _errorMsg = null;
       if (loadMore) {
         _loadingMore = true;
@@ -129,42 +143,104 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     try {
       final newTx = await _tron.getUnifiedTransactions(
-        _userAddress!,
+        addr,
         limit: _limit,
         start: _start,
       );
 
-      setState(() {
+      if (myToken != _fetchGen) return;
+
+      _set(() {
         if (loadMore) {
           _transactions.addAll(newTx);
         } else {
           _transactions = newTx;
+          _seenIds.clear();
+        }
+        for (final t in newTx) {
+          final id = (t['id'] ?? '').toString();
+          if (id.isNotEmpty) _seenIds.add(id);
         }
         if (newTx.isNotEmpty) _start += _limit;
         _hasMore = newTx.length == _limit;
       });
     } catch (e) {
-      setState(() {
-        _errorMsg = 'Error fetching history: $e';
-      });
+      _set(() => _errorMsg = 'Error fetching history: $e');
     } finally {
-      if (!mounted) return;
-      setState(() {
+      _set(() {
         _loading = false;
         _loadingMore = false;
       });
     }
   }
 
+  Future<void> _resetAndFetch() async {
+    _start = 0;
+    _hasMore = true;
+    await _fetchTransactions();
+  }
+
+  // ---- Filtering
+  List<Tx> get _visibleTxs {
+    if (_filter == _TxFilter.all) return _transactions;
+    final wantIn = _filter == _TxFilter.receive;
+    return _transactions
+        .where((t) => (t['direction'] ?? 'other') == (wantIn ? 'in' : 'out'))
+        .toList();
+  }
+
+  Widget _buildFilterChips(AppColor colors) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _chip(colors, label: 'All', value: _TxFilter.all),
+          const SizedBox(width: 8),
+          _chip(colors, label: 'Receive', value: _TxFilter.receive),
+          const SizedBox(width: 8),
+          _chip(colors, label: 'Send', value: _TxFilter.send),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(AppColor colors, {required String label, required _TxFilter value}) {
+    final selected = _filter == value;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: selected ? Colors.white : colors.primary,
+        ),
+      ),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: colors.primary,
+      backgroundColor: colors.surface,
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: selected ? Colors.transparent : colors.primary.withOpacity(0.55),
+          width: 1.2,
+        ),
+      ),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      onSelected: (_) => setState(() => _filter = value),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
 
-    final recipItems = context.watch<RecipientAddressProvider>().items;
-    final Map<String, RecipientAddress> addressBook = {
-      for (final r in recipItems) r.address.trim().toLowerCase(): r,
-    };
+    // Watch provider so tiles update when the saved address book changes.
+    final recipProv = context.watch<RecipientAddressProvider>();
 
+    final visibleTxs = _visibleTxs;
+    final showLoaderRow = _loadingMore && _filter == _TxFilter.all;
 
     Widget content;
     if (_loading) {
@@ -175,11 +251,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           title: 'Couldn’t load transactions',
           message: _errorMsg!,
           primaryActionLabel: 'Retry',
-          onPrimaryAction: () {
-            _start = 0;
-            _hasMore = true;
-            _fetchTransactions();
-          },
+          onPrimaryAction: _resetAndFetch,
           context: context,
         ),
       );
@@ -189,88 +261,35 @@ class _TransactionScreenState extends State<TransactionScreen> {
           title: 'No transactions yet',
           message: 'When you send or receive TRX or USDT, they’ll appear here.',
           primaryActionLabel: 'Refresh',
-          onPrimaryAction: () {
-            _start = 0;
-            _hasMore = true;
-            _fetchTransactions();
-          },
+          onPrimaryAction: _resetAndFetch,
+          context: context,
+        ),
+      );
+    } else if (_transactions.isNotEmpty && visibleTxs.isEmpty) {
+      content = Center(
+        child: EmptyState.noData(
+          title: 'No matching transactions',
+          message: 'Try switching filters to All, Receive, or Send.',
+          primaryActionLabel: 'Clear Filter',
+          onPrimaryAction: () => setState(() => _filter = _TxFilter.all),
           context: context,
         ),
       );
     } else {
       content = RefreshIndicator(
-        onRefresh: () async {
-          _start = 0;
-          _hasMore = true;
-          await _fetchTransactions();
-        },
+        onRefresh: _resetAndFetch,
         child: ListView.builder(
           controller: _scrollController,
-          itemCount: _transactions.length + (_loadingMore ? 1 : 0),
+          itemCount: visibleTxs.length + (showLoaderRow ? 1 : 0),
           itemBuilder: (context, index) {
-            if (index >= _transactions.length) {
+            if (showLoaderRow && index >= visibleTxs.length) {
               return const Padding(
                 padding: EdgeInsets.all(16),
                 child: Center(child: CircularProgressIndicator()),
               );
             }
-
-            final tx = _transactions[index];
-            final txId = (tx['id'] ?? '').toString();
-            final ts = (tx['timestamp'] as num?)?.toInt();
-            final dt =
-            ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
-
-            final asset = (tx['asset'] ?? 'TRX').toString();
-            final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-            final from = (tx['from'] ?? '').toString();
-            final to = (tx['to'] ?? '').toString();
-            final direction = (tx['direction'] ?? 'other').toString();
-            final isIncoming = direction == 'in';
-
-            final peerAddr = (isIncoming ? from : to).trim();
-            final rec = _findRecipient(addressBook, peerAddr);
-
-            final titleText = rec != null
-                ? "${rec.name} • ${amount.toStringAsFixed(2)} $asset"
-                : "${amount.toStringAsFixed(2)} $asset";
-
-            final subtitleWho = isIncoming ? "From" : "To";
-            final subtitlePeer =
-            rec != null ? "${rec.name} (${_short(peerAddr)})" : _short(peerAddr);
-
-            return ListTile(
-              leading: _buildLeadingAvatar(
-                colors: colors,
-                isIncoming: isIncoming,
-                rec: rec,
-              ),
-              title: Text(
-                titleText,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: colors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                "$subtitleWho: $subtitlePeer • "
-                    "${dt != null ? DateFormat('MMM d, h:mm a').format(dt) : ''}",
-                style: TextStyle(color: colors.textSecondary),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing:
-              Icon(LucideIcons.chevronRight, color: colors.textSecondary),
-              onTap: () => _showTxDetailsBottomSheet(
-                context,
-                colors,
-                tx,
-                rec: rec,
-                isIncoming: isIncoming,
-              ),
-            );
+            final tx = visibleTxs[index];
+            return _buildTxTile(context, colors, tx, recipProv);
           },
         ),
       );
@@ -281,25 +300,82 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: colors.surface,
-        title: const Text(
-          "Transactions",
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: const Text("Transactions", style: TextStyle(fontWeight: FontWeight.bold)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: _buildFilterChips(colors),
         ),
       ),
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
         child: content,
       ),
     );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Modal sheet for full transaction details (with saved name/color if any)
+  // List tile builder (uses provider.byAddress to resolve name/color)
+  // ───────────────────────────────────────────────────────────────────────────
+  Widget _buildTxTile(
+      BuildContext context,
+      AppColor colors,
+      Tx tx,
+      RecipientAddressProvider recipProv,
+      ) {
+    final txId = (tx['id'] ?? '').toString();
+    final ts = (tx['timestamp'] as num?)?.toInt();
+    final dt = ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
+
+    final asset = (tx['asset'] ?? 'TRX').toString();
+    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+    final from = (tx['from'] ?? '').toString();
+    final to = (tx['to'] ?? '').toString();
+    final direction = (tx['direction'] ?? 'other').toString();
+    final isIncoming = direction == 'in';
+
+    final peerAddr = (isIncoming ? from : to).trim();
+    final RecipientAddress? rec = recipProv.byAddress(peerAddr);
+
+    final titleText = rec != null
+        ? "${rec.name} • ${amount.toStringAsFixed(2)} $asset"
+        : "${amount.toStringAsFixed(2)} $asset";
+
+    final subtitleWho = isIncoming ? "From" : "To";
+    final subtitlePeer = rec != null ? "${rec.name} (${_short(peerAddr)})" : _short(peerAddr);
+
+    return ListTile(
+      key: ValueKey(txId.isEmpty ? 'idx:${_transactions.indexOf(tx)}' : txId),
+      leading: _buildLeadingAvatar(colors: colors, isIncoming: isIncoming, rec: rec),
+      title: Text(
+        titleText,
+        style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        "$subtitleWho: $subtitlePeer • ${dt != null ? _listFmt.format(dt) : ''}",
+        style: TextStyle(color: colors.textSecondary),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Icon(LucideIcons.chevronRight, color: colors.textSecondary),
+      onTap: () => _showTxDetailsBottomSheet(
+        context,
+        colors,
+        tx,
+        rec: rec, // pass resolved recipient so modal can show name/color
+        isIncoming: isIncoming,
+      ),
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Modal: transaction details (rec name/color shown when available)
   // ───────────────────────────────────────────────────────────────────────────
   void _showTxDetailsBottomSheet(
       BuildContext context,
       AppColor colors,
-      Map<String, dynamic> tx, {
+      Tx tx, {
         RecipientAddress? rec,
         required bool isIncoming,
       }) {
@@ -366,15 +442,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: (isIncoming ? colors.success : colors.error)
-                              .withOpacity(0.12),
+                          color: (isIncoming ? colors.success : colors.error).withOpacity(0.12),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: (isIncoming ? colors.success : colors.error)
-                                .withOpacity(0.3),
+                            color: (isIncoming ? colors.success : colors.error).withOpacity(0.3),
                           ),
                         ),
                         child: Text(
@@ -402,13 +475,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   if (rec != null) ...[
                     const SizedBox(height: 2),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: Color(rec.color).withOpacity(0.14),
                         borderRadius: BorderRadius.circular(999),
-                        border:
-                        Border.all(color: Color(rec.color).withOpacity(0.35)),
+                        border: Border.all(color: Color(rec.color).withOpacity(0.35)),
                       ),
                       child: Text(
                         rec.name,
@@ -423,13 +494,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(LucideIcons.calendarClock,
-                          size: 16, color: colors.textSecondary),
+                      Icon(LucideIcons.calendarClock, size: 16, color: colors.textSecondary),
                       const SizedBox(width: 8),
                       Text(
-                        dt != null
-                            ? DateFormat('MMM d, yyyy • h:mm a').format(dt)
-                            : 'Unknown date',
+                        dt != null ? _detailFmt.format(dt) : 'Unknown date',
                         style: TextStyle(color: colors.textSecondary),
                       ),
                     ],
@@ -468,16 +536,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () async {
-                            if (txId.isEmpty) return;
+                          onPressed: txId.isEmpty
+                              ? null
+                              : () async {
                             await Clipboard.setData(ClipboardData(text: txId));
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('TxID copied')),
                             );
                           },
-                          icon: Icon(LucideIcons.copy,
-                              size: 18, color: colors.primary),
+                          icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
                           label: Text(
                             "Copy TxID",
                             style: TextStyle(
@@ -486,12 +554,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(
-                                color: colors.primary.withOpacity(0.35)),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
-                            padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(color: colors.primary.withOpacity(0.35)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
                       ),
@@ -501,24 +566,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           onPressed: explorerUrl == null
                               ? null
                               : () async {
-                            await Clipboard.setData(
-                                ClipboardData(text: explorerUrl));
+                            await Clipboard.setData(ClipboardData(text: explorerUrl));
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content:
-                                  Text('Explorer link copied')),
+                              const SnackBar(content: Text('Explorer link copied')),
                             );
                           },
-                          icon: const Icon(LucideIcons.externalLink,
-                              size: 18, color: Colors.white),
+                          icon: const Icon(LucideIcons.externalLink, size: 18, color: Colors.white),
                           label: const Text("Explorer"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.primary,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
-                            padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             elevation: 0,
                           ),
                         ),
@@ -534,8 +593,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       label: const Text("Done"),
                       style: TextButton.styleFrom(
                         foregroundColor: colors.textPrimary,
-                        padding:
-                        const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -550,14 +608,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   /* ===================== Helpers ===================== */
 
-  RecipientAddress? _findRecipient(
-      Map<String, RecipientAddress> book,
-      String address,
-      ) {
-    final key = address.trim().toLowerCase();
-    return book[key];
-  }
-
   Widget _buildLeadingAvatar({
     required AppColor colors,
     required bool isIncoming,
@@ -571,13 +621,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
       return CircleAvatar(
         backgroundColor: bg,
         foregroundColor: Colors.white,
-        child:
-        Text(initial, style: const TextStyle(fontWeight: FontWeight.w800)),
+        child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w800)),
       );
     }
     return CircleAvatar(
-      backgroundColor:
-      (isIncoming ? colors.success : colors.error).withOpacity(0.15),
+      backgroundColor: (isIncoming ? colors.success : colors.error).withOpacity(0.15),
       child: Icon(
         isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
         color: isIncoming ? colors.success : colors.error,
@@ -593,14 +641,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   /// If [isThisTo] == true we highlight the "to" address if it matches [rec],
   /// if false we highlight the "from", if null we just render name+address.
-  static String _prettyAddr(
-      String addr,
-      RecipientAddress? rec,
-      bool? isThisTo,
-      ) {
+  static String _prettyAddr(String addr, RecipientAddress? rec, bool? isThisTo) {
     if (rec == null) return addr;
-    final matches =
-        rec.address.trim().toLowerCase() == addr.trim().toLowerCase();
+    final matches = rec.address.trim().toLowerCase() == addr.trim().toLowerCase();
     if (!matches) return addr;
     return '${rec.name}  •  $addr';
   }
@@ -620,10 +663,7 @@ Widget _kv({
     children: [
       SizedBox(
         width: 70,
-        child: Text(
-          label,
-          style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-        ),
+        child: Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
       ),
       const SizedBox(width: 8),
       Expanded(
@@ -644,9 +684,7 @@ Widget _kv({
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: value));
             // ignore: use_build_context_synchronously
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Copied')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
           },
         ),
     ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:provider/provider.dart';
 import '../model/recipient_address.dart';
+import 'package:flutter/services.dart';
 
 /// Call this to open the sheet.
 /// Returns true if something was saved.
@@ -12,7 +13,7 @@ Future<bool?> showRecipientUpsertSheet(
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true,
+    useSafeArea: false, // we'll handle SafeArea manually inside
     backgroundColor: Theme.of(context).colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -31,9 +32,9 @@ class _RecipientEditSheet extends StatefulWidget {
 
 class _RecipientEditSheetState extends State<_RecipientEditSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _name = TextEditingController(text: widget.initial?.name ?? '');
-  late final TextEditingController _addr = TextEditingController(text: widget.initial?.address ?? '');
-  late int _color = widget.initial?.color ?? Colors.blue.value;
+  late final TextEditingController _name;
+  late final TextEditingController _addr;
+  late int _color;
 
   static const _palette = <int>[
     0xFF2563EB, // blue-600
@@ -46,20 +47,42 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     0xFF0EA5E9, // sky-500
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.initial?.name ?? '');
+    _addr = TextEditingController(text: widget.initial?.address ?? '');
+    _color = widget.initial?.color ?? Colors.blue.value;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _addr.dispose();
+    super.dispose();
+  }
+
   bool _looksLikeTron(String a) {
     final s = a.trim();
-    // Quick check; replace with your TronWalletService validator if desired.
+    // Quick check; replace with TronWalletService validator if available.
     return s.isNotEmpty && s.startsWith('T') && s.length >= 34;
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final prov = context.read<RecipientAddressProvider>();
+    final name = _name.text.trim();
+    final address = _addr.text.trim();
+
     if (widget.initial == null) {
-      await prov.add(name: _name.text, address: _addr.text, color: _color);
+      await prov.add(name: name, address: address, color: _color);
     } else {
-      await prov.update(widget.initial!.id,
-          name: _name.text, address: _addr.text, color: _color);
+      await prov.update(
+        widget.initial!.id,
+        name: name,
+        address: address,
+        color: _color,
+      );
     }
     if (mounted) Navigator.of(context).pop(true);
   }
@@ -69,28 +92,32 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isEdit = widget.initial != null;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: SafeArea(
-        top: false,
-        child: Padding(
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 44, height: 5,
+                width: 44,
+                height: 5,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade400, borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
               Row(
                 children: [
                   Icon(isEdit ? Icons.edit : Icons.person_add_alt_1_rounded),
                   const SizedBox(width: 8),
-                  Text(isEdit ? 'Edit Recipient' : 'Add Recipient',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    isEdit ? 'Edit Recipient' : 'Add Recipient',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.pop(context, false),
@@ -106,6 +133,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                   children: [
                     TextFormField(
                       controller: _name,
+                      textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'Name',
@@ -123,15 +151,22 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                         hintText: 'e.g. T... (Base58)',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                       ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(RegExp(r'\s')), // no spaces
+                      ],
                       minLines: 1,
                       maxLines: 2,
-                      validator: (v) =>
-                      (v == null || !_looksLikeTron(v)) ? 'Enter a valid TRON address' : null,
+                      validator: (v) => (v == null || !_looksLikeTron(v))
+                          ? 'Enter a valid TRON address'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Color Tag', style: Theme.of(context).textTheme.labelLarge),
+                      child: Text(
+                        'Color Tag',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -153,7 +188,13 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                                 width: selected ? 3 : 1,
                               ),
                               boxShadow: selected
-                                  ? [BoxShadow(color: Colors.black26, blurRadius: 6, offset: const Offset(0, 2))]
+                                  ? [
+                                const BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                )
+                              ]
                                   : null,
                             ),
                           ),

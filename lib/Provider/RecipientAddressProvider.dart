@@ -16,11 +16,28 @@ class RecipientAddressProvider with ChangeNotifier {
   }
 
   bool get loading => _loading;
-  List<RecipientAddress> get items =>
-      List.unmodifiable(_items..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())));
 
-  RecipientAddress? byId(String id) =>
-      _items.firstWhere((e) => e.id == id, orElse: () => null as RecipientAddress);
+  /// Returns a **sorted copy** to avoid mutating the backing list.
+  List<RecipientAddress> get items {
+    final list = [..._items];
+    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return List.unmodifiable(list);
+  }
+
+  /// Safe nullable lookup by id.
+  RecipientAddress? byId(String id) {
+    final idx = _items.indexWhere((e) => e.id == id);
+    return idx < 0 ? null : _items[idx];
+  }
+
+  /// NEW: Lookup by address (case-insensitive, trimmed).
+  RecipientAddress? byAddress(String address) {
+    final key = address.trim().toLowerCase();
+    final idx = _items.indexWhere(
+          (e) => e.address.trim().toLowerCase() == key,
+    );
+    return idx < 0 ? null : _items[idx];
+  }
 
   Future<void> _init() async {
     try {
@@ -36,14 +53,13 @@ class RecipientAddressProvider with ChangeNotifier {
     await _storage.write(key: _storageKey, value: RecipientAddress.encodeList(_items));
   }
 
-  /// Create
+  /// Create (de-dup by exact address string, trimmed).
   Future<RecipientAddress> add({
     required String name,
     required String address,
     required int color,
   }) async {
     final now = DateTime.now();
-    // de-dup by exact address string (trimmed)
     final existingIndex = _items.indexWhere((e) => e.address.trim() == address.trim());
     if (existingIndex >= 0) {
       final updated = _items[existingIndex].copyWith(

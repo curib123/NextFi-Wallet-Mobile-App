@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Screen/swap_screen.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/token_chooser.dart';
@@ -494,8 +495,7 @@ class _HeaderSection extends StatelessWidget {
                         child: Icon(hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
                             color: colors.textSecondary, size: 18),
                       ),
-                      const SizedBox(width: 8),
-                      _LivePill(active: isUpdatingBalances, colors: colors, controller: livePulse),
+
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -519,7 +519,14 @@ class _HeaderSection extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
                   elevation: 3,
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SwapScreen(),
+                    )
+                  );
+                },
                 child: const Row(
                   children: [
                     Icon(LucideIcons.shuffle, size: 22, color: Colors.white),
@@ -543,35 +550,6 @@ class _HeaderSection extends StatelessWidget {
         const SizedBox(height: 20),
         incomingStrip,
       ],
-    );
-  }
-}
-
-class _LivePill extends StatelessWidget {
-  const _LivePill({required this.active, required this.colors, required this.controller});
-  final bool active;
-  final AppColor colors;
-  final AnimationController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final dot = ScaleTransition(
-      scale: Tween<double>(begin: .8, end: 1).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut)),
-      child: Container(width: 8, height: 8, decoration: BoxDecoration(color: colors.success, shape: BoxShape.circle)),
-    );
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 200),
-      opacity: active ? 1 : .35,
-      child: Container(
-        margin: const EdgeInsets.only(left: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: colors.success.withOpacity(.12), borderRadius: BorderRadius.circular(999)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          dot,
-          const SizedBox(width: 6),
-          Text('LIVE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.success)),
-        ]),
-      ),
     );
   }
 }
