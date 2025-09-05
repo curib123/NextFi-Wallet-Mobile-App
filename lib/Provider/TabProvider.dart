@@ -18,7 +18,6 @@ class TabProvider extends ChangeNotifier {
     TransactionScreen(),
     StakeV2MainScreen(),
     TransactionScreen(),
-    WalletHomeScreen(),
   ];
 
   TabProvider() {
