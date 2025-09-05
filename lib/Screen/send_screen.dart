@@ -1,11 +1,9 @@
 // lib/Screen/send_screen.dart
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -54,8 +52,7 @@ class _SendScreenState extends State<SendScreen> {
   // Tron service
   late final TronWalletService _tron = TronWalletService(const TronClientConfig());
 
-  // Resources (Bandwidth/Energy)
-  static const String _baseUrl = 'https://api.trongrid.io';
+  // Resources (Bandwidth/Energy) – now loaded via TronWalletService
   bool _resLoading = true;
   String? _resError;
   int _freeNetLimit = 0, _freeNetUsed = 0, _netLimit = 0, _netUsed = 0;
@@ -95,8 +92,7 @@ class _SendScreenState extends State<SendScreen> {
 
     try {
       final privKey = TronWalletService.derivePrivateKey(storedMnemonic);
-      final pubKey  = TronWalletService.publicKeyFromPrivateKey(privKey);
-      final address = TronWalletService.tronAddressFromPublicKey(pubKey!);
+      final address = TronWalletService.tronAddressFromMnemonic(storedMnemonic);
 
       String? hex41;
       try {
@@ -111,7 +107,7 @@ class _SendScreenState extends State<SendScreen> {
         _tronAddressHex41 = hex41;
       });
 
-      await _fetchResources();
+      await _fetchResources(); // cached by service
       _scheduleEstimate();
     } catch (_) {
       if (!mounted) return;
@@ -123,8 +119,8 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  Future<void> _fetchResources() async {
-    final addr = _tronAddress ?? widget.address;
+  Future<void> _fetchResources({bool forceRefresh = false}) async {
+    final addr = (_tronAddress ?? widget.address).trim();
     if (addr.isEmpty) return;
 
     setState(() {
@@ -132,25 +128,18 @@ class _SendScreenState extends State<SendScreen> {
       _resError = null;
     });
     try {
-      final headers = {'Content-Type': 'application/json'};
-      final body = jsonEncode({'address': addr, 'visible': true});
+      // Use service wrappers (with built-in TTL cache)
+      final net = await _tron.getAccountNet(addr, forceRefresh: forceRefresh);
+      final res = await _tron.getAccountResource(addr, forceRefresh: forceRefresh);
 
-      // Bandwidth
-      final netUri = Uri.parse('$_baseUrl/wallet/getaccountnet');
-      final netRes = await http.post(netUri, headers: headers, body: body).timeout(const Duration(seconds: 15));
-      final netJ = jsonDecode(netRes.body) as Map<String, dynamic>;
-      _freeNetLimit = (netJ['freeNetLimit'] as num?)?.toInt() ?? 0;
-      _freeNetUsed  = (netJ['freeNetUsed']  as num?)?.toInt() ?? 0;
-      _netLimit     = (netJ['NetLimit']     as num?)?.toInt() ?? 0;
-      _netUsed      = (netJ['NetUsed']      as num?)?.toInt() ?? 0;
+      _freeNetLimit = net['freeNetLimit'] ?? 0;
+      _freeNetUsed  = net['freeNetUsed']  ?? 0;
+      _netLimit     = net['NetLimit']     ?? 0;
+      _netUsed      = net['NetUsed']      ?? 0;
 
-      // Energy
-      final resUri = Uri.parse('$_baseUrl/wallet/getaccountresource');
-      final resRes = await http.post(resUri, headers: headers, body: body).timeout(const Duration(seconds: 15));
-      final resJ = jsonDecode(resRes.body) as Map<String, dynamic>;
-      _energyLimit = (resJ['EnergyLimit'] as num?)?.toInt() ?? 0;
-      _energyUsed  = (resJ['EnergyUsed']  as num?)?.toInt() ?? 0;
-    } catch (e) {
+      _energyLimit  = res['EnergyLimit']  ?? 0;
+      _energyUsed   = res['EnergyUsed']   ?? 0;
+    } catch (_) {
       _resError = "Failed to load resources";
     } finally {
       if (mounted) setState(() => _resLoading = false);
@@ -232,7 +221,6 @@ class _SendScreenState extends State<SendScreen> {
       String txId;
 
       if (isTRX) {
-        // leave a small buffer for fees when sending TRX (burn if no bandwidth)
         final int sun = (amount * 1e6).round();
         txId = await _tron.sendTrx(
           privateKey: _privateKey!,
@@ -240,7 +228,6 @@ class _SendScreenState extends State<SendScreen> {
           amountSun: sun,
         );
       } else {
-        // USDT needs energy (fee_limit in SUN)
         txId = await _tron.sendUsdt(
           privateKey: _privateKey!,
           toAddress: recipient,
@@ -288,7 +275,6 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   Future<void> _pickFromAddressBook() async {
-    // Route should return a String (the chosen TRON address) via Navigator.pop(context, address);
     final picked = await Navigator.of(context).pushNamed<String>('/address-book');
     if (!mounted) return;
     if (picked != null && picked.trim().isNotEmpty) {
@@ -302,7 +288,6 @@ class _SendScreenState extends State<SendScreen> {
   bool _looksLikeTron(String s) => s.isNotEmpty && s.startsWith('T') && s.length >= 30 && s.length <= 45;
 
   void _onTapPercent(double pct, {required bool isTRX}) {
-    // For TRX, keep a tiny fee buffer so confirm/send won’t fail
     final bufferTrx = isTRX ? 0.2 : 0.0; // ~0.2 TRX buffer
     final maxSpend = isTRX ? (widget.balance - bufferTrx).clamp(0.0, widget.balance) : widget.balance;
     final v = (maxSpend * pct).clamp(0.0, widget.balance);
@@ -419,7 +404,6 @@ class _SendScreenState extends State<SendScreen> {
               const SizedBox(height: 8),
 
               if (!isTRX) ...[
-                // USDT specifics
                 Row(
                   children: [
                     Icon(LucideIcons.zap, size: 16, color: colors.textSecondary),
@@ -452,7 +436,6 @@ class _SendScreenState extends State<SendScreen> {
                   ),
                 ],
               ] else ...[
-                // TRX specifics
                 Row(
                   children: [
                     Icon(LucideIcons.flame, size: 16, color: colors.textSecondary),
@@ -524,12 +507,10 @@ class _SendScreenState extends State<SendScreen> {
     final typedAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
     final typedFiat = isTRX ? currency.trxToFiat(typedAmount) : currency.usdtToFiat(typedAmount);
 
-    // Derived resources
     final bwLimitTotal = _freeNetLimit + _netLimit;
     final bwUsedTotal  = _freeNetUsed + _netUsed;
 
     final fromAddress = _tronAddress ?? widget.address;
-
     final t = (widget.token).toUpperCase();
 
     return Scaffold(
@@ -554,14 +535,13 @@ class _SendScreenState extends State<SendScreen> {
           IconButton(
             tooltip: "Refresh resources",
             icon: Icon(LucideIcons.refreshCcw, color: colors.textPrimary),
-            onPressed: _fetchResources,
+            onPressed: () => _fetchResources(forceRefresh: true),
           ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         children: [
-          // Wallet banner if not loaded
           if (_privateKey == null)
             Container(
               padding: const EdgeInsets.all(12),
@@ -585,49 +565,16 @@ class _SendScreenState extends State<SendScreen> {
               ),
             ),
 
-          // From address chip
-          if (fromAddress.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: colors.primary.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.badgeCheck, size: 16, color: colors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      fromAddress,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  if (_tronAddressHex41 != null) ...[
-                    const SizedBox(width: 8),
-                    Tooltip(message: _tronAddressHex41!, child: const Icon(LucideIcons.info, size: 16)),
-                  ]
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-
-          // Price header (no day chips / no chart)
           PriceHeader(
             token: widget.token,
             oneTokenInFiat: oneTokenInFiat,
-            changePct: 0, // no chart context; omit change or pass your own percent if available
+            changePct: 0,
             rangeLabel: 'NOW',
             colors: colors,
             fiatFmt: fiatFmt,
           ),
           const SizedBox(height: 12),
 
-          // Balance header
           BalanceHeader(
             token: widget.token,
             amountToken: widget.balance,
@@ -639,7 +586,6 @@ class _SendScreenState extends State<SendScreen> {
 
           const SizedBox(height: 14),
 
-          // Resources (Energy/Bandwidth)
           ResourcesCard(
             loading: _resLoading,
             errorText: _resError,
@@ -650,18 +596,16 @@ class _SendScreenState extends State<SendScreen> {
             bandwidthLimit: bwLimitTotal,
             colors: colors,
             showGuide: false,
-            showEnergy:    t == 'USDT' || (t != 'TRX' && t != 'USDT'), // default to true
-            showBandwidth: t == 'TRX'  || (t != 'TRX' && t != 'USDT'), // default to true
+            showEnergy:    t == 'USDT' || (t != 'TRX' && t != 'USDT'),
+            showBandwidth: t == 'TRX'  || (t != 'TRX' && t != 'USDT'),
             showActions: true,
           ),
           const SizedBox(height: 16),
 
-          // Form
           Form(
             key: _formKey,
             child: Column(
               children: [
-                // Recipient (modern input)
                 TextFormField(
                   controller: _recipientController,
                   decoration: InputDecoration(
@@ -678,7 +622,6 @@ class _SendScreenState extends State<SendScreen> {
                           icon: Icon(LucideIcons.contact, color: colors.primary),
                           onPressed: _pickFromAddressBook,
                         ),
-
                         IconButton(
                           tooltip: "Scan QR",
                           icon: Icon(LucideIcons.qrCode, color: colors.primary),
@@ -706,7 +649,6 @@ class _SendScreenState extends State<SendScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Amount (modern input)
                 TextFormField(
                   controller: _amountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -715,7 +657,6 @@ class _SendScreenState extends State<SendScreen> {
                     filled: true,
                     fillColor: colors.primary.withOpacity(0.04),
                     prefixIcon: Icon(LucideIcons.coins, color: colors.primary),
-                    suffixIcon: null,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -735,7 +676,6 @@ class _SendScreenState extends State<SendScreen> {
                   },
                 ),
 
-                // Quick ranges under amount
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -749,7 +689,6 @@ class _SendScreenState extends State<SendScreen> {
                   ],
                 ),
 
-                // Fiat preview + fees note
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -777,7 +716,6 @@ class _SendScreenState extends State<SendScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Send button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -806,7 +744,6 @@ class _SendScreenState extends State<SendScreen> {
           ),
           const SizedBox(height: 8),
 
-          // Safety note
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -832,5 +769,3 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 }
-
-

@@ -568,31 +568,6 @@ class ResourcesCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Chips
-          Row(
-            children: [
-              if (showEnergy)
-                _ChipStat(
-                  icon: LucideIcons.zap,
-                  label: "Energy left",
-                  value: nf.format(energyRemain),
-                  bg: Colors.green.withOpacity(0.10),
-                  fg: Colors.green,
-                  border: Colors.green.withOpacity(0.30),
-                ),
-              if (showEnergy && showBandwidth) const SizedBox(width: 8),
-              if (showBandwidth)
-                _ChipStat(
-                  icon: LucideIcons.activity,
-                  label: "Bandwidth left",
-                  value: nf.format(bandwidthRemain),
-                  bg: Colors.blueAccent.withOpacity(0.10),
-                  fg: Colors.blueAccent,
-                  border: Colors.blueAccent.withOpacity(0.30),
-                ),
-            ],
-          ),
-
           // CTAs (hidden by default)
           if (showActions && (showEnergy || showBandwidth)) ...[
             const SizedBox(height: 10),
@@ -933,60 +908,6 @@ class _ResBar extends StatelessWidget {
   }
 }
 
-/// Small chip-style statistic (used in ResourcesCard bottom row)
-class _ChipStat extends StatelessWidget {
-  const _ChipStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.bg,
-    required this.fg,
-    required this.border,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color bg;
-  final Color fg;
-  final Color border;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: border),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 14, color: fg),
-                const SizedBox(width: 6),
-                Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 12)),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                color: fg,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// Guide block that shows an info icon and opens a modal sheet explanation.
 class _GuideBlock extends StatelessWidget {
