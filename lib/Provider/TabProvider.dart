@@ -17,8 +17,8 @@ class TabProvider extends ChangeNotifier {
   final List<Widget> screens = const [
     WalletHomeScreen(),
     TransactionScreen(),
-    StakeV2MainScreen(),
     SwapScreen(),
+    StakeV2MainScreen(),
   ];
 
   TabProvider() {
