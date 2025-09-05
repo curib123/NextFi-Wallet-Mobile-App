@@ -16,7 +16,7 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart';
+import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 import 'WalletHomeScreenWidgets/action_button.dart';
 import 'WalletHomeScreenWidgets/build_tab_bar.dart';
@@ -125,7 +125,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     try {
       final pk = TronWalletService.derivePrivateKey(mnemonic);
       final pub = TronWalletService.publicKeyFromPrivateKey(pk);
-      final address = TronWalletService.tronAddressFromPublicKey(pub);
+      final address = TronWalletService.tronAddressFromPublicKey(pub!);
       String? hex41;
       try {
         hex41 = TronWalletService.tronBase58ToHex(address);

@@ -11,7 +11,7 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart';
+import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
   const SeedPhraseScreen({super.key});

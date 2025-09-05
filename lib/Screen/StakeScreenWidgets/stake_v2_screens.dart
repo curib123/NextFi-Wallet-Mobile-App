@@ -6,7 +6,7 @@ import 'package:next_fi/Components/CustomButton.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart';
+import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 import 'stake_widgets.dart';
 import 'package:next_fi/Components/confirm_action_sheet.dart'; // your provided sheet file path
 

@@ -96,11 +96,11 @@ class _HomeState extends State<Home> {
                   label: 'Wallet',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.package),
+                  icon: Icon(LucideIcons.receipt),
                   label: 'Transaction',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.package),
+                  icon: Icon(LucideIcons.zap),
                   label: 'Stake',
                 ),
                 BottomNavigationBarItem(

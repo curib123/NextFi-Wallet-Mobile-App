@@ -16,7 +16,7 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Screen/qr_code_scanner.dart';
 
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart';
+import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 // Shared UI kit
 import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
@@ -96,7 +96,7 @@ class _SendScreenState extends State<SendScreen> {
     try {
       final privKey = TronWalletService.derivePrivateKey(storedMnemonic);
       final pubKey  = TronWalletService.publicKeyFromPrivateKey(privKey);
-      final address = TronWalletService.tronAddressFromPublicKey(pubKey);
+      final address = TronWalletService.tronAddressFromPublicKey(pubKey!);
 
       String? hex41;
       try {

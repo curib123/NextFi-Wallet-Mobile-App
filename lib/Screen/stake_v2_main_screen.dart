@@ -30,7 +30,7 @@ import 'package:next_fi/Screen/StakeScreenWidgets/stake_v2_screens.dart';
 import 'package:next_fi/Screen/StakeScreenWidgets/stake_v2_unstake_screens.dart';
 
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart';
+import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 class StakeV2MainScreen extends StatefulWidget {
   const StakeV2MainScreen({super.key});
@@ -112,7 +112,7 @@ class _StakeV2MainScreenState extends State<StakeV2MainScreen> {
     try {
       final pk = TronWalletService.derivePrivateKey(mn);
       final pub = TronWalletService.publicKeyFromPrivateKey(pk);
-      final addr = TronWalletService.tronAddressFromPublicKey(pub);
+      final addr = TronWalletService.tronAddressFromPublicKey(pub!);
       setState(() {
         _pk = pk;
         _addr = addr;

@@ -9,7 +9,7 @@ import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/empty_state.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron_wallet_service.dart';
+import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/model/recipient_address.dart';
@@ -75,7 +75,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     try {
       final priv = TronWalletService.derivePrivateKey(storedMnemonic);
       final pub = TronWalletService.publicKeyFromPrivateKey(priv);
-      final address = TronWalletService.tronAddressFromPublicKey(pub);
+      final address = TronWalletService.tronAddressFromPublicKey(pub!);
 
       setState(() => _userAddress = address);
 
