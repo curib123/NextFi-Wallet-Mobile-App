@@ -3,12 +3,16 @@ import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
-import 'package:next_fi/Components/AppAlert.dart'; // kept for incoming toast
+import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/empty_state.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/tron_wallet_service.dart';
+
+import 'package:next_fi/Provider/RecipientAddressProvider.dart';
+import 'package:next_fi/model/recipient_address.dart';
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
@@ -19,7 +23,6 @@ class TransactionScreen extends StatefulWidget {
 
 class _TransactionScreenState extends State<TransactionScreen> {
   final ScrollController _scrollController = ScrollController();
-
   late final TronWalletService _tron;
 
   String? _userAddress;
@@ -28,7 +31,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   bool _hasMore = true;
   String? _errorMsg;
 
-  int _start = 0; // pagination offset
+  int _start = 0;
   final int _limit = 20;
   List<Map<String, dynamic>> _transactions = [];
 
@@ -37,9 +40,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   @override
   void initState() {
     super.initState();
-    _tron = TronWalletService(
-      TronClientConfig(),
-    );
+    _tron = TronWalletService(TronClientConfig());
     _loadWalletAndData();
 
     _scrollController.addListener(() {
@@ -80,7 +81,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       await _fetchTransactions();
 
-      // watch for incoming (append at top + small toast)
       _incomingSub = _tron
           .watchIncoming(_userAddress!, interval: const Duration(seconds: 12))
           .listen(_handleIncomingTx, onError: (_) {});
@@ -160,6 +160,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
 
+    final recipItems = context.watch<RecipientAddressProvider>().items;
+    final Map<String, RecipientAddress> addressBook = {
+      for (final r in recipItems) r.address.trim().toLowerCase(): r,
+    };
+
+
     Widget content;
     if (_loading) {
       content = const Center(child: CircularProgressIndicator());
@@ -212,7 +218,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
             final tx = _transactions[index];
             final txId = (tx['id'] ?? '').toString();
             final ts = (tx['timestamp'] as num?)?.toInt();
-            final dt = ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
+            final dt =
+            ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
 
             final asset = (tx['asset'] ?? 'TRX').toString();
             final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
@@ -221,30 +228,48 @@ class _TransactionScreenState extends State<TransactionScreen> {
             final direction = (tx['direction'] ?? 'other').toString();
             final isIncoming = direction == 'in';
 
+            final peerAddr = (isIncoming ? from : to).trim();
+            final rec = _findRecipient(addressBook, peerAddr);
+
+            final titleText = rec != null
+                ? "${rec.name} • ${amount.toStringAsFixed(2)} $asset"
+                : "${amount.toStringAsFixed(2)} $asset";
+
+            final subtitleWho = isIncoming ? "From" : "To";
+            final subtitlePeer =
+            rec != null ? "${rec.name} (${_short(peerAddr)})" : _short(peerAddr);
+
             return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: isIncoming
-                    ? colors.success.withOpacity(0.15)
-                    : colors.error.withOpacity(0.15),
-                child: Icon(
-                  isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
-                  color: isIncoming ? colors.success : colors.error,
-                ),
+              leading: _buildLeadingAvatar(
+                colors: colors,
+                isIncoming: isIncoming,
+                rec: rec,
               ),
               title: Text(
-                "${amount.toStringAsFixed(2)} $asset",
+                titleText,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: colors.textPrimary,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                "From: ${from.isNotEmpty ? '${from.substring(0, 6)}...' : '???'} • "
+                "$subtitleWho: $subtitlePeer • "
                     "${dt != null ? DateFormat('MMM d, h:mm a').format(dt) : ''}",
                 style: TextStyle(color: colors.textSecondary),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              trailing: Icon(LucideIcons.chevronRight, color: colors.textSecondary),
-              onTap: () => _showTxDetailsBottomSheet(context, colors, tx),
+              trailing:
+              Icon(LucideIcons.chevronRight, color: colors.textSecondary),
+              onTap: () => _showTxDetailsBottomSheet(
+                context,
+                colors,
+                tx,
+                rec: rec,
+                isIncoming: isIncoming,
+              ),
             );
           },
         ),
@@ -269,13 +294,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Modal sheet for full transaction details (replaces alert)
+  // Modal sheet for full transaction details (with saved name/color if any)
   // ───────────────────────────────────────────────────────────────────────────
   void _showTxDetailsBottomSheet(
       BuildContext context,
       AppColor colors,
-      Map<String, dynamic> tx,
-      ) {
+      Map<String, dynamic> tx, {
+        RecipientAddress? rec,
+        required bool isIncoming,
+      }) {
     final txId = (tx['id'] ?? '').toString();
     final ts = (tx['timestamp'] as num?)?.toInt();
     final dt = ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
@@ -284,12 +311,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
     final from = (tx['from'] ?? '').toString();
     final to = (tx['to'] ?? '').toString();
-    final direction = (tx['direction'] ?? 'other').toString();
-    final isIncoming = direction == 'in';
 
-    final explorerUrl = txId.isNotEmpty
-        ? 'https://tronscan.org/#/transaction/$txId'
-        : null;
+    final explorerUrl =
+    txId.isNotEmpty ? 'https://tronscan.org/#/transaction/$txId' : null;
 
     showModalBottomSheet(
       context: context,
@@ -311,7 +335,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // grabber
                   Center(
                     child: Container(
                       width: 42,
@@ -323,12 +346,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // title row + direction chip
                   Row(
                     children: [
                       Icon(
-                        isIncoming ? LucideIcons.arrowDownCircle : LucideIcons.arrowUpCircle,
+                        isIncoming
+                            ? LucideIcons.arrowDownCircle
+                            : LucideIcons.arrowUpCircle,
                         color: isIncoming ? colors.success : colors.error,
                         size: 22,
                       ),
@@ -343,12 +366,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: (isIncoming ? colors.success : colors.error).withOpacity(0.12),
+                          color: (isIncoming ? colors.success : colors.error)
+                              .withOpacity(0.12),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: (isIncoming ? colors.success : colors.error).withOpacity(0.3),
+                            color: (isIncoming ? colors.success : colors.error)
+                                .withOpacity(0.3),
                           ),
                         ),
                         child: Text(
@@ -362,10 +388,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
-                  // amount big
                   Text(
                     "${amount.toStringAsFixed(6)} $asset",
                     style: TextStyle(
@@ -375,12 +398,33 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       letterSpacing: -0.2,
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  if (rec != null) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Color(rec.color).withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(999),
+                        border:
+                        Border.all(color: Color(rec.color).withOpacity(0.35)),
+                      ),
+                      child: Text(
+                        rec.name,
+                        style: TextStyle(
+                          color: Color(rec.color),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
-
-                  // date/time
                   Row(
                     children: [
-                      Icon(LucideIcons.calendarClock, size: 16, color: colors.textSecondary),
+                      Icon(LucideIcons.calendarClock,
+                          size: 16, color: colors.textSecondary),
                       const SizedBox(width: 8),
                       Text(
                         dt != null
@@ -390,44 +434,36 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 14),
                   const Divider(height: 1),
-
                   const SizedBox(height: 12),
-
-                  // From
                   _kv(
+                    context: context,
                     colors: colors,
                     label: "From",
-                    value: from,
-                    mono: true,
+                    value: _prettyAddr(from, rec, isIncoming ? false : null),
+                    mono: false,
                     copyable: true,
                   ),
                   const SizedBox(height: 8),
-
-                  // To
                   _kv(
+                    context: context,
                     colors: colors,
                     label: "To",
-                    value: to,
-                    mono: true,
+                    value: _prettyAddr(to, rec, isIncoming ? true : null),
+                    mono: false,
                     copyable: true,
                   ),
                   const SizedBox(height: 8),
-
-                  // TxID
                   _kv(
+                    context: context,
                     colors: colors,
                     label: "TxID",
                     value: txId,
                     mono: true,
                     copyable: true,
                   ),
-
                   const SizedBox(height: 16),
-
-                  // actions
                   Row(
                     children: [
                       Expanded(
@@ -440,7 +476,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
                               const SnackBar(content: Text('TxID copied')),
                             );
                           },
-                          icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
+                          icon: Icon(LucideIcons.copy,
+                              size: 18, color: colors.primary),
                           label: Text(
                             "Copy TxID",
                             style: TextStyle(
@@ -449,9 +486,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(
+                                color: colors.primary.withOpacity(0.35)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            padding:
+                            const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
                       ),
@@ -461,21 +501,24 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           onPressed: explorerUrl == null
                               ? null
                               : () async {
-                            // Let the caller open externally; you can
-                            // integrate url_launcher if you use it app-wide.
-                            // For now, just copy the link:
-                            await Clipboard.setData(ClipboardData(text: explorerUrl));
+                            await Clipboard.setData(
+                                ClipboardData(text: explorerUrl));
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Explorer link copied')),
+                              const SnackBar(
+                                  content:
+                                  Text('Explorer link copied')),
                             );
                           },
-                          icon: const Icon(LucideIcons.externalLink, size: 18, color: Colors.white),
+                          icon: const Icon(LucideIcons.externalLink,
+                              size: 18, color: Colors.white),
                           label: const Text("Explorer"),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.primary,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            padding:
+                            const EdgeInsets.symmetric(vertical: 12),
                             elevation: 0,
                           ),
                         ),
@@ -491,7 +534,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       label: const Text("Done"),
                       style: TextButton.styleFrom(
                         foregroundColor: colors.textPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -503,10 +547,68 @@ class _TransactionScreenState extends State<TransactionScreen> {
       },
     );
   }
+
+  /* ===================== Helpers ===================== */
+
+  RecipientAddress? _findRecipient(
+      Map<String, RecipientAddress> book,
+      String address,
+      ) {
+    final key = address.trim().toLowerCase();
+    return book[key];
+  }
+
+  Widget _buildLeadingAvatar({
+    required AppColor colors,
+    required bool isIncoming,
+    RecipientAddress? rec,
+  }) {
+    if (rec != null) {
+      final bg = Color(rec.color);
+      final initial = rec.name.trim().isNotEmpty
+          ? rec.name.trim().characters.first.toUpperCase()
+          : '•';
+      return CircleAvatar(
+        backgroundColor: bg,
+        foregroundColor: Colors.white,
+        child:
+        Text(initial, style: const TextStyle(fontWeight: FontWeight.w800)),
+      );
+    }
+    return CircleAvatar(
+      backgroundColor:
+      (isIncoming ? colors.success : colors.error).withOpacity(0.15),
+      child: Icon(
+        isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
+        color: isIncoming ? colors.success : colors.error,
+      ),
+    );
+  }
+
+  static String _short(String addr) {
+    if (addr.isEmpty) return '—';
+    if (addr.length <= 12) return addr;
+    return '${addr.substring(0, 6)}…${addr.substring(addr.length - 4)}';
+  }
+
+  /// If [isThisTo] == true we highlight the "to" address if it matches [rec],
+  /// if false we highlight the "from", if null we just render name+address.
+  static String _prettyAddr(
+      String addr,
+      RecipientAddress? rec,
+      bool? isThisTo,
+      ) {
+    if (rec == null) return addr;
+    final matches =
+        rec.address.trim().toLowerCase() == addr.trim().toLowerCase();
+    if (!matches) return addr;
+    return '${rec.name}  •  $addr';
+  }
 }
 
-// small inline key/value row
+/* ===================== Shared KV row ===================== */
 Widget _kv({
+  required BuildContext context,
   required AppColor colors,
   required String label,
   required String value,
@@ -542,8 +644,10 @@ Widget _kv({
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: value));
             // ignore: use_build_context_synchronously
-
-          }
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Copied')),
+            );
+          },
         ),
     ],
   );
