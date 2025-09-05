@@ -1,16 +1,18 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
-import 'package:next_fi/Components/confirm_action_sheet.dart';
-import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
+import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/tron/tron_wallet_service.dart';
+
+// Compact UI kit
+import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
 
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
@@ -21,12 +23,18 @@ class SwapScreen extends StatefulWidget {
 enum _SwapDir { trxToUsdt, usdtToTrx }
 
 class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
-  static const double _kDefaultAutoFeeTrx = 5.0; // NEW: default auto fee is 5 TRX
+  // Defaults
+  static const double _kDefaultAutoFeeTrx = 5.0; // default even if fee toggle untouched
+  static const double _kDustTrx = 0.1;
 
+  // Controllers
   final _amountCtl = TextEditingController();
   final _minOutCtl = TextEditingController();
+
+  // Format
   final _fmt = NumberFormat('#,##0.######');
 
+  // State
   _SwapDir _dir = _SwapDir.trxToUsdt;
   bool _loading = true;
   String? _errorMsg;
@@ -40,109 +48,124 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   double _slippage = 1.0; // %
   bool _useMinGuard = false;
 
-  // Fee limit controls (TRX units for UX)
-  bool _feeAuto = true;                 // Auto uses 5 TRX now
-  double _feeLimitTrx = _kDefaultAutoFeeTrx; // start aligned with auto default
-  final double _minFeeTrx = 5;          // Lower bound (TRX)
-  final double _maxFeeTrx = 60;         // Upper bound (TRX)
+  // Network fee (TRX) — default 5 TRX, swap enabled even if not toggled
+  bool _feeAuto = true;                 // user toggles only to change it
+  double _feeLimitTrx = _kDefaultAutoFeeTrx;
+  final double _minFeeTrx = 5;
+  final double _maxFeeTrx = 60;
 
-  StreamSubscription<Map<String, dynamic>>? _incomingSub;
+  // Realtime
+  StreamSubscription? _incomingSub;
+
+  // Anim
   late final AnimationController _swapSpin =
-  AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+  AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
 
-  TronWalletService _tron = TronWalletService(TronClientConfig());
+  // Tron
+  final TronWalletService _tron = TronWalletService(const TronClientConfig());
+
+  // -------- Swap Cost Estimate (debounced) --------
+  Timer? _debounceEst;
+  bool _estLoading = false;
+  int? _estEnergyUsed;     // units
+  int? _estBandwidthUsed;  // bytes
+  double? _estBurnTrx;     // TRX
+  String? _estNote;
+
+  /* ---------------- Getters ---------------- */
+  bool get _isTrxToUsdt => _dir == _SwapDir.trxToUsdt;
+  String get _fromSymbol => _isTrxToUsdt ? 'TRX' : 'USDT';
+  String get _toSymbol   => _isTrxToUsdt ? 'USDT' : 'TRX';
+  double get _effectiveFeeTrx => _feeAuto ? _kDefaultAutoFeeTrx : _feeLimitTrx;
+  int get _feeLimitSun => (_effectiveFeeTrx.clamp(_minFeeTrx, _maxFeeTrx)) * 1e6 ~/ 1;
 
   @override
   void initState() {
     super.initState();
     _loadWalletAndData();
-    _amountCtl.addListener(_onAmountChange);
+    _amountCtl.addListener(_onAmountInput);
   }
 
   @override
   void dispose() {
     _incomingSub?.cancel();
+    _debounceEst?.cancel();
+    _amountCtl.removeListener(_onAmountInput);
     _amountCtl.dispose();
     _minOutCtl.dispose();
     _swapSpin.dispose();
+    _tron.dispose();
     super.dispose();
   }
 
-  /* ---------------- Wallet load ---------------- */
+  /* ---------------- Wallet + balances ---------------- */
   Future<void> _loadWalletAndData() async {
-    final storedMnemonic = await SeedStorage.getSeed();
+    final mn = await SeedStorage.getSeed();
     if (!mounted) return;
 
-    if (storedMnemonic == null || storedMnemonic.isEmpty) {
+    if (mn == null || mn.isEmpty) {
       setState(() {
         _loading = false;
-        _errorMsg = 'No wallet found. Please import or create a wallet.';
+        _errorMsg = 'No wallet found.';
       });
       return;
     }
 
     try {
-      final priv = TronWalletService.derivePrivateKey(storedMnemonic);
-      final pub = TronWalletService.publicKeyFromPrivateKey(priv);
-      final address = TronWalletService.tronAddressFromPublicKey(pub);
-
+      final priv = TronWalletService.derivePrivateKey(mn);
+      final addr = TronWalletService.tronAddressFromMnemonic(mn);
       setState(() {
         _privateKey = priv;
-        _userAddress = address;
+        _userAddress = addr;
       });
 
       await _refreshBalances();
 
       _incomingSub = _tron
-          .watchIncoming(_userAddress!, interval: const Duration(seconds: 12))
-          .listen(_handleIncomingTx, onError: (_) {});
+          .watchIncoming(addr, interval: const Duration(seconds: 20))
+          .listen((_) => _refreshBalances(), onError: (_) {});
 
       if (mounted) setState(() => _loading = false);
-    } catch (e) {
+      _scheduleEstimate(); // first estimate after load
+    } catch (_) {
       setState(() {
         _loading = false;
-        _errorMsg = 'Failed to load wallet: $e';
+        _errorMsg = 'Failed to load wallet.';
       });
     }
   }
 
   Future<void> _refreshBalances() async {
-    if (_userAddress == null) return;
+    final addr = _userAddress;
+    if (addr == null) return;
     try {
-      final sun = await _tron.getTrxBalance(_userAddress!);
-      final usdt = await _tron.getTrc20BalanceViaHolders(walletBase58: _userAddress!);
+      final res = await Future.wait([
+        _tron.getTrxBalance(addr),                            // sun
+        _tron.getTrc20BalanceViaHolders(walletBase58: addr), // USDT
+      ]);
       if (!mounted) return;
       setState(() {
-        _trxBal = sun / 1e6;
-        _usdtBal = usdt;
+        _trxBal = (res[0]).toDouble() / 1e6;
+        _usdtBal = (res[1]).toDouble();
       });
-    } catch (_) {}
+    } catch (_) {/* keep previous balances */}
   }
 
-  void _handleIncomingTx(Map<String, dynamic> tx) {
-    if (!mounted) return;
-    showFloatingSnackBar(
-      context,
-      type: SnackBarType.info,
-      message: 'Incoming ${tx['asset']} ${tx['amount']} detected',
-    );
-    _refreshBalances();
-  }
-
+  /* ---------------- Helpers ---------------- */
   void _flipDirection() {
     HapticFeedback.lightImpact();
     _swapSpin.forward(from: 0);
     setState(() {
-      _dir = _dir == _SwapDir.trxToUsdt ? _SwapDir.usdtToTrx : _SwapDir.trxToUsdt;
+      _dir = _isTrxToUsdt ? _SwapDir.usdtToTrx : _SwapDir.trxToUsdt;
     });
     _suggestMinReceive();
+    _scheduleEstimate();
   }
 
   void _useMax() {
-    final dust = 0.1; // keep dust for network fees
-    if (_dir == _SwapDir.trxToUsdt) {
-      final fee = _feeAuto ? _kDefaultAutoFeeTrx : _feeLimitTrx;
-      final max = (_trxBal - fee - dust).clamp(0, double.infinity);
+    if (_isTrxToUsdt) {
+      final fee = _effectiveFeeTrx;
+      final max = (_trxBal - fee - _kDustTrx).clamp(0, double.infinity);
       _amountCtl.text = max <= 0 ? '' : max.toStringAsFixed(6);
     } else {
       _amountCtl.text = _usdtBal <= 0 ? '' : _usdtBal.toStringAsFixed(6);
@@ -150,117 +173,225 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   }
 
   void _quickPercent(double p) {
-    final fromBal = _dir == _SwapDir.trxToUsdt ? _trxBal : _usdtBal;
-    var v = fromBal * p;
-    if (_dir == _SwapDir.trxToUsdt) {
-      final dust = 0.1;
-      final fee = _feeAuto ? _kDefaultAutoFeeTrx : _feeLimitTrx;
-      v = (v - fee - dust).clamp(0, fromBal);
+    final bal = _isTrxToUsdt ? _trxBal : _usdtBal;
+    var v = bal * p;
+    if (_isTrxToUsdt) {
+      v = (v - _effectiveFeeTrx - _kDustTrx).clamp(0, bal);
     }
     _amountCtl.text = v <= 0 ? '' : v.toStringAsFixed(6);
   }
 
+  void _onAmountInput() {
+    if (_useMinGuard) _suggestMinReceive();
+    _scheduleEstimate();
+  }
+
   void _suggestMinReceive() {
     if (!_useMinGuard) return;
-    final amount = double.tryParse(_amountCtl.text.trim());
-    if (amount == null || amount <= 0) {
+    final a = double.tryParse(_amountCtl.text.trim());
+    if (a == null || a <= 0) {
       _minOutCtl.clear();
       return;
     }
-    final minOut = amount * (1 - (_slippage / 100));
-    _minOutCtl.text = minOut.toStringAsFixed(6);
+    _minOutCtl.text = (a * (1 - _slippage / 100)).toStringAsFixed(6);
   }
 
-  void _onAmountChange() {
-    if (_useMinGuard) _suggestMinReceive();
-    setState(() {});
-  }
-
-  bool get _hasEnoughBalanceBasic {
+  bool get _hasEnoughBalance {
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amount <= 0) return false;
-    if (_dir == _SwapDir.trxToUsdt) {
-      return amount <= _trxBal;
+    if (_isTrxToUsdt) {
+      return (amount + _effectiveFeeTrx + _kDustTrx) <= _trxBal + 1e-9;
     } else {
-      return amount <= _usdtBal;
+      return amount <= _usdtBal + 1e-9;
     }
   }
 
-  bool get _hasEnoughForFeesIfTRXOut {
-    if (_dir != _SwapDir.trxToUsdt) return true;
-    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
-    final dust = 0.1;
-    final fee = _feeAuto ? _kDefaultAutoFeeTrx : _feeLimitTrx;
-    return (amount + fee + dust) <= _trxBal + 1e-9;
+  /* ---------------- Estimate (best-effort via service) ---------------- */
+  void _scheduleEstimate() {
+    _debounceEst?.cancel();
+    _debounceEst = Timer(const Duration(milliseconds: 320), _estimateSwapCosts);
   }
 
-  bool get _hasEnoughBalance => _hasEnoughBalanceBasic && _hasEnoughForFeesIfTRXOut;
+  Future<void> _estimateSwapCosts() async {
+    final addr = _userAddress;
+    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
+    if (!mounted || addr == null || amount <= 0) {
+      setState(() {
+        _estLoading = false;
+        _estEnergyUsed = null;
+        _estBandwidthUsed = null;
+        _estBurnTrx = null;
+        _estNote = null;
+      });
+      return;
+    }
 
-  int get _selectedFeeLimitSun =>
-      (_feeAuto ? _kDefaultAutoFeeTrx : _feeLimitTrx).clamp(_minFeeTrx, _maxFeeTrx) * 1e6 ~/ 1;
+    setState(() {
+      _estLoading = true;
+      _estEnergyUsed = null;
+      _estBandwidthUsed = null;
+      _estBurnTrx = null;
+      _estNote = null;
+    });
 
-  /* ---------------- Swap action ---------------- */
-  Future<void> _doSwap() async {
-    if (_privateKey == null || _userAddress == null) return;
+    try {
+      final res = await _tron.estimateSwapCosts(
+        from: _fromSymbol,
+        to: _toSymbol,
+        amount: amount,
+        feeLimitSun: _feeLimitSun,
+        address: addr,
+        slippage: _slippage,
+      );
 
+      int _asInt(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
+      double _asTrx(dynamic sun) => (_asInt(sun)) / 1e6;
+
+      final energy = _asInt(res['energy_used'] ?? res['energyRequired'] ?? res['energy']);
+      final net    = _asInt(res['bandwidth_used'] ?? res['net_used'] ?? res['bandwidth'] ?? res['net']);
+      final burn   = _asTrx(res['trx_burn_sun'] ?? res['burn_sun'] ?? res['fee_burn_sun'] ?? 0);
+      final note   = (res['message'] ?? res['note'] ?? '').toString().trim();
+
+      if (!mounted) return;
+      setState(() {
+        _estLoading = false;
+        _estEnergyUsed = energy > 0 ? energy : null;
+        _estBandwidthUsed = net > 0 ? net : null;
+        _estBurnTrx = burn > 0 ? burn : null;
+        _estNote = note.isEmpty ? null : note;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _estLoading = false; // silent; modal row shows "—"
+      });
+    }
+  }
+
+  /* ---------------- Confirm → Execute ---------------- */
+  Future<void> _openConfirmSheet() async {
+    if (_privateKey == null || _userAddress == null) {
+      showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.error);
+      return;
+    }
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amount <= 0) {
-      showFloatingSnackBar(context, message: 'Enter a valid amount', type: SnackBarType.error);
+      showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.error);
       return;
     }
     if (!_hasEnoughBalance) {
-      final msg = _dir == _SwapDir.trxToUsdt && !_hasEnoughForFeesIfTRXOut
-          ? 'Not enough TRX to cover amount + fee limit'
-          : 'Not enough balance';
-      showFloatingSnackBar(context, message: msg, type: SnackBarType.error);
+      showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error);
       return;
     }
 
-    final minOutVal = _useMinGuard ? (double.tryParse(_minOutCtl.text.trim()) ?? 0.0) : 0.0;
-    final from = _dir == _SwapDir.trxToUsdt ? 'TRX' : 'USDT';
-    final to = _dir == _SwapDir.trxToUsdt ? 'USDT' : 'TRX';
-    final feeTrx = _selectedFeeLimitSun / 1e6;
+    // Ensure estimate is reasonably fresh
+    await _estimateSwapCosts();
 
-    final ok = await showConfirmActionSheet(
-      context,
-      title: 'Confirm Swap',
-      message: 'You’re swapping ${_fmt.format(amount)} $from → $to\n'
-          'Slippage tolerance: ${_slippage.toStringAsFixed(1)}%\n'
-          'Min receive: ${_useMinGuard ? _fmt.format(minOutVal) : 'OFF'} $to\n'
-          'Fee limit: ${_feeAuto ? 'Auto (5 TRX)' : '${feeTrx.toStringAsFixed(0)} TRX'}'
-          '${_dir == _SwapDir.trxToUsdt ? '\nMax TRX spend: ${_fmt.format(amount + feeTrx)} TRX' : ''}',
-      icon: LucideIcons.shuffle,
-      confirmLabel: 'Swap',
+    final minOut = _useMinGuard ? (double.tryParse(_minOutCtl.text.trim()) ?? 0.0) : null;
+    final feeText = _feeAuto ? 'Auto (5 TRX)' : '${(_feeLimitSun / 1e6).toStringAsFixed(0)} TRX';
+    final colors = AppColor.of(context);
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (_) {
+        String estRow() {
+          if (_estLoading) return 'Estimating…';
+          final parts = <String>[];
+          if (_estEnergyUsed != null) parts.add('Energy ~$_estEnergyUsed');
+          if (_estBandwidthUsed != null) parts.add('Bandwidth ~$_estBandwidthUsed');
+          if (_estBurnTrx != null) parts.add('TRX burn ~${_estBurnTrx!.toStringAsFixed(3)}');
+          return parts.isEmpty ? '—' : parts.join('  •  ');
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
+              const SizedBox(height: 8),
+              Text('Confirm Swap', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+              const SizedBox(height: 8),
+              SummaryRow(label: 'Route',    value: '$_fromSymbol → $_toSymbol'),
+              SummaryRow(label: 'Amount',   value: '${_fmt.format(amount)} $_fromSymbol'),
+              if (minOut != null) SummaryRow(label: 'Min receive', value: '${_fmt.format(minOut)} $_toSymbol'),
+              SummaryRow(label: 'Slippage', value: '${_slippage.toStringAsFixed(1)}%'),
+              SummaryRow(label: 'Fee limit', value: feeText),
+              SummaryRow(label: 'Est. costs', value: estRow()),
+              if (_estNote != null && _estNote!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(_estNote!, style: TextStyle(color: colors.textSecondary, fontSize: 11.5)),
+                  ),
+                ),
+
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: colors.primary.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text('Cancel', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _executeSwap(amount: amount, minOut: minOut ?? 0);
+                      },
+                      icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
+                      label: const Text('Confirm'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
-    if (!ok) return;
+  }
 
+  Future<void> _executeSwap({required double amount, required double minOut}) async {
+    if (_privateKey == null) return;
     FocusScope.of(context).unfocus();
     setState(() => _loading = true);
 
     try {
-      String txid;
-      if (_dir == _SwapDir.trxToUsdt) {
-        txid = await _tron.swapTrxToUsdtViaRouter(
-          privateKey: _privateKey!,
-          amountTrx: amount,
-          minUsdtOut: minOutVal,
-          feeLimitSun: _selectedFeeLimitSun,
-        );
-      } else {
-        txid = await _tron.swapUsdtToTrxViaRouter(
-          privateKey: _privateKey!,
-          amountUsdt: amount,
-          minTrxOut: minOutVal,
-          feeLimitSun: _selectedFeeLimitSun,
-        );
-      }
+      final txid = _isTrxToUsdt
+          ? await _tron.swapTrxToUsdtViaRouter(
+        privateKey: _privateKey!,
+        amountTrx: amount,
+        minUsdtOut: minOut,
+        feeLimitSun: _feeLimitSun,
+      )
+          : await _tron.swapUsdtToTrxViaRouter(
+        privateKey: _privateKey!,
+        amountUsdt: amount,
+        minTrxOut: minOut,
+        feeLimitSun: _feeLimitSun,
+      );
 
       if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        type: SnackBarType.success,
-        message: 'Swap sent! txid: ${txid.trim()}',
-      );
+      HapticFeedback.mediumImpact();
+      showFloatingSnackBar(context, type: SnackBarType.success, message: 'Swap submitted\n$txid');
       _amountCtl.clear();
       _minOutCtl.clear();
       await _refreshBalances();
@@ -277,125 +408,113 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
-    final feeTrx = _selectedFeeLimitSun / 1e6;
-
-    final isTrxToUsdt = _dir == _SwapDir.trxToUsdt;
-    final fromSymbol = isTrxToUsdt ? 'TRX' : 'USDT';
-    final toSymbol = isTrxToUsdt ? 'USDT' : 'TRX';
+    final feeTrx = _effectiveFeeTrx;
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(title: const Text('Swap'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Swap'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(LucideIcons.refreshCcw),
+            onPressed: _refreshBalances,
+          ),
+        ],
+      ),
       body: _loading && _userAddress == null
           ? const PageLoader()
           : _errorMsg != null
-          ? ErrorStateCard(message: _errorMsg!)
+          ? ErrorCard(message: _errorMsg!)
           : RefreshIndicator(
         onRefresh: _refreshBalances,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              WalletCard(trx: _trxBal, usdt: _usdtBal),
-              const SizedBox(height: 16),
-              DirectionPill(
-                isTrxToUsdt: isTrxToUsdt,
-                onTapTRXtoUSDT: () {
-                  if (!isTrxToUsdt) _flipDirection();
-                },
-                onTapUSDTtoTRX: () {
-                  if (isTrxToUsdt) _flipDirection();
-                },
-              ),
+              BalanceRow(trx: _trxBal, usdt: _usdtBal),
+
               const SizedBox(height: 10),
-              SwapCard(
-                fromSymbol: fromSymbol,
-                toSymbol: toSymbol,
-                amountCtl: _amountCtl,
-                minOutCtl: _minOutCtl,
+              DirectionSegmented(
+                isTrxToUsdt: _isTrxToUsdt,
+                onFlip: _flipDirection,
+                controller: _swapSpin,
+              ),
+
+              const SizedBox(height: 10),
+              AmountField(
+                label: 'You send ($_fromSymbol)',
+                controller: _amountCtl,
+                onUseMax: _useMax,
+                onPct: _quickPercent,
+                colors: colors,
+              ),
+
+              const SizedBox(height: 8),
+              MinReceiveRow(
+                enabled: _useMinGuard,
+                valueCtl: _minOutCtl,
                 slippage: _slippage,
-                useMinGuard: _useMinGuard,
-                fromBalance: isTrxToUsdt ? _trxBal : _usdtBal,
-                hasEnoughBalance: _hasEnoughBalance,
-                onToggleMinGuard: (v) {
-                  setState(() {
-                    _useMinGuard = v;
-                    if (v) {
-                      _suggestMinReceive();
-                    } else {
-                      _minOutCtl.clear();
-                    }
-                  });
+                onToggle: (v) {
+                  setState(() => _useMinGuard = v);
+                  _suggestMinReceive();
+                  _scheduleEstimate();
                 },
-                onSlippageChanged: (v) {
+                onSlippage: (v) {
                   setState(() => _slippage = v);
                   _suggestMinReceive();
+                  _scheduleEstimate();
                 },
-                onFlip: _flipDirection,
-                onUseMax: _useMax,
-                onQuickPercent: _quickPercent,
+                toSymbol: _toSymbol,
+                colors: colors,
               ),
-              const SizedBox(height: 14),
 
-              // Fee guides only when switch is active (Custom)
-              FeeSection(
-                isTrxToUsdt: isTrxToUsdt,
-                feeAuto: _feeAuto,
-                feeLimitTrx: _feeLimitTrx,
-                minFeeTrx: _minFeeTrx,
-                maxFeeTrx: _maxFeeTrx,
-                trxBalance: _trxBal,
-                currentAmountTrx: amount,
-                onModeChanged: (auto) => setState(() => _feeAuto = auto),
-                onFeeChanged: (v) => setState(() => _feeLimitTrx = v),
-                // conveys the auto default to the widget for its internal labels if needed
-                autoDefaultTrx: _kDefaultAutoFeeTrx,
+              const SizedBox(height: 8),
+              FeeRow(
+                auto: _feeAuto,
+                feeTrx: feeTrx,
+                min: _minFeeTrx,
+                max: _maxFeeTrx,
+                onMode: (isAuto) {
+                  setState(() => _feeAuto = isAuto);
+                  _scheduleEstimate();
+                },
+                onChange: (v) {
+                  setState(() => _feeLimitTrx = v);
+                  _scheduleEstimate();
+                },
+                colors: colors,
               ),
-              const SizedBox(height: 12),
 
-              SummaryTile(
-                isTrxToUsdt: isTrxToUsdt,
+              const SizedBox(height: 10),
+              SummaryCard(
+                from: _fromSymbol,
+                to: _toSymbol,
                 amount: amount,
                 minOut: _useMinGuard ? (double.tryParse(_minOutCtl.text.trim()) ?? 0.0) : null,
-                feeTrx: feeTrx,
-                feeAuto: _feeAuto,
+                feeText: _feeAuto ? 'Auto (5 TRX)' : '${feeTrx.toStringAsFixed(0)} TRX',
+                colors: colors,
+                fmt: _fmt,
               ),
-              const SizedBox(height: 12),
 
+              const SizedBox(height: 10),
               ElevatedButton.icon(
-                onPressed: (_loading || !_hasEnoughBalance) ? null : _doSwap,
+                onPressed: (_loading || !_hasEnoughBalance) ? null : _openConfirmSheet,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(LucideIcons.arrowRightLeft),
-                label: Text(isTrxToUsdt ? 'Swap TRX ' : 'Swap USDT '),
-              ),
-              const SizedBox(height: 18),
-              InfoTile(
-                text:
-                'SunSwap is used under the hood. Set slippage and an optional minimum receive. '
-                    'Default fee limit is Auto (5 TRX). Turn ON “Custom” in Network Fee Limit to reveal guides and presets (5–60 TRX). '
-                    'For TRX→USDT, ensure you have enough TRX to cover amount + fee limit.',
+                label: Text(_isTrxToUsdt ? 'Review TRX → USDT' : 'Review USDT → TRX'),
               ),
             ],
           ),
-        ),
-      ),
-      floatingActionButton: RotationTransition(
-        turns: Tween(begin: 0.0, end: 0.5)
-            .animate(CurvedAnimation(parent: _swapSpin, curve: Curves.easeOut)),
-        child: FloatingActionButton(
-          heroTag: 'swap_flip_fab',
-          onPressed: _flipDirection,
-          backgroundColor: colors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Icon(LucideIcons.arrowUpDown, color: colors.primary),
         ),
       ),
     );
