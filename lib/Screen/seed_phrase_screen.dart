@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/CustomButton.dart';
@@ -11,7 +12,6 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
   const SeedPhraseScreen({super.key});
@@ -66,9 +66,21 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   }
 
   Future<void> _generateMnemonic() async {
-    _mnemonic = TronWalletService.generateMnemonic(); // ✅ Tron service
-    _words = _mnemonic.split(' ');
-    if (mounted) setState(() {});
+    try {
+      final m = await StellarWalletService.generateMnemonic(); // ✅ Stellar service (24 words)
+      if (!mounted) return;
+      setState(() {
+        _mnemonic = m.trim();
+        _words = _mnemonic.split(RegExp(r'\s+'));
+      });
+    } catch (e) {
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Failed to generate recovery phrase: $e',
+        type: SnackBarType.error,
+      );
+    }
   }
 
   // === Regenerate: modal bottom sheet ===
@@ -166,6 +178,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
 
   // Copy all — real copier
   Future<void> _copySeedPhrase() async {
+    if (_mnemonic.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: _mnemonic));
     HapticFeedback.lightImpact();
     final colors = AppColor.of(context);

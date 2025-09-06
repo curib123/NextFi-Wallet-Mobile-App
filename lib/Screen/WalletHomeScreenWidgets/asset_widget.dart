@@ -16,8 +16,8 @@ class AssetWidget extends StatelessWidget {
     required this.colors,
     required this.assets,
     required this.logos,
-    required this.trxBalance,
-    required this.usdtBalance,
+    required this.xlmBalance,
+    required this.usdcBalance,
     required this.address,                 // NEW: needed to open ReceiveScreen
     this.loading = false,
     this.onRefresh,
@@ -28,8 +28,8 @@ class AssetWidget extends StatelessWidget {
   final AppColor colors;
   final List<AssetModel> assets;
   final Map<String, String> logos;
-  final double trxBalance;
-  final double usdtBalance;
+  final double xlmBalance;
+  final double usdcBalance;
   final String address;                    // NEW
   final bool loading;
   final Future<void> Function()? onRefresh;
@@ -42,9 +42,9 @@ class AssetWidget extends StatelessWidget {
   double _balanceFor(AssetModel a) {
     switch (a.symbol.toUpperCase()) {
       case 'TRX':
-        return trxBalance;
+        return xlmBalance;
       case 'USDT':
-        return usdtBalance;
+        return usdcBalance;
       default:
         return 0.0;
     }
@@ -54,9 +54,9 @@ class AssetWidget extends StatelessWidget {
     final cur = ctx.read<CurrencyProvider>();
     switch (a.symbol.toUpperCase()) {
       case 'TRX':
-        return cur.trxToFiat(trxBalance);
+        return cur.xlmToFiat(xlmBalance);
       case 'USDT':
-        return cur.usdtToFiat(usdtBalance);
+        return cur.usdcToFiat(usdcBalance);
       default:
         return 0.0;
     }
@@ -87,8 +87,8 @@ class AssetWidget extends StatelessWidget {
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => ReceiveScreen(
         address: address,
-        trxBalance: trxBalance,
-        usdtBalance: usdtBalance,
+        xlmBalance: xlmBalance,
+        usdcBalance: usdcBalance,
         initialToken: token, // initial tab based on tapped tile
       ),
     ));

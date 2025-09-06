@@ -3,13 +3,14 @@ import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
 import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/empty_state.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/model/recipient_address.dart';
@@ -26,20 +27,21 @@ class TransactionScreen extends StatefulWidget {
 
 class _TransactionScreenState extends State<TransactionScreen> {
   final ScrollController _scrollController = ScrollController();
-  late final TronWalletService _tron;
+  late final StellarWalletService _stellar;
 
-  String? _userAddress;
+  String? _userAddress; // G... public key
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
   String? _errorMsg;
 
-  int _start = 0;
+  // Horizon pagination uses a cursor (paging token), not offset.
+  String? _cursor; // next cursor to request when loading more
   final int _limit = 20;
   List<Tx> _transactions = [];
   final Set<String> _seenIds = <String>{};
 
-  StreamSubscription<Tx>? _incomingSub;
+  StreamSubscription<stellar.OperationResponse>? _incomingSub;
   int _fetchGen = 0;
 
   _TxFilter _filter = _TxFilter.all;
@@ -50,7 +52,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
   @override
   void initState() {
     super.initState();
-    _tron = TronWalletService(TronClientConfig());
+    // Profit address is unused in this screen; pass a placeholder.
+    _stellar = StellarWalletService();
     _loadWalletAndData();
 
     _scrollController.addListener(() {
@@ -85,22 +88,89 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
 
     try {
-      final priv = TronWalletService.derivePrivateKey(storedMnemonic);
-      final pub = TronWalletService.publicKeyFromPrivateKey(priv);
-      final address = TronWalletService.tronAddressFromPublicKey(pub!);
+      final wallet = await StellarWalletService.walletFromMnemonic(storedMnemonic);
+      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
+      final address = kp.accountId; // G... address
 
       _set(() => _userAddress = address);
 
       await _fetchTransactions();
 
-      _incomingSub = _tron
-          .watchIncoming(_userAddress!, interval: const Duration(seconds: 12))
-          .listen(_handleIncomingTx, onError: (_) {});
+      // Live incoming payments stream
+      _incomingSub = _stellar.sdk.payments
+          .forAccount(_userAddress!)
+          .cursor("now")
+          .stream()
+          .listen((op) {
+        final tx = _opToTx(op, _userAddress!);
+        if (tx != null) _handleIncomingTx(tx);
+      }, onError: (_) {});
     } catch (e) {
       _set(() {
         _loading = false;
         _errorMsg = 'Failed to load wallet: $e';
       });
+    }
+  }
+
+  // Convert OperationResponse to our Tx map, or null if unsupported op type.
+  Tx? _opToTx(stellar.OperationResponse op, String myAddr) {
+    String? assetCode;
+    double? amount;
+    String? from;
+    String? to;
+
+    if (op is stellar.PaymentOperationResponse) {
+      assetCode = (op.assetType == 'native') ? 'XLM' : (op.assetCode ?? 'ASSET');
+      amount = double.tryParse(op.amount ?? '');
+      from = op.from;
+      to = op.to;
+    } else if (op is stellar.PathPaymentStrictSendOperationResponse) {
+      // amount here is the *destination* amount/asset
+      assetCode = (op.assetType == 'native') ? 'XLM' : (op.assetCode ?? 'ASSET');
+      amount = double.tryParse(op.amount ?? '');
+      from = op.from;
+      to = op.to;
+    } else if (op is stellar.PathPaymentStrictReceiveOperationResponse) {
+      assetCode = (op.assetType == 'native') ? 'XLM' : (op.assetCode ?? 'ASSET');
+      amount = double.tryParse(op.amount ?? '');
+      from = op.from;
+      to = op.to;
+    } else if (op is stellar.CreateAccountOperationResponse) {
+      // Treat as incoming XLM payment (account creation funding)
+      assetCode = 'XLM';
+      amount = double.tryParse(op.startingBalance ?? '');
+      from = op.funder;
+      to = op.account;
+    } else {
+      return null; // skip non-payment-like ops
+    }
+
+    final hash = op.transactionHash ?? '';
+    final id = '${op.pagingToken ?? hash}';
+    final createdAt = op.createdAt; // ISO8601 string
+    final ts = _safeParseMillis(createdAt);
+
+    final isIncoming = (to != null && to == myAddr);
+
+    return <String, dynamic>{
+      'id': id,
+      'hash': hash,
+      'timestamp': ts,
+      'asset': assetCode ?? 'ASSET',
+      'amount': amount ?? 0.0,
+      'from': from ?? '',
+      'to': to ?? '',
+      'direction': isIncoming ? 'in' : 'out',
+    };
+  }
+
+  int? _safeParseMillis(String? iso) {
+    if (iso == null || iso.isEmpty) return null;
+    try {
+      return DateTime.parse(iso).millisecondsSinceEpoch;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -114,7 +184,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       _transactions.insert(0, tx);
     });
 
-    final asset = (tx['asset'] ?? 'TRX').toString();
+    final asset = (tx['asset'] ?? 'XLM').toString();
     final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
     AppAlert.show(
       context: context,
@@ -137,16 +207,29 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _loadingMore = true;
       } else {
         _loading = true;
-        _start = 0;
+        _cursor = null;
       }
     });
 
     try {
-      final newTx = await _tron.getUnifiedTransactions(
-        addr,
-        limit: _limit,
-        start: _start,
-      );
+      final builder = _stellar.sdk.payments
+          .forAccount(addr)
+          .order(stellar.RequestBuilderOrder.DESC)
+          .limit(_limit);
+
+      if (loadMore && _cursor != null && _cursor!.isNotEmpty) {
+        builder.cursor(_cursor!);
+      }
+
+      final page = await builder.execute(); // Page<OperationResponse>
+      final ops = page.records ?? const <stellar.OperationResponse>[];
+
+      // Map into Tx list (payments & path-payments & create-account only)
+      final newTx = <Tx>[];
+      for (final op in ops) {
+        final tx = _opToTx(op, addr);
+        if (tx != null) newTx.add(tx);
+      }
 
       if (myToken != _fetchGen) return;
 
@@ -161,8 +244,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
           final id = (t['id'] ?? '').toString();
           if (id.isNotEmpty) _seenIds.add(id);
         }
-        if (newTx.isNotEmpty) _start += _limit;
-        _hasMore = newTx.length == _limit;
+
+        // Prepare next cursor from the last op received
+        if (ops.isNotEmpty) {
+          _cursor = ops.last.pagingToken;
+        }
+        _hasMore = ops.length == _limit;
       });
     } catch (e) {
       _set(() => _errorMsg = 'Error fetching history: $e');
@@ -175,7 +262,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   Future<void> _resetAndFetch() async {
-    _start = 0;
+    _cursor = null;
     _hasMore = true;
     await _fetchTransactions();
   }
@@ -259,7 +346,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       content = Center(
         child: EmptyState.noData(
           title: 'No transactions yet',
-          message: 'When you send or receive TRX or USDT, they’ll appear here.',
+          message: 'When you send or receive XLM or USDC, they’ll appear here.',
           primaryActionLabel: 'Refresh',
           onPrimaryAction: _resetAndFetch,
           context: context,
@@ -326,7 +413,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final ts = (tx['timestamp'] as num?)?.toInt();
     final dt = ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
 
-    final asset = (tx['asset'] ?? 'TRX').toString();
+    final asset = (tx['asset'] ?? 'XLM').toString();
     final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
     final from = (tx['from'] ?? '').toString();
     final to = (tx['to'] ?? '').toString();
@@ -383,13 +470,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final ts = (tx['timestamp'] as num?)?.toInt();
     final dt = ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null;
 
-    final asset = (tx['asset'] ?? 'TRX').toString();
+    final asset = (tx['asset'] ?? 'XLM').toString();
     final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
     final from = (tx['from'] ?? '').toString();
     final to = (tx['to'] ?? '').toString();
+    final hash = (tx['hash'] ?? '').toString();
 
-    final explorerUrl =
-    txId.isNotEmpty ? 'https://tronscan.org/#/transaction/$txId' : null;
+    final explorerUrl = _stellarExplorerTx(hash, _stellar);
 
     showModalBottomSheet(
       context: context,
@@ -526,8 +613,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   _kv(
                     context: context,
                     colors: colors,
-                    label: "TxID",
-                    value: txId,
+                    label: "Tx Hash",
+                    value: hash,
                     mono: true,
                     copyable: true,
                   ),
@@ -536,18 +623,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: txId.isEmpty
+                          onPressed: hash.isEmpty
                               ? null
                               : () async {
-                            await Clipboard.setData(ClipboardData(text: txId));
+                            await Clipboard.setData(ClipboardData(text: hash));
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('TxID copied')),
+                              const SnackBar(content: Text('Hash copied')),
                             );
                           },
                           icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
                           label: Text(
-                            "Copy TxID",
+                            "Copy Hash",
                             style: TextStyle(
                               color: colors.primary,
                               fontWeight: FontWeight.w700,
@@ -563,7 +650,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: explorerUrl == null
+                          onPressed: (explorerUrl == null || explorerUrl.isEmpty)
                               ? null
                               : () async {
                             await Clipboard.setData(ClipboardData(text: explorerUrl));
@@ -607,6 +694,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   /* ===================== Helpers ===================== */
+
+  String? _stellarExplorerTx(String hash, StellarWalletService svc) {
+    if (hash.isEmpty) return null;
+    // Use Stellar.Expert (public/testnet)
+    final isTestnet = identical(svc.sdk, stellar.StellarSDK.TESTNET);
+    final net = isTestnet ? 'testnet' : 'public';
+    return 'https://stellar.expert/explorer/$net/tx/$hash';
+  }
 
   Widget _buildLeadingAvatar({
     required AppColor colors,

@@ -62,22 +62,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.0"
-  base58check:
-    dependency: "direct main"
-    description:
-      name: base58check
-      sha256: "6c300dfc33e598d2fe26319e13f6243fea81eaf8204cb4c6b69ef20a625319a5"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.0"
-  bip32:
-    dependency: "direct main"
-    description:
-      name: bip32
-      sha256: "54787cd7a111e9d37394aabbf53d1fc5e2e0e0af2cd01c459147a97c0e3f8a97"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.0"
   bip39:
     dependency: "direct main"
     description:
@@ -86,14 +70,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.6"
-  blockchain_utils:
-    dependency: "direct main"
-    description:
-      name: blockchain_utils
-      sha256: edc360f7f2a8978d089a34dd62a5dfad303c79260e5f6207e1709fed80c84334
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.2.0"
   boolean_selector:
     dependency: transitive
     description:
@@ -102,14 +78,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
-  bs58check:
-    dependency: transitive
-    description:
-      name: bs58check
-      sha256: c4a164d42b25c2f6bc88a8beccb9fc7d01440f3c60ba23663a20a70faf484ea9
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.2"
   build:
     dependency: transitive
     description:
@@ -286,6 +254,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.8"
+  decimal:
+    dependency: transitive
+    description:
+      name: decimal
+      sha256: fc706a5618b81e5b367b01dd62621def37abc096f2b46a9bd9068b64c1fa36d0
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.4"
+  dio:
+    dependency: transitive
+    description:
+      name: dio
+      sha256: d90ee57923d1828ac14e492ca49440f65477f4bb1263575900be731a3dac66a9
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.9.0"
+  dio_web_adapter:
+    dependency: transitive
+    description:
+      name: dio_web_adapter
+      sha256: "7586e476d70caecaf1686d21eee7247ea43ef5c345eab9e0cc3583ff13378d78"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
   eip1559:
     dependency: transitive
     description:
@@ -510,7 +502,7 @@ packages:
     source: hosted
     version: "2.3.2"
   hex:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: hex
       sha256: "4e7cd54e4b59ba026432a6be2dd9d96e4c5205725194997193bf871703b82c4a"
@@ -534,7 +526,7 @@ packages:
     source: hosted
     version: "2.0.1"
   http:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: http
       sha256: bb2ce4590bc2667c96f318d68cac1b5a7987ec819351d32b1c987239a815e007
@@ -813,14 +805,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
-  on_chain:
-    dependency: "direct main"
-    description:
-      name: on_chain
-      sha256: a6f4e8c5243f83e588c5c47e09b8fd7a7b231d3a14d4a80a509cc319f02168fd
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.0"
   package_config:
     dependency: transitive
     description:
@@ -893,6 +877,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  pinenacl:
+    dependency: transitive
+    description:
+      name: pinenacl
+      sha256: "57e907beaacbc3c024a098910b6240758e899674de07d6949a67b52fd984cbdf"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.0"
   platform:
     dependency: transitive
     description:
@@ -973,6 +965,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.0"
+  rational:
+    dependency: transitive
+    description:
+      name: rational
+      sha256: cb808fb6f1a839e6fc5f7d8cb3b0a10e1db48b3be102de73938c627f0b636336
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.3"
   rxdart:
     dependency: transitive
     description:
@@ -1098,6 +1098,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.12.1"
+  stellar_flutter_sdk:
+    dependency: "direct main"
+    description:
+      name: stellar_flutter_sdk
+      sha256: d5cc48149f5da85fa2f0f9acba54170ff42cb4661a921ba5db1cab267f92c08f
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.2"
   stream_channel:
     dependency: transitive
     description:
@@ -1154,6 +1162,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
+  toml:
+    dependency: transitive
+    description:
+      name: toml
+      sha256: d968d149c8bd06dc14e09ea3a140f90a3f2ba71949e7a91df4a46f3107400e71
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.16.0"
   typed_data:
     dependency: transitive
     description:
@@ -1170,6 +1186,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.0"
+  unorm_dart:
+    dependency: transitive
+    description:
+      name: unorm_dart
+      sha256: "8e3870a1caa60bde8352f9597dd3535d8068613269444f8e35ea8925ec84c1f5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.1+1"
   uuid:
     dependency: transitive
     description:

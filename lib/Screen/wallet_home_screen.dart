@@ -1,12 +1,13 @@
 // lib/Screen/wallet_home_screen.dart
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Screen/swap_screen.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+import 'package:next_fi/Screen/swap_screen.dart';
 import 'package:next_fi/Components/token_chooser.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
@@ -18,7 +19,6 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 import 'WalletHomeScreenWidgets/action_button.dart';
 import 'WalletHomeScreenWidgets/build_tab_bar.dart';
@@ -33,41 +33,41 @@ class WalletHomeScreen extends StatefulWidget {
 class _WalletHomeScreenState extends State<WalletHomeScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   /* ================= Services ================= */
-  late final TronWalletService _tron = TronWalletService(const TronClientConfig());
+  late final StellarWalletService _stellar = StellarWalletService();
 
-  /* ================= Wallet ================= */
-  String? _tronAddress, _tronAddressHex41;
-  Uint8List? _privateKey;
+  /* ================= Wallet (Stellar) ================= */
+  String? _stellarAccountId; // "G..." public address
+  String? _secretSeed;
 
-  /* ================= Balances ================= */
-  double _trxBalance = 0, _usdtBalance = 0;
+  /* ================= Balances (XLM/USDC) ================= */
+  double _xlmBalance = 0, _usdcBalance = 0;
   bool _hideBalance = false, _loadingBalances = true;
 
   /* ================= Incoming Hints (light) ================= */
   final _incomingHints = <Map<String, dynamic>>[];
-  final _seenTxIds = <String>{};     // dedupe hints shown
-  static const int _maxHints = 4;     // cap UI list
+  final _seenTxIds = <String>{};
+  static const int _maxHints = 4;
 
   /* ================= Throttle / Schedules ================= */
-  static const Duration _minBalancesGap = Duration(minutes: 10);   // poll ceiling
+  static const Duration _minBalancesGap = Duration(minutes: 10);
   static const Duration _incomingWatchInterval = Duration(seconds: 55);
   DateTime? _lastBalancesAt;
   bool _balancesInFlight = false;
 
   Timer? _balancesTimer;
-  StreamSubscription<Map<String, dynamic>>? _incomingSub;
-  Timer? _debounceBalanceKick;   // for burst coalescing
+  StreamSubscription<OperationResponse>? _incomingSub;
+  Timer? _debounceBalanceKick;
 
   /* ================= Anim ================= */
   late final AnimationController _livePulse =
-  AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
 
   /* ================= Lifecycle ================= */
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Logos / prices etc. (provider internal throttling)
     Future.microtask(() => mounted ? context.read<AssetProvider>().startRealtimeUpdates() : null);
     _loadWallet();
   }
@@ -84,7 +84,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _startRealtime();
-      // Gentle catch-up if stale
       if (_isStale(_lastBalancesAt, _minBalancesGap)) {
         unawaited(_fetchBalances(force: true));
       }
@@ -95,29 +94,13 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   /* ================= Helpers ================= */
   static String _txIdOf(Map<String, dynamic> tx) =>
-      (tx['txID'] ?? tx['hash'] ?? tx['txId'] ?? '').toString();
+      (tx['hash'] ?? tx['txHash'] ?? '').toString();
 
   bool _isIncomingToMe(Map<String, dynamic> tx) {
-    final my = _tronAddress;
+    final my = _stellarAccountId;
     if (my == null || my.isEmpty) return false;
-    final c = (tx['contract'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final to = (c['to_address'] ?? c['to'] ?? '').toString();
-    if (to.isEmpty) return false;
-    final b58 = to == my;
-    final hex41 = _tronAddressHex41 != null && to.toUpperCase() == _tronAddressHex41!.toUpperCase();
-    return b58 || hex41;
-  }
-
-  bool _isSuccessTx(Map<String, dynamic> tx) {
-    if (tx['confirmed'] == true) return true;
-    final status = (tx['status'] ?? tx['receipt_status'] ?? '').toString().toUpperCase();
-    if (status == 'SUCCESS') return true;
-    final ret = tx['ret'];
-    if (ret is List && ret.isNotEmpty) {
-      final s = (ret.first['contractRet'] ?? '').toString().toUpperCase();
-      if (s == 'SUCCESS') return true;
-    }
-    return false;
+    final to = (tx['to'] ?? '').toString();
+    return to == my;
   }
 
   bool _isStale(DateTime? last, Duration gap) =>
@@ -145,19 +128,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (!mounted || mnemonic == null || mnemonic.isEmpty) return;
 
     try {
-      // Faster: derive address straight from mnemonic
-      final pk = TronWalletService.derivePrivateKey(mnemonic);
-      final address = TronWalletService.tronAddressFromMnemonic(mnemonic);
-
-      String? hex41;
-      try {
-        hex41 = TronWalletService.tronBase58ToHex(address);
-      } catch (_) {}
+      final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
+      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
 
       setState(() {
-        _privateKey = pk;
-        _tronAddress = address;
-        _tronAddressHex41 = hex41;
+        _stellarAccountId = kp.accountId;
+        _secretSeed = kp.secretSeed;
       });
 
       await _fetchBalances(force: true);
@@ -166,28 +142,28 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       if (!mounted) return;
       showFloatingSnackBar(
         context,
-        message: 'Failed to load wallet. Please check your mnemonic.',
+        message: 'Failed to load Stellar wallet. Please check your mnemonic.',
         type: SnackBarType.error,
       );
     }
   }
 
   Future<void> _fetchBalances({bool force = false}) async {
-    if (_tronAddress == null) return;
+    if (_stellarAccountId == null) return;
     if (_balancesInFlight) return;
     if (!force && !_isStale(_lastBalancesAt, _minBalancesGap)) return;
 
     _balancesInFlight = true;
     try {
       final res = await Future.wait([
-        _tron.getTrxBalance(_tronAddress!),                            // SUN
-        _tron.getTrc20BalanceViaHolders(walletBase58: _tronAddress!), // USDT
+        _stellar.getXlmBalance(_stellarAccountId!),
+        _stellar.getUsdcBalance(_stellarAccountId!),
       ]);
 
       if (!mounted) return;
       setState(() {
-        _trxBalance = (res[0] as num).toDouble() / 1e6;
-        _usdtBalance = (res[1] as num).toDouble();
+        _xlmBalance = (res[0] as num).toDouble();
+        _usdcBalance = (res[1] as num).toDouble();
         _loadingBalances = false;
         _lastBalancesAt = DateTime.now();
       });
@@ -198,31 +174,36 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   /* ================= Realtime ================= */
   void _startRealtime() {
-    _stopRealtime(); // defensive
+    _stopRealtime();
 
-    // 1) Low-cadence balances poller as safety net
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) => unawaited(_fetchBalances()));
 
-    // 2) Optional lightweight watcher — only fires when changes observed
-    if (_tronAddress != null && _tronAddress!.isNotEmpty) {
+    if (_stellarAccountId != null && _stellarAccountId!.isNotEmpty) {
       try {
-        _incomingSub = _tron
-            .watchIncoming(
-          _tronAddress!,
-          interval: _incomingWatchInterval,
-          pageLimit: 10,
-        )
-            .listen((tx) {
-          // Only react to SUCCESS + to-me
-          if (!_isSuccessTx(tx) || !_isIncomingToMe(tx)) return;
+        _incomingSub = _stellar.sdk.payments
+            .forAccount(_stellarAccountId!)
+            .cursor("now")
+            .stream()
+            .listen((op) {
           if (!mounted) return;
-          setState(() => _safeAddHint(tx));
-          // Kick a single balances refresh (debounced)
-          _scheduleBalanceKick();
+
+          if (op is PaymentOperationResponse && op.transactionSuccessful == true) {
+            final to = op.to;
+            if (to == _stellarAccountId) {
+              final map = <String, dynamic>{
+                'hash': op.transactionHash ?? '',
+                'from': op.from,
+                'to': to,
+                'amount': op.amount,
+                'assetCode': op.assetCode ?? (op.assetType == Asset.TYPE_NATIVE ? 'XLM' : null),
+                'assetType': op.assetType,
+              };
+              setState(() => _safeAddHint(map));
+              _scheduleBalanceKick();
+            }
+          }
         }, onError: (_) {});
-      } catch (_) {
-        // watcher not supported in some environments — balances poller still active
-      }
+      } catch (_) {}
     }
   }
 
@@ -251,12 +232,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
             children: [
               Column(
                 children: [
-                  // Top bar
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _TopBar(colors: colors),
                   ),
-                  // Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _HeaderSection(
@@ -265,13 +244,13 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       hideBalance: _hideBalance,
                       onToggleHide: () => setState(() => _hideBalance = !_hideBalance),
                       loadingBalances: _loadingBalances,
-                      tronAddress: _tronAddress,
-                      trxBalance: _trxBalance,
-                      usdtBalance: _usdtBalance,
-                      incomingStrip: (_tronAddress != null)
+                      stellarAddress: _stellarAccountId,
+                      xlmBalance: _xlmBalance,
+                      usdcBalance: _usdcBalance,
+                      incomingStrip: (_stellarAccountId != null)
                           ? IncomingHintsStrip(
                         colors: colors,
-                        tronAddress: _tronAddress!,
+                          stellarAddress: _stellarAccountId!,
                         incomingHints: _incomingHints,
                         onAcknowledge: (tx) {
                           final id = _txIdOf(tx);
@@ -289,12 +268,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       livePulse: _livePulse,
                     ),
                   ),
-                  // Tabs
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
                     child: buildTabBar(colors),
                   ),
-                  // Content
                   Expanded(
                     child: TabBarView(
                       children: [
@@ -304,12 +281,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                             colors: colors,
                             assets: assetProv.assets,
                             logos: assetProv.logos,
-                            trxBalance: _trxBalance,
-                            usdtBalance: _usdtBalance,
-                            address: _tronAddress ?? '',
+                            xlmBalance: _xlmBalance,
+                            usdcBalance: _usdcBalance,
+                            address: _stellarAccountId ?? '',
                             loading: assetProv.loading || currency.loading || _loadingBalances,
                             onItemTap: (token) {
-                              final addr = _tronAddress;
+                              final addr = _stellarAccountId;
                               if (addr == null) {
                                 showFloatingSnackBar(context,
                                     message: "No address available", type: SnackBarType.error);
@@ -320,9 +297,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                                 MaterialPageRoute(
                                   builder: (_) => ReceiveScreen(
                                     address: addr,
-                                    trxBalance: _trxBalance,
-                                    usdtBalance: _usdtBalance,
-                                    initialToken: token,
+                                    xlmBalance: _xlmBalance,
+                                    usdcBalance: _usdcBalance,
+                                    initialToken: token, // 'XLM' or 'USDC'
                                   ),
                                 ),
                               );
@@ -333,11 +310,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           storageKey: 'recipientsTab',
                           child: RecipientListWidget(
                             colors: colors,
-                            fromAddress: _tronAddress,
-                            trxBalance: _trxBalance,
-                            usdtBalance: _usdtBalance,
-                          )
-
+                            fromAddress: _stellarAccountId,
+                            xlmBalance: _xlmBalance,
+                            usdcBalance: _usdcBalance,
+                          ),
                         ),
                       ],
                     ),
@@ -345,13 +321,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                 ],
               ),
 
-              // Overlay FAB (safe for null address)
               HomeFab(
                 colors: colors,
                 incomingHints: _incomingHints,
-                tronAddress: _tronAddress ?? '',
-                trxBalance: _trxBalance,
-                usdtBalance: _usdtBalance,
+                stellarAddress: _stellarAccountId ?? '',
+                xlmBalance: _xlmBalance,
+                usdcBalance: _usdcBalance,
               ),
             ],
           ),
@@ -362,7 +337,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   /* ================= Actions ================= */
   void _onSend() {
-    final addr = _tronAddress;
+    final addr = _stellarAccountId;
     if (addr == null) {
       showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
@@ -370,18 +345,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     showTokenSelector(
       context,
       addr,
-      _trxBalance,
-      _usdtBalance,
+      _xlmBalance,
+      _usdcBalance,
       title: 'Send Token',
-      screenBuilder: (address, token, balance) => SendScreen(address: address, token: token, balance: balance),
+      screenBuilder: (address, token, balance) =>
+          SendScreen(address: address, token: token, balance: balance),
     ).then((_) {
-      // user may have sent tokens; force a single refresh afterwards
       _scheduleBalanceKick(delay: const Duration(milliseconds: 200));
     });
   }
 
   void _onReceive() {
-    final addr = _tronAddress;
+    final addr = _stellarAccountId;
     if (addr == null) {
       showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
@@ -391,9 +366,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: addr,
-          trxBalance: _trxBalance,
-          usdtBalance: _usdtBalance,
-          initialToken: 'TRX',
+          xlmBalance: _xlmBalance,
+          usdcBalance: _usdcBalance,
+          initialToken: 'XLM',
         ),
       ),
     );
@@ -418,7 +393,8 @@ class _TopBar extends StatelessWidget {
       const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Tron Wallet', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+          Text('Stellar Wallet',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
           SizedBox(width: 4),
           Icon(LucideIcons.chevronDown, size: 18),
         ],
@@ -439,9 +415,9 @@ class _HeaderSection extends StatelessWidget {
     required this.hideBalance,
     required this.onToggleHide,
     required this.loadingBalances,
-    required this.tronAddress,
-    required this.trxBalance,
-    required this.usdtBalance,
+    required this.stellarAddress,
+    required this.xlmBalance,
+    required this.usdcBalance,
     required this.incomingStrip,
     required this.onSend,
     required this.onReceive,
@@ -455,8 +431,8 @@ class _HeaderSection extends StatelessWidget {
   final bool hideBalance;
   final VoidCallback onToggleHide;
   final bool loadingBalances;
-  final String? tronAddress;
-  final double trxBalance, usdtBalance;
+  final String? stellarAddress;
+  final double xlmBalance, usdcBalance;
   final Widget incomingStrip;
   final VoidCallback onSend, onReceive;
   final bool isUpdatingBalances;
@@ -466,7 +442,7 @@ class _HeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final totalFiat = currency.trxToFiat(trxBalance) + currency.usdtToFiat(usdtBalance);
+    final totalFiat = currency.xlmToFiat(xlmBalance) + currency.usdcToFiat(usdcBalance);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -495,7 +471,6 @@ class _HeaderSection extends StatelessWidget {
                         child: Icon(hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
                             color: colors.textSecondary, size: 18),
                       ),
-
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -524,7 +499,7 @@ class _HeaderSection extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const SwapScreen(),
-                    )
+                    ),
                   );
                 },
                 child: const Row(

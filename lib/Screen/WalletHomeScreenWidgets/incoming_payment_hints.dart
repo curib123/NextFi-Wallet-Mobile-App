@@ -1,11 +1,11 @@
 // lib/Screen/WalletHomeScreenWidgets/incoming_payment_hints.dart
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 /// SLIM, FLAT reminder; tap to view details in a flat bottom sheet.
 /// onAcknowledge: called when user marks it as received.
@@ -18,28 +18,17 @@ Widget incomingPaymentHint(
     builder: (context) {
       final colors = AppColor.of(context);
 
-      final Map<String, dynamic> contract =
-          (tx['contract'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+      // Expecting keys from Payment stream mapping:
+      // { hash, from, to, amount, assetCode, assetType, createdAt? }
+      final String txId = (tx['hash'] ?? tx['transactionHash'] ?? _randKey()).toString();
+      final String from = (tx['from'] ?? 'Unknown').toString();
+      final String to = (tx['to'] ?? 'Unknown').toString();
 
-      final String txId = (tx['txID'] ?? tx['hash'] ?? _randKey()).toString();
-      final String from =
-      (contract['from_address'] ?? contract['from'] ?? tx['from'] ?? 'Unknown').toString();
-      final String to =
-      (contract['to_address'] ?? contract['to'] ?? tx['to'] ?? 'Unknown').toString();
+      final String assetType = (tx['assetType'] ?? '').toString();
+      final String symbol = _resolveSymbol(tx['assetCode'], assetType);
 
-      final String symbol = (tx['token'] ??
-          tx['symbol'] ??
-          contract['symbol'] ??
-          contract['token'] ??
-          (tx['contract_type'] == 'TriggerSmartContract' ? 'TRC20' : 'TRX'))
-          .toString();
-
-      final num rawAmountNum =
-      _toNum(tx['amount'] ?? contract['amount'] ?? contract['value'] ?? tx['value'] ?? 0);
-      final int decimalsHint = _toInt(tx['decimals'] ?? contract['decimals'] ?? -1);
-      final double amount = _normalizeAmount(rawAmountNum, symbol, decimalsHint);
-
-      final int tsMs = _bestEffortMillis(tx['timestamp'] ?? tx['time'] ?? tx['block_timestamp']);
+      final double amount = _toHumanAmount(tx['amount']);
+      final int tsMs = _parseMillis(tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time']);
 
       return Material(
         color: Colors.transparent,
@@ -62,13 +51,15 @@ Widget incomingPaymentHint(
             child: Row(
               children: [
                 Container(
-                  height: 8, width: 8,
+                  height: 8,
+                  width: 8,
                   decoration: BoxDecoration(color: colors.success, borderRadius: BorderRadius.circular(99)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: RichText(
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     text: TextSpan(
                       children: [
                         TextSpan(
@@ -102,27 +93,17 @@ void _showTxDetailsSheet(
       VoidCallback? onAcknowledge,
     }) {
   final colors = AppColor.of(context);
-  final Map<String, dynamic> contract =
-      (tx['contract'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
 
-  final String txId = (tx['txID'] ?? tx['hash'] ?? _randKey()).toString();
-  final String from =
-  (contract['from_address'] ?? contract['from'] ?? tx['from'] ?? 'Unknown').toString();
-  final String to = (contract['to_address'] ?? contract['to'] ?? tx['to'] ?? 'Unknown').toString();
+  final String txId = (tx['hash'] ?? tx['transactionHash'] ?? _randKey()).toString();
+  final String from = (tx['from'] ?? 'Unknown').toString();
+  final String to = (tx['to'] ?? 'Unknown').toString();
 
-  final String symbol = (tx['token'] ??
-      tx['symbol'] ??
-      contract['symbol'] ??
-      contract['token'] ??
-      (tx['contract_type'] == 'TriggerSmartContract' ? 'TRC20' : 'TRX'))
-      .toString();
+  final String assetType = (tx['assetType'] ?? '').toString();
+  final String symbol = _resolveSymbol(tx['assetCode'], assetType);
 
-  final num rawAmountNum =
-  _toNum(tx['amount'] ?? contract['amount'] ?? contract['value'] ?? tx['value'] ?? 0);
-  final int decimalsHint = _toInt(tx['decimals'] ?? contract['decimals'] ?? -1);
-  final double amount = _normalizeAmount(rawAmountNum, symbol, decimalsHint);
+  final double amount = _toHumanAmount(tx['amount']);
 
-  final int tsMs = _bestEffortMillis(tx['timestamp'] ?? tx['time'] ?? tx['block_timestamp']);
+  final int tsMs = _parseMillis(tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time']);
   final String when = tsMs > 0
       ? DateFormat('MMM d, y • HH:mm').format(DateTime.fromMillisecondsSinceEpoch(tsMs))
       : '—';
@@ -139,14 +120,26 @@ void _showTxDetailsSheet(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(height: 4, width: 44, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(99))),
+          Container(
+            height: 4,
+            width: 44,
+            decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(99)),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
               Icon(LucideIcons.arrowDownLeft, color: colors.success),
               const SizedBox(width: 10),
-              Expanded(child: Text('Incoming $symbol', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16))),
-              Text('+ ${_fmtAmount(amount)} $symbol', style: TextStyle(color: colors.success, fontWeight: FontWeight.w800)),
+              Expanded(
+                child: Text(
+                  'Incoming $symbol',
+                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+              ),
+              Text(
+                '+ ${_fmtAmount(amount)} $symbol',
+                style: TextStyle(color: colors.success, fontWeight: FontWeight.w800),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -157,7 +150,6 @@ void _showTxDetailsSheet(
           _flatRow(ctx, 'When', when, colors: colors),
           _divider(colors),
           _flatRow(ctx, 'TxID', _short(txId), fullValue: txId, colors: colors),
-
           const SizedBox(height: 14),
           // Mark as received
           SizedBox(
@@ -186,7 +178,8 @@ void _showTxDetailsSheet(
 }
 
 Widget _divider(AppColor colors) => Container(
-  height: 1, margin: const EdgeInsets.symmetric(vertical: 2),
+  height: 1,
+  margin: const EdgeInsets.symmetric(vertical: 2),
   color: colors.textSecondary.withOpacity(.06),
 );
 
@@ -203,11 +196,19 @@ Widget _flatRow(
       children: [
         SizedBox(width: 72, child: Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12))),
         const SizedBox(width: 8),
-        Expanded(child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13.5))),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13.5),
+          ),
+        ),
         if (fullValue != null)
           IconButton(
             visualDensity: VisualDensity.compact,
-            iconSize: 18, splashRadius: 18,
+            iconSize: 18,
+            splashRadius: 18,
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: fullValue));
               showFloatingSnackBar(context, message: '$label copied', type: SnackBarType.success);
@@ -221,10 +222,54 @@ Widget _flatRow(
 
 // ===== helpers =====
 String _randKey() => DateTime.now().microsecondsSinceEpoch.toString();
-int _bestEffortMillis(dynamic v) { if (v == null) return 0; final num n = _toNum(v); return n > 1e12 ? n.toInt() : (n * 1000).toInt(); }
-String _relative(int tsMs) { if (tsMs <= 0) return '—'; final now = DateTime.now().millisecondsSinceEpoch; final diff = now - tsMs; final s = (diff / 1000).floor(); if (s < 60) return '${s}s ago'; final m = (s / 60).floor(); if (m < 60) return '${m}m ago'; final h = (m / 60).floor(); if (h < 24) return '${h}h ago'; final d = (h / 24).floor(); if (d < 7) return '${d}d ago'; return DateFormat('MMM d').format(DateTime.fromMillisecondsSinceEpoch(tsMs)); }
-num _toNum(dynamic v) => v is num ? v : num.tryParse(v.toString()) ?? 0;
-int _toInt(dynamic v) => v is int ? v : int.tryParse(v.toString()) ?? 0;
-double _normalizeAmount(num raw, String symbol, int decimalsHint) { final int d = decimalsHint >= 0 ? decimalsHint : (symbol.toUpperCase() == 'TRX' || symbol.toUpperCase() == 'USDT' ? 6 : 6); return raw / (pow(10, d) as num); }
-String _fmtAmount(double v) => NumberFormat("#,##0.######").format(v);
-String _short(String s) { if (s.isEmpty || s == 'Unknown') return s; if (s.length <= 12) return s; return '${s.substring(0, 6)}…${s.substring(s.length - 4)}'; }
+
+/// Tries to parse either ISO-8601 strings or numeric seconds/millis.
+int _parseMillis(dynamic v) {
+  if (v == null) return 0;
+  if (v is int) return v > 1e12 ? v : v * 1000;
+  if (v is num) return v > 1e12 ? v.toInt() : (v * 1000).toInt();
+  final s = v.toString().trim();
+  try {
+    return DateTime.parse(s).millisecondsSinceEpoch;
+  } catch (_) {
+    final n = num.tryParse(s);
+    if (n == null) return 0;
+    return n > 1e12 ? n.toInt() : (n * 1000).toInt();
+  }
+}
+
+String _relative(int tsMs) {
+  if (tsMs <= 0) return '—';
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final diff = now - tsMs;
+  final s = (diff / 1000).floor();
+  if (s < 60) return '${s}s ago';
+  final m = (s / 60).floor();
+  if (m < 60) return '${m}m ago';
+  final h = (m / 60).floor();
+  if (h < 24) return '${h}h ago';
+  final d = (h / 24).floor();
+  if (d < 7) return '${d}d ago';
+  return DateFormat('MMM d').format(DateTime.fromMillisecondsSinceEpoch(tsMs));
+}
+
+double _toHumanAmount(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v.toDouble(); // Already human units
+  final s = v.toString();
+  return double.tryParse(s) ?? 0.0; // Stellar amounts are decimal strings
+}
+
+String _fmtAmount(double v) => NumberFormat("#,##0.#######").format(v); // up to 7 dp (Stellar)
+String _short(String s) {
+  if (s.isEmpty || s == 'Unknown') return s;
+  if (s.length <= 12) return s;
+  return '${s.substring(0, 6)}…${s.substring(s.length - 4)}';
+}
+
+String _resolveSymbol(dynamic assetCode, String assetType) {
+  final code = (assetCode ?? '').toString().trim();
+  if (code.isNotEmpty) return code.toUpperCase();
+  if (assetType == Asset.TYPE_NATIVE || assetType.toLowerCase() == 'native') return 'XLM';
+  return 'ASSET';
+}

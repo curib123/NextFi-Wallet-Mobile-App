@@ -1,28 +1,28 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Screen/qr_code_scanner.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 // Shared UI kit
 import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
 
 class SendScreen extends StatefulWidget {
   final String address;                 // fallback (replaced by derived)
-  final String token;                   // TRX | USDT
+  final String token;                   // XLM | USDC
   final double balance;
   final bool autoOpenScanner;
 
-  /// NEW: optional recipient prefill
+  /// optional recipient prefill
   final String? prefillAddress;         // if non-empty ⇒ auto-populate the recipient
   final String? prefillName;            // optional alias shown in confirm sheet
 
@@ -45,30 +45,38 @@ class _SendScreenState extends State<SendScreen> {
   final _recipientController = TextEditingController();
   final _amountController = TextEditingController();
 
-  // Wallet
-  Uint8List? _privateKey;
-  String? _tronAddress;
-  String? _tronAddressHex41;
+  // Wallet (Stellar)
+  Wallet? _wallet;
+  KeyPair? _keyPair;            // used to sign
+  String? _stellarAddress;      // G...
 
   bool _isSending = false;
 
-  // Tron service
-  late final TronWalletService _tron = TronWalletService(const TronClientConfig());
+  // Stellar service + SDK
+  late final StellarWalletService _stellar = StellarWalletService();
+  late final StellarSDK _sdk = _stellar.sdk;
+  bool get _isTestnet => identical(_sdk, StellarSDK.TESTNET);
+  Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
-  // Resources (via service – assumed cached)
-  bool _resLoading = true;
-  String? _resError;
-  int _freeNetLimit = 0, _freeNetUsed = 0, _netLimit = 0, _netUsed = 0;
-  int _energyLimit = 0, _energyUsed = 0;
+  // Issuers (match StellarWalletService defaults/overrides)
+  static const String _USDC_ISSUER_MAINNET =
+      'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+  static const String _USDC_ISSUER_TESTNET =
+      'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+  String get _usdcIssuer =>
+      _isTestnet
+          ? (_stellar.usdcIssuerOverrideTestnet ?? _USDC_ISSUER_TESTNET)
+          : (_stellar.usdcIssuerOverrideMainnet ?? _USDC_ISSUER_MAINNET);
 
-  // USDT preflight estimate (debounced + deduped)
+  Asset get _assetXlm => Asset.NATIVE;
+  Asset get _assetUsdc => AssetTypeCreditAlphaNum4('USDC', _usdcIssuer);
+
+  // Lightweight “estimate” / checks (USDC trustline etc.)
   Timer? _debounce;
-  bool _estimating = false;
-  int? _estEnergyRequired;
-  int? _recommendedFeeLimitSun;
-  bool? _willSucceed;
-  String? _estimateMsg;
-  String _lastEstKey = ''; // from|to|amount|token
+  bool _checking = false;
+  bool? _destHasUsdcTL;
+  String? _checkMsg;
+  String _lastCheckKey = ''; // from|to|amount|token
 
   @override
   void initState() {
@@ -89,33 +97,26 @@ class _SendScreenState extends State<SendScreen> {
     _recipientController.dispose();
     _amountController.dispose();
     _debounce?.cancel();
-    _tron.dispose();
     super.dispose();
   }
 
-  /* ---------------- Wallet & Resources ---------------- */
+  /* ---------------- Wallet ---------------- */
   Future<void> _loadWallet() async {
-    final storedMnemonic = await SeedStorage.getSeed();
-    if (!mounted || storedMnemonic == null || storedMnemonic.isEmpty) return;
+    final mnemonic = await SeedStorage.getSeed();
+    if (!mounted || mnemonic == null || mnemonic.isEmpty) return;
 
     try {
-      final privKey = TronWalletService.derivePrivateKey(storedMnemonic);
-      final address = TronWalletService.tronAddressFromMnemonic(storedMnemonic);
-      String? hex41;
-      try {
-        hex41 = TronWalletService.tronBase58ToHex(address);
-      } catch (_) {}
+      final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
+      final kp = await StellarWalletService.getKeyPair(wallet);
 
       setState(() {
-        _privateKey = privKey;
-        _tronAddress = address;
-        _tronAddressHex41 = hex41;
+        _wallet = wallet;
+        _keyPair = kp;
+        _stellarAddress = kp.accountId;
       });
 
-      // Single resource load (service should cache); refresh only on pull
-      unawaited(_fetchResources());
-      _scheduleEstimate();
-    } catch (_) {
+      _scheduleChecks();
+    } catch (e) {
       if (!mounted) return;
       showFloatingSnackBar(
         context,
@@ -125,122 +126,181 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  Future<void> _fetchResources({bool forceRefresh = false}) async {
-    final addr = (_tronAddress ?? widget.address).trim();
-    if (addr.isEmpty) return;
-
-    setState(() {
-      _resLoading = true;
-      _resError = null;
-    });
-    try {
-      final net = await _tron.getAccountNet(addr, forceRefresh: forceRefresh);
-      final res = await _tron.getAccountResource(addr, forceRefresh: forceRefresh);
-
-      _freeNetLimit = net['freeNetLimit'] ?? 0;
-      _freeNetUsed  = net['freeNetUsed']  ?? 0;
-      _netLimit     = net['NetLimit']     ?? 0;
-      _netUsed      = net['NetUsed']      ?? 0;
-
-      _energyLimit  = res['EnergyLimit']  ?? 0;
-      _energyUsed   = res['EnergyUsed']   ?? 0;
-    } catch (_) {
-      _resError = 'Failed to load resources';
-    } finally {
-      if (mounted) setState(() => _resLoading = false);
-    }
-  }
-
-  /* ---------------- Estimate (USDT only) ---------------- */
-  void _scheduleEstimate() {
+  /* ---------------- Checks (dest trustline for USDC, simple guards) ---------------- */
+  void _scheduleChecks() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), _estimateIfNeeded);
+    _debounce = Timer(const Duration(milliseconds: 300), _runChecksIfNeeded);
   }
 
-  bool _looksLikeTron(String s) => s.isNotEmpty && s.startsWith('T') && s.length >= 30 && s.length <= 45;
+  bool _looksLikeStellar(String s) => s.isNotEmpty && s.startsWith('G') && s.length == 56;
 
-  Future<void> _estimateIfNeeded() async {
-    final isUSDT = widget.token.toUpperCase() == 'USDT';
-    final from = (_tronAddress ?? widget.address).trim();
+  Future<void> _runChecksIfNeeded() async {
+    final token = widget.token.toUpperCase();
+    final from = (_stellarAddress ?? widget.address).trim();
     final to = _recipientController.text.trim();
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
 
-    // Dedup key (avoid repeat calls for same tuple)
-    final key = '$from|$to|$amount|${widget.token.toUpperCase()}';
-    if (!isUSDT || amount <= 0 || !_looksLikeTron(to) || from.isEmpty) {
-      _lastEstKey = '';
+    final key = '$from|$to|$amount|$token';
+    if (amount <= 0 || !_looksLikeStellar(from) || !_looksLikeStellar(to)) {
+      _lastCheckKey = '';
       setState(() {
-        _estimating = false;
-        _estEnergyRequired = null;
-        _recommendedFeeLimitSun = null;
-        _willSucceed = null;
-        _estimateMsg = null;
+        _checking = false;
+        _destHasUsdcTL = null;
+        _checkMsg = null;
       });
       return;
     }
-    if (key == _lastEstKey) return; // unchanged → no extra call
-    _lastEstKey = key;
+    if (key == _lastCheckKey) return;
+    _lastCheckKey = key;
 
     setState(() {
-      _estimating = true;
-      _estEnergyRequired = null;
-      _recommendedFeeLimitSun = null;
-      _willSucceed = null;
-      _estimateMsg = null;
+      _checking = true;
+      _destHasUsdcTL = null;
+      _checkMsg = null;
     });
 
     try {
-      final est = await _tron.estimateUsdtTransfer(
-        fromAddress: from,
-        toAddress: to,
-        amount: amount,
-      );
-      if (!mounted) return;
-      setState(() {
-        _estEnergyRequired = (est['energy_required'] as int?) ?? (est['energy_used'] as int?);
-        _recommendedFeeLimitSun = est['recommended_fee_limit_sun'] as int?;
-        _willSucceed = est['will_succeed'] as bool?;
-        _estimateMsg = (est['raw']?['message'] as String?)?.trim();
-      });
+      if (token == 'USDC') {
+        // Recipient must have USDC trustline
+        final hasTL = await _stellar.hasUsdcTrustline(to);
+        if (!mounted) return;
+        setState(() {
+          _destHasUsdcTL = hasTL;
+          _checkMsg = hasTL
+              ? 'Recipient USDC trustline OK'
+              : 'Recipient must add USDC trustline first.';
+        });
+      } else {
+        // XLM needs no trustline
+        if (!mounted) return;
+        setState(() {
+          _destHasUsdcTL = null;
+          _checkMsg = 'Ready';
+        });
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _estimateMsg = 'Estimate failed');
+      setState(() => _checkMsg = 'Check failed');
     } finally {
       if (!mounted) return;
-      setState(() => _estimating = false);
+      setState(() => _checking = false);
     }
   }
 
   /* ---------------- Send ---------------- */
+
+  /// Ensure SENDER has USDC trustline (creates if missing).
+  Future<void> _ensureSenderUsdcTrustline() async {
+    final kp = _keyPair!;
+    // Check balances to see if trustline already exists
+    final acc = await _sdk.accounts.account(kp.accountId);
+    final exists = acc.balances.any(
+          (b) => b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer,
+    );
+    if (exists) return;
+
+    // Create trustline
+    final tx = (TransactionBuilder(acc)
+      ..addOperation(ChangeTrustOperationBuilder(_assetUsdc, '922337203685.4775807').build())
+      ..setMaxOperationFee(100))
+        .build();
+    tx.sign(kp, _network);
+
+    final res = await _sdk.submitTransaction(tx);
+    if (!res.success) {
+      throw Exception('ChangeTrust(USDC) failed: ${res.resultXdr}');
+    }
+  }
+
+  Future<String> _sendPayment({
+    required Asset asset,
+    required String destination,
+    required String amount, // already 7dp string
+    String? memoText,
+  }) async {
+    final kp = _keyPair!;
+    final acc = await _sdk.accounts.account(kp.accountId);
+
+    final builder = TransactionBuilder(acc)
+      ..addOperation(PaymentOperationBuilder(destination, asset, amount).build())
+      ..setMaxOperationFee(100); // 100 stroops/op
+
+    if (memoText != null && memoText.isNotEmpty) {
+      builder.addMemo(Memo.text(memoText));
+    }
+
+    final tx = builder.build();
+    tx.sign(kp, _network);
+    final res = await _sdk.submitTransaction(tx);
+    if (!res.success) {
+      throw Exception('Payment failed: ${res.resultXdr}');
+    }
+    return res.hash!;
+  }
+
+  // ✅ Helper: works whether KeyPair.secretSeed is a String or bytes.
+  String _seedStringFromKeyPair(KeyPair kp) {
+    final dynamic ss = kp.secretSeed; // sdk types vary across versions
+    if (ss == null) {
+      throw Exception('KeyPair has no secret seed');
+    }
+    if (ss is String) {
+      return ss; // already a base32 seed string (e.g., "SA...").
+    }
+    if (ss is Iterable<int>) {
+      return String.fromCharCodes(ss); // convert Uint8List/bytes → String
+    }
+    throw Exception('Unsupported secretSeed type: ${ss.runtimeType}');
+  }
+
   Future<void> _sendTokenNow() async {
     if (!_formKey.currentState!.validate()) return;
 
     final to = _recipientController.text.trim();
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final amt = double.tryParse(_amountController.text.trim()) ?? 0;
 
-    if (amount <= 0 || amount > widget.balance) {
+    if (amt <= 0 || amt > widget.balance) {
       showFloatingSnackBar(context, message: 'Invalid amount', type: SnackBarType.error);
       return;
     }
-    if (_privateKey == null) {
+    if (_keyPair == null || _stellarAddress == null) {
       showFloatingSnackBar(context, message: 'Wallet not loaded', type: SnackBarType.error);
       return;
     }
 
     setState(() => _isSending = true);
     try {
-      final isTRX = widget.token.toUpperCase() == 'TRX';
+      final isXLM = widget.token.toUpperCase() == 'XLM';
       String txId;
 
-      if (isTRX) {
-        final sun = (amount * 1e6).round();
-        txId = await _tron.sendTrx(privateKey: _privateKey!, toAddress: to, amountSun: sun);
+      if (isXLM) {
+        // If a profit address is configured in service, use the fee-split helper,
+        // otherwise send full amount directly.
+        if ((_stellar.profitAddress).trim().isNotEmpty) {
+          final hashes = await _stellar.sendXlmWithFee(
+            secretSeed: _seedStringFromKeyPair(_keyPair!),
+            destination: to,
+            amount: amt,
+            memoText: null,
+          );
+          txId = hashes.first; // main transfer hash
+        } else {
+          txId = await _sendPayment(
+            asset: _assetXlm,
+            destination: to,
+            amount: amt.toStringAsFixed(7),
+          );
+        }
       } else {
-        txId = await _tron.sendUsdt(
-          privateKey: _privateKey!,
-          toAddress: to,
-          amount: amount,
-          feeLimitSun: (_recommendedFeeLimitSun ?? 5_000_000), // ~5 TRX default
+        // USDC: ensure sender trustline; recipient must already have it
+        if (_destHasUsdcTL == false) {
+          throw Exception('Recipient has no USDC trustline.');
+        }
+        await _ensureSenderUsdcTrustline();
+        txId = await _sendPayment(
+          asset: _assetUsdc,
+          destination: to,
+          amount: amt.toStringAsFixed(7),
         );
       }
 
@@ -251,14 +311,11 @@ class _SendScreenState extends State<SendScreen> {
       if (mounted) {
         showFloatingSnackBar(
           context,
-          message: '${amount.toStringAsFixed(6)} ${widget.token} sent',
+          message: '${amt.toStringAsFixed(6)} ${widget.token.toUpperCase()} sent',
           type: SnackBarType.success,
         );
         Navigator.pop(context);
       }
-    } on TronError catch (e) {
-      if (!mounted) return;
-      showFloatingSnackBar(context, message: e.message, type: SnackBarType.error);
     } catch (e) {
       if (!mounted) return;
       showFloatingSnackBar(context, message: 'Failed to send: $e', type: SnackBarType.error);
@@ -276,7 +333,7 @@ class _SendScreenState extends State<SendScreen> {
     if (code != null && code.isNotEmpty) {
       _recipientController.text = code.trim();
       HapticFeedback.lightImpact();
-      _scheduleEstimate();
+      _scheduleChecks();
     }
   }
 
@@ -286,21 +343,21 @@ class _SendScreenState extends State<SendScreen> {
     if (picked != null && picked.trim().isNotEmpty) {
       _recipientController.text = picked.trim();
       HapticFeedback.selectionClick();
-      _scheduleEstimate();
+      _scheduleChecks();
     }
   }
 
-  void _onTapPercent(double pct, {required bool isTRX}) {
-    // Keep tiny buffer when sending TRX (bandwidth fallback)
-    final bufferTrx = isTRX ? 0.2 : 0.0;
-    final maxSpend = isTRX ? (widget.balance - bufferTrx).clamp(0.0, widget.balance) : widget.balance;
+  void _onTapPercent(double pct, {required bool isXLM}) {
+    // Keep tiny buffer when sending XLM to avoid going below reserves (very conservative)
+    final bufferXlm = isXLM ? 0.1 : 0.0;
+    final maxSpend = isXLM ? (widget.balance - bufferXlm).clamp(0.0, widget.balance) : widget.balance;
     final v = (maxSpend * pct).clamp(0.0, widget.balance);
     _amountController.text = v.toStringAsFixed(6);
     HapticFeedback.selectionClick();
-    _scheduleEstimate();
+    _scheduleChecks();
   }
 
-  void _onTapMax({required bool isTRX}) => _onTapPercent(1.0, isTRX: isTRX);
+  void _onTapMax({required bool isXLM}) => _onTapPercent(1.0, isXLM: isXLM);
 
   Future<void> _showTxSubmittedModal(String txId) {
     final colors = AppColor.of(context);
@@ -363,14 +420,16 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  void _confirmAndSend(CurrencyProvider currency, bool isTRX) {
+  void _confirmAndSend(CurrencyProvider currency, bool isXLM) {
     final colors = AppColor.of(context);
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final fiat = isTRX ? currency.trxToFiat(amount) : currency.usdtToFiat(amount);
+    final fiat = isXLM ? currency.xlmToFiat(amount) : currency.usdcToFiat(amount);
 
-    final feeLimitSun = _recommendedFeeLimitSun ?? 5_000_000;
-    final estFeeTrx = feeLimitSun / 1e6;
+    // Stellar fee ≈ 100 stroops/op = 0.0000100 XLM for a single Payment op
+    const feePerOpXlm = 0.0000100;
+    final ops = 1;
+    final estFee = feePerOpXlm * ops;
 
     final toText = () {
       final addr = _recipientController.text.trim();
@@ -392,31 +451,28 @@ class _SendScreenState extends State<SendScreen> {
               const SizedBox(height: 10),
               Text('Review', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
               const SizedBox(height: 8),
-              ReviewRow(label: 'From', value: (_tronAddress ?? widget.address), mono: true),
+              ReviewRow(label: 'From', value: (_stellarAddress ?? widget.address), mono: true),
               ReviewRow(label: 'To', value: toText, mono: true),
               ReviewRow(label: 'Amount', value: '${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}'),
               ReviewRow(label: '≈ Fiat', value: fiatFmt.format(fiat)),
-
-              if (!isTRX) ...[
-                const SizedBox(height: 6),
-                ReviewRow(
-                  label: 'Energy/Fee',
-                  value: _estimating
-                      ? 'Estimating…'
-                      : (_willSucceed == true
-                      ? 'Energy ~${_estEnergyRequired ?? 0}  •  Limit ${feeLimitSun} SUN (~${estFeeTrx.toStringAsFixed(3)} TRX)'
-                      : 'Limit ${feeLimitSun} SUN (~${estFeeTrx.toStringAsFixed(3)} TRX)'),
-                ),
-                if ((_estimateMsg ?? '').isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(_estimateMsg!, style: TextStyle(color: colors.textSecondary, fontSize: 11.5)),
+              const SizedBox(height: 6),
+              ReviewRow(
+                label: 'Network Fee',
+                value: '≈ ${estFee.toStringAsFixed(6)} XLM (${ops} op)',
+              ),
+              if ((widget.token.toUpperCase() == 'USDC') && (_checking || _destHasUsdcTL == false || (_checkMsg ?? '').isNotEmpty)) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _checking ? 'Checking recipient trustline…' : (_checkMsg ?? ''),
+                    style: TextStyle(
+                      color: (_destHasUsdcTL == false) ? Colors.red : colors.textSecondary,
+                      fontSize: 11.5,
                     ),
                   ),
+                ),
               ],
-
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
@@ -461,20 +517,16 @@ class _SendScreenState extends State<SendScreen> {
     final colors = AppColor.of(context);
     final currency = Provider.of<CurrencyProvider>(context, listen: true);
 
-    final isTRX = widget.token.toUpperCase() == 'TRX';
-    final balanceFiat = isTRX ? currency.trxToFiat(widget.balance) : currency.usdtToFiat(widget.balance);
+    final isXLM = widget.token.toUpperCase() == 'XLM';
+    final balanceFiat = isXLM ? currency.xlmToFiat(widget.balance) : currency.usdcToFiat(widget.balance);
 
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final numFmt = NumberFormat('#,##0.00');
 
-    final oneTokenInFiat = isTRX ? currency.trxToFiat(1) : currency.usdtToFiat(1);
+    final oneTokenInFiat = isXLM ? currency.xlmToFiat(1) : currency.usdcToFiat(1);
     final typedAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
-    final typedFiat = isTRX ? currency.trxToFiat(typedAmount) : currency.usdtToFiat(typedAmount);
 
-    final bwLimitTotal = _freeNetLimit + _netLimit;
-    final bwUsedTotal = _freeNetUsed + _netUsed;
-
-    final fromAddress = _tronAddress ?? widget.address;
+    final fromAddress = _stellarAddress ?? widget.address;
     final t = widget.token.toUpperCase();
 
     return Scaffold(
@@ -486,15 +538,8 @@ class _SendScreenState extends State<SendScreen> {
           icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Send ${t}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
+        title: Text('Send $t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'Refresh resources',
-            icon: Icon(LucideIcons.refreshCcw, color: colors.textPrimary),
-            onPressed: () => _fetchResources(forceRefresh: true),
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
@@ -517,10 +562,6 @@ class _SendScreenState extends State<SendScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, fontWeight: FontWeight.w700)),
                   ),
-                  if (_tronAddressHex41 != null) ...[
-                    const SizedBox(width: 8),
-                    Tooltip(message: _tronAddressHex41!, child: const Icon(LucideIcons.info, size: 16)),
-                  ]
                 ],
               ),
             ),
@@ -546,25 +587,33 @@ class _SendScreenState extends State<SendScreen> {
             fiatFmt: fiatFmt,
           ),
 
-          const SizedBox(height: 12),
-
-          // Resources (only once per load unless user refreshes)
-          ResourcesCard(
-            loading: _resLoading,
-            errorText: _resError,
-            onRetry: _fetchResources,
-            energyUsed: _energyUsed,
-            energyLimit: _energyLimit,
-            bandwidthUsed: bwUsedTotal,
-            bandwidthLimit: bwLimitTotal,
-            colors: colors,
-            showGuide: false,
-            showEnergy: t == 'USDT' || (t != 'TRX' && t != 'USDT'),
-            showBandwidth: t == 'TRX' || (t != 'TRX' && t != 'USDT'),
-            showActions: true,
-          ),
-
           const SizedBox(height: 14),
+
+          // Simple hint card (Stellar fee info / trustline message)
+          if (_checking || (_checkMsg ?? '').isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.primary.withOpacity(0.2)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(LucideIcons.info, color: colors.primary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _checking ? 'Checking recipient...' : _checkMsg!,
+                      style: TextStyle(color: colors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Form (compact)
           Form(
@@ -575,7 +624,7 @@ class _SendScreenState extends State<SendScreen> {
                   controller: _recipientController,
                   decoration: InputDecoration(
                     labelText: 'Recipient',
-                    hintText: 'T... (TRON address)',
+                    hintText: 'G... (Stellar address)',
                     filled: true,
                     fillColor: colors.primary.withOpacity(0.04),
                     prefixIcon: Icon(LucideIcons.contact, color: colors.primary),
@@ -604,11 +653,11 @@ class _SendScreenState extends State<SendScreen> {
                       borderSide: BorderSide(color: colors.primary.withOpacity(0.35), width: 1.3),
                     ),
                   ),
-                  onChanged: (_) => _scheduleEstimate(),
+                  onChanged: (_) => _scheduleChecks(),
                   validator: (value) {
                     final v = value?.trim() ?? '';
                     if (v.isEmpty) return 'Enter recipient address';
-                    if (!_looksLikeTron(v)) return 'Invalid TRON address';
+                    if (!_looksLikeStellar(v)) return 'Invalid Stellar address';
                     return null;
                   },
                 ),
@@ -632,7 +681,7 @@ class _SendScreenState extends State<SendScreen> {
                       borderSide: BorderSide(color: colors.primary.withOpacity(0.35), width: 1.3),
                     ),
                   ),
-                  onChanged: (_) => _scheduleEstimate(),
+                  onChanged: (_) => _scheduleChecks(),
                   validator: (value) {
                     final v = double.tryParse(value?.trim() ?? '') ?? 0;
                     if (v <= 0) return 'Enter amount';
@@ -644,19 +693,19 @@ class _SendScreenState extends State<SendScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    PctChip(label: '25%', onTap: () => _onTapPercent(0.25, isTRX: isTRX), colors: colors),
+                    PctChip(label: '25%', onTap: () => _onTapPercent(0.25, isXLM: isXLM), colors: colors),
                     const SizedBox(width: 8),
-                    PctChip(label: '50%', onTap: () => _onTapPercent(0.50, isTRX: isTRX), colors: colors),
+                    PctChip(label: '50%', onTap: () => _onTapPercent(0.50, isXLM: isXLM), colors: colors),
                     const SizedBox(width: 8),
-                    PctChip(label: '75%', onTap: () => _onTapPercent(0.75, isTRX: isTRX), colors: colors),
+                    PctChip(label: '75%', onTap: () => _onTapPercent(0.75, isXLM: isXLM), colors: colors),
                     const SizedBox(width: 8),
-                    PctChip(label: 'MAX', onTap: () => _onTapMax(isTRX: isTRX), colors: colors),
+                    PctChip(label: 'MAX', onTap: () => _onTapMax(isXLM: isXLM), colors: colors),
                     const Spacer(),
                     Row(
                       children: [
                         Icon(LucideIcons.banknote, size: 14, color: colors.textSecondary),
                         const SizedBox(width: 6),
-                        Text('≈ ${fiatFmt.format(isTRX ? currency.trxToFiat(typedAmount) : currency.usdtToFiat(typedAmount))}',
+                        Text('≈ ${fiatFmt.format(isXLM ? currency.xlmToFiat(typedAmount) : currency.usdcToFiat(typedAmount))}',
                             style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
                       ],
                     ),
@@ -670,12 +719,12 @@ class _SendScreenState extends State<SendScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _isSending || _privateKey == null
+              onPressed: _isSending || _keyPair == null
                   ? null
                   : () {
                 if (_formKey.currentState!.validate()) {
                   HapticFeedback.selectionClick();
-                  _confirmAndSend(currency, isTRX);
+                  _confirmAndSend(currency, isXLM);
                 }
               },
               icon: _isSending

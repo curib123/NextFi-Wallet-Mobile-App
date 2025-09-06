@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 /// CoinGecko-free provider with multi-exchange fallbacks
-/// - TRX/USDT spot & candles: Binance → OKX → KuCoin → Bybit → Kraken (spot)
-/// - USDT→FIAT spot: Coinbase → OKX → Kraken → Bitstamp (USDT/USD) → compose w/ USD→FIAT
+/// - XLM/USDT spot & candles: Binance → OKX → KuCoin → Bybit → Kraken (spot)
+/// - USDC→FIAT spot: Coinbase → OKX → Kraken → Bitstamp (USDC/USD) → compose w/ USD→FIAT
 /// - USD→FIAT history: Frankfurter
-/// - USDT 24H: flat proxy at current spot
+/// - USDC 24H: flat proxy at current spot
 class CurrencyProvider extends ChangeNotifier {
   CurrencyProvider({
     this.pollEvery = const Duration(seconds: 30),
@@ -23,61 +23,61 @@ class CurrencyProvider extends ChangeNotifier {
 
   // ---- State: fiat + rates ----
   String _fiat = "usd";
-  double _usdtRate = 0; // USDT -> FIAT
-  double _trxRate  = 0; // TRX  -> FIAT
+  double _usdcRate = 0; // USDC -> FIAT
+  double _xlmRate  = 0; // XLM  -> FIAT
 
-  double _prevUsdtRate = 0;
-  double _prevTrxRate  = 0;
+  double _prevUsdcRate = 0;
+  double _prevXlmRate  = 0;
 
   // ---- Histories (normalized exact length) ----
   // 24H (24 hourly points)
-  List<double> _trxHistory24h  = [];
-  List<double> _usdtHistory24h = [];
+  List<double> _xlmHistory24h  = [];
+  List<double> _usdcHistory24h = [];
 
   // 7D (7 daily points)
-  List<double> _trxHistory7   = [];
-  List<double> _usdtHistory7  = [];
+  List<double> _xlmHistory7   = [];
+  List<double> _usdcHistory7  = [];
 
   // 30D (30 daily points)
-  List<double> _trxHistory30  = [];
-  List<double> _usdtHistory30 = [];
+  List<double> _xlmHistory30  = [];
+  List<double> _usdcHistory30 = [];
 
   // 365D (365 daily points)
-  List<double> _trxHistory365  = [];
-  List<double> _usdtHistory365 = [];
+  List<double> _xlmHistory365  = [];
+  List<double> _usdcHistory365 = [];
 
   // ---- Loading + timers ----
   bool _loading = true;
   Timer? _pollingTimer;
 
   // ---- Streams (live price) ----
-  final _trxPriceController  = StreamController<double>.broadcast();
-  final _usdtPriceController = StreamController<double>.broadcast();
+  final _xlmPriceController  = StreamController<double>.broadcast();
+  final _usdcPriceController = StreamController<double>.broadcast();
 
   // ---- Public API ----
   String get fiat => _fiat;
   bool get loading => _loading;
 
-  double get usdtRate => _usdtRate;
-  double get trxRate  => _trxRate;
+  double get usdcRate => _usdcRate;
+  double get xlmRate  => _xlmRate;
 
-  // Backward-compat (7D)
-  List<double> get trxHistory  => _trxHistory7;
-  List<double> get usdtHistory => _usdtHistory7;
+  // Backward-compat (7D) — renamed for clarity
+  List<double> get xlmHistory  => _xlmHistory7;
+  List<double> get usdcHistory => _usdcHistory7;
 
   // Explicit ranges
-  List<double> get trxHistory24h  => _trxHistory24h;
-  List<double> get trxHistory7    => _trxHistory7;
-  List<double> get trxHistory30   => _trxHistory30;
-  List<double> get trxHistory365  => _trxHistory365;
+  List<double> get xlmHistory24h  => _xlmHistory24h;
+  List<double> get xlmHistory7    => _xlmHistory7;
+  List<double> get xlmHistory30   => _xlmHistory30;
+  List<double> get xlmHistory365  => _xlmHistory365;
 
-  List<double> get usdtHistory24h  => _usdtHistory24h;
-  List<double> get usdtHistory7    => _usdtHistory7;
-  List<double> get usdtHistory30   => _usdtHistory30;
-  List<double> get usdtHistory365  => _usdtHistory365;
+  List<double> get usdcHistory24h  => _usdcHistory24h;
+  List<double> get usdcHistory7    => _usdcHistory7;
+  List<double> get usdcHistory30   => _usdcHistory30;
+  List<double> get usdcHistory365  => _usdcHistory365;
 
-  Stream<double> get trxPriceStream  => _trxPriceController.stream;
-  Stream<double> get usdtPriceStream => _usdtPriceController.stream;
+  Stream<double> get xlmPriceStream  => _xlmPriceController.stream;
+  Stream<double> get usdcPriceStream => _usdcPriceController.stream;
 
   // ---- Lifecycle ----
   void setFiat(String newFiat) {
@@ -96,8 +96,8 @@ class CurrencyProvider extends ChangeNotifier {
   @override
   void dispose() {
     _pollingTimer?.cancel();
-    _trxPriceController.close();
-    _usdtPriceController.close();
+    _xlmPriceController.close();
+    _usdcPriceController.close();
     super.dispose();
   }
 
@@ -111,8 +111,8 @@ class CurrencyProvider extends ChangeNotifier {
       await _fetchHistoryAll();
     } finally {
       _loading = false;
-      _trxPriceController.add(_trxRate);
-      _usdtPriceController.add(_usdtRate);
+      _xlmPriceController.add(_xlmRate);
+      _usdcPriceController.add(_usdcRate);
       notifyListeners();
     }
   }
@@ -120,26 +120,26 @@ class CurrencyProvider extends ChangeNotifier {
   // ---- Rates ----
   Future<void> _fetchRates() async {
     try {
-      final trxUsdtF  = _fetchTrxUsdtMulti();
-      final usdtFiatF = _fetchUsdtToFiatMulti(_fiat);
+      final xlmUsdtF  = _fetchXlmUsdtMulti();
+      final usdcFiatF = _fetchUsdcToFiatMulti(_fiat);
 
-      final results = await Future.wait<double?>([trxUsdtF, usdtFiatF]);
+      final results = await Future.wait<double?>([xlmUsdtF, usdcFiatF]);
 
-      final trxUsdt    = results[0];
-      final usdtToFiat = results[1];
+      final xlmUsdt    = results[0];
+      final usdcToFiat = results[1];
 
       bool gotAny = false;
 
-      if (usdtToFiat != null && usdtToFiat > 0) {
-        _prevUsdtRate = _usdtRate;
-        _usdtRate = usdtToFiat;
+      if (usdcToFiat != null && usdcToFiat > 0) {
+        _prevUsdcRate = _usdcRate;
+        _usdcRate = usdcToFiat;
         gotAny = true;
       }
 
-      if (trxUsdt != null && trxUsdt > 0 && (_usdtRate > 0 || _prevUsdtRate > 0)) {
-        final fx = (_usdtRate > 0) ? _usdtRate : _prevUsdtRate;
-        _prevTrxRate = _trxRate;
-        _trxRate = trxUsdt * fx;
+      if (xlmUsdt != null && xlmUsdt > 0 && (_usdcRate > 0 || _prevUsdcRate > 0)) {
+        final fx = (_usdcRate > 0) ? _usdcRate : _prevUsdcRate;
+        _prevXlmRate = _xlmRate;
+        _xlmRate = xlmUsdt * fx;
         gotAny = true;
       }
 
@@ -153,28 +153,28 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   void _applyPreviousIfCurrentInvalid() {
-    if (_usdtRate <= 0 && _prevUsdtRate > 0) _usdtRate = _prevUsdtRate;
-    if (_trxRate  <= 0 && _prevTrxRate  > 0) _trxRate  = _prevTrxRate;
+    if (_usdcRate <= 0 && _prevUsdcRate > 0) _usdcRate = _prevUsdcRate;
+    if (_xlmRate  <= 0 && _prevXlmRate  > 0) _xlmRate  = _prevXlmRate;
   }
 
   /* =========================
    *   MULTI-EXCHANGE HELPERS
    * ========================= */
 
-  // --- TRX/USDT spot (double?) ---
-  Future<double?> _fetchTrxUsdtMulti() async {
+  // --- XLM/USDT spot (double?) ---
+  Future<double?> _fetchXlmUsdtMulti() async {
     return await _tryFirstNonNull<double?>([
-      _fetchTrxUsdtFromBinance, // https://api.binance.com/api/v3/ticker/price?symbol=TRXUSDT
-      _fetchTrxUsdtFromOKX,     // https://www.okx.com/api/v5/market/ticker?instId=TRX-USDT
-      _fetchTrxUsdtFromKuCoin,  // https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=TRX-USDT
-      _fetchTrxUsdtFromBybit,   // https://api.bybit.com/v5/market/tickers?category=spot&symbol=TRXUSDT
-      _fetchTrxUsdtFromKraken,  // https://api.kraken.com/0/public/Ticker?pair=TRXUSDT
+      _fetchXlmUsdtFromBinance, // https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT
+      _fetchXlmUsdtFromOKX,     // https://www.okx.com/api/v5/market/ticker?instId=XLM-USDT
+      _fetchXlmUsdtFromKuCoin,  // https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDT
+      _fetchXlmUsdtFromBybit,   // https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDT
+      _fetchXlmUsdtFromKraken,  // https://api.kraken.com/0/public/Ticker?pair=XLMUSDT
     ]);
   }
 
-  Future<double?> _fetchTrxUsdtFromBinance() async {
+  Future<double?> _fetchXlmUsdtFromBinance() async {
     try {
-      final url = Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=TRXUSDT');
+      final url = Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -185,9 +185,9 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchTrxUsdtFromOKX() async {
+  Future<double?> _fetchXlmUsdtFromOKX() async {
     try {
-      final url = Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=TRX-USDT');
+      final url = Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDT');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -199,9 +199,9 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchTrxUsdtFromKuCoin() async {
+  Future<double?> _fetchXlmUsdtFromKuCoin() async {
     try {
-      final url = Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=TRX-USDT');
+      final url = Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDT');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -212,9 +212,9 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchTrxUsdtFromBybit() async {
+  Future<double?> _fetchXlmUsdtFromBybit() async {
     try {
-      final url = Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=TRXUSDT');
+      final url = Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDT');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -226,9 +226,9 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchTrxUsdtFromKraken() async {
+  Future<double?> _fetchXlmUsdtFromKraken() async {
     try {
-      final url = Uri.parse('https://api.kraken.com/0/public/Ticker?pair=TRXUSDT');
+      final url = Uri.parse('https://api.kraken.com/0/public/Ticker?pair=XLMUSDT');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -245,19 +245,19 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  // --- USDT -> FIAT spot (double?) ---
-  Future<double?> _fetchUsdtToFiatMulti(String fiat) async {
-    // 1) Coinbase direct USDT->FIAT
-    final cb = await _fetchUsdtToFiatFromCoinbase(fiat);
+  // --- USDC -> FIAT spot (double?) ---
+  Future<double?> _fetchUsdcToFiatMulti(String fiat) async {
+    // 1) Coinbase direct USDC->FIAT
+    final cb = await _fetchUsdcToFiatFromCoinbase(fiat);
     if (cb != null && cb > 0) return cb;
 
-    // 2) If FIAT==USD, try direct USDT/USD from CEXs (OKX/Kraken/Bitstamp)
+    // 2) If FIAT==USD, try direct USDC/USD from CEXs (OKX/Kraken/Bitstamp)
     if (fiat.toLowerCase() == 'usd') {
-      final okx = await _fetchUsdtUsdFromOKX();
+      final okx = await _fetchUsdcUsdFromOKX();
       if (okx != null && okx > 0) return okx;
-      final krk = await _fetchUsdtUsdFromKraken();
+      final krk = await _fetchUsdcUsdFromKraken();
       if (krk != null && krk > 0) return krk;
-      final bst = await _fetchUsdtUsdFromBitstamp();
+      final bst = await _fetchUsdcUsdFromBitstamp();
       if (bst != null && bst > 0) return bst;
       // fall back to peg
       return 1.0;
@@ -265,15 +265,14 @@ class CurrencyProvider extends ChangeNotifier {
 
     final usdToFiat = await _fetchUsdToFiatSpot(fiat);
 
-
-    // 4) Last resort: treat USDT≈USD and just convert USD→FIAT
+    // 4) Last resort: treat USDC≈USD and just convert USD→FIAT
     if (usdToFiat != null && usdToFiat > 0) return usdToFiat;
     return null;
   }
 
-  Future<double?> _fetchUsdtToFiatFromCoinbase(String fiat) async {
+  Future<double?> _fetchUsdcToFiatFromCoinbase(String fiat) async {
     try {
-      final url = Uri.parse('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
+      final url = Uri.parse('https://api.coinbase.com/v2/exchange-rates?currency=USDC');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -301,9 +300,9 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchUsdtUsdFromOKX() async {
+  Future<double?> _fetchUsdcUsdFromOKX() async {
     try {
-      final url = Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=USDT-USD');
+      final url = Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=USDC-USD');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -315,9 +314,9 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchUsdtUsdFromKraken() async {
+  Future<double?> _fetchUsdcUsdFromKraken() async {
     try {
-      final url = Uri.parse('https://api.kraken.com/0/public/Ticker?pair=USDTUSD');
+      final url = Uri.parse('https://api.kraken.com/0/public/Ticker?pair=USDCUSD');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -334,10 +333,10 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<double?> _fetchUsdtUsdFromBitstamp() async {
+  Future<double?> _fetchUsdcUsdFromBitstamp() async {
     try {
-      // https://www.bitstamp.net/api/v2/ticker/usdtusd/
-      final url = Uri.parse('https://www.bitstamp.net/api/v2/ticker/usdtusd/');
+      // https://www.bitstamp.net/api/v2/ticker/usdcusd/
+      final url = Uri.parse('https://www.bitstamp.net/api/v2/ticker/usdcusd/');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -370,44 +369,44 @@ class CurrencyProvider extends ChangeNotifier {
       final f30  = now.subtract(const Duration(days: 30));
       final f365 = now.subtract(const Duration(days: 365));
 
-      // USDT series (proxy from USD->FIAT)
-      final usdt24hF = _buildUsdt24hSeries(expectedLen: 24); // flat around current rate
-      final usdt7F   = _fetchUsdToFiatSeries(f7, now, _fiat, expectedLen: 7);
-      final usdt30F  = _fetchUsdToFiatSeries(f30, now, _fiat, expectedLen: 30);
-      final usdt365F = _fetchUsdToFiatSeries(f365, now, _fiat, expectedLen: 365);
+      // USDC series (proxy from USD->FIAT)
+      final usdc24hF = _buildUsdc24hSeries(expectedLen: 24); // flat around current rate
+      final usdc7F   = _fetchUsdToFiatSeries(f7, now, _fiat, expectedLen: 7);
+      final usdc30F  = _fetchUsdToFiatSeries(f30, now, _fiat, expectedLen: 30);
+      final usdc365F = _fetchUsdToFiatSeries(f365, now, _fiat, expectedLen: 365);
 
-      // TRX series in USDT, then multiplied by USDT->FIAT (current/prev)
-      final trx24F  = _fetchTrxIntradayUsdt(hours: 24);
-      final trx7F   = _fetchTrxClosesUsdt(days: 7);
-      final trx30F  = _fetchTrxClosesUsdt(days: 30);
-      final trx365F = _fetchTrxClosesUsdt(days: 365);
+      // XLM series in USDT, then multiplied by USDC->FIAT (current/prev)
+      final xlm24F  = _fetchXlmIntradayUsdt(hours: 24);
+      final xlm7F   = _fetchXlmClosesUsdt(days: 7);
+      final xlm30F  = _fetchXlmClosesUsdt(days: 30);
+      final xlm365F = _fetchXlmClosesUsdt(days: 365);
 
       final results = await Future.wait([
-        usdt24hF, usdt7F, usdt30F, usdt365F,
-        trx24F,   trx7F,  trx30F,  trx365F,
+        usdc24hF, usdc7F, usdc30F, usdc365F,
+        xlm24F,   xlm7F,  xlm30F,  xlm365F,
       ]);
 
-      final usdt24  = (results[0] );
-      final usdt7   = (results[1] );
-      final usdt30  = (results[2] );
-      final usdt365 = (results[3]);
+      final usdc24  = (results[0] as List<double>);
+      final usdc7   = (results[1] as List<double>);
+      final usdc30  = (results[2] as List<double>);
+      final usdc365 = (results[3] as List<double>);
 
-      final trx24u  = (results[4]);
-      final trx7u   = (results[5]);
-      final trx30u  = (results[6]);
-      final trx365u = (results[7]);
+      final xlm24u  = (results[4] as List<double>);
+      final xlm7u   = (results[5] as List<double>);
+      final xlm30u  = (results[6] as List<double>);
+      final xlm365u = (results[7] as List<double>);
 
-      final fx = (_usdtRate > 0) ? _usdtRate : (_prevUsdtRate > 0 ? _prevUsdtRate : 1.0);
+      final fx = (_usdcRate > 0) ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
 
-      _usdtHistory24h = usdt24;
-      _usdtHistory7   = usdt7;
-      _usdtHistory30  = usdt30;
-      _usdtHistory365 = usdt365;
+      _usdcHistory24h = usdc24;
+      _usdcHistory7   = usdc7;
+      _usdcHistory30  = usdc30;
+      _usdcHistory365 = usdc365;
 
-      _trxHistory24h  = trx24u.map((c) => c * fx).toList();
-      _trxHistory7    = trx7u.map((c) => c * fx).toList();
-      _trxHistory30   = trx30u.map((c) => c * fx).toList();
-      _trxHistory365  = trx365u.map((c) => c * fx).toList();
+      _xlmHistory24h  = xlm24u.map((c) => c * fx).toList();
+      _xlmHistory7    = xlm7u.map((c) => c * fx).toList();
+      _xlmHistory30   = xlm30u.map((c) => c * fx).toList();
+      _xlmHistory365  = xlm365u.map((c) => c * fx).toList();
 
       notifyListeners();
     } on TimeoutException catch (e) {
@@ -417,8 +416,8 @@ class CurrencyProvider extends ChangeNotifier {
     }
   }
 
-  // 24H TRX: 1h candles (24 points) with fallbacks
-  Future<List<double>> _fetchTrxIntradayUsdt({required int hours}) async {
+  // 24H XLM: 1h candles (24 points) with fallbacks
+  Future<List<double>> _fetchXlmIntradayUsdt({required int hours}) async {
     // Binance → OKX → KuCoin → Bybit → Kraken
     final tryOrder = <Future<List<double>?> Function()>[
           () => _binanceKlines('1h', hours),
@@ -435,16 +434,16 @@ class CurrencyProvider extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Fallback: derive TRX/USDT from spot or use a safe default
-    double trxUsdt = 0;
-    final usdt = _usdtRate > 0 ? _usdtRate : (_prevUsdtRate > 0 ? _prevUsdtRate : 1.0);
-    if (usdt > 0 && _trxRate > 0) trxUsdt = _trxRate / usdt;
-    final base = trxUsdt > 0 ? trxUsdt : 0.12;
+    // Fallback: derive XLM/USDT from spot or use a safe default
+    double xlmUsdt = 0;
+    final usdc = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
+    if (usdc > 0 && _xlmRate > 0) xlmUsdt = _xlmRate / usdc;
+    final base = xlmUsdt > 0 ? xlmUsdt : 0.12; // conservative default
     return List<double>.filled(hours, base);
   }
 
-  // 7D/30D/365D TRX: daily closes with fallbacks
-  Future<List<double>> _fetchTrxClosesUsdt({required int days}) async {
+  // 7D/30D/365D XLM: daily closes with fallbacks
+  Future<List<double>> _fetchXlmClosesUsdt({required int days}) async {
     final tryOrder = <Future<List<double>?> Function()>[
           () => _binanceKlines('1d', days),
           () => _okxCandles('1D', days),
@@ -460,19 +459,19 @@ class CurrencyProvider extends ChangeNotifier {
       } catch (_) {}
     }
 
-    double trxUsdt = 0;
-    final usdt = _usdtRate > 0 ? _usdtRate : (_prevUsdtRate > 0 ? _prevUsdtRate : 1.0);
-    if (usdt > 0 && _trxRate > 0) trxUsdt = _trxRate / usdt;
-    final base = trxUsdt > 0 ? trxUsdt : 0.12;
+    double xlmUsdt = 0;
+    final usdc = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
+    if (usdc > 0 && _xlmRate > 0) xlmUsdt = _xlmRate / usdc;
+    final base = xlmUsdt > 0 ? xlmUsdt : 0.12;
     return List<double>.filled(days, base);
   }
 
-  // ---- Exchange-specific candles ----
+  // ---- Exchange-specific candles (XLM/USDT) ----
 
   // Binance klines: interval e.g., 1h or 1d
   Future<List<double>?> _binanceKlines(String interval, int limit) async {
     try {
-      final url = Uri.parse('https://api.binance.com/api/v3/klines?symbol=TRXUSDT&interval=$interval&limit=$limit');
+      final url = Uri.parse('https://api.binance.com/api/v3/klines?symbol=XLMUSDT&interval=$interval&limit=$limit');
       final res = await http.get(url).timeout(httpTimeout);
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>;
@@ -489,7 +488,7 @@ class CurrencyProvider extends ChangeNotifier {
   // OKX candles: bar e.g., 1H or 1D, response rows: [ts,o,h,l,c,vol,...]
   Future<List<double>?> _okxCandles(String bar, int limit) async {
     try {
-      final url = Uri.parse('https://www.okx.com/api/v5/market/candles?instId=TRX-USDT&bar=$bar&limit=$limit');
+      final url = Uri.parse('https://www.okx.com/api/v5/market/candles?instId=XLM-USDT&bar=$bar&limit=$limit');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -509,7 +508,7 @@ class CurrencyProvider extends ChangeNotifier {
   // KuCoin candles: [time, open, close, high, low, volume, turnover]
   Future<List<double>?> _kucoinCandles(String type, int limit) async {
     try {
-      final url = Uri.parse('https://api.kucoin.com/api/v1/market/candles?type=$type&symbol=TRX-USDT');
+      final url = Uri.parse('https://api.kucoin.com/api/v1/market/candles?type=$type&symbol=XLM-USDT');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
         final m = jsonDecode(r.body) as Map<String, dynamic>;
@@ -531,7 +530,7 @@ class CurrencyProvider extends ChangeNotifier {
   Future<List<double>?> _bybitKline(String interval, int limit) async {
     try {
       final url = Uri.parse(
-        'https://api.bybit.com/v5/market/kline?category=spot&symbol=TRXUSDT&interval=$interval&limit=$limit',
+        'https://api.bybit.com/v5/market/kline?category=spot&symbol=XLMUSDT&interval=$interval&limit=$limit',
       );
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
@@ -553,7 +552,7 @@ class CurrencyProvider extends ChangeNotifier {
   Future<List<double>?> _krakenOhlc(int intervalMinutes, int limit) async {
     try {
       final url = Uri.parse(
-        'https://api.kraken.com/0/public/OHLC?pair=TRXUSDT&interval=$intervalMinutes',
+        'https://api.kraken.com/0/public/OHLC?pair=XLMUSDT&interval=$intervalMinutes',
       );
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
@@ -581,14 +580,14 @@ class CurrencyProvider extends ChangeNotifier {
    *    USD->FIAT (history)
    * ========================= */
 
-  // USD->FIAT series (proxy for USDT) via Frankfurter; normalized to expectedLen points.
+  // USD->FIAT series (proxy for USDC) via Frankfurter; normalized to expectedLen points.
   Future<List<double>> _fetchUsdToFiatSeries(
       DateTime from,
       DateTime to,
       String fiat, {
         required int expectedLen,
       }) async {
-    // If fiat is USD, USDT≈1 => flat
+    // If fiat is USD, USDC≈1 => flat
     if (fiat.toLowerCase() == 'usd') {
       return List<double>.filled(expectedLen, 1.0);
     }
@@ -620,13 +619,13 @@ class CurrencyProvider extends ChangeNotifier {
     }
 
     // Fallback: flat using current rate
-    final base = _usdtRate > 0 ? _usdtRate : (_prevUsdtRate > 0 ? _prevUsdtRate : 1.0);
+    final base = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
     return List<double>.filled(expectedLen, base);
   }
 
-  // USDT 24H proxy: flat line at current rate (no reliable hourly USD->FIAT)
-  Future<List<double>> _buildUsdt24hSeries({required int expectedLen}) async {
-    final base = _usdtRate > 0 ? _usdtRate : (_prevUsdtRate > 0 ? _prevUsdtRate : 1.0);
+  // USDC 24H proxy: flat line at current rate (no reliable hourly USD->FIAT)
+  Future<List<double>> _buildUsdc24hSeries({required int expectedLen}) async {
+    final base = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
     return List<double>.filled(expectedLen, base);
   }
 
@@ -642,10 +641,14 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   // ---- Converters ----
-  double trxToFiat(double trxAmount) => trxAmount * _trxRate;
-  double usdtToFiat(double usdtAmount) => usdtAmount * _usdtRate;
-  double fiatToUsdt(double fiatAmount) => (_usdtRate != 0) ? fiatAmount / _usdtRate : 0.0;
-  double fiatToTrx(double fiatAmount)  => (_trxRate  != 0) ? fiatAmount / _trxRate  : 0.0;
-  double trxToUsdt(double trxAmount)   => (_trxRate  != 0 && _usdtRate != 0) ? (trxAmount * _trxRate) / _usdtRate : 0.0;
-  double usdtToTrx(double usdtAmount)  => (_trxRate  != 0 && _usdtRate != 0) ? (usdtAmount * _usdtRate) / _trxRate : 0.0;
+  double xlmToFiat(double xlmAmount)  => xlmAmount * _xlmRate;
+  double usdcToFiat(double usdcAmount) => usdcAmount * _usdcRate;
+
+  double fiatToUsdc(double fiatAmount) => (_usdcRate != 0) ? fiatAmount / _usdcRate : 0.0;
+  double fiatToXlm(double fiatAmount)  => (_xlmRate  != 0) ? fiatAmount / _xlmRate  : 0.0;
+
+  double xlmToUsdc(double xlmAmount)   =>
+      (_xlmRate != 0 && _usdcRate != 0) ? (xlmAmount * _xlmRate) / _usdcRate : 0.0;
+  double usdcToXlm(double usdcAmount)  =>
+      (_xlmRate != 0 && _usdcRate != 0) ? (usdcAmount * _usdcRate) / _xlmRate : 0.0;
 }

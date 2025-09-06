@@ -7,17 +7,17 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 class AssetProvider with ChangeNotifier {
   AssetProvider(this.currency)
       : _assets = [
-    AssetModel(id: 'tron', name: 'Tron', symbol: 'TRX'),
+    AssetModel(id: 'stellar', name: 'Tron', symbol: 'TRX'),
     AssetModel(id: 'tether_trc20', name: 'Tether (TRC20)', symbol: 'USDT'),
   ] {
     // Primary logo map (first-choice URLs). Kept as Map<String,String> to avoid breaking callers.
-    // - TRX uses Trust Wallet's tron/info logo (stable).
+    // - TRX uses Trust Wallet's stellar/info logo (stable).
     // - USDT (TRC20 on TRON) switches to GitHub-hosted icon packs via jsDelivr CDN.
     // inside AssetProvider constructor:
     _logos = const {
       // TRON (via jsDelivr CDN)
-      'tron': 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/tron/info/logo.png',
-      'trx' : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/tron/info/logo.png',
+      'stellar': 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
+      'trx' : 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
 
       // USDT (TRC20) via CDN icon pack
       'tether_trc20': 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdt.png',
@@ -65,14 +65,14 @@ class AssetProvider with ChangeNotifier {
       k.toUpperCase(),
       // convenience aliases:
       if (k.toLowerCase().contains('usdt') || k.toLowerCase().contains('tether')) 'tether_trc20',
-      if (k.toLowerCase().contains('trx') || k.toLowerCase().contains('tron')) 'tron',
+      if (k.toLowerCase().contains('trx') || k.toLowerCase().contains('stellar')) 'stellar',
     ];
     for (final a in aliases) {
       final url = _logos[a];
       if (url != null && url.isNotEmpty) return url;
     }
     // safe default
-    return _logos['tron']!;
+    return _logos['stellar']!;
   }
 
   // ---- lifecycle -----------------------------------------------------------
@@ -82,11 +82,11 @@ class AssetProvider with ChangeNotifier {
     _started = true;
 
     // Stream-based updates (prices)
-    _trxSub = currency.trxPriceStream.listen((_) {
+    _trxSub = currency.xlmPriceStream.listen((_) {
       _recompute();
       _safeNotify();
     });
-    _usdtSub = currency.usdtPriceStream.listen((_) {
+    _usdtSub = currency.usdcPriceStream.listen((_) {
       _recompute();
       _safeNotify();
     });
@@ -139,8 +139,8 @@ class AssetProvider with ChangeNotifier {
       return (ref > 0) ? ((last / ref) - 1) * 100.0 : 0.0;
     }
 
-    final trxH = currency.trxHistory;
-    final usdtH = currency.usdtHistory;
+    final trxH = currency.xlmHistory;
+    final usdtH = currency.usdcHistory;
 
     final trx24h = _pctFromHistory(trxH, 1);
     final trx7d  = _pctFromHistory(trxH, 7);

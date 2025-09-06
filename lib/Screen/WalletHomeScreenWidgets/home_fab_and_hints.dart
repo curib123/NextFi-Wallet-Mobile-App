@@ -1,7 +1,6 @@
-import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
@@ -18,13 +17,13 @@ class IncomingHintsStrip extends StatelessWidget {
   const IncomingHintsStrip({
     super.key,
     required this.colors,
-    required this.tronAddress,
+    required this.stellarAddress,
     required this.incomingHints,
     required this.onAcknowledge,
   });
 
   final AppColor colors;
-  final String tronAddress;
+  final String stellarAddress;
   final List<Map<String, dynamic>> incomingHints;
   final void Function(Map<String, dynamic> tx) onAcknowledge;
 
@@ -38,7 +37,7 @@ class IncomingHintsStrip extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 0),
             child: incomingPaymentHint(
               tx,
-              tronAddress,
+              stellarAddress,
               onAcknowledge: () => onAcknowledge(tx),
             ),
           ),
@@ -55,21 +54,21 @@ class HomeFab extends StatelessWidget {
     super.key,
     required this.colors,
     required this.incomingHints,
-    this.tronAddress,   // nullable
-    this.trxBalance,    // nullable
-    this.usdtBalance,   // nullable
+    this.stellarAddress,   // nullable
+    this.xlmBalance,    // nullable
+    this.usdcBalance,   // nullable
   });
 
   final AppColor colors;
   final List<Map<String, dynamic>> incomingHints;
 
   // Nullable fields (wallet may not be loaded on first build)
-  final String? tronAddress;
-  final double? trxBalance;
-  final double? usdtBalance;
+  final String? stellarAddress;
+  final double? xlmBalance;
+  final double? usdcBalance;
 
   bool get _walletReady =>
-      tronAddress != null && trxBalance != null && usdtBalance != null;
+      stellarAddress != null && xlmBalance != null && usdcBalance != null;
 
   @override
   Widget build(BuildContext context) {
@@ -111,9 +110,9 @@ class HomeFab extends StatelessWidget {
             }
             showTokenSelector(
               context,
-              tronAddress!,      // safe after _walletReady
-              trxBalance!,       // safe after _walletReady
-              usdtBalance!,      // safe after _walletReady
+              stellarAddress!,      // safe after _walletReady
+              xlmBalance!,       // safe after _walletReady
+              usdcBalance!,      // safe after _walletReady
               title: 'Send Token',
               screenBuilder: (address, token, balance) => SendScreen(
                 address: address,

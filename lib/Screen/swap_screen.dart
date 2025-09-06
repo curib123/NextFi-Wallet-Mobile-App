@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -9,10 +7,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/tron/tron_wallet_service.dart';
 
 // Compact UI kit
 import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+
 
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
@@ -20,12 +19,11 @@ class SwapScreen extends StatefulWidget {
   State<SwapScreen> createState() => _SwapScreenState();
 }
 
-enum _SwapDir { trxToUsdt, usdtToTrx }
+enum _SwapDir { xlmToUsdc, usdcToXlm }
 
 class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
-  // Defaults
-  static const double _kDefaultAutoFeeTrx = 5.0; // default even if fee toggle untouched
-  static const double _kDustTrx = 0.1;
+  // Keep at least this much XLM to cover base reserve/fees.
+  static const double _kDustXlm = 1.0;
 
   // Controllers
   final _amountCtl = TextEditingController();
@@ -35,49 +33,30 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   final _fmt = NumberFormat('#,##0.######');
 
   // State
-  _SwapDir _dir = _SwapDir.trxToUsdt;
+  _SwapDir _dir = _SwapDir.xlmToUsdc;
   bool _loading = true;
   String? _errorMsg;
 
-  Uint8List? _privateKey;
-  String? _userAddress;
+  String? _secretSeed; // Stellar secret seed (S...)
+  String? _accountId;  // Stellar account id (G...)
 
-  double _trxBal = 0;
-  double _usdtBal = 0;
+  double _xlmBal = 0.0;
+  double _usdcBal = 0.0;
 
   double _slippage = 1.0; // %
   bool _useMinGuard = false;
-
-  // Network fee (TRX) — default 5 TRX, swap enabled even if not toggled
-  bool _feeAuto = true;                 // user toggles only to change it
-  double _feeLimitTrx = _kDefaultAutoFeeTrx;
-  final double _minFeeTrx = 5;
-  final double _maxFeeTrx = 60;
-
-  // Realtime
-  StreamSubscription? _incomingSub;
 
   // Anim
   late final AnimationController _swapSpin =
   AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
 
-  // Tron
-  final TronWalletService _tron = TronWalletService(const TronClientConfig());
-
-  // -------- Swap Cost Estimate (debounced) --------
-  Timer? _debounceEst;
-  bool _estLoading = false;
-  int? _estEnergyUsed;     // units
-  int? _estBandwidthUsed;  // bytes
-  double? _estBurnTrx;     // TRX
-  String? _estNote;
+  // Stellar
+  StellarWalletService? _stellar;
 
   /* ---------------- Getters ---------------- */
-  bool get _isTrxToUsdt => _dir == _SwapDir.trxToUsdt;
-  String get _fromSymbol => _isTrxToUsdt ? 'TRX' : 'USDT';
-  String get _toSymbol   => _isTrxToUsdt ? 'USDT' : 'TRX';
-  double get _effectiveFeeTrx => _feeAuto ? _kDefaultAutoFeeTrx : _feeLimitTrx;
-  int get _feeLimitSun => (_effectiveFeeTrx.clamp(_minFeeTrx, _maxFeeTrx)) * 1e6 ~/ 1;
+  bool get _isXlmToUsdc => _dir == _SwapDir.xlmToUsdc;
+  String get _fromSymbol => _isXlmToUsdc ? 'XLM' : 'USDC';
+  String get _toSymbol   => _isXlmToUsdc ? 'USDC' : 'XLM';
 
   @override
   void initState() {
@@ -88,13 +67,10 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _incomingSub?.cancel();
-    _debounceEst?.cancel();
     _amountCtl.removeListener(_onAmountInput);
     _amountCtl.dispose();
     _minOutCtl.dispose();
     _swapSpin.dispose();
-    _tron.dispose();
     super.dispose();
   }
 
@@ -112,43 +88,50 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
     }
 
     try {
-      final priv = TronWalletService.derivePrivateKey(mn);
-      final addr = TronWalletService.tronAddressFromMnemonic(mn);
+      // Derive Stellar keys from mnemonic
+      final wallet = await StellarWalletService.walletFromMnemonic(mn);
+      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
+
+      // Lazy-create the service AFTER we know an address (use self as profit sink; not used here)
+      _stellar = StellarWalletService(profitAddress: kp.accountId);
+
       setState(() {
-        _privateKey = priv;
-        _userAddress = addr;
+        _secretSeed = kp.secretSeed; // provided by sdk Wallet.getKeyPair()
+        _accountId = kp.accountId;
       });
 
       await _refreshBalances();
 
-      _incomingSub = _tron
-          .watchIncoming(addr, interval: const Duration(seconds: 20))
-          .listen((_) => _refreshBalances(), onError: (_) {});
+      // Start listening for incoming payments to refresh balances (fire-and-forget).
+      // (Service internally manages the stream; we don't need to cancel explicitly.)
+      _stellar!.streamPayments(kp.accountId, (_) => _refreshBalances());
 
       if (mounted) setState(() => _loading = false);
-      _scheduleEstimate(); // first estimate after load
     } catch (_) {
       setState(() {
         _loading = false;
-        _errorMsg = 'Failed to load wallet.';
+        _errorMsg = 'Failed to load Stellar wallet (is the account funded?).';
       });
     }
   }
 
   Future<void> _refreshBalances() async {
-    final addr = _userAddress;
-    if (addr == null) return;
+    final aid = _accountId;
+    final svc = _stellar;
+    if (aid == null || svc == null) return;
     try {
-      final res = await Future.wait([
-        _tron.getTrxBalance(addr),                            // sun
-        _tron.getTrc20BalanceViaHolders(walletBase58: addr), // USDT
+      final res = await Future.wait<double>([
+        svc.getXlmBalance(aid),
+        svc.getUsdcBalance(aid),
       ]);
       if (!mounted) return;
       setState(() {
-        _trxBal = (res[0]).toDouble() / 1e6;
-        _usdtBal = (res[1]).toDouble();
+        _xlmBal = res[0];
+        _usdcBal = res[1];
       });
-    } catch (_) {/* keep previous balances */}
+    } catch (_) {
+      // Keep previous
+    }
   }
 
   /* ---------------- Helpers ---------------- */
@@ -156,34 +139,29 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
     HapticFeedback.lightImpact();
     _swapSpin.forward(from: 0);
     setState(() {
-      _dir = _isTrxToUsdt ? _SwapDir.usdtToTrx : _SwapDir.trxToUsdt;
+      _dir = _isXlmToUsdc ? _SwapDir.usdcToXlm : _SwapDir.xlmToUsdc;
     });
     _suggestMinReceive();
-    _scheduleEstimate();
   }
 
   void _useMax() {
-    if (_isTrxToUsdt) {
-      final fee = _effectiveFeeTrx;
-      final max = (_trxBal - fee - _kDustTrx).clamp(0, double.infinity);
+    if (_isXlmToUsdc) {
+      final max = (_xlmBal - _kDustXlm).clamp(0, double.infinity);
       _amountCtl.text = max <= 0 ? '' : max.toStringAsFixed(6);
     } else {
-      _amountCtl.text = _usdtBal <= 0 ? '' : _usdtBal.toStringAsFixed(6);
+      _amountCtl.text = _usdcBal <= 0 ? '' : _usdcBal.toStringAsFixed(6);
     }
   }
 
   void _quickPercent(double p) {
-    final bal = _isTrxToUsdt ? _trxBal : _usdtBal;
+    final bal = _isXlmToUsdc ? _xlmBal : _usdcBal;
     var v = bal * p;
-    if (_isTrxToUsdt) {
-      v = (v - _effectiveFeeTrx - _kDustTrx).clamp(0, bal);
-    }
+    if (_isXlmToUsdc) v = (v - _kDustXlm).clamp(0, bal);
     _amountCtl.text = v <= 0 ? '' : v.toStringAsFixed(6);
   }
 
   void _onAmountInput() {
     if (_useMinGuard) _suggestMinReceive();
-    _scheduleEstimate();
   }
 
   void _suggestMinReceive() {
@@ -199,78 +177,16 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   bool get _hasEnoughBalance {
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amount <= 0) return false;
-    if (_isTrxToUsdt) {
-      return (amount + _effectiveFeeTrx + _kDustTrx) <= _trxBal + 1e-9;
+    if (_isXlmToUsdc) {
+      return (amount + _kDustXlm) <= _xlmBal + 1e-9;
     } else {
-      return amount <= _usdtBal + 1e-9;
-    }
-  }
-
-  /* ---------------- Estimate (best-effort via service) ---------------- */
-  void _scheduleEstimate() {
-    _debounceEst?.cancel();
-    _debounceEst = Timer(const Duration(milliseconds: 320), _estimateSwapCosts);
-  }
-
-  Future<void> _estimateSwapCosts() async {
-    final addr = _userAddress;
-    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
-    if (!mounted || addr == null || amount <= 0) {
-      setState(() {
-        _estLoading = false;
-        _estEnergyUsed = null;
-        _estBandwidthUsed = null;
-        _estBurnTrx = null;
-        _estNote = null;
-      });
-      return;
-    }
-
-    setState(() {
-      _estLoading = true;
-      _estEnergyUsed = null;
-      _estBandwidthUsed = null;
-      _estBurnTrx = null;
-      _estNote = null;
-    });
-
-    try {
-      final res = await _tron.estimateSwapCosts(
-        from: _fromSymbol,
-        to: _toSymbol,
-        amount: amount,
-        feeLimitSun: _feeLimitSun,
-        address: addr,
-        slippage: _slippage,
-      );
-
-      int _asInt(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
-      double _asTrx(dynamic sun) => (_asInt(sun)) / 1e6;
-
-      final energy = _asInt(res['energy_used'] ?? res['energyRequired'] ?? res['energy']);
-      final net    = _asInt(res['bandwidth_used'] ?? res['net_used'] ?? res['bandwidth'] ?? res['net']);
-      final burn   = _asTrx(res['trx_burn_sun'] ?? res['burn_sun'] ?? res['fee_burn_sun'] ?? 0);
-      final note   = (res['message'] ?? res['note'] ?? '').toString().trim();
-
-      if (!mounted) return;
-      setState(() {
-        _estLoading = false;
-        _estEnergyUsed = energy > 0 ? energy : null;
-        _estBandwidthUsed = net > 0 ? net : null;
-        _estBurnTrx = burn > 0 ? burn : null;
-        _estNote = note.isEmpty ? null : note;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _estLoading = false; // silent; modal row shows "—"
-      });
+      return amount <= _usdcBal + 1e-9;
     }
   }
 
   /* ---------------- Confirm → Execute ---------------- */
   Future<void> _openConfirmSheet() async {
-    if (_privateKey == null || _userAddress == null) {
+    if (_secretSeed == null || _accountId == null || _stellar == null) {
       showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.error);
       return;
     }
@@ -284,11 +200,7 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
       return;
     }
 
-    // Ensure estimate is reasonably fresh
-    await _estimateSwapCosts();
-
     final minOut = _useMinGuard ? (double.tryParse(_minOutCtl.text.trim()) ?? 0.0) : null;
-    final feeText = _feeAuto ? 'Auto (5 TRX)' : '${(_feeLimitSun / 1e6).toStringAsFixed(0)} TRX';
     final colors = AppColor.of(context);
 
     await showModalBottomSheet(
@@ -296,39 +208,31 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
       backgroundColor: colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       builder: (_) {
-        String estRow() {
-          if (_estLoading) return 'Estimating…';
-          final parts = <String>[];
-          if (_estEnergyUsed != null) parts.add('Energy ~$_estEnergyUsed');
-          if (_estBandwidthUsed != null) parts.add('Bandwidth ~$_estBandwidthUsed');
-          if (_estBurnTrx != null) parts.add('TRX burn ~${_estBurnTrx!.toStringAsFixed(3)}');
-          return parts.isEmpty ? '—' : parts.join('  •  ');
-        }
-
         return Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 36, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.primary.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('Confirm Swap', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+              Text('Confirm Swap',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary)),
               const SizedBox(height: 8),
-              SummaryRow(label: 'Route',    value: '$_fromSymbol → $_toSymbol'),
-              SummaryRow(label: 'Amount',   value: '${_fmt.format(amount)} $_fromSymbol'),
+              SummaryRow(label: 'Route', value: '$_fromSymbol → $_toSymbol'),
+              SummaryRow(label: 'Amount', value: '${_fmt.format(amount)} $_fromSymbol'),
               if (minOut != null) SummaryRow(label: 'Min receive', value: '${_fmt.format(minOut)} $_toSymbol'),
               SummaryRow(label: 'Slippage', value: '${_slippage.toStringAsFixed(1)}%'),
-              SummaryRow(label: 'Fee limit', value: feeText),
-              SummaryRow(label: 'Est. costs', value: estRow()),
-              if (_estNote != null && _estNote!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(_estNote!, style: TextStyle(color: colors.textSecondary, fontSize: 11.5)),
-                  ),
-                ),
-
+              const SummaryRow(
+                label: 'Network fee',
+                value: '~ a few stroops (≈ 0.0000100 XLM/op)',
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -348,7 +252,7 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         Navigator.pop(context);
-                        await _executeSwap(amount: amount, minOut: minOut ?? 0);
+                        await _executeSwap(amount: amount, minOut: minOut);
                       },
                       icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
                       label: const Text('Confirm'),
@@ -369,24 +273,25 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _executeSwap({required double amount, required double minOut}) async {
-    if (_privateKey == null) return;
+  Future<void> _executeSwap({required double amount, double? minOut}) async {
+    final svc = _stellar;
+    final seed = _secretSeed;
+    if (svc == null || seed == null) return;
+
     FocusScope.of(context).unfocus();
     setState(() => _loading = true);
 
     try {
-      final txid = _isTrxToUsdt
-          ? await _tron.swapTrxToUsdtViaRouter(
-        privateKey: _privateKey!,
-        amountTrx: amount,
-        minUsdtOut: minOut,
-        feeLimitSun: _feeLimitSun,
+      final txid = _isXlmToUsdc
+          ? await svc.swapXlmToUsdc(
+        secretSeed: seed,
+        sendAmountXlm: amount,
+        minUsdcOut: (minOut ?? (amount * (1 - _slippage / 100))).clamp(0, double.infinity),
       )
-          : await _tron.swapUsdtToTrxViaRouter(
-        privateKey: _privateKey!,
-        amountUsdt: amount,
-        minTrxOut: minOut,
-        feeLimitSun: _feeLimitSun,
+          : await svc.swapUsdcToXlm(
+        secretSeed: seed,
+        sendAmountUsdc: amount,
+        minXlmOut: (minOut ?? (amount * (1 - _slippage / 100))).clamp(0, double.infinity),
       );
 
       if (!mounted) return;
@@ -408,7 +313,6 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
-    final feeTrx = _effectiveFeeTrx;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -423,7 +327,7 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-      body: _loading && _userAddress == null
+      body: _loading && _accountId == null
           ? const PageLoader()
           : _errorMsg != null
           ? ErrorCard(message: _errorMsg!)
@@ -435,11 +339,12 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BalanceRow(trx: _trxBal, usdt: _usdtBal),
+              BalanceRow(trx: _xlmBal, usdt: _usdcBal,),
 
               const SizedBox(height: 10),
+              // Reuse segmented control; pass our direction bool.
               DirectionSegmented(
-                isTrxToUsdt: _isTrxToUsdt,
+                isTrxToUsdt: _isXlmToUsdc, // bool only controls left/right selection
                 onFlip: _flipDirection,
                 controller: _swapSpin,
               ),
@@ -461,31 +366,12 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
                 onToggle: (v) {
                   setState(() => _useMinGuard = v);
                   _suggestMinReceive();
-                  _scheduleEstimate();
                 },
                 onSlippage: (v) {
                   setState(() => _slippage = v);
                   _suggestMinReceive();
-                  _scheduleEstimate();
                 },
                 toSymbol: _toSymbol,
-                colors: colors,
-              ),
-
-              const SizedBox(height: 8),
-              FeeRow(
-                auto: _feeAuto,
-                feeTrx: feeTrx,
-                min: _minFeeTrx,
-                max: _maxFeeTrx,
-                onMode: (isAuto) {
-                  setState(() => _feeAuto = isAuto);
-                  _scheduleEstimate();
-                },
-                onChange: (v) {
-                  setState(() => _feeLimitTrx = v);
-                  _scheduleEstimate();
-                },
                 colors: colors,
               ),
 
@@ -495,7 +381,7 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
                 to: _toSymbol,
                 amount: amount,
                 minOut: _useMinGuard ? (double.tryParse(_minOutCtl.text.trim()) ?? 0.0) : null,
-                feeText: _feeAuto ? 'Auto (5 TRX)' : '${feeTrx.toStringAsFixed(0)} TRX',
+                feeText: 'Auto (base fee)',
                 colors: colors,
                 fmt: _fmt,
               ),
@@ -511,7 +397,7 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(LucideIcons.arrowRightLeft),
-                label: Text(_isTrxToUsdt ? 'Review TRX → USDT' : 'Review USDT → TRX'),
+                label: Text(_isXlmToUsdc ? 'Review XLM → USDC' : 'Review USDC → XLM'),
               ),
             ],
           ),

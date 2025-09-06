@@ -17,16 +17,16 @@ class RecipientListWidget extends StatelessWidget {
 
   /// Needed so we can launch SendScreen directly after the selector.
   final String? fromAddress;   // your wallet (base58)
-  final double? trxBalance;
-  final double? usdtBalance;
+  final double? xlmBalance;
+  final double? usdcBalance;
 
   const RecipientListWidget({
     super.key,
     required this.colors,
     this.onSelect,
     this.fromAddress,
-    this.trxBalance,
-    this.usdtBalance,
+    this.xlmBalance,
+    this.usdcBalance,
   });
 
   @override
@@ -62,8 +62,8 @@ class RecipientListWidget extends StatelessWidget {
                 await showTokenSelector(
                   context,
                   addr,
-                  (trxBalance ?? 0),
-                  (usdtBalance ?? 0),
+                  (xlmBalance ?? 0),
+                  (usdcBalance ?? 0),
                   screenBuilder: (address, token, balance) {
                     // Auto-populate recipient in SendScreen
                     return SendScreen(

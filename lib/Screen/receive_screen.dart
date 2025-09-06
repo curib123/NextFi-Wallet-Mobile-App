@@ -1,8 +1,6 @@
 // lib/Screen/receive_screen.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -14,21 +12,21 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 
 import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
 
-// === ReceiveScreen with TRX/USDT tabs ======================================
+// === ReceiveScreen with XLM/USDC tabs ======================================
 class ReceiveScreen extends StatefulWidget {
   final String address;
-  final double trxBalance;
-  final double usdtBalance;
+  final double xlmBalance;
+  final double usdcBalance;
 
-  /// Optional initial token for the tab (defaults to TRX).
-  final String initialToken; // 'TRX' | 'USDT'
+  /// Optional initial token for the tab (defaults to XLM).
+  final String initialToken; // 'XLM' | 'USDC'
 
   const ReceiveScreen({
     super.key,
     required this.address,
-    required this.trxBalance,
-    required this.usdtBalance,
-    this.initialToken = 'TRX',
+    required this.xlmBalance,
+    required this.usdcBalance,
+    this.initialToken = 'XLM',
   });
 
   @override
@@ -42,15 +40,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
   // ---- Tabs ----
   late final TabController _tabController;
 
-  bool get isTRX => _tabController.index == 0;
-  String get currentToken => isTRX ? 'TRX' : 'USDT';
-
-  // ---- Resources (Bandwidth/Energy) ----
-  static const String _baseUrl = 'https://api.trongrid.io'; // adjust for Shasta/custom
-  bool _resLoading = true;
-  String? _resError;
-  int _freeNetLimit = 0, _freeNetUsed = 0, _netLimit = 0, _netUsed = 0;
-  int _energyLimit = 0, _energyUsed = 0;
+  bool get isXLM => _tabController.index == 0;
+  String get currentToken => isXLM ? 'XLM' : 'USDC';
 
   @override
   void initState() {
@@ -58,12 +49,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
     _tabController = TabController(
       length: 2,
       vsync: this,
-      initialIndex: widget.initialToken.toUpperCase() == 'USDT' ? 1 : 0,
+      initialIndex: widget.initialToken.toUpperCase() == 'USDC' ? 1 : 0,
     )..addListener(() {
       if (!_tabController.indexIsChanging) setState(() {});
     });
-
-    _fetchResources();
   }
 
   @override
@@ -73,56 +62,21 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
   }
 
   // Pick the right history series from provider given token + range
-  List<double> _historyFor(CurrencyProvider c, {required bool isTRX, required PriceRange r}) {
-    if (isTRX) {
+  List<double> _historyFor(CurrencyProvider c, {required bool isXLM, required PriceRange r}) {
+    if (isXLM) {
       return switch (r) {
-        PriceRange.h24 => c.trxHistory24h,
-        PriceRange.d7 => c.trxHistory7,
-        PriceRange.d30 => c.trxHistory30,
-        PriceRange.y1 => c.trxHistory365,
+        PriceRange.h24 => c.xlmHistory24h,
+        PriceRange.d7  => c.xlmHistory7,
+        PriceRange.d30 => c.xlmHistory30,
+        PriceRange.y1  => c.xlmHistory365,
       };
     } else {
       return switch (r) {
-        PriceRange.h24 => c.usdtHistory24h,
-        PriceRange.d7 => c.usdtHistory7,
-        PriceRange.d30 => c.usdtHistory30,
-        PriceRange.y1 => c.usdtHistory365,
+        PriceRange.h24 => c.usdcHistory24h,
+        PriceRange.d7  => c.usdcHistory7,
+        PriceRange.d30 => c.usdcHistory30,
+        PriceRange.y1  => c.usdcHistory365,
       };
-    }
-  }
-
-  // ---- Fetch account resources for the displayed address ----
-  Future<void> _fetchResources() async {
-    final addr = widget.address;
-    if (addr.isEmpty) return;
-    setState(() {
-      _resLoading = true;
-      _resError = null;
-    });
-
-    try {
-      final headers = {'Content-Type': 'application/json'};
-      final body = jsonEncode({'address': addr, 'visible': true});
-
-      // Bandwidth
-      final netUri = Uri.parse('$_baseUrl/wallet/getaccountnet');
-      final netRes = await http.post(netUri, headers: headers, body: body).timeout(const Duration(seconds: 15));
-      final netJ = jsonDecode(netRes.body) as Map<String, dynamic>;
-      _freeNetLimit = (netJ['freeNetLimit'] as num?)?.toInt() ?? 0;
-      _freeNetUsed  = (netJ['freeNetUsed']  as num?)?.toInt() ?? 0;
-      _netLimit     = (netJ['NetLimit']     as num?)?.toInt() ?? 0;
-      _netUsed      = (netJ['NetUsed']      as num?)?.toInt() ?? 0;
-
-      // Energy
-      final resUri = Uri.parse('$_baseUrl/wallet/getaccountresource');
-      final resRes = await http.post(resUri, headers: headers, body: body).timeout(const Duration(seconds: 15));
-      final resJ = jsonDecode(resRes.body) as Map<String, dynamic>;
-      _energyLimit = (resJ['EnergyLimit'] as num?)?.toInt() ?? 0;
-      _energyUsed  = (resJ['EnergyUsed']  as num?)?.toInt() ?? 0;
-    } catch (e) {
-      _resError = "Failed to load resources";
-    } finally {
-      if (mounted) setState(() => _resLoading = false);
     }
   }
 
@@ -135,17 +89,13 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
     final numFmt = NumberFormat("#,##0.00");
 
     // streams / prices based on selected token
-    final priceStream = isTRX ? currency.trxPriceStream : currency.usdtPriceStream;
-    final lastPrice   = isTRX ? currency.trxRate        : currency.usdtRate;
-    final oneTokenInFiat = isTRX ? currency.trxToFiat(1) : currency.usdtToFiat(1);
+    final priceStream   = isXLM ? currency.xlmPriceStream : currency.usdcPriceStream;
+    final lastPrice     = isXLM ? currency.xlmRate        : currency.usdcRate;
+    final oneTokenFiat  = isXLM ? currency.xlmToFiat(1)   : currency.usdcToFiat(1);
 
     // selected balances & history
-    final double tokenBalance = isTRX ? widget.trxBalance : widget.usdtBalance;
-    final double balanceFiat  = isTRX ? currency.trxToFiat(tokenBalance) : currency.usdtToFiat(tokenBalance);
-
-    // derived for resource bars
-    final bwLimitTotal = _freeNetLimit + _netLimit;
-    final bwUsedTotal  = _freeNetUsed + _netUsed;
+    final double tokenBalance = isXLM ? widget.xlmBalance : widget.usdcBalance;
+    final double balanceFiat  = isXLM ? currency.xlmToFiat(tokenBalance) : currency.usdcToFiat(tokenBalance);
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -162,11 +112,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            tooltip: "Refresh resources",
-            icon: Icon(LucideIcons.refreshCcw, color: colors.textPrimary),
-            onPressed: _fetchResources,
-          ),
           IconButton(
             tooltip: "Copy address",
             icon: Icon(LucideIcons.copy, color: colors.textPrimary),
@@ -202,8 +147,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
                 tabs: const [
-                  Tab(text: 'TRX'),
-                  Tab(text: 'USDT'),
+                  Tab(text: 'XLM'),
+                  Tab(text: 'USDC'),
                 ],
               ),
             ),
@@ -213,8 +158,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
       body: StreamBuilder<double>(
         stream: priceStream,
         builder: (context, snapshot) {
-          final _ = snapshot.data ?? lastPrice;
-          final series = _historyFor(currency, isTRX: isTRX, r: _selected);
+          final _ = snapshot.data ?? lastPrice; // triggers rebuilds
+          final series = _historyFor(currency, isXLM: isXLM, r: _selected);
 
           final changePct = pctChangeFromSeries(series);
           final changeUp = changePct >= 0;
@@ -226,7 +171,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
               // Price header
               PriceHeader(
                 token: currentToken,
-                oneTokenInFiat: oneTokenInFiat,
+                oneTokenInFiat: oneTokenFiat,
                 changePct: changePct,
                 rangeLabel: kRangeLabel[_selected]!,
                 colors: colors,
@@ -262,7 +207,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 14),
 
-
               // QR card
               GestureDetector(
                 onTap: () => _showQrDialog(context, colors),
@@ -282,8 +226,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                         backgroundColor: Colors.white,
                       ),
                       const SizedBox(height: 12),
-                      Text("Tap to enlarge QR",
-                          style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      Text(
+                        "Tap to enlarge QR",
+                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
                     ],
                   ),
                 ),
@@ -341,9 +287,9 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        isTRX
-                            ? "Send only TRX (native TRON coin) to this address. Sending other networks or tokens may result in permanent loss."
-                            : "Send only USDT on TRON (TRC20) to this address. Sending other networks or tokens may result in permanent loss.",
+                        isXLM
+                            ? "Send only XLM (native Stellar coin) to this address. Sending other networks or assets may result in permanent loss."
+                            : "Send only USDC on the Stellar network to this address. The receiver must have a USDC trustline to accept funds.",
                         style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.28),
                       ),
                     ),
@@ -370,8 +316,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("Receive $currentToken",
-                    style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+                Text(
+                  "Receive $currentToken",
+                  style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 8),
                 QrImageView(
                   data: widget.address,
