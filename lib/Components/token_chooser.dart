@@ -6,13 +6,27 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Model/asset_model.dart';
 
+/// Token selector (Stellar) — XLM / USDC
+///
+/// Usage:
+/// showTokenSelector(
+///   context,
+///   address,
+///   xlmBalance,
+///   usdcBalance,
+///   screenBuilder: (address, token, balance) => SendScreen(
+///     address: address,
+///     token: token, // "XLM" | "USDC"
+///     balance: balance,
+///   ),
+/// );
 Future<void> showTokenSelector(
     BuildContext context,
     String address,
-    double trxBalance,
-    double usdtBalance, {
+    double xlmBalance,
+    double usdcBalance, {
       required Widget Function(String address, String token, double balance) screenBuilder,
-      String title = "Select Token",
+      String title = 'Select Asset',
     }) async {
   final colors = AppColor.of(context);
 
@@ -65,38 +79,42 @@ Future<void> showTokenSelector(
             ),
             const SizedBox(height: 16),
 
-            // ===== TRX =====
+            // ===== XLM (native) =====
             _buildTokenTile(
               context,
               colors,
-              logoUrl: logoForSymbol('TRX'),
-              token: "TRX",
-              balance: trxBalance,
+              logoUrl: logoForSymbol('XLM'),
+              token: 'XLM',
+              subtitle: 'Stellar Lumens (native)',
+              balance: xlmBalance,
+              icon: LucideIcons.star,
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => screenBuilder(address, "TRX", trxBalance),
+                    builder: (_) => screenBuilder(address, 'XLM', xlmBalance),
                   ),
                 );
               },
             ),
             const SizedBox(height: 12),
 
-            // ===== USDT (TRC20) =====
+            // ===== USDC (credit) =====
             _buildTokenTile(
               context,
               colors,
-              logoUrl: logoForSymbol('USDT'),
-              token: "USDT (TRC20)",
-              balance: usdtBalance,
+              logoUrl: logoForSymbol('USDC'),
+              token: 'USDC',
+              subtitle: 'USDC (Stellar asset)',
+              balance: usdcBalance,
+              icon: LucideIcons.banknote,
               onTap: () {
                 Navigator.pop(ctx);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => screenBuilder(address, "USDT", usdtBalance),
+                    builder: (_) => screenBuilder(address, 'USDC', usdcBalance),
                   ),
                 );
               },
@@ -113,9 +131,13 @@ Widget _buildTokenTile(
     AppColor colors, {
       required String? logoUrl,
       required String token,
+      String? subtitle,
       required double balance,
+      required IconData icon,
       required VoidCallback onTap,
     }) {
+  String _num(double v) => v.toStringAsFixed(v >= 100 ? 2 : 4);
+
   return InkWell(
     onTap: onTap,
     borderRadius: BorderRadius.circular(12),
@@ -128,7 +150,7 @@ Widget _buildTokenTile(
       ),
       child: Row(
         children: [
-          _logoView(logoUrl, colors),
+          _logoView(logoUrl, colors, icon: icon),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -142,9 +164,16 @@ Widget _buildTokenTile(
                     color: colors.textPrimary,
                   ),
                 ),
+                if ((subtitle ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(fontSize: 11.5, color: colors.textSecondary),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 Text(
-                  "Balance: ${balance.toStringAsFixed(2)}",
+                  'Balance: ${_num(balance)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: colors.textSecondary,
@@ -160,7 +189,7 @@ Widget _buildTokenTile(
   );
 }
 
-Widget _logoView(String? url, AppColor colors, {double size = 32}) {
+Widget _logoView(String? url, AppColor colors, {double size = 32, IconData? icon}) {
   if (url == null || url.isEmpty) {
     return Container(
       width: size,
@@ -170,7 +199,7 @@ Widget _logoView(String? url, AppColor colors, {double size = 32}) {
         borderRadius: BorderRadius.circular(size / 2),
       ),
       child: Icon(
-        LucideIcons.helpCircle,
+        icon ?? LucideIcons.helpCircle,
         size: size * 0.6,
         color: colors.textSecondary.withOpacity(0.6),
       ),
@@ -192,7 +221,7 @@ Widget _logoView(String? url, AppColor colors, {double size = 32}) {
           borderRadius: BorderRadius.circular(size / 2),
         ),
         child: Icon(
-          LucideIcons.helpCircle,
+          icon ?? LucideIcons.helpCircle,
           size: size * 0.6,
           color: colors.textSecondary.withOpacity(0.6),
         ),

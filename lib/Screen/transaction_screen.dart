@@ -15,6 +15,8 @@ import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/model/recipient_address.dart';
 
+import 'package:next_fi/Provider/AssetProvider.dart';
+
 typedef Tx = Map<String, dynamic>;
 
 enum _TxFilter { all, receive, send }
@@ -49,10 +51,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
   static final DateFormat _listFmt = DateFormat('MMM d, h:mm a');
   static final DateFormat _detailFmt = DateFormat('MMM d, yyyy • h:mm a');
 
+  // Nice default color choices for contacts
+  static const List<int> _colorChoices = <int>[
+    0xFF5B8CFF, 0xFFFF6B6B, 0xFF2ED573, 0xFFFFC107, 0xFF6A5ACD, 0xFF00C2A8, 0xFFEA4C89,
+  ];
+
+  // Fallback if AssetProvider isn't available for some reason
+  static const String _FALLBACK_XLM_LOGO =
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png';
+
   @override
   void initState() {
     super.initState();
-    // Profit address is unused in this screen; pass a placeholder.
     _stellar = StellarWalletService();
     _loadWalletAndData();
 
@@ -162,6 +172,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
       'from': from ?? '',
       'to': to ?? '',
       'direction': isIncoming ? 'in' : 'out',
+      // Will be filled by _attachRecipientMetaTo()
+      'recName': null,
+      'recColor': null,
     };
   }
 
@@ -178,6 +191,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (!mounted) return;
     final id = (tx['id'] ?? '').toString();
     if (id.isEmpty || _seenIds.contains(id)) return;
+
+    // Enrich with recipient meta before inserting
+    _attachRecipientMetaTo([tx]);
 
     _set(() {
       _seenIds.add(id);
@@ -233,6 +249,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       if (myToken != _fetchGen) return;
 
+      // ✅ Iterate all fetched txs and attach name/color from address book
+      _attachRecipientMetaTo(newTx);
+
       _set(() {
         if (loadMore) {
           _transactions.addAll(newTx);
@@ -261,6 +280,29 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
   }
 
+  // Enrich a list of Tx with cached recipient name/color (if present)
+  void _attachRecipientMetaTo(List<Tx> list) {
+    if (!mounted) return;
+    final recipProv = context.read<RecipientAddressProvider>();
+    if (recipProv.loading) return; // will resolve next rebuild
+
+    for (final tx in list) {
+      final direction = (tx['direction'] ?? 'other').toString();
+      final isIncoming = direction == 'in';
+      final peerAddr = (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? '')).toString().trim();
+      if (peerAddr.isEmpty) continue;
+
+      final rec = recipProv.byAddress(peerAddr);
+      if (rec != null) {
+        tx['recName'] = rec.name;
+        tx['recColor'] = rec.color;
+      } else {
+        tx['recName'] = null;
+        tx['recColor'] = null;
+      }
+    }
+  }
+
   Future<void> _resetAndFetch() async {
     _cursor = null;
     _hasMore = true;
@@ -280,7 +322,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           _chip(colors, label: 'All', value: _TxFilter.all),
           const SizedBox(width: 8),
@@ -421,18 +463,40 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final isIncoming = direction == 'in';
 
     final peerAddr = (isIncoming ? from : to).trim();
-    final RecipientAddress? rec = recipProv.byAddress(peerAddr);
 
-    final titleText = rec != null
-        ? "${rec.name} • ${amount.toStringAsFixed(2)} $asset"
+    // Prefer cached meta; fallback to provider for live updates
+    String? recName = (tx['recName'] as String?);
+    int? recColor = (tx['recColor'] as int?);
+    RecipientAddress? rec;
+
+    if (recName == null || recColor == null) {
+      rec = recipProv.byAddress(peerAddr);
+      if (rec != null) {
+        recName = rec.name;
+        recColor = rec.color;
+        // store back so future rebuilds use cached
+        tx['recName'] = recName;
+        tx['recColor'] = recColor;
+      }
+    }
+
+    final titleText = recName != null
+        ? "$recName • ${amount.toStringAsFixed(2)} $asset"
         : "${amount.toStringAsFixed(2)} $asset";
 
     final subtitleWho = isIncoming ? "From" : "To";
-    final subtitlePeer = rec != null ? "${rec.name} (${_short(peerAddr)})" : _short(peerAddr);
+    final subtitlePeer = recName != null ? "$recName (${_short(peerAddr)})" : _short(peerAddr);
 
     return ListTile(
       key: ValueKey(txId.isEmpty ? 'idx:${_transactions.indexOf(tx)}' : txId),
-      leading: _buildLeadingAvatar(colors: colors, isIncoming: isIncoming, rec: rec),
+      leading: _buildLeadingAvatarWithLogo(
+        context: context,
+        colors: colors,
+        isIncoming: isIncoming,
+        recName: recName,
+        recColor: recColor,
+        asset: asset,
+      ),
       title: Text(
         titleText,
         style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary),
@@ -450,20 +514,23 @@ class _TransactionScreenState extends State<TransactionScreen> {
         context,
         colors,
         tx,
-        rec: rec, // pass resolved recipient so modal can show name/color
+        peerAddr: peerAddr,
         isIncoming: isIncoming,
       ),
     );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Modal: transaction details (rec name/color shown when available)
+  // Modal: transaction details + Save/Edit contact by address
   // ───────────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────────────
+// Modal: transaction details + auto-apply contact name/color from address book
+// ───────────────────────────────────────────────────────────────────────────
   void _showTxDetailsBottomSheet(
       BuildContext context,
       AppColor colors,
       Tx tx, {
-        RecipientAddress? rec,
+        required String peerAddr,
         required bool isIncoming,
       }) {
     final txId = (tx['id'] ?? '').toString();
@@ -478,6 +545,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final explorerUrl = _stellarExplorerTx(hash, _stellar);
 
+    // 🔹 Look up existing contact by the peer address and APPLY to the tx cache
+    final recipProv = context.read<RecipientAddressProvider>();
+    final existing = recipProv.byAddress(peerAddr);
+    if (existing != null) {
+      tx['recName'] = existing.name;
+      tx['recColor'] = existing.color;
+      // If you want the list behind the modal to reflect this immediately:
+      if (mounted) setState(() {});
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -489,7 +566,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
         return DraggableScrollableSheet(
           expand: false,
           maxChildSize: 0.95,
-          initialChildSize: 0.55,
+          initialChildSize: 0.62,
           minChildSize: 0.40,
           builder: (context, scroll) {
             return SingleChildScrollView(
@@ -549,35 +626,39 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    "${amount.toStringAsFixed(6)} $asset",
-                    style: TextStyle(
-                      color: colors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (rec != null) ...[
-                    const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Color(rec.color).withOpacity(0.14),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Color(rec.color).withOpacity(0.35)),
-                      ),
-                      child: Text(
-                        rec.name,
+
+                  // Amount + asset logo
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _assetLogo(context: context, asset: asset, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        "${amount.toStringAsFixed(6)} $asset",
                         style: TextStyle(
-                          color: Color(rec.color),
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 22,
+                          letterSpacing: -0.2,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // 🔹 Contact chip shown using existing (auto-applied if present)
+                  _ContactRow(
+                    colors: colors,
+                    peerAddr: peerAddr,
+                    existing: existing,
+                    onChanged: (rec) {
+                      // if user edits/saves, persist change into tx cache and rebuild
+                      tx['recName'] = rec?.name;
+                      tx['recColor'] = rec?.color;
+                      setState(() {});
+                    },
+                  ),
+
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -592,11 +673,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   const SizedBox(height: 14),
                   const Divider(height: 1),
                   const SizedBox(height: 12),
+
+                  // 🔹 From/To rows automatically show contact name if it exists
                   _kv(
                     context: context,
                     colors: colors,
                     label: "From",
-                    value: _prettyAddr(from, rec, isIncoming ? false : null),
+                    value: _prettyAddr(from, existing, isIncoming ? false : null),
                     mono: false,
                     copyable: true,
                   ),
@@ -605,7 +688,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     context: context,
                     colors: colors,
                     label: "To",
-                    value: _prettyAddr(to, rec, isIncoming ? true : null),
+                    value: _prettyAddr(to, existing, isIncoming ? true : null),
                     mono: false,
                     copyable: true,
                   ),
@@ -618,6 +701,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     mono: true,
                     copyable: true,
                   ),
+
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -693,6 +777,54 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+
+  // Inside _TransactionScreenState
+  Widget _kv({
+    required BuildContext context,
+    required AppColor colors,
+    required String label,
+    required String value,
+    bool mono = false,
+    bool copyable = false,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SelectableText(
+            value.isEmpty ? '—' : value,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontFamily: mono ? 'monospace' : null,
+              fontSize: 13.5,
+            ),
+          ),
+        ),
+        if (copyable && value.isNotEmpty)
+          IconButton(
+            splashRadius: 18,
+            icon: Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: value));
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Copied')),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
   /* ===================== Helpers ===================== */
 
   String? _stellarExplorerTx(String hash, StellarWalletService svc) {
@@ -703,27 +835,103 @@ class _TransactionScreenState extends State<TransactionScreen> {
     return 'https://stellar.expert/explorer/$net/tx/$hash';
   }
 
-  Widget _buildLeadingAvatar({
+  // Leading avatar with optional contact color and overlaid asset logo from AssetProvider
+  Widget _buildLeadingAvatarWithLogo({
+    required BuildContext context,
     required AppColor colors,
     required bool isIncoming,
-    RecipientAddress? rec,
+    required String asset,
+    String? recName,
+    int? recColor,
   }) {
-    if (rec != null) {
-      final bg = Color(rec.color);
-      final initial = rec.name.trim().isNotEmpty
-          ? rec.name.trim().characters.first.toUpperCase()
+    // Base avatar (contact-colored or direction arrow)
+    Widget baseAvatar;
+    if (recName != null && recColor != null) {
+      final bg = Color(recColor);
+      final initial = recName.trim().isNotEmpty
+          ? recName.trim().characters.first.toUpperCase()
           : '•';
-      return CircleAvatar(
+      baseAvatar = CircleAvatar(
         backgroundColor: bg,
         foregroundColor: Colors.white,
         child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w800)),
       );
+    } else {
+      baseAvatar = CircleAvatar(
+        backgroundColor: (isIncoming ? colors.success : colors.error).withOpacity(0.15),
+        child: Icon(
+          isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
+          color: isIncoming ? colors.success : colors.error,
+        ),
+      );
     }
-    return CircleAvatar(
-      backgroundColor: (isIncoming ? colors.success : colors.error).withOpacity(0.15),
-      child: Icon(
-        isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
-        color: isIncoming ? colors.success : colors.error,
+
+    // Size + overlay logo (overflow-proof)
+    const double outer = 40;
+    const double logoSize = 16;
+
+    return SizedBox(
+      width: outer,
+      height: outer,
+      child: Stack(
+        children: [
+          Align(
+            alignment: Alignment.center,
+            child: SizedBox(width: outer, height: outer, child: baseAvatar),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: colors.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: colors.primary.withOpacity(0.12)),
+              ),
+              padding: const EdgeInsets.all(1.5),
+              child: _assetLogo(context: context, asset: asset, size: logoSize),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Asset logo using AssetProvider.logoFor(); graceful fallback to XLM logo if provider missing.
+  Widget _assetLogo({
+    required BuildContext context,
+    required String asset,
+    required double size,
+  }) {
+    String url = _FALLBACK_XLM_LOGO;
+    try {
+      final ap = context.read<AssetProvider>();
+      url = ap.logoFor(asset);
+    } catch (_) {
+      // Provider not found; keep fallback.
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              asset.isNotEmpty ? asset.characters.first.toUpperCase() : '•',
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+            ),
+          );
+        },
       ),
     );
   }
@@ -744,44 +952,209 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 }
 
-/* ===================== Shared KV row ===================== */
-Widget _kv({
-  required BuildContext context,
-  required AppColor colors,
-  required String label,
-  required String value,
-  bool mono = false,
-  bool copyable = false,
-}) {
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SizedBox(
-        width: 70,
-        child: Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 12.5)),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: SelectableText(
-          value.isEmpty ? '—' : value,
-          style: TextStyle(
-            color: colors.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontFamily: mono ? 'monospace' : null,
-            fontSize: 13.5,
+/* ===================== Contact row (save / edit) ===================== */
+class _ContactRow extends StatelessWidget {
+  final AppColor colors;
+  final String peerAddr;
+  final RecipientAddress? existing;
+  final ValueChanged<RecipientAddress?> onChanged;
+
+  const _ContactRow({
+    required this.colors,
+    required this.peerAddr,
+    required this.existing,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rec = existing ??
+        context.read<RecipientAddressProvider>().byAddress(peerAddr);
+    final has = rec != null;
+
+    return Row(
+      children: [
+        if (has)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Color(rec!.color).withOpacity(0.14),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Color(rec.color).withOpacity(0.35)),
+            ),
+            child: Text(
+              rec.name,
+              style: TextStyle(
+                color: Color(rec.color),
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
           ),
+        if (has) const SizedBox(width: 8),
+        TextButton.icon(
+          onPressed: () =>
+              _showContactEditor(context, peerAddr, rec, onChanged),
+          icon: Icon(has ? LucideIcons.userCog : LucideIcons.userPlus, size: 16,
+              color: colors.primary),
+          label: Text(has ? 'Edit Contact' : 'Save Contact',
+              style: TextStyle(
+                  color: colors.primary, fontWeight: FontWeight.w700)),
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
         ),
+      ],
+    );
+  }
+
+  static Future<void> _showContactEditor(BuildContext context,
+      String addr,
+      RecipientAddress? existing,
+      ValueChanged<RecipientAddress?> onChanged,) async {
+    final colors = AppColor.of(context);
+    final prov = context.read<RecipientAddressProvider>();
+
+    final nameCtl = TextEditingController(text: existing?.name ?? '');
+    int chosen = existing?.color ?? _TransactionScreenState._colorChoices.first;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      if (copyable && value.isNotEmpty)
-        IconButton(
-          splashRadius: 18,
-          icon: Icon(LucideIcons.copy, size: 16, color: colors.textSecondary),
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: value));
-            // ignore: use_build_context_synchronously
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery
+                    .of(ctx)
+                    .viewInsets
+                    .bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.primary.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    existing == null ? 'Save Contact' : 'Edit Contact',
+                    style: TextStyle(fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: colors.textPrimary),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameCtl,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'e.g. Alice',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                        'Color', style: TextStyle(color: colors.textSecondary)),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _TransactionScreenState._colorChoices.map((c) {
+                      final sel = c == chosen;
+                      return GestureDetector(
+                        onTap: () => setModalState(() => chosen = c),
+                        // ✅ FIX: no void-expression error
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Color(c),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: sel ? Colors.white : Colors.transparent,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: sel
+                              ? const Icon(
+                              Icons.check, size: 18, color: Colors.white)
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text('Cancel', style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final name = nameCtl.text.trim();
+                            if (name.isEmpty) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Please enter a name')),
+                              );
+                              return;
+                            }
+                            RecipientAddress saved;
+                            if (existing == null) {
+                              saved = await prov.add(
+                                  name: name, address: addr, color: chosen);
+                            } else {
+                              saved = (await prov.update(
+                                  existing.id, name: name, color: chosen)) ??
+                                  existing;
+                            }
+                            onChanged(saved);
+                            if (context.mounted) Navigator.pop(ctx);
+                          },
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: colors.primary, elevation: 0),
+                          child: const Text('Save'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
           },
-        ),
-    ],
-  );
+        );
+      },
+    );
+  }
+
 }

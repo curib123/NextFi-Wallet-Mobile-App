@@ -18,11 +18,11 @@ class AssetWidget extends StatelessWidget {
     required this.logos,
     required this.xlmBalance,
     required this.usdcBalance,
-    required this.address,                 // NEW: needed to open ReceiveScreen
+    required this.address,                 // used to open ReceiveScreen
     this.loading = false,
     this.onRefresh,
     this.window = PriceWindow.h24,
-    this.onItemTap,                        // NEW: optional override
+    this.onItemTap,                        // optional override
   });
 
   final AppColor colors;
@@ -30,20 +30,20 @@ class AssetWidget extends StatelessWidget {
   final Map<String, String> logos;
   final double xlmBalance;
   final double usdcBalance;
-  final String address;                    // NEW
+  final String address;                    // wallet public address
   final bool loading;
   final Future<void> Function()? onRefresh;
   final PriceWindow window;
 
   /// Optional override if you want to handle navigation yourself.
-  /// Receives the token string ('TRX' or 'USDT') that was tapped.
-  final void Function(String token)? onItemTap; // NEW
+  /// Receives the token string ('XLM' or 'USDC') that was tapped.
+  final void Function(String token)? onItemTap;
 
   double _balanceFor(AssetModel a) {
     switch (a.symbol.toUpperCase()) {
-      case 'TRX':
+      case 'XLM':
         return xlmBalance;
-      case 'USDT':
+      case 'USDC':
         return usdcBalance;
       default:
         return 0.0;
@@ -53,9 +53,9 @@ class AssetWidget extends StatelessWidget {
   double _fiatFor(BuildContext ctx, AssetModel a) {
     final cur = ctx.read<CurrencyProvider>();
     switch (a.symbol.toUpperCase()) {
-      case 'TRX':
+      case 'XLM':
         return cur.xlmToFiat(xlmBalance);
-      case 'USDT':
+      case 'USDC':
         return cur.usdcToFiat(usdcBalance);
       default:
         return 0.0;
@@ -77,7 +77,7 @@ class AssetWidget extends StatelessWidget {
 
   void _openReceive(BuildContext context, AssetModel a) {
     final t = a.symbol.toUpperCase();
-    final token = (t == 'USDT') ? 'USDT' : 'TRX'; // default to TRX if unknown
+    final token = (t == 'USDC') ? 'USDC' : 'XLM'; // default to XLM if unknown
 
     if (onItemTap != null) {
       onItemTap!(token);
@@ -120,7 +120,7 @@ class AssetWidget extends StatelessWidget {
         final logoUrl = logos[a.id];
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16,),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Material(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),

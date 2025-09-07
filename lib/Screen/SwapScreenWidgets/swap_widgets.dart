@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Provider/AssetProvider.dart';
 
-/* ======================= Compact, reusable widgets ======================= */
+/* ======================= Compact, reusable widgets (XLM / USDC) ======================= */
 
 class PageLoader extends StatelessWidget {
   const PageLoader({super.key});
@@ -42,46 +44,51 @@ class ErrorCard extends StatelessWidget {
 }
 
 class BalanceRow extends StatelessWidget {
-  final double trx, usdt;
-  const BalanceRow({super.key, required this.trx, required this.usdt});
+  final double xlm, usdc;
+  const BalanceRow({super.key, required this.xlm, required this.usdc});
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    Widget chip(String label, String value, IconData icon) => Container(
+
+    // chip now uses token LOGO via AssetProvider instead of a generic Icon
+    Widget chip(String assetKey, String value) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: c.primary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: c.primary.withOpacity(0.14)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 16, color: c.primary),
-        const SizedBox(width: 6),
-        Text('$label: ', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
-        Text(value, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AssetLogo(asset: assetKey, size: 16),
+          const SizedBox(width: 6),
+          Text('$assetKey: ', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+          Text(value, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
+        ],
+      ),
     );
 
     String _num(double v) => v.toStringAsFixed(v >= 100 ? 2 : 4);
 
     return Row(
       children: [
-        Expanded(child: chip('TRX', _num(trx), LucideIcons.triangle)),
+        Expanded(child: chip('XLM', _num(xlm))),
         const SizedBox(width: 8),
-        Expanded(child: chip('USDT', _num(usdt), LucideIcons.banknote)),
+        Expanded(child: chip('USDC', _num(usdc))),
       ],
     );
   }
 }
 
 class DirectionSegmented extends StatelessWidget {
-  final bool isTrxToUsdt;
+  final bool isXlmToUsdc;
   final VoidCallback onFlip;
   final AnimationController controller;
   const DirectionSegmented({
     super.key,
-    required this.isTrxToUsdt,
+    required this.isXlmToUsdc,
     required this.onFlip,
     required this.controller,
   });
@@ -100,26 +107,29 @@ class DirectionSegmented extends StatelessWidget {
         children: [
           Expanded(
             child: _SegBtn(
-              active: isTrxToUsdt,
-              label: 'TRX → USDT',
+              active: isXlmToUsdc,
+              // keep text; logos are on the chips and summary; flip button remains an icon
+              label: 'XLM → USDC',
               onTap: () {
-                if (!isTrxToUsdt) onFlip();
+                if (!isXlmToUsdc) onFlip();
               },
             ),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: _SegBtn(
-              active: !isTrxToUsdt,
-              label: 'USDT → TRX',
+              active: !isXlmToUsdc,
+              label: 'USDC → XLM',
               onTap: () {
-                if (isTrxToUsdt) onFlip();
+                if (isXlmToUsdc) onFlip();
               },
             ),
           ),
           const SizedBox(width: 6),
           RotationTransition(
-            turns: Tween(begin: 0.0, end: 0.5).animate(CurvedAnimation(parent: controller, curve: Curves.easeOut)),
+            turns: Tween(begin: 0.0, end: 0.5).animate(
+              CurvedAnimation(parent: controller, curve: Curves.easeOut),
+            ),
             child: IconButton(
               visualDensity: VisualDensity.compact,
               onPressed: onFlip,
@@ -190,7 +200,7 @@ class AmountField extends StatelessWidget {
         foregroundColor: c.primary,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
-      child: Text(t, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: const Text(''),
     );
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
@@ -200,7 +210,8 @@ class AmountField extends StatelessWidget {
           child: TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,6}$'))],
+            // Stellar supports up to 7 decimal places
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
             decoration: InputDecoration(
               hintText: '0.0',
               filled: true,
@@ -228,10 +239,42 @@ class AmountField extends StatelessWidget {
       const SizedBox(height: 6),
       Row(
         children: [
-          pct('25%', 0.25),
-          pct('50%', 0.50),
-          pct('75%', 0.75),
-          pct('100%', 1.00),
+          TextButton(
+            onPressed: () => onPct(0.25),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              foregroundColor: c.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('25%', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+            onPressed: () => onPct(0.50),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              foregroundColor: c.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('50%', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+            onPressed: () => onPct(0.75),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              foregroundColor: c.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('75%', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+            onPressed: () => onPct(1.00),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              foregroundColor: c.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('100%', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     ]);
@@ -275,7 +318,7 @@ class MinReceiveRow extends StatelessWidget {
                 controller: valueCtl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 textAlign: TextAlign.right,
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,6}$'))],
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
                 decoration: InputDecoration(
                   hintText: '0.0 $toSymbol',
                   isDense: true,
@@ -310,15 +353,15 @@ class MinReceiveRow extends StatelessWidget {
 
 class FeeRow extends StatelessWidget {
   final bool auto;
-  final double feeTrx;
-  final double min, max;
-  final ValueChanged<bool> onMode;     // pass true => auto, false => custom
+  final double feeXlm; // in XLM units
+  final double min, max; // slider bounds in XLM
+  final ValueChanged<bool> onMode; // pass true => auto, false => custom
   final ValueChanged<double> onChange; // slider (custom)
   final AppColor colors;
   const FeeRow({
     super.key,
     required this.auto,
-    required this.feeTrx,
+    required this.feeXlm,
     required this.min,
     required this.max,
     required this.onMode,
@@ -329,6 +372,10 @@ class FeeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colors;
+    final fmt = NumberFormat('#,##0.0000000');
+    // Stellar base fee ~100 stroops/op = 0.0000100 XLM per operation.
+    final autoText = 'Auto (≈ 0.0000100 XLM)';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -341,19 +388,19 @@ class FeeRow extends StatelessWidget {
           Row(children: [
             Text('Network fee limit', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700)),
             const Spacer(),
-            Text(auto ? 'Auto (5 TRX)' : '${feeTrx.toStringAsFixed(0)} TRX', style: TextStyle(color: c.textSecondary)),
+            Text(auto ? autoText : '${fmt.format(feeXlm)} XLM', style: TextStyle(color: c.textSecondary)),
             const SizedBox(width: 6),
-            // Toggle only to switch modes; default (auto=5 TRX) works even untouched
+            // Toggle only to switch modes; default auto works even untouched
             Switch.adaptive(value: auto, onChanged: onMode, activeColor: c.primary),
           ]),
           if (!auto) ...[
             const SizedBox(height: 6),
             Slider(
-              value: feeTrx.clamp(min, max),
+              value: feeXlm.clamp(min, max),
               min: min,
               max: max,
-              divisions: (max - min).toInt(),
-              label: '${feeTrx.toStringAsFixed(0)} TRX',
+              divisions: 20,
+              label: '${fmt.format(feeXlm)} XLM',
               onChanged: onChange,
               activeColor: c.primary,
             ),
@@ -361,9 +408,15 @@ class FeeRow extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 6,
-              children: [5, 10, 20, 40, 60].map((v) {
+              children: [
+                0.0000100,
+                0.0000500,
+                0.0001000,
+                0.0005000,
+                0.0010000,
+              ].map((v) {
                 return InkWell(
-                  onTap: () => onChange(v.toDouble()),
+                  onTap: () => onChange(v),
                   borderRadius: BorderRadius.circular(999),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -372,7 +425,7 @@ class FeeRow extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(color: c.border),
                     ),
-                    child: Text('$v TRX', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700)),
+                    child: Text('${fmt.format(v)} XLM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700)),
                   ),
                 );
               }).toList(),
@@ -387,7 +440,6 @@ class FeeRow extends StatelessWidget {
 class SummaryCard extends StatelessWidget {
   final String from, to;
   final double amount;
-  final double? minOut;
   final String feeText;
   final AppColor colors;
   final NumberFormat fmt;
@@ -396,7 +448,6 @@ class SummaryCard extends StatelessWidget {
     required this.from,
     required this.to,
     required this.amount,
-    required this.minOut,
     required this.feeText,
     required this.colors,
     required this.fmt,
@@ -416,7 +467,6 @@ class SummaryCard extends StatelessWidget {
         children: [
           SummaryRow(label: 'Route', value: '$from → $to'),
           SummaryRow(label: 'Amount', value: '${fmt.format(amount)} $from'),
-          if (minOut != null) SummaryRow(label: 'Min receive', value: '${fmt.format(minOut)} $to'),
           SummaryRow(label: 'Fee limit', value: feeText),
         ],
       ),
@@ -438,8 +488,65 @@ class SummaryRow extends StatelessWidget {
         children: [
           SizedBox(width: 110, child: Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12.5))),
           Expanded(
-              child: Text(value, textAlign: TextAlign.right, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800))),
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/* ======================= Shared: token logo (via AssetProvider) ======================= */
+
+class AssetLogo extends StatelessWidget {
+  final String asset; // 'XLM' or 'USDC' (case-insensitive is fine)
+  final double size;
+  final double radius;
+  const AssetLogo({
+    super.key,
+    required this.asset,
+    required this.size,
+    this.radius = 999,
+  });
+
+  static const String _fallbackXlm =
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png';
+
+  @override
+  Widget build(BuildContext context) {
+    // Resolve logo URL via provider with graceful fallback.
+    String url = _fallbackXlm;
+    try {
+      final ap = context.read<AssetProvider>();
+      url = ap.logoFor(asset);
+    } catch (_) {
+      // Provider not found; keep fallback.
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          // Fallback to an initial if image fails
+          return Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(color: Colors.black12, shape: BoxShape.circle),
+            child: Text(
+              asset.isNotEmpty ? asset.characters.first.toUpperCase() : '•',
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+            ),
+          );
+        },
       ),
     );
   }

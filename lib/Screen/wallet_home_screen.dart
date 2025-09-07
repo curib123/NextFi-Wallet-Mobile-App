@@ -125,7 +125,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   /* ================= Data ================= */
   Future<void> _loadWallet() async {
     final mnemonic = await SeedStorage.getSeed();
-    if (!mounted || mnemonic == null || mnemonic.isEmpty) return;
+    if (!mounted || mnemonic == null || mnemonic.isEmpty) {
+      // New user: no wallet yet → show 0 total instead of endless loader
+      if (mounted) {
+        setState(() {
+          _xlmBalance = 0;
+          _usdcBalance = 0;
+          _loadingBalances = false;
+          _lastBalancesAt = DateTime.now();
+        });
+      }
+      return;
+    }
 
     try {
       final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
@@ -140,6 +151,13 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       _startRealtime();
     } catch (_) {
       if (!mounted) return;
+      // On any error, still fall back to zeros so the UI is stable
+      setState(() {
+        _xlmBalance = 0;
+        _usdcBalance = 0;
+        _loadingBalances = false;
+        _lastBalancesAt = DateTime.now();
+      });
       showFloatingSnackBar(
         context,
         message: 'Failed to load Stellar wallet. Please check your mnemonic.',
@@ -148,22 +166,43 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     }
   }
 
+
   Future<void> _fetchBalances({bool force = false}) async {
-    if (_stellarAccountId == null) return;
+    if (_stellarAccountId == null) {
+      // No account yet — treat as 0 balances
+      if (mounted && _loadingBalances) {
+        setState(() {
+          _xlmBalance = 0;
+          _usdcBalance = 0;
+          _loadingBalances = false;
+          _lastBalancesAt = DateTime.now();
+        });
+      }
+      return;
+    }
     if (_balancesInFlight) return;
     if (!force && !_isStale(_lastBalancesAt, _minBalancesGap)) return;
 
     _balancesInFlight = true;
     try {
-      final res = await Future.wait([
-        _stellar.getXlmBalance(_stellarAccountId!),
-        _stellar.getUsdcBalance(_stellarAccountId!),
-      ]);
+      final results = await Future.wait<double>([
+        _stellar.getXlmBalance(_stellarAccountId!).catchError((_) => 0.0),
+        _stellar.getUsdcBalance(_stellarAccountId!).catchError((_) => 0.0),
+      ], eagerError: false);
 
       if (!mounted) return;
       setState(() {
-        _xlmBalance = (res[0] as num).toDouble();
-        _usdcBalance = (res[1] as num).toDouble();
+        _xlmBalance = results[0];
+        _usdcBalance = results[1];
+        _loadingBalances = false;
+        _lastBalancesAt = DateTime.now();
+      });
+    } catch (_) {
+      // Any unexpected error → show zeros so Total still renders
+      if (!mounted) return;
+      setState(() {
+        _xlmBalance = 0;
+        _usdcBalance = 0;
         _loadingBalances = false;
         _lastBalancesAt = DateTime.now();
       });
@@ -442,13 +481,18 @@ class _HeaderSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final totalFiat = currency.xlmToFiat(xlmBalance) + currency.usdcToFiat(usdcBalance);
+
+    final fxXlm  = currency.xlmToFiat(xlmBalance);
+    final fxUsdc = currency.usdcToFiat(usdcBalance);
+    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
+          margin: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(16),
@@ -464,7 +508,7 @@ class _HeaderSection extends StatelessWidget {
                   Row(
                     children: [
                       Text('Total Balance',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: colors.textSecondary)),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: colors.textSecondary)),
                       const SizedBox(width: 6),
                       GestureDetector(
                         onTap: onToggleHide,
@@ -513,6 +557,7 @@ class _HeaderSection extends StatelessWidget {
             ],
           ),
         ),
+        SizedBox(height: 30,),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -537,14 +582,14 @@ class _AnimatedFiat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => value == null
-      ? Text('••••', style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold, color: textColor))
+      ? Text('••••', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: textColor))
       : AnimatedSwitcher(
     duration: const Duration(milliseconds: 250),
     transitionBuilder: (c, a) => FadeTransition(opacity: a, child: c),
     child: Text(
       currencyFmt.format(value),
       key: ValueKey(value),
-      style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold, color: textColor),
+      style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: textColor),
     ),
   );
 }

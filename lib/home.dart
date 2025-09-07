@@ -104,8 +104,8 @@ class _HomeState extends State<Home> {
                   label: 'Swap',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.zap),
-                  label: 'Stake',
+                  icon: Icon(LucideIcons.settings),
+                  label: 'Settings',
                 ),
 
               ],

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -106,24 +107,20 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
           icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          "Receive",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary),
+        // ✅ Add logo in the title and remove address from the top (no address chip/action here)
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AssetLogo(asset: currentToken, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              "Receive",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary),
+            ),
+          ],
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: "Copy address",
-            icon: Icon(LucideIcons.copy, color: colors.textPrimary),
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: widget.address));
-              HapticFeedback.lightImpact();
-              if (mounted) {
-                showFloatingSnackBar(context, message: "Address copied", type: SnackBarType.success);
-              }
-            },
-          ),
-        ],
+        // 🗑️ Removed the "copy address" action from the top app bar
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
@@ -146,9 +143,28 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                 unselectedLabelColor: colors.textSecondary,
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
-                tabs: const [
-                  Tab(text: 'XLM'),
-                  Tab(text: 'USDC'),
+                // ✅ Tabs with logos
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        AssetLogo(asset: 'XLM', size: 14),
+                        SizedBox(width: 6),
+                        Text('XLM'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        AssetLogo(asset: 'USDC', size: 14),
+                        SizedBox(width: 6),
+                        Text('USDC'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -219,6 +235,20 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                   ),
                   child: Column(
                     children: [
+                      // ✅ Small logo above QR
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AssetLogo(asset: currentToken, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Scan to receive $currentToken',
+                              style: TextStyle(
+                                color: colors.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              )),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
                       QrImageView(
                         data: widget.address,
                         version: QrVersions.auto,
@@ -236,7 +266,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 16),
 
-              // Address card
+              // Address card (still available lower on the page; top address removed)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
@@ -245,7 +275,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                 ),
                 child: Row(
                   children: [
-                    Icon(LucideIcons.qrCode, color: colors.primary, size: 18),
+                    // ✅ Token logo next to the address
+                    AssetLogo(asset: currentToken, size: 18),
                     const SizedBox(width: 10),
                     Expanded(
                       child: SelectableText(
@@ -283,7 +314,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(LucideIcons.alertTriangle, color: colors.primary, size: 20),
+                    AssetLogo(asset: currentToken, size: 18), // ✅ small logo for context
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -316,9 +347,17 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  "Receive $currentToken",
-                  style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
+                // ✅ Dialog title with logo
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AssetLogo(asset: currentToken, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Receive $currentToken",
+                      style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 QrImageView(

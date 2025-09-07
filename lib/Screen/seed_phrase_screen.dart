@@ -141,9 +141,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                   Expanded(
                     child: FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      style: ButtonStyle(
-                        backgroundColor: WidgetStatePropertyAll(colors.primary),
-                        foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                      style: const ButtonStyle(
+                        backgroundColor: MaterialStatePropertyAll(Colors.black), // overwritten below
+                        foregroundColor: MaterialStatePropertyAll(Colors.white),
+                      ).copyWith(
+                        backgroundColor: MaterialStatePropertyAll(colors.primary),
                       ),
                       child: const Text('Generate'),
                     ),
@@ -271,8 +273,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                     child: FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
                       style: ButtonStyle(
-                        backgroundColor: WidgetStatePropertyAll(colors.primary),
-                        foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                        backgroundColor: MaterialStatePropertyAll(colors.primary),
+                        foregroundColor: const MaterialStatePropertyAll(Colors.white),
                       ),
                       child: const Text('Copy anyway'),
                     ),
@@ -437,49 +439,60 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
         _ack1 = tempAck1;
         _ack2 = tempAck2;
       });
-      await _secureAndContinue();
+      await _startAuthFlow(); // <<< now goes through AuthGateScreen
     }
   }
 
-  Future<void> _secureAndContinue() async {
+  /// Pushes AuthGateScreen and runs the secure-save logic inside its `goNext`.
+  Future<void> _startAuthFlow() async {
     if (_obscured || !_ack1 || !_ack2 || _isLoading) return;
 
-    try {
-      setState(() => _isLoading = true);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AuthGateScreen(
+          goNext: () async {
+            if (_isLoading) return;
+            if (!mounted) return;
+            setState(() => _isLoading = true);
 
-      final ok = await SeedStorage.saveSeed(_mnemonic);
-      if (!ok) {
-        showFloatingSnackBar(
-          context,
-          message: "Failed to save your wallet. Please try again.",
-          type: SnackBarType.error,
-        );
-        return;
-      }
+            try {
+              final ok = await SeedStorage.saveSeed(_mnemonic);
+              if (!ok) {
+                showFloatingSnackBar(
+                  context,
+                  message: "Failed to save your wallet. Please try again.",
+                  type: SnackBarType.error,
+                );
+                return;
+              }
 
-      // Optional sanity check
-      final stored = await SeedStorage.getSeed();
-      if (stored == null || stored.isEmpty) {
-        showFloatingSnackBar(
-          context,
-          message: "Could not verify saved phrase. Please try again.",
-          type: SnackBarType.error,
-        );
-        return;
-      }
+              final stored = await SeedStorage.getSeed();
+              if (stored == null || stored.isEmpty) {
+                showFloatingSnackBar(
+                  context,
+                  message: "Could not verify saved phrase. Please try again.",
+                  type: SnackBarType.error,
+                );
+                return;
+              }
 
-      // Move on only after a confirmed save
-      context.read<TabProvider>().setTab(1);
-      Phoenix.rebirth(context); // or Navigator.pushReplacement(...) to your home
-    } catch (e) {
-      showFloatingSnackBar(
-        context,
-        message: "Unexpected error: $e",
-        type: SnackBarType.error,
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+              if (!mounted) return;
+              context.read<TabProvider>().setTab(1);
+              Phoenix.rebirth(context);
+            } catch (e) {
+              showFloatingSnackBar(
+                context,
+                message: "Unexpected error: $e",
+                type: SnackBarType.error,
+              );
+            } finally {
+              if (mounted) setState(() => _isLoading = false);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override

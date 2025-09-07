@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
@@ -13,7 +14,7 @@ import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Screen/qr_code_scanner.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
-// Shared UI kit
+// Shared UI kit (now includes AssetLogo)
 import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
 
 class SendScreen extends StatefulWidget {
@@ -58,18 +59,10 @@ class _SendScreenState extends State<SendScreen> {
   bool get _isTestnet => identical(_sdk, StellarSDK.TESTNET);
   Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
-  // Issuers (match StellarWalletService defaults/overrides)
-  static const String _USDC_ISSUER_MAINNET =
-      'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
-  static const String _USDC_ISSUER_TESTNET =
-      'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
-  String get _usdcIssuer =>
-      _isTestnet
-          ? (_stellar.usdcIssuerOverrideTestnet ?? _USDC_ISSUER_TESTNET)
-          : (_stellar.usdcIssuerOverrideMainnet ?? _USDC_ISSUER_MAINNET);
+
 
   Asset get _assetXlm => Asset.NATIVE;
-  Asset get _assetUsdc => AssetTypeCreditAlphaNum4('USDC', _usdcIssuer);
+  Asset get _assetUsdc => AssetTypeCreditAlphaNum4('USDC', _stellar.usdcIssuerOverrideMainnet!);
 
   // Lightweight “estimate” / checks (USDC trustline etc.)
   Timer? _debounce;
@@ -195,7 +188,7 @@ class _SendScreenState extends State<SendScreen> {
     // Check balances to see if trustline already exists
     final acc = await _sdk.accounts.account(kp.accountId);
     final exists = acc.balances.any(
-          (b) => b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer,
+          (b) => b.assetCode == 'USDC' && b.assetIssuer == _stellar.usdcIssuerOverrideMainnet!,
     );
     if (exists) return;
 
@@ -274,8 +267,6 @@ class _SendScreenState extends State<SendScreen> {
       String txId;
 
       if (isXLM) {
-        // If a profit address is configured in service, use the fee-split helper,
-        // otherwise send full amount directly.
         if ((_stellar.profitAddress).trim().isNotEmpty) {
           final hashes = await _stellar.sendXlmWithFee(
             secretSeed: _seedStringFromKeyPair(_keyPair!),
@@ -448,9 +439,19 @@ class _SendScreenState extends State<SendScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(width: 40, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
+
               const SizedBox(height: 10),
-              Text('Review', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AssetLogo(asset: widget.token, size: 18),
+                  const SizedBox(width: 8),
+                  Text('Review', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+                ],
+              ),
+
               const SizedBox(height: 8),
+              // Removed top-level address in the main screen already; keep details in review:
               ReviewRow(label: 'From', value: (_stellarAddress ?? widget.address), mono: true),
               ReviewRow(label: 'To', value: toText, mono: true),
               ReviewRow(label: 'Amount', value: '${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}'),
@@ -526,7 +527,6 @@ class _SendScreenState extends State<SendScreen> {
     final oneTokenInFiat = isXLM ? currency.xlmToFiat(1) : currency.usdcToFiat(1);
     final typedAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
 
-    final fromAddress = _stellarAddress ?? widget.address;
     final t = widget.token.toUpperCase();
 
     return Scaffold(
@@ -538,35 +538,20 @@ class _SendScreenState extends State<SendScreen> {
           icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Send $t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AssetLogo(asset: t, size: 18),
+            const SizedBox(width: 8),
+            Text('Send $t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
+          ],
+        ),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         children: [
-          // From chip (compact)
-          if (fromAddress.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: colors.primary.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.badgeCheck, size: 16, color: colors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(fromAddress,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5, fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
+          // 🗑️ Removed the top "From" address chip per request
 
           // Price + balance (compact)
           PriceHeader(
@@ -670,7 +655,11 @@ class _SendScreenState extends State<SendScreen> {
                     labelText: 'Amount (${widget.token.toUpperCase()})',
                     filled: true,
                     fillColor: colors.primary.withOpacity(0.04),
-                    prefixIcon: Icon(LucideIcons.coins, color: colors.primary),
+                    // ✅ Token logo instead of generic icon
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: AssetLogo(asset: widget.token, size: 20),
+                    ),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -703,10 +692,13 @@ class _SendScreenState extends State<SendScreen> {
                     const Spacer(),
                     Row(
                       children: [
-                        Icon(LucideIcons.banknote, size: 14, color: colors.textSecondary),
+                        // ✅ Token logo beside fiat approximation
+                        AssetLogo(asset: widget.token, size: 14),
                         const SizedBox(width: 6),
-                        Text('≈ ${fiatFmt.format(isXLM ? currency.xlmToFiat(typedAmount) : currency.usdcToFiat(typedAmount))}',
-                            style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        Text(
+                          '≈ ${fiatFmt.format(isXLM ? currency.xlmToFiat(typedAmount) : currency.usdcToFiat(typedAmount))}',
+                          style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                        ),
                       ],
                     ),
                   ],
