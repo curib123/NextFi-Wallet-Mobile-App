@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
@@ -194,51 +195,65 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
                 const SizedBox(height: 32),
 
-                // PIN field with show/hide icon
-                TextField(
-                  controller: _pinController,
-                  keyboardType: TextInputType.number,
-                  obscureText: _obscurePin,
-                  maxLength: 6,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20,
-                    letterSpacing: 8,
-                    fontWeight: FontWeight.bold,
-                    color: colors.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    counterText: "",
-                    filled: true,
-                    fillColor: colors.surface,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colors.primary.withOpacity(0.2)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colors.primary, width: 1.5),
-                    ),
-                    hintText: "••••••",
-                    hintStyle: TextStyle(
-                      fontSize: 20,
-                      letterSpacing: 6,
-                      color: colors.textSecondary.withOpacity(0.4),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePin ? Icons.visibility_off : Icons.visibility,
-                        color: colors.textSecondary,
+                // --- Centered PIN field (replace your current TextField) ---
+                Align(
+                  alignment: Alignment.center,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 280), // <- keeps it narrow & centered
+                    child: TextField(
+                      controller: _pinController,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      obscureText: _obscurePin,
+                      maxLength: 6,
+                      textAlign: TextAlign.center,
+                      textAlignVertical: TextAlignVertical.center,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _onSubmitPin(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        letterSpacing: 8,
+                        fontWeight: FontWeight.bold,
+                        color: colors.textPrimary,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePin = !_obscurePin;
-                        });
-                      },
+                      decoration: InputDecoration(
+                        counterText: "",
+                        filled: true,
+                        fillColor: colors.surface,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: colors.primary.withOpacity(0.2)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: colors.primary, width: 1.5),
+                        ),
+                        hintText: "••••••",
+                        hintStyle: TextStyle(
+                          fontSize: 20,
+                          letterSpacing: 6,
+                          color: colors.textSecondary.withOpacity(0.4),
+                        ),
+
+                        // Keep text VISUALLY centered by balancing the suffix icon width:
+                        prefixIcon: const SizedBox(width: 48),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 48),
+
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePin ? Icons.visibility_off : Icons.visibility,
+                            color: colors.textSecondary,
+                          ),
+                          onPressed: () => setState(() => _obscurePin = !_obscurePin),
+                        ),
+                        suffixIconConstraints: const BoxConstraints(minWidth: 48),
+                      ),
                     ),
                   ),
                 ),
+
 
                 const SizedBox(height: 24),
 

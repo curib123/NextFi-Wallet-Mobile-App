@@ -1,6 +1,8 @@
+// lib/Screen/wallet_creation_screen.dart
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Screen/import_wallet_screen.dart';
@@ -14,6 +16,15 @@ class WalletCreationScreen extends StatefulWidget {
 }
 
 class _WalletCreationScreenState extends State<WalletCreationScreen> {
+  static const _logoAsset = 'assets/icon/icon.png';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Pre-cache the logo to avoid initial flicker
+    precacheImage(const AssetImage(_logoAsset), context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
@@ -31,7 +42,7 @@ class _WalletCreationScreenState extends State<WalletCreationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Moving Icon
+                      // Bouncing App Logo
                       Bounce(
                         infinite: true,
                         duration: const Duration(seconds: 3),
@@ -41,10 +52,12 @@ class _WalletCreationScreenState extends State<WalletCreationScreen> {
                             shape: BoxShape.circle,
                             color: colors.primary.withOpacity(0.08),
                           ),
-                          child: Icon(
-                            LucideIcons.wallet2,
-                            size: 80,
-                            color: colors.primary,
+                          child: Image.asset(
+                            _logoAsset,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                           ),
                         ),
                       ),
