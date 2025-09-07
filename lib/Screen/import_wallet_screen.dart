@@ -72,7 +72,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   Future<void> _importWallet() async {
     final mnemonic = _sanitizedMnemonic(_mnemonicController.text);
 
-    // Validate mnemonic using bip39
+    // 1) Validate mnemonic using bip39
     if (!bip39.validateMnemonic(mnemonic)) {
       showFloatingSnackBar(
         context,
@@ -84,22 +84,30 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
 
     if (!mounted) return;
 
+    // 2) Navigate to AuthGateScreen and run the save logic inside goNext
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AuthGateScreen(
           goNext: () async {
+            if (_isImporting) return;
+            setState(() => _isImporting = true);
+
             try {
-              setState(() => _isImporting = true);
-
-              // Save the mnemonic securely
-              await SeedStorage.saveSeed(mnemonic);
-
-              if (mounted) {
-                final tabProvider = context.read<TabProvider>();
-                tabProvider.setTab(1);
-                Phoenix.rebirth(context);
+              final ok = await SeedStorage.saveSeed(mnemonic);
+              if (!ok) {
+                showFloatingSnackBar(
+                  context,
+                  message: "Failed to save your wallet. Please try again.",
+                  type: SnackBarType.error,
+                );
+                return;
               }
+
+              // Success: set tab and restart
+              if (!mounted) return;
+              context.read<TabProvider>().setTab(1);
+              Phoenix.rebirth(context);
             } catch (e) {
               showFloatingSnackBar(
                 context,

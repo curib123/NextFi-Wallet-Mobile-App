@@ -442,46 +442,44 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   }
 
   Future<void> _secureAndContinue() async {
-    // Guard: must be revealed and acknowledged via modal
-    if (_obscured || !_ack1 || !_ack2) return;
+    if (_obscured || !_ack1 || !_ack2 || _isLoading) return;
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AuthGateScreen(
-          goNext: () async {
-            try {
-              setState(() => _isLoading = true);
+    try {
+      setState(() => _isLoading = true);
 
-              await SeedStorage.saveSeed(_mnemonic);
+      final ok = await SeedStorage.saveSeed(_mnemonic);
+      if (!ok) {
+        showFloatingSnackBar(
+          context,
+          message: "Failed to save your wallet. Please try again.",
+          type: SnackBarType.error,
+        );
+        return;
+      }
 
-              final storedMnemonic = await SeedStorage.getSeed();
-              if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
-                if (mounted) {
-                  final tabProvider = context.read<TabProvider>();
-                  tabProvider.setTab(1);
-                  Phoenix.rebirth(context);
-                }
-              } else {
-                showFloatingSnackBar(
-                  context,
-                  message: "Failed to save your wallet. Please try again.",
-                  type: SnackBarType.error,
-                );
-              }
-            } catch (e) {
-              showFloatingSnackBar(
-                context,
-                message: "Unexpected error: $e",
-                type: SnackBarType.error,
-              );
-            } finally {
-              if (mounted) setState(() => _isLoading = false);
-            }
-          },
-        ),
-      ),
-    );
+      // Optional sanity check
+      final stored = await SeedStorage.getSeed();
+      if (stored == null || stored.isEmpty) {
+        showFloatingSnackBar(
+          context,
+          message: "Could not verify saved phrase. Please try again.",
+          type: SnackBarType.error,
+        );
+        return;
+      }
+
+      // Move on only after a confirmed save
+      context.read<TabProvider>().setTab(1);
+      Phoenix.rebirth(context); // or Navigator.pushReplacement(...) to your home
+    } catch (e) {
+      showFloatingSnackBar(
+        context,
+        message: "Unexpected error: $e",
+        type: SnackBarType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
