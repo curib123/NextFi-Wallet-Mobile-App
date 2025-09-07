@@ -67,7 +67,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
 
   Future<void> _generateMnemonic() async {
     try {
-      final m = await StellarWalletService.generateMnemonic(); // ✅ Stellar service (24 words)
+      final m = await StellarWalletService.generateMnemonic();
       if (!mounted) return;
       setState(() {
         _mnemonic = m.trim();
