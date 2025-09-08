@@ -270,6 +270,7 @@ class CurrencyProvider extends ChangeNotifier {
     return null;
   }
 
+
   Future<double?> _usdtToUsdc() async {
     // Use Coinbase rates to approximate USDT→USDC
     // USDT→USD and USDC→USD => USDT/USDC = (USDT→USD)/(USDC→USD)
