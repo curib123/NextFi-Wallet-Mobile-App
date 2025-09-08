@@ -6,7 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/wallet_screen_settings.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/Services/wallet_secure_storage.dart';
+// removed: wallet_secure_storage.dart
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
@@ -127,7 +127,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   /* ================= Data ================= */
   Future<void> _loadWallet() async {
-    final mnemonic = await SeedStorage.getSeed();
+    final mnemonic = await SeedStorage.getSeed(); // active wallet seed
     if (!mounted || mnemonic == null || mnemonic.isEmpty) {
       // New user: no wallet yet → show 0 total instead of endless loader
       if (mounted) {
@@ -168,7 +168,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       );
     }
   }
-
 
   Future<void> _fetchBalances({bool force = false}) async {
     if (_stellarAccountId == null) {
@@ -292,7 +291,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       incomingStrip: (_stellarAccountId != null)
                           ? IncomingHintsStrip(
                         colors: colors,
-                          stellarAddress: _stellarAccountId!,
+                        stellarAddress: _stellarAccountId!,
                         incomingHints: _incomingHints,
                         onAcknowledge: (tx) {
                           final id = _txIdOf(tx);
@@ -431,17 +430,17 @@ class _TopBar extends StatefulWidget {
 }
 
 class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
-  String _name = WalletSecureStorage.defaultWalletName;
+  static const String _defaultWalletName = "My Wallet";
+  String _name = _defaultWalletName;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Start with provided label (if any), else default.
     _name = (widget.walletName?.trim().isNotEmpty ?? false)
         ? widget.walletName!.trim()
-        : WalletSecureStorage.defaultWalletName;
+        : _defaultWalletName;
 
     _loadName();
   }
@@ -452,7 +451,7 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Refresh when returning from background (e.g., after renaming in settings)
+  // Refresh when returning from background (e.g., after renaming/switching/import)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -461,14 +460,12 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
   }
 
   Future<void> _loadName() async {
-    // Reads saved name; falls back to default if none, and writes default if you prefer:
-    // final saved = await WalletSecureStorage.ensureWalletName();
-    final saved = await WalletSecureStorage.readWalletNameOrDefault();
+    final meta = await SeedStorage.getActiveWalletMeta();
     if (!mounted) return;
-
-    final trimmed = saved.trim();
-    if (trimmed != _name) {
-      setState(() => _name = trimmed);
+    final fallback = _defaultWalletName;
+    final next = (meta?.name.trim().isNotEmpty ?? false) ? meta!.name.trim() : fallback;
+    if (next != _name) {
+      setState(() => _name = next);
     }
   }
 
@@ -480,17 +477,20 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
         children: [
           IconButton(
             icon: Icon(LucideIcons.package, color: widget.colors.textPrimary, size: 26),
-            onPressed: () { tabs.setTab(1); }, // Activity tab (change index if needed)
+            onPressed: () { tabs.setTab(1); },
             tooltip: 'Activity',
           ),
-          // Center title (runtime value → no `const`)
+          // Center title → opens wallet settings on tap
           GestureDetector(
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const WalletScreenSettings(),
                 ),
-              );
+              ).then((_) {
+                // After returning from settings, refresh the name
+                _loadName();
+              });
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -506,7 +506,7 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
           ),
           IconButton(
             icon: Icon(LucideIcons.settings, color: widget.colors.textPrimary, size: 26),
-            onPressed: () { tabs.setTab(3); }, // Settings tab (change index if needed)
+            onPressed: () { tabs.setTab(3); },
             tooltip: 'Settings',
           ),
         ],
@@ -553,7 +553,6 @@ class _HeaderSection extends StatelessWidget {
     final fxXlm  = currency.xlmToFiat(xlmBalance);
     final fxUsdc = currency.usdcToFiat(usdcBalance);
     final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
-
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -625,7 +624,7 @@ class _HeaderSection extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: 30,),
+        const SizedBox(height: 30),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
