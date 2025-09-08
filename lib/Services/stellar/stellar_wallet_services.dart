@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 class StellarWalletService {
@@ -5,7 +7,7 @@ class StellarWalletService {
   final StellarSDK sdk;
 
   /// Profit address for 1% fee used by [sendXlmWithFee].
-   String profitAddress = '';
+  String profitAddress = '';
 
   /// Default USDC issuer on Stellar Mainnet (configurable).
   /// You may override in the constructor if needed.
@@ -16,13 +18,12 @@ class StellarWalletService {
   static const String _DEFAULT_USDC_ISSUER_TESTNET =
       'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
-
   /// Optional override for USDC issuer (mainnet / testnet).
   final String? usdcIssuerOverrideMainnet;
   final String? usdcIssuerOverrideTestnet;
 
   StellarWalletService({
-     this.profitAddress = '',
+    this.profitAddress = '',
     bool testnet = false,
     this.usdcIssuerOverrideMainnet,
     this.usdcIssuerOverrideTestnet,
@@ -34,10 +35,9 @@ class StellarWalletService {
 
   Asset get _xlm => Asset.NATIVE;
 
-  String get _usdcIssuer =>
-      _isTestnet
-          ? (usdcIssuerOverrideTestnet ?? _DEFAULT_USDC_ISSUER_TESTNET)
-          : (usdcIssuerOverrideMainnet ?? _DEFAULT_USDC_ISSUER_MAINNET);
+  String get _usdcIssuer => _isTestnet
+      ? (usdcIssuerOverrideTestnet ?? _DEFAULT_USDC_ISSUER_TESTNET)
+      : (usdcIssuerOverrideMainnet ?? _DEFAULT_USDC_ISSUER_MAINNET);
 
   Asset get _usdc => AssetTypeCreditAlphaNum4('USDC', _usdcIssuer);
 
@@ -50,14 +50,21 @@ class StellarWalletService {
   Future<AccountResponse> _loadAccount(String accountId) =>
       sdk.accounts.account(accountId);
 
+  // ---------- PUBLIC helpers (exposed for UI) ----------
+  bool get isTestnet => _isTestnet;
+
+  /// Horizon base used by this SDK instance.
+  String get horizonBase =>
+      _isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org';
+
+  String get usdcIssuer => _usdcIssuer;
+
   // ---------- Wallet Basics ----------
   static Future<String> generateMnemonic() => Wallet.generate24WordsMnemonic();
 
-  static Future<Wallet> walletFromMnemonic(String mnemonic) =>
-      Wallet.from(mnemonic);
+  static Future<Wallet> walletFromMnemonic(String mnemonic) => Wallet.from(mnemonic);
 
-  static Future<KeyPair> getKeyPair(Wallet wallet, {int index = 0}) =>
-      wallet.getKeyPair(index: index);
+  static Future<KeyPair> getKeyPair(Wallet wallet, {int index = 0}) => wallet.getKeyPair(index: index);
 
   // ---------- Balances ----------
   Future<double> getXlmBalance(String accountId) async {
@@ -89,9 +96,7 @@ class StellarWalletService {
   // ---------- Trustlines (USDC) ----------
   Future<bool> hasUsdcTrustline(String accountId) async {
     final acc = await _loadAccount(accountId);
-    return acc.balances.any(
-          (b) => b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer,
-    );
+    return acc.balances.any((b) => b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer);
   }
 
   /// Create/raise USDC trustline for the signer of [secretSeed].
@@ -106,7 +111,7 @@ class StellarWalletService {
 
       final tx = TransactionBuilder(acc)
           .addOperation(ChangeTrustOperationBuilder(_usdc, limit).build())
-          .setMaxOperationFee(100) // 100  / op
+          .setMaxOperationFee(100) // 100 / op
           .build();
 
       tx.sign(kp, _network);
@@ -120,8 +125,7 @@ class StellarWalletService {
   }
 
   /// Ensure the signer has USDC trustline (creates it if missing).
-  Future<void> _ensureUsdcTrustlineSelf(String secretSeed,
-      {String limit = '922337203685.4775807'}) async {
+  Future<void> _ensureUsdcTrustlineSelf(String secretSeed, {String limit = '922337203685.4775807'}) async {
     final kp = KeyPair.fromSecretSeed(secretSeed);
     if (await hasUsdcTrustline(kp.accountId)) return;
     await createUsdcTrustline(secretSeed: secretSeed, limit: limit);
@@ -156,9 +160,7 @@ class StellarWalletService {
       final acc = await _loadAccount(sender.accountId);
 
       final builder = TransactionBuilder(acc)
-        ..addOperation(
-          PaymentOperationBuilder(destination, _xlm, _fmt7(amount)).build(),
-        )
+        ..addOperation(PaymentOperationBuilder(destination, _xlm, _fmt7(amount)).build())
         ..setMaxOperationFee(100);
 
       if (memoText != null && memoText.isNotEmpty) {
@@ -179,8 +181,7 @@ class StellarWalletService {
   // ---------- Swaps: XLM ↔ USDC (PathPaymentStrictSend) ----------
   // Notes:
   // - Destination must have USDC trustline when receiving USDC.
-  // - For best prices across multi-hop routes, add a path discovery step
-  //   (not required for basic direct XLM/USDC pools).
+  // - For best prices across multi-hop routes, add a path discovery step.
 
   /// Swap XLM → USDC (strict-send).
   /// If [destination] is omitted, swap to self and auto-create USDC trustline if missing.
@@ -196,9 +197,7 @@ class StellarWalletService {
 
     try {
       final kp = KeyPair.fromSecretSeed(secretSeed);
-      final dest = (destination?.trim().isNotEmpty == true)
-          ? destination!.trim()
-          : kp.accountId;
+      final dest = (destination?.trim().isNotEmpty == true) ? destination!.trim() : kp.accountId;
 
       // Ensure destination has USDC trustline
       if (dest == kp.accountId) {
@@ -258,12 +257,10 @@ class StellarWalletService {
       // Optional: preflight balance check (helpful UX).
       final usdcBal = await getUsdcBalance(kp.accountId);
       if (sendAmountUsdc > usdcBal + 1e-7) {
-        _fail('Insufficient USDC balance. Have $_fmt7(usdcBal), need $_fmt7(sendAmountUsdc).');
+        _fail('Insufficient USDC balance. Have ${_fmt7(usdcBal)}, need ${_fmt7(sendAmountUsdc)}.');
       }
 
-      final dest = (destination?.trim().isNotEmpty == true)
-          ? destination!.trim()
-          : kp.accountId;
+      final dest = (destination?.trim().isNotEmpty == true) ? destination!.trim() : kp.accountId;
 
       final acc = await _loadAccount(kp.accountId);
 
@@ -290,6 +287,108 @@ class StellarWalletService {
     } catch (e) {
       _fail('Failed to swap USDC→XLM', e);
     }
+  }
+
+
+  // ---------- Quote helpers (strict-send path) ----------
+// ---------- Quote helpers (strict-send path) ----------
+  Future<double?> quoteStrictSend({
+    required Asset sourceAsset,
+    required String sourceAmount,
+    required List<Asset> destinationAssets,
+  }) async {
+    // For destination_assets param in strict-send:
+    // Must be "native" or "CODE:ISSUER" (no credit_alphanum prefix)
+    String _destAssetToQuery(Asset a) {
+      if (a is AssetTypeNative) return 'native';
+      if (a is AssetTypeCreditAlphaNum) {
+        final code = a.code;         // e.g., "USDC"
+        final issuer = a.issuerId;   // G... issuer account
+        return '$code:$issuer';
+      }
+      return 'native';
+    }
+
+    final destParam = destinationAssets.map(_destAssetToQuery).join(',');
+
+    // Source asset still uses type/code/issuer fields
+    final qp = <String, String>{
+      'source_amount': sourceAmount,
+      if (sourceAsset is AssetTypeNative) 'source_asset_type': 'native',
+      if (sourceAsset is AssetTypeCreditAlphaNum) ...{
+        'source_asset_type': 'credit_alphanum${sourceAsset.code.length}', // 4 or 12
+        'source_asset_code': sourceAsset.code,
+        'source_asset_issuer': sourceAsset.issuerId,
+      },
+      'destination_assets': destParam,
+    };
+
+    final uri = Uri.parse('$horizonBase/paths/strict-send').replace(queryParameters: qp);
+
+    try {
+      final resp = await http.get(uri).timeout(const Duration(seconds: 20));
+      // Optional: quick visibility while debugging
+      // ignore: avoid_print
+      print('[quoteStrictSend] GET $uri => ${resp.statusCode}');
+      if (resp.statusCode != 200) return null;
+
+      final data = json.decode(resp.body) as Map<String, dynamic>;
+      final records = (data['_embedded']?['records'] as List?) ?? const [];
+      if (records.isEmpty) return null;
+
+      final String destAmt = records.first['destination_amount'] as String;
+      return double.tryParse(destAmt);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Convenience quotes:
+  Future<double?> quoteXlmToUsdc(double sendAmountXlm) => quoteStrictSend(
+    sourceAsset: _xlm,
+    sourceAmount: _fmt7(sendAmountXlm),
+    destinationAssets: [_usdc], // becomes "USDC:<issuer>"
+  );
+
+  Future<double?> quoteUsdcToXlm(double sendAmountUsdc) => quoteStrictSend(
+    sourceAsset: _usdc,
+    sourceAmount: _fmt7(sendAmountUsdc),
+    destinationAssets: [_xlm],  // becomes "native"
+  );
+
+
+
+  Future<double> estimateNetworkFeeXlm({int opCount = 1, int percentile = 90}) async {
+    final ops = opCount <= 0 ? 1 : opCount;
+    try {
+      final uri = Uri.parse('${this.horizonBase}/fee_stats');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+
+        // Base fee (stroops/op)
+        final base = int.tryParse('${data['last_ledger_base_fee'] ?? '100'}') ?? 100;
+
+        // Use actual fees paid, not max bids
+        final fc = (data['fee_charged'] as Map?) ?? const {};
+        final p = percentile.clamp(10, 99);
+        final perTxStroops = int.tryParse('${fc['p$p'] ?? fc['p50'] ?? base}') ?? base;
+
+        // Convert per-transaction -> per-operation (ceil), then clamp
+        var perOpStroops = (perTxStroops / ops).ceil();
+        // Clamp to [base, base * 50] per-op to ignore pathological outliers
+        final maxReasonable = base * 50; // ~0.0005 XLM if base=100
+        if (perOpStroops < base) perOpStroops = base;
+        if (perOpStroops > maxReasonable) perOpStroops = maxReasonable;
+
+        final totalStroops = perOpStroops * ops;
+        return totalStroops * 1e-7; // stroops -> XLM
+      }
+    } catch (_) {
+      // fall through to fallback
+    }
+    // Conservative fallback ~200 stroops/op
+    return (200 * (opCount <= 0 ? 1 : opCount)) * 1e-7;
   }
 
   // ---------- Federation & Streaming ----------
