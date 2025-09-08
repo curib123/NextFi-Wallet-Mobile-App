@@ -6,7 +6,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/wallet_screen_settings.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-// removed: wallet_secure_storage.dart
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
@@ -60,6 +59,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   Timer? _balancesTimer;
   StreamSubscription<OperationResponse>? _incomingSub;
   Timer? _debounceBalanceKick;
+
+  /* ================= Pull-to-refresh ================= */
+  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   /* ================= Anim ================= */
   late final AnimationController _livePulse =
@@ -213,10 +215,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     }
   }
 
+  /* ================= Pull-to-refresh action ================= */
+  Future<void> _onRefresh() async {
+    // Force a live refresh of balances; hints will update via stream automatically.
+    await _fetchBalances(force: true);
+
+    // Defensive: if stream hiccups, kick a delayed fetch.
+    _scheduleBalanceKick(delay: const Duration(milliseconds: 400));
+  }
+
   /* ================= Realtime ================= */
   void _startRealtime() {
     _stopRealtime();
 
+    // Periodic gentle refresh (if user leaves app open for long time)
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) => unawaited(_fetchBalances()));
 
     if (_stellarAccountId != null && _stellarAccountId!.isNotEmpty) {
@@ -243,8 +255,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
               _scheduleBalanceKick();
             }
           }
-        }, onError: (_) {});
-      } catch (_) {}
+        }, onError: (_) {
+          // Silent; periodic timer + manual refresh cover outages.
+        });
+      } catch (_) {
+        // Swallow; user can still pull-to-refresh.
+      }
     }
   }
 
@@ -271,97 +287,117 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         body: SafeArea(
           child: Stack(
             children: [
-              Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _TopBar(colors: colors),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _HeaderSection(
-                      colors: colors,
-                      currency: currency,
-                      hideBalance: _hideBalance,
-                      onToggleHide: () => setState(() => _hideBalance = !_hideBalance),
-                      loadingBalances: _loadingBalances,
-                      stellarAddress: _stellarAccountId,
-                      xlmBalance: _xlmBalance,
-                      usdcBalance: _usdcBalance,
-                      incomingStrip: (_stellarAccountId != null)
-                          ? IncomingHintsStrip(
-                        colors: colors,
-                        stellarAddress: _stellarAccountId!,
-                        incomingHints: _incomingHints,
-                        onAcknowledge: (tx) {
-                          final id = _txIdOf(tx);
-                          setState(() {
-                            _incomingHints.removeWhere((e) => _txIdOf(e) == id);
-                            _seenTxIds.remove(id);
-                          });
-                        },
-                      )
-                          : const SizedBox.shrink(),
-                      onSend: _onSend,
-                      onReceive: _onReceive,
-                      isUpdatingBalances: _balancesInFlight,
-                      lastBalancesAt: _lastBalancesAt,
-                      livePulse: _livePulse,
+              // ── Pull-to-refresh wrapper ─────────────────────────────────────
+              RefreshIndicator.adaptive(
+                key: _refreshKey,
+                onRefresh: _onRefresh,
+                edgeOffset: 8,
+                displacement: 48,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    // Top bar
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _TopBar(colors: colors),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                    child: buildTabBar(colors),
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        _TabKeepAlive(
-                          storageKey: 'assetsTab',
-                          child: AssetWidget(
+                    // Header: total balance, actions, incoming strip
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _HeaderSection(
+                          colors: colors,
+                          currency: currency,
+                          hideBalance: _hideBalance,
+                          onToggleHide: () => setState(() => _hideBalance = !_hideBalance),
+                          loadingBalances: _loadingBalances,
+                          stellarAddress: _stellarAccountId,
+                          xlmBalance: _xlmBalance,
+                          usdcBalance: _usdcBalance,
+                          incomingStrip: (_stellarAccountId != null)
+                              ? IncomingHintsStrip(
                             colors: colors,
-                            assets: assetProv.assets,
-                            logos: assetProv.logos,
-                            xlmBalance: _xlmBalance,
-                            usdcBalance: _usdcBalance,
-                            address: _stellarAccountId ?? '',
-                            loading: assetProv.loading || currency.loading || _loadingBalances,
-                            onItemTap: (token) {
-                              final addr = _stellarAccountId;
-                              if (addr == null) {
-                                showFloatingSnackBar(context,
-                                    message: "No address available", type: SnackBarType.error);
-                                return;
-                              }
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ReceiveScreen(
-                                    address: addr,
-                                    xlmBalance: _xlmBalance,
-                                    usdcBalance: _usdcBalance,
-                                    initialToken: token, // 'XLM' or 'USDC'
-                                  ),
-                                ),
-                              );
+                            stellarAddress: _stellarAccountId!,
+                            incomingHints: _incomingHints,
+                            onAcknowledge: (tx) {
+                              final id = _txIdOf(tx);
+                              setState(() {
+                                _incomingHints.removeWhere((e) => _txIdOf(e) == id);
+                                _seenTxIds.remove(id);
+                              });
                             },
-                          ),
+                          )
+                              : const SizedBox.shrink(),
+                          onSend: _onSend,
+                          onReceive: _onReceive,
+                          isUpdatingBalances: _balancesInFlight,
+                          lastBalancesAt: _lastBalancesAt,
+                          livePulse: _livePulse,
                         ),
-                        _TabKeepAlive(
-                          storageKey: 'recipientsTab',
-                          child: RecipientListWidget(
-                            colors: colors,
-                            fromAddress: _stellarAccountId,
-                            xlmBalance: _xlmBalance,
-                            usdcBalance: _usdcBalance,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    // Tab bar
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                        child: buildTabBar(colors),
+                      ),
+                    ),
+                    // Tabs body (fills remaining; still scrolls for pull-to-refresh)
+                    SliverFillRemaining(
+                      hasScrollBody: true,
+                      child: TabBarView(
+                        children: [
+                          _TabKeepAlive(
+                            storageKey: 'assetsTab',
+                            child: AssetWidget(
+                              colors: colors,
+                              assets: assetProv.assets,
+                              logos: assetProv.logos,
+                              xlmBalance: _xlmBalance,
+                              usdcBalance: _usdcBalance,
+                              address: _stellarAccountId ?? '',
+                              loading: assetProv.loading || currency.loading || _loadingBalances,
+                              onItemTap: (token) {
+                                final addr = _stellarAccountId;
+                                if (addr == null) {
+                                  showFloatingSnackBar(context,
+                                      message: "No address available", type: SnackBarType.error);
+                                  return;
+                                }
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ReceiveScreen(
+                                      address: addr,
+                                      xlmBalance: _xlmBalance,
+                                      usdcBalance: _usdcBalance,
+                                      initialToken: token, // 'XLM' or 'USDC'
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          _TabKeepAlive(
+                            storageKey: 'recipientsTab',
+                            child: RecipientListWidget(
+                              colors: colors,
+                              fromAddress: _stellarAccountId,
+                              xlmBalance: _xlmBalance,
+                              usdcBalance: _usdcBalance,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
 
+              // Floating Actions / Hints
               HomeFab(
                 colors: colors,
                 incomingHints: _incomingHints,
@@ -477,7 +513,9 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
         children: [
           IconButton(
             icon: Icon(LucideIcons.package, color: widget.colors.textPrimary, size: 26),
-            onPressed: () { tabs.setTab(1); },
+            onPressed: () {
+              tabs.setTab(1);
+            },
             tooltip: 'Activity',
           ),
           // Center title → opens wallet settings on tap
@@ -506,7 +544,9 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
           ),
           IconButton(
             icon: Icon(LucideIcons.settings, color: widget.colors.textPrimary, size: 26),
-            onPressed: () { tabs.setTab(3); },
+            onPressed: () {
+              tabs.setTab(3);
+            },
             tooltip: 'Settings',
           ),
         ],
@@ -550,7 +590,7 @@ class _HeaderSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
 
-    final fxXlm  = currency.xlmToFiat(xlmBalance);
+    final fxXlm = currency.xlmToFiat(xlmBalance);
     final fxUsdc = currency.usdcToFiat(usdcBalance);
     final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
@@ -563,7 +603,9 @@ class _HeaderSection extends StatelessWidget {
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6))],
+            boxShadow: const [
+              BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6))
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -575,7 +617,10 @@ class _HeaderSection extends StatelessWidget {
                   Row(
                     children: [
                       Text('Total Balance',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: colors.textSecondary)),
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: colors.textSecondary)),
                       const SizedBox(width: 6),
                       GestureDetector(
                         onTap: onToggleHide,
@@ -586,7 +631,8 @@ class _HeaderSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   if (loadingBalances)
-                    const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    const SizedBox(
+                        height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
                   else
                     _AnimatedFiat(
                       value: hideBalance ? null : totalFiat,
@@ -617,7 +663,8 @@ class _HeaderSection extends StatelessWidget {
                   children: [
                     Icon(LucideIcons.shuffle, size: 22, color: Colors.white),
                     SizedBox(width: 6),
-                    Text('Swap', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text('Swap',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -630,8 +677,10 @@ class _HeaderSection extends StatelessWidget {
           children: [
             actionButton(colors, Icons.send, 'Send', gradient: true, onTap: onSend),
             actionButton(colors, Icons.call_received, 'Receive', gradient: true, onTap: onReceive),
-            actionButton(colors, LucideIcons.wallet, 'Deposit', gradient: true, onTap: () => debugPrint('Deposit')),
-            actionButton(colors, Icons.arrow_upward, 'Withdraw', gradient: true, onTap: () => debugPrint('Withdraw')),
+            actionButton(colors, LucideIcons.wallet, 'Deposit',
+                gradient: true, onTap: () => debugPrint('Deposit')),
+            actionButton(colors, Icons.arrow_upward, 'Withdraw',
+                gradient: true, onTap: () => debugPrint('Withdraw')),
           ],
         ),
         const SizedBox(height: 20),
