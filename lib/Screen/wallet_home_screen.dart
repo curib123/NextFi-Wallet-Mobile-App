@@ -98,8 +98,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 
   /* ================= Helpers ================= */
-  static String _txIdOf(Map<String, dynamic> tx) =>
-      (tx['hash'] ?? tx['txHash'] ?? '').toString();
+  static String _txIdOf(Map<String, dynamic> tx) => (tx['hash'] ?? tx['txHash'] ?? '').toString();
 
   bool _isIncomingToMe(Map<String, dynamic> tx) {
     final my = _stellarAccountId;
@@ -108,8 +107,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     return to == my;
   }
 
-  bool _isStale(DateTime? last, Duration gap) =>
-      last == null || DateTime.now().difference(last) >= gap;
+  bool _isStale(DateTime? last, Duration gap) => last == null || DateTime.now().difference(last) >= gap;
 
   void _safeAddHint(Map<String, dynamic> tx) {
     final id = _txIdOf(tx);
@@ -293,6 +291,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                 onRefresh: _onRefresh,
                 edgeOffset: 8,
                 displacement: 48,
+                // Listen to scroll notifications from nested scrollables (e.g., inside tabs)
+                notificationPredicate: (notification) => true,
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
@@ -603,9 +603,7 @@ class _HeaderSection extends StatelessWidget {
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6))
-            ],
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6))],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -618,9 +616,7 @@ class _HeaderSection extends StatelessWidget {
                     children: [
                       Text('Total Balance',
                           style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: colors.textSecondary)),
+                              fontSize: 16, fontWeight: FontWeight.w500, color: colors.textSecondary)),
                       const SizedBox(width: 6),
                       GestureDetector(
                         onTap: onToggleHide,
@@ -631,8 +627,7 @@ class _HeaderSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   if (loadingBalances)
-                    const SizedBox(
-                        height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                    const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
                   else
                     _AnimatedFiat(
                       value: hideBalance ? null : totalFiat,
@@ -663,8 +658,7 @@ class _HeaderSection extends StatelessWidget {
                   children: [
                     Icon(LucideIcons.shuffle, size: 22, color: Colors.white),
                     SizedBox(width: 6),
-                    Text('Swap',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text('Swap', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -677,8 +671,7 @@ class _HeaderSection extends StatelessWidget {
           children: [
             actionButton(colors, Icons.send, 'Send', gradient: true, onTap: onSend),
             actionButton(colors, Icons.call_received, 'Receive', gradient: true, onTap: onReceive),
-            actionButton(colors, LucideIcons.wallet, 'Deposit',
-                gradient: true, onTap: () => debugPrint('Deposit')),
+            actionButton(colors, LucideIcons.wallet, 'Deposit', gradient: true, onTap: () => debugPrint('Deposit')),
             actionButton(colors, Icons.arrow_upward, 'Withdraw',
                 gradient: true, onTap: () => debugPrint('Withdraw')),
           ],

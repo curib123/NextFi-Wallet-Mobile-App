@@ -1,14 +1,18 @@
+// lib/Provider/CurrencyProvider.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:http/io_client.dart';
 
 import 'package:next_fi/Services/currency_secure_storage.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
 /// Compact, hotspot/ISP-resilient provider
 /// - Prefers XLM/USDC; falls back to XLM/USDT → convert/approx to USDC
-/// - USDC→FIAT via Coinbase (fallbacks + USD peg) × USD→FIAT via Frankfurter (with fallbacks)
+/// - USDC→FIAT via Coinbase (fallbacks + USD peg) × USD→FIAT via multiple FX sources
+/// - When CEX hosts are blocked: falls back to Stellar DEX via Horizon (paths + orderbook + trade aggs)
 /// - Never persists zeros; reuses last-good cache when hosts are blocked
 class CurrencyProvider extends ChangeNotifier {
   CurrencyProvider({
@@ -23,14 +27,15 @@ class CurrencyProvider extends ChangeNotifier {
   final Duration pollEvery;
   final Duration httpTimeout;
 
-  // ---- HTTP client (timeouts, no proxy). No ConnectionTask.connect used. ---
+  // ---- HTTP client (honor system proxy; timeouts) --------------------------
   late final IOClient _client;
   IOClient _buildClient() {
     final hc = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8)
       ..idleTimeout = const Duration(seconds: 15)
       ..maxConnectionsPerHost = 8
-      ..findProxy = (_) => 'DIRECT';
+    // Honor system/OS proxy settings (Wi-Fi proxy, VPN/WARP, etc.)
+      ..findProxy = HttpClient.findProxyFromEnvironment;
     return IOClient(hc);
   }
 
@@ -154,12 +159,12 @@ class CurrencyProvider extends ChangeNotifier {
 
       // Only save if both are positive (avoid committing zeros)
       if (_usdcRate > 0 && _xlmRate > 0) {
-        unawaited(CurrencySecureStorage.saveLastGoodRates({
+        CurrencySecureStorage.saveLastGoodRates({
           'fiat': _fiat,
           'usdcRate': _usdcRate,
           'xlmRate': _xlmRate,
           'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        }));
+        });
       }
     } finally {
       // If still zeros, fallback to cache or safe pegs
@@ -192,7 +197,7 @@ class CurrencyProvider extends ChangeNotifier {
     }
   }
 
-  // ---- Rates (resilient) ---------------------------------------------------
+  // ---- Rates (CEX + DEX fallback) ------------------------------------------
   Future<void> _fetchRates() async {
     try {
       final res = await Future.wait<double?>([
@@ -233,7 +238,7 @@ class CurrencyProvider extends ChangeNotifier {
 
   // USDC→FIAT = (USDC→USD multi-venue with peg fallback) * (USD→FIAT multi-source)
   Future<double?> _usdcToFiat() async {
-    final usdcUsd = await _firstNonNull<double>([
+    final usdcUsd = await _firstNonNullConcurrent<double?>([
           () => _coinbaseRate(base: 'USDC', quote: 'USD'),
           () => _krakenPrice('USDCUSD'),
           () => _binancePrice('USDCUSDT'), // ≈1 vs USDT
@@ -243,9 +248,26 @@ class CurrencyProvider extends ChangeNotifier {
     return (usdcUsd ?? 1.0) * usdFiat;
   }
 
-  // Prefer XLM/USDC from multiple venues; else XLM/USDT × (USDT≈USD peg)
+  // ---- DEX (on-chain) config ----------------------------------------------
+  // Circle USDC issuer on Stellar mainnet:
+  // GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN
+
+  // Use your Stellar wallet service’s override when present; fall back to Circle issuer.
+  final StellarWalletService _stellar = StellarWalletService();
+  static const String _FALLBACK_USDC_ISSUER =
+      'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+  String get _usdcIssuer => _stellar.usdcIssuerOverrideMainnet ?? _FALLBACK_USDC_ISSUER;
+
+  final List<String> _horizonBases = [
+    'https://horizon.stellar.org',
+    // Optional public mirrors:
+    'https://horizon.stellar.lobstr.co',
+    'https://horizon-public.stellar.lobstr.co',
+  ];
+
+  // Prefer XLM/USDC from CEX; else DEX via Horizon; else XLM/USDT route
   Future<double?> _xlmUsdc() async {
-    final parsers = <Future<double?> Function()>[
+    final parsersCex = <Future<double?> Function()>[
       // OKX XLM-USDC
           () async {
         final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDC'));
@@ -266,59 +288,195 @@ class CurrencyProvider extends ChangeNotifier {
         final s = m['data']?['price'] as String?;
         return s != null ? double.tryParse(s) : null;
       },
-      // Binance XLMUSDC
+      // Binance XLMUSDC (try alt hosts)
           () async {
-        final m = await _json(Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDC'));
-        final s = m['price'] as String?;
-        return s != null ? double.tryParse(s) : null;
+        for (final host in const [
+          'api.binance.com',
+          'api1.binance.com',
+          'api2.binance.com',
+          'api3.binance.com',
+        ]) {
+          if (_isBannedHost(host)) continue;
+          final m = await _json(Uri.parse('https://$host/api/v3/ticker/price?symbol=XLMUSDC'));
+          final s = m['price'] as String?;
+          final v = s != null ? double.tryParse(s) : null;
+          if (v != null && v > 0) return v;
+        }
+        return null;
       },
     ];
 
-    for (final f in parsers) {
-      try {
-        final v = await f();
-        if (v != null && v > 0) return v;
-      } catch (_) {}
-    }
+    // Try CEX in parallel first
+    final cex = await _firstNonNullConcurrent<double?>(parsersCex);
+    if (cex != null && cex > 0) return cex;
 
-    // fallback: XLM/USDT × USDT≈USD (≈1) / USDC≈USD (≈1) ≈ XLM/USDT
+    // DEX fallback (on-chain): strict-send path → orderbook mid → trade agg
+    final dex = await _xlmUsdcViaDex();
+    if (dex != null && dex > 0) return dex;
+
+    // Final fallback: XLM/USDT × (USDT/USD) / (USDC/USD)
     final xlmUsdt = await _xlmUsdt();
     if (xlmUsdt == null) return null;
-    final usdtUsd = await _usdtUsdApprox(); // ≈1.0
-    final usdcUsd = await _firstNonNull<double>([
+    final usdtUsd = await _usdtUsdApprox(); // ~1.0
+    final usdcUsd = await _firstNonNullConcurrent<double?>([
           () => _coinbaseRate(base: 'USDC', quote: 'USD'),
           () => _krakenPrice('USDCUSD'),
           () => _binancePrice('USDCUSDT'),
           () async => 1.0,
-    ]) ?? 1.0;
+    ]) ??
+        1.0;
     if (usdcUsd <= 0) return xlmUsdt * usdtUsd;
     return xlmUsdt * (usdtUsd / usdcUsd);
   }
 
+  /// DEX fallback chain:
+  /// 1) Paths (strict-send) quote: how much USDC for 1 XLM
+  /// 2) Order book midprice: avg(top ask, top bid) in USDC/XLM
+  /// 3) Trade aggregation (1h) average price
+  Future<double?> _xlmUsdcViaDex() async {
+    // 1) Strict-send path quote (1 XLM → USDC)
+    final q1 = await _dexStrictSendQuoteXlmToUsdc(sourceAmount: 1.0);
+    if (q1 != null && q1 > 0) return q1;
+
+    // 2) Orderbook mid (USDC per XLM)
+    final q2 = await _dexOrderbookMidXlmUsdc();
+    if (q2 != null && q2 > 0) return q2;
+
+    // 3) Trade aggregation (1h)
+    final q3 = await _xlmUsdcViaTradeAgg();
+    return q3;
+  }
+
+  // ---- DEX helpers ---------------------------------------------------------
+
+  // Strict-send path quote via Horizon:
+  // GET /paths/strict-send?source_asset_type=native&source_amount=1&destination_assets=USDC:ISSUER
+  Future<double?> _dexStrictSendQuoteXlmToUsdc({double sourceAmount = 1.0}) async {
+    final amt = sourceAmount <= 0 ? 1.0 : sourceAmount;
+    final dest = 'USDC:$_usdcIssuer';
+
+    return _firstNonNullConcurrent<double?>([
+      for (final base in _horizonBases)
+            () async {
+          final uri = Uri.parse(
+              '$base/paths/strict-send?source_asset_type=native&source_amount=${amt.toString()}&destination_assets=$dest&limit=3');
+          final m = await _json(uri);
+          final recs = (m['records'] as List?) ?? const [];
+          if (recs.isEmpty) return null;
+          // Take the highest destination_amount among returned paths
+          double best = 0;
+          for (final r in recs) {
+            final v = (r is Map) ? r['destination_amount'] : null;
+            final d = (v is String) ? double.tryParse(v) : (v is num ? v.toDouble() : null);
+            if (d != null && d > best) best = d;
+          }
+          return best > 0 ? best / amt : null; // normalize to USDC per 1 XLM
+        },
+    ], attemptTimeout: const Duration(seconds: 6));
+  }
+
+  // Orderbook midprice: selling XLM, buying USDC
+  // GET /order_book?selling_asset_type=native&buying_asset_type=credit_alphanum4&buying_asset_code=USDC&buying_asset_issuer=ISSUER
+  Future<double?> _dexOrderbookMidXlmUsdc() async {
+    return _firstNonNullConcurrent<double?>([
+      for (final base in _horizonBases)
+            () async {
+          final uri = Uri.parse(
+              '$base/order_book?selling_asset_type=native'
+                  '&buying_asset_type=credit_alphanum4&buying_asset_code=USDC&buying_asset_issuer=$_usdcIssuer'
+                  '&limit=10');
+          final m = await _json(uri);
+          final bids = (m['bids'] as List?) ?? const [];
+          final asks = (m['asks'] as List?) ?? const [];
+
+          double? parsePx(dynamic e) {
+            if (e is Map) {
+              final p = e['price'];
+              if (p is String) return double.tryParse(p);
+              if (p is num) return p.toDouble();
+              final pr = e['price_r'];
+              if (pr is Map && pr['n'] != null && pr['d'] != null) {
+                final n = (pr['n'] as num).toDouble();
+                final d = (pr['d'] as num).toDouble();
+                if (d != 0) return n / d;
+              }
+            }
+            return null;
+          }
+
+          final bestAsk = asks.isNotEmpty ? parsePx(asks.first) : null; // USDC per XLM
+          final bestBid = bids.isNotEmpty ? parsePx(bids.first) : null; // USDC per XLM
+          if (bestAsk != null && bestBid != null) return (bestAsk + bestBid) / 2.0;
+          return bestAsk ?? bestBid;
+        },
+    ], attemptTimeout: const Duration(seconds: 6));
+  }
+
+  // Trade aggregation (1h) average USDC per XLM
+  Future<double?> _xlmUsdcViaTradeAgg() async {
+    return _firstNonNullConcurrent<double?>([
+      for (final base in _horizonBases)
+            () async {
+          final uri = Uri.parse(
+            '$base/trade_aggregations'
+                '?base_asset_type=native'
+                '&counter_asset_type=credit_alphanum4'
+                '&counter_asset_code=USDC'
+                '&counter_asset_issuer=$_usdcIssuer'
+                '&resolution=3600000' // 1h
+                '&limit=1&order=desc',
+          );
+          final m = await _json(uri);
+          final recs = (m['records'] as List?) ?? const [];
+          if (recs.isEmpty) return null;
+          final avg = recs.first['avg'];
+          if (avg is String) return double.tryParse(avg);
+          if (avg is num) return avg.toDouble();
+          return null;
+        },
+    ], attemptTimeout: const Duration(seconds: 6));
+  }
+
+  // ---- CEX helpers ---------------------------------------------------------
   Future<double?> _xlmUsdt() async {
-    final fns = <Future<double?> Function()>[
+    return _firstNonNullConcurrent<double?>([
+      // Binance family
           () async {
-        final m = await _json(Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT'));
-        final s = m['price'] as String?;
-        return s != null ? double.tryParse(s) : null;
+        for (final host in const [
+          'api.binance.com',
+          'api1.binance.com',
+          'api2.binance.com',
+          'api3.binance.com',
+        ]) {
+          if (_isBannedHost(host)) continue;
+          final m = await _json(Uri.parse('https://$host/api/v3/ticker/price?symbol=XLMUSDT'));
+          final s = m['price'] as String?;
+          final v = s != null ? double.tryParse(s) : null;
+          if (v != null && v > 0) return v;
+        }
+        return null;
       },
+      // OKX
           () async {
         final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDT'));
         final d = (m['data'] as List?) ?? const [];
         final s = d.isNotEmpty ? d.first['last'] as String? : null;
         return s != null ? double.tryParse(s) : null;
       },
+      // KuCoin
           () async {
         final m = await _json(Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDT'));
         final s = m['data']?['price'] as String?;
         return s != null ? double.tryParse(s) : null;
       },
+      // Bybit
           () async {
         final m = await _json(Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDT'));
         final l = (m['result']?['list'] as List?) ?? const [];
         final s = l.isNotEmpty ? l.first['lastPrice'] as String? : null;
         return s != null ? double.tryParse(s) : null;
       },
+      // Kraken
           () async {
         final m = await _json(Uri.parse('https://api.kraken.com/0/public/Ticker?pair=XLMUSDT'));
         final r = (m['result'] as Map?) ?? {};
@@ -328,14 +486,7 @@ class CurrencyProvider extends ChangeNotifier {
         }
         return null;
       },
-    ];
-    for (final f in fns) {
-      try {
-        final v = await f();
-        if (v != null && v > 0) return v;
-      } catch (_) {}
-    }
-    return null;
+    ]);
   }
 
   // ---- Histories (derive from USDT klines, scale to FIAT) ------------------
@@ -379,17 +530,28 @@ class CurrencyProvider extends ChangeNotifier {
         return (v is num) ? v.toDouble() : 1.0;
       }).toList();
       return _normalize(series, len);
-    } catch (e) {
+    } catch (_) {
       final base = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
       return List<double>.filled(len, base);
     }
   }
 
-  // XLM/USDT klines (Binance → OKX → KuCoin). Safe parsing + flat fallback.
+  // XLM/USDT klines (Binance → Vision mirror → OKX → KuCoin). Safe parsing + flat fallback.
   Future<List<double>> _klines(String interval, int limit) async {
     final tries = <Future<List<double>?> Function()>[
           () async {
         final m = await _json(Uri.parse('https://api.binance.com/api/v3/klines?symbol=XLMUSDT&interval=$interval&limit=$limit'));
+        final raw = m['_'];
+        if (raw is List) {
+          final l = raw.cast<dynamic>();
+          final out = l.map((e) => (e is List && e.length > 4) ? double.tryParse(e[4].toString()) : null)
+              .whereType<double>().toList();
+          return out.isNotEmpty ? out : null;
+        }
+        return null;
+      },
+          () async { // Binance "vision" mirror
+        final m = await _json(Uri.parse('https://data-api.binance.vision/api/v3/klines?symbol=XLMUSDT&interval=$interval&limit=$limit'));
         final raw = m['_'];
         if (raw is List) {
           final l = raw.cast<dynamic>();
@@ -430,7 +592,7 @@ class CurrencyProvider extends ChangeNotifier {
     final tgt = fiat.toUpperCase();
     if (tgt == 'USD') return 1.0;
 
-    return _firstNonNull<double>([
+    return _firstNonNullConcurrent<double?>([
       // Frankfurter
           () async {
         final m = await _json(Uri.parse('https://api.frankfurter.app/latest?from=USD&to=$tgt'));
@@ -453,7 +615,7 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   Future<double?> _coinbaseRate({required String base, required String quote}) async {
-    return _firstNonNull<double>([
+    return _firstNonNullConcurrent<double?>([
           () async {
         final m = await _json(Uri.parse('https://api.coinbase.com/v2/exchange-rates?currency=$base'));
         final rates = (m['data']?['rates'] as Map?) ?? {};
@@ -493,7 +655,7 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   Future<double> _usdtUsdApprox() async {
-    final v = await _firstNonNull<double>([
+    final v = await _firstNonNullConcurrent<double?>([
           () => _krakenPrice('USDTUSD'),
           () => _binancePrice('USDTUSD'),
           () async => 1.0,
@@ -518,15 +680,23 @@ class CurrencyProvider extends ChangeNotifier {
 
   // Central GET+JSON with retries/backoff + per-request timeout + UA header
   Future<Map<String,dynamic>> _json(Uri url) async {
-    final resp = await _retry(() => _client
-        .get(url, headers: {'User-Agent': 'NextFi/1.0'})
-        .timeout(httpTimeout));
-    if (resp.statusCode >= 200 && resp.statusCode < 300) {
-      final b = resp.body.isEmpty ? '{}' : resp.body;
-      final d = jsonDecode(b);
-      return d is Map<String,dynamic> ? d : {'_': d};
+    if (_isBannedHost(url.host)) throw Exception('Host banned temporarily: ${url.host}');
+    try {
+      final resp = await _retry(() => _client
+          .get(url, headers: {'User-Agent': 'NextFi/1.0', 'Accept': 'application/json'})
+          .timeout(httpTimeout));
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        _noteHostSuccess(url.host);
+        final b = resp.body.isEmpty ? '{}' : resp.body;
+        final d = jsonDecode(b);
+        return d is Map<String,dynamic> ? d : {'_': d};
+      }
+      _noteHostFailure(url.host);
+      throw Exception('HTTP ${resp.statusCode} for $url');
+    } catch (e) {
+      _noteHostFailure(url.host);
+      rethrow;
     }
-    throw Exception('HTTP ${resp.statusCode} for $url');
   }
 
   Future<T> _retry<T>(Future<T> Function() f, {int times = 3}) async {
@@ -548,33 +718,41 @@ class CurrencyProvider extends ChangeNotifier {
   // Better probe: detect captive portals & DNS interception
   Future<bool> _hasInternet() async {
     try {
-      final ok204 = await _retry(() async {
-        final r = await _client
-            .get(Uri.parse('https://www.gstatic.com/generate_204'),
-            headers: {'User-Agent': 'NextFi/1.0'})
-            .timeout(const Duration(seconds: 4));
-        return r.statusCode == 204;
-      }, times: 2).catchError((_) => false);
-      if (ok204 == true) return true;
-
-      final cf = await _retry(() async {
-        final r = await _client
-            .get(Uri.parse('https://1.1.1.1/cdn-cgi/trace'),
-            headers: {'User-Agent': 'NextFi/1.0'})
-            .timeout(const Duration(seconds: 4));
-        return r.statusCode >= 200 && r.statusCode < 400;
-      }, times: 2).catchError((_) => false);
-      if (cf == true) return true;
-
-      final dns = await InternetAddress.lookup('one.one.one.one')
-          .timeout(const Duration(seconds: 3));
-      return dns.isNotEmpty;
+      final checks = [
+            () async { // HTTPS 204
+          final r = await _client.get(Uri.parse('https://www.gstatic.com/generate_204'))
+              .timeout(const Duration(seconds: 4));
+          return r.statusCode == 204;
+        },
+            () async { // HTTP 204
+          final r = await _client.get(Uri.parse('http://connectivitycheck.gstatic.com/generate_204'))
+              .timeout(const Duration(seconds: 4));
+          return r.statusCode == 204;
+        },
+            () async { // Cloudflare trace
+          final r = await _client.get(Uri.parse('https://1.1.1.1/cdn-cgi/trace'))
+              .timeout(const Duration(seconds: 4));
+          return r.statusCode >= 200 && r.statusCode < 400;
+        },
+            () async { // DNS lookup
+          final a = await InternetAddress.lookup('one.one.one.one')
+              .timeout(const Duration(seconds: 3));
+          if (a.isNotEmpty) return true;
+          final b = await InternetAddress.lookup('dns.google')
+              .timeout(const Duration(seconds: 3));
+          return b.isNotEmpty;
+        },
+      ];
+      for (final c in checks) {
+        try { if (await c()) return true; } catch (_) {}
+      }
+      return false;
     } catch (_) {
       return false;
     }
   }
 
-  // Utility: first non-null among async attempts
+  // Utility: first non-null among async attempts (sequential)
   Future<T?> _firstNonNull<T>(List<Future<T?> Function()> attempts) async {
     for (final f in attempts) {
       try {
@@ -583,5 +761,59 @@ class CurrencyProvider extends ChangeNotifier {
       } catch (_) {}
     }
     return null;
+  }
+
+  // Utility: first non-null among async attempts (parallel race)
+  Future<T?> _firstNonNullConcurrent<T>(
+      List<Future<T?> Function()> attempts, {
+        Duration attemptTimeout = const Duration(seconds: 5),
+      }) async {
+    final futures = <Future<T?>>[];
+    for (final fn in attempts) {
+      futures.add(
+            () async {
+          try {
+            final v = await fn().timeout(attemptTimeout);
+            return v;
+          } catch (_) {
+            return null;
+          }
+        }(),
+      );
+    }
+    T? picked;
+    for (final f in futures) {
+      final v = await f;
+      if (picked == null && v != null) picked = v;
+    }
+    return picked;
+  }
+
+  // --- Host circuit breaker (ban failing hosts for a bit) -------------------
+  final Map<String, int> _hostFails = {}; // host -> failures in window
+  final Map<String, DateTime> _bannedUntil = {}; // host -> until
+
+  bool _isBannedHost(String host) {
+    final t = _bannedUntil[host];
+    if (t == null) return false;
+    if (DateTime.now().isAfter(t)) {
+      _bannedUntil.remove(host);
+      _hostFails.remove(host);
+      return false;
+    }
+    return true;
+  }
+
+  void _noteHostSuccess(String host) {
+    _hostFails.remove(host);
+    _bannedUntil.remove(host);
+  }
+
+  void _noteHostFailure(String host) {
+    final n = (_hostFails[host] ?? 0) + 1;
+    _hostFails[host] = n;
+    if (n >= 3) {
+      _bannedUntil[host] = DateTime.now().add(const Duration(minutes: 10));
+    }
   }
 }
