@@ -1,9 +1,12 @@
+// lib/Screen/home.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+
+import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
-import 'package:next_fi/Screen/wallet_creation_screen.dart';
+import 'package:next_fi/Screen/wallet_splash_screen.dart';
+import 'package:next_fi/Screen/wallet_creation_screen.dart'; // TODO: keep if you still have a creation/onboarding screen
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
@@ -16,6 +19,7 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
+  bool _showSplash = true;
   bool _isLoading = true;
   bool _hasMnemonic = false;
   bool _isAuthenticated = false;
@@ -23,60 +27,72 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
-    _checkMnemonic();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    // Show splash for at least this long while we check storage.
+    final minSplash = Future.delayed(const Duration(seconds: 5 ));
+    final check = _checkMnemonic();
+    await Future.wait([minSplash, check]);
+    if (!mounted) return;
+    setState(() => _showSplash = false);
   }
 
   Future<void> _checkMnemonic() async {
     final storedMnemonic = await SeedStorage.getSeed();
 
-    if (mounted) {
-      if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
-        setState(() {
-          _hasMnemonic = true;
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          showFloatingSnackBar(
-            context,
-            message: "No wallet found. Please create one.",
-            type: SnackBarType.error,
-          );
-        });
-      }
+    if (!mounted) return;
+    if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
+      setState(() {
+        _hasMnemonic = true;
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showFloatingSnackBar(
+          context,
+          message: "No wallet found. Please create one.",
+          type: SnackBarType.error,
+        );
+      });
     }
   }
 
   void _onAuthSuccess() {
-    if (mounted) {
-      setState(() => _isAuthenticated = true);
-    }
+    if (!mounted) return;
+    setState(() => _isAuthenticated = true);
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
 
+    // 1) Always show the splash first.
+    if (_showSplash) {
+      return const WalletSplashScreen();
+    }
+
+    // 2) While still loading state (edge), show a simple loader.
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // If no wallet, show WalletCreationScreen
+    // 3) If no wallet yet, go to your onboarding/creation screen.
+    //    Replace WalletCreationScreen with your preferred onboarding if needed.
     if (!_hasMnemonic) {
       return const WalletCreationScreen();
     }
 
-    // If wallet exists but not authenticated, show AuthGate
+    // 4) If wallet exists but not authenticated, gate with Auth.
     if (!_isAuthenticated) {
-      return AuthGateScreen(
-        goNext: _onAuthSuccess,
-      );
+      return AuthGateScreen(goNext: _onAuthSuccess);
     }
 
-    // If authenticated and wallet exists, show main home with tabs
+    // 5) Authenticated main app with tabs.
     return ChangeNotifierProvider(
       create: (_) => TabProvider(),
       child: Consumer<TabProvider>(
@@ -107,7 +123,6 @@ class _HomeState extends State<Home> {
                   icon: Icon(LucideIcons.settings),
                   label: 'Settings',
                 ),
-
               ],
             ),
           );

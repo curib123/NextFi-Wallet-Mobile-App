@@ -1,23 +1,18 @@
-// lib/Screen/wallet_creation_screen.dart
+// lib/Screen/wallet_splash_screen.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:animate_do/animate_do.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:vector_math/vector_math_64.dart' as vm;
 
-import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Screen/import_wallet_screen.dart';
-import 'package:next_fi/Screen/seed_phrase_screen.dart';
 
-class WalletCreationScreen extends StatefulWidget {
-  const WalletCreationScreen({super.key});
+class WalletSplashScreen extends StatefulWidget {
+  const WalletSplashScreen({super.key});
 
   @override
-  State<WalletCreationScreen> createState() => _WalletCreationScreenState();
+  State<WalletSplashScreen> createState() => _WalletSplashScreenState();
 }
 
-class _WalletCreationScreenState extends State<WalletCreationScreen>
+class _WalletSplashScreenState extends State<WalletSplashScreen>
     with SingleTickerProviderStateMixin {
   static const _logoAsset = 'assets/icon/icon.png';
 
@@ -46,7 +41,7 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            // Animated background, CLIPPED to the TOP band only.
+            // Animated background, now CLIPPED to the TOP area only.
             IgnorePointer(
               child: AnimatedBuilder(
                 animation: _bgCtrl,
@@ -54,116 +49,62 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                   painter: _AuroraFintechPainter(
                     progress: _bgCtrl.value,
                     colors: colors,
-                    topBandFraction: .45, // adjust 0.38–0.55 to taste
+                    topBandFraction: .45, // animate only in the top 45% height
                   ),
                   child: const SizedBox.expand(),
                 ),
               ),
             ),
 
-            // Foreground content
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: AnimatedBuilder(
-                        animation: _bgCtrl,
-                        builder: (_, __) {
-                          // subtle float + tilt based on progress
-                          final t = _bgCtrl.value * 2 * math.pi;
-                          final dy = math.sin(t) * 6;
-                          final tilt = math.cos(t) * 0.02; // radians
-                          return Transform.translate(
-                            offset: Offset(0, dy),
-                            child: Transform.rotate(
-                              angle: tilt,
-                              child: _GlassCard(
-                                colors: colors,
-                                child: Padding(
-                                  padding:
-                                  const EdgeInsets.fromLTRB(18, 22, 18, 18),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Round logo (asset clipped to a perfect circle)
-                                      ClipOval(
-                                        child: Image.asset(
-                                          _logoAsset,
-                                          width: 96,
-                                          height: 96,
-                                          fit: BoxFit.cover,
-                                          filterQuality: FilterQuality.high,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      // Shimmer title
-                                      _ShimmerText(
-                                        "NextFI Wallet",
-                                        baseColor: colors.textPrimary,
-                                        highlightColor: colors.primary,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: colors.textSecondary,
-                                          height: 1.4,
-                                          letterSpacing: .2,
-                                        ),
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+            // Foreground content (STATIC: logo + title)
+            Center(
+              child: _GlassCard(
+                colors: colors,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipOval(
+                        child: Image.asset(
+                          _logoAsset,
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.high,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      _ShimmerText(
+                        "NextFI Wallet",
+                        baseColor: colors.textPrimary,
+                        highlightColor: colors.primary,
+                      ),
+                    ],
                   ),
+                ),
+              ),
+            ),
 
-                  // Actions
-                  FadeInUp(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 120),
-                    child: CustomButton(
-                      text: "Create New Wallet",
-                      icon: LucideIcons.plusCircle,
-                      type: ButtonType.filled,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SeedPhraseScreen(),
-                          ),
-                        );
-                      },
-                    ),
+            // Bottom subtitle (pinned)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                minimum: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Text(
+                  'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: colors.textSecondary.withOpacity(.95),
+                    height: 1.35,
+                    letterSpacing: .2,
                   ),
-                  const SizedBox(height: 12),
-                  FadeInUp(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 220),
-                    child: CustomButton(
-                      text: "Import Wallet",
-                      icon: LucideIcons.download,
-                      type: ButtonType.outlined,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ImportWalletScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
@@ -173,7 +114,6 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
   }
 }
 
-/// Transparent card (no blur, clean border & soft shadow)
 class _GlassCard extends StatelessWidget {
   const _GlassCard({required this.child, required this.colors});
   final Widget child;
@@ -183,18 +123,12 @@ class _GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: const DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.transparent, // no tint
-        ),
-      ).copyWith(child: child),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(color: Colors.transparent),
+        child: child,
+      ),
     );
   }
-}
-
-extension on DecoratedBox {
-  DecoratedBox copyWith({Widget? child}) =>
-      DecoratedBox(decoration: decoration, position: position, child: child);
 }
 
 /// Shimmering title using an animated gradient shader.
@@ -204,6 +138,7 @@ class _ShimmerText extends StatefulWidget {
         required this.baseColor,
         required this.highlightColor,
       });
+
   final String text;
   final Color baseColor;
   final Color highlightColor;
@@ -247,7 +182,7 @@ class _ShimmerTextState extends State<_ShimmerText>
           },
           blendMode: BlendMode.srcIn,
           child: Text(
-            widget.text, // <-- use the passed text (fixed)
+            widget.text,
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 28,
@@ -261,7 +196,6 @@ class _ShimmerTextState extends State<_ShimmerText>
   }
 }
 
-/// Gradient translation helper (moves the gradient horizontally)
 class GradientTranslation extends GradientTransform {
   const GradientTranslation(this.dx);
   final double dx;
