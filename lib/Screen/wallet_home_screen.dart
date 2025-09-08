@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Provider/TabProvider.dart';
+import 'package:next_fi/Screen/wallet_screen_settings.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/Services/wallet_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -471,35 +473,45 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
   }
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      IconButton(
-        icon: Icon(LucideIcons.package, color: widget.colors.textPrimary, size: 26),
-        onPressed: () {},
-        tooltip: 'Activity',
-      ),
-      // Center title (runtime value → no `const`)
-      GestureDetector(
-        onTap: () {}, // e.g., open wallet switcher later
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _name,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+  Widget build(BuildContext context) => Consumer<TabProvider>(
+    builder: (context, tabs, _) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: Icon(LucideIcons.package, color: widget.colors.textPrimary, size: 26),
+            onPressed: () { tabs.setTab(1); }, // Activity tab (change index if needed)
+            tooltip: 'Activity',
+          ),
+          // Center title (runtime value → no `const`)
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const WalletScreenSettings(),
+                ),
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _name,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                ),
+                const SizedBox(width: 4),
+                Icon(LucideIcons.chevronDown, size: 18, color: widget.colors.textPrimary),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(LucideIcons.chevronDown, size: 18, color: widget.colors.textPrimary),
-          ],
-        ),
-      ),
-      IconButton(
-        icon: Icon(LucideIcons.settings, color: widget.colors.textPrimary, size: 26),
-        onPressed: () {},
-        tooltip: 'Settings',
-      ),
-    ],
+          ),
+          IconButton(
+            icon: Icon(LucideIcons.settings, color: widget.colors.textPrimary, size: 26),
+            onPressed: () { tabs.setTab(3); }, // Settings tab (change index if needed)
+            tooltip: 'Settings',
+          ),
+        ],
+      );
+    },
   );
 }
 
