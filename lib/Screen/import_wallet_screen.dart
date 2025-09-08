@@ -69,11 +69,13 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   }
 
   // ---------- Import flow ----------
+  /// Imports a wallet: validate phrase → biometric/PIN auth → securely save
   Future<void> _importWallet() async {
-    final mnemonic = _sanitizedMnemonic(_mnemonicController.text);
+    if (_isImporting || !mounted) return;
 
-    // 1) Validate mnemonic using bip39
-    if (!bip39.validateMnemonic(mnemonic)) {
+    // 1) Sanitize & validate mnemonic (bip39)
+    final phrase = _sanitizedMnemonic(_mnemonicController.text);
+    if (!bip39.validateMnemonic(phrase)) {
       showFloatingSnackBar(
         context,
         message: "Invalid seed phrase. Please check again.",
@@ -82,32 +84,44 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
       return;
     }
 
-    if (!mounted) return;
+    // Prevent double taps while the auth screen is active
+    setState(() => _isImporting = true);
 
-    // 2) Navigate to AuthGateScreen and run the save logic inside goNext
-    Navigator.push(
-      context,
+    // 2) Navigate to AuthGateScreen and run the secure save inside goNext
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AuthGateScreen(
           goNext: () async {
-            if (_isImporting) return;
-            setState(() => _isImporting = true);
-
+            if (!mounted) return;
+            bool restarted = false;
             try {
-              final ok = await SeedStorage.saveSeed(mnemonic);
-              if (!ok) {
+              // Create a NEW wallet entry (multi-wallet) and set it active
+              final newId = await SeedStorage.addWallet(phrase, name: 'Imported Wallet');
+              await SeedStorage.setActiveWallet(newId);
+
+              // Verify round-trip read from secure storage
+              final stored = await SeedStorage.getActiveSeed();
+              if (stored == null || stored.isEmpty) {
                 showFloatingSnackBar(
                   context,
-                  message: "Failed to save your wallet. Please try again.",
+                  message: "Could not verify saved phrase. Please try again.",
                   type: SnackBarType.error,
                 );
                 return;
               }
 
-              // Success: set tab and restart
+              // Move user to Wallet tab before a clean restart
               if (!mounted) return;
               context.read<TabProvider>().setTab(1);
+
+              // Close the auth screen before hard restart to avoid context leaks
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+
+              // Full app restart to clear sensitive in-memory state
               Phoenix.rebirth(context);
+              restarted = true;
             } catch (e) {
               showFloatingSnackBar(
                 context,
@@ -115,12 +129,17 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
                 type: SnackBarType.error,
               );
             } finally {
-              if (mounted) setState(() => _isImporting = false);
+              if (!restarted && mounted) {
+                setState(() => _isImporting = false);
+              }
             }
           },
         ),
       ),
     );
+
+    // If user backed out of AuthGateScreen (no restart), clear the flag
+    if (mounted) setState(() => _isImporting = false);
   }
 
   // ---------- Modal: Security checklist BEFORE importing ----------

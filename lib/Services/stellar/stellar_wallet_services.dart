@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
+
 
 class StellarWalletService {
   /// Horizon SDK instance (PUBLIC or TESTNET).
   final StellarSDK sdk;
 
-  /// Profit address for 1% fee used by [sendXlmWithFee].
-  String profitAddress = '';
+  /// Immutable profit-address vault (source of truth is a compiled constant).
+  final ProfitAddressVaultSecureStorage profitVault;
 
   /// Default USDC issuer on Stellar Mainnet (configurable).
   /// You may override in the constructor if needed.
@@ -23,11 +25,12 @@ class StellarWalletService {
   final String? usdcIssuerOverrideTestnet;
 
   StellarWalletService({
-    this.profitAddress = '',
     bool testnet = false,
     this.usdcIssuerOverrideMainnet,
     this.usdcIssuerOverrideTestnet,
-  }) : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC;
+    ProfitAddressVaultSecureStorage? profitVault,
+  })  : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+        profitVault = profitVault ?? const ProfitAddressVaultSecureStorage();
 
   // ---------- Internals ----------
   bool get _isTestnet => identical(sdk, StellarSDK.TESTNET);
@@ -131,7 +134,12 @@ class StellarWalletService {
     await createUsdcTrustline(secretSeed: secretSeed, limit: limit);
   }
 
-  // ---------- Send XLM with 1% profit fee ----------
+  // Helpers for precise amounts
+  int _toStroops(double amount) => (amount * 1e7).round();
+  double _fromStroops(int stroops) => stroops / 1e7;
+
+  /// Send XLM and collect a 1% fee to the **immutable profit address** (vault) atomically.
+  /// Returns a single tx hash in the list (to preserve your original return type).
   Future<List<String>> sendXlmWithFee({
     required String secretSeed,
     required String destination,
@@ -139,50 +147,55 @@ class StellarWalletService {
     String? memoText,
   }) async {
     if (amount <= 0) _fail('Amount must be > 0');
-    if (destination.trim().isEmpty) _fail('Destination is required');
+    final dest = destination.trim();
+    if (dest.isEmpty) _fail('Destination is required');
+
+    // Always read the fee address from the secure, immutable vault (cannot be changed).
+    final feeAddr = await profitVault.readOrInit();
+
+    // Validate account IDs (throws on invalid G... address)
+    KeyPair.fromAccountId(dest);
+    KeyPair.fromAccountId(feeAddr);
+
+    // Split in stroops to avoid float rounding bugs
+    final total = _toStroops(amount);
+    final feePart = (total / 100).round(); // 1%
+    final recvPart = total - feePart;
+    if (recvPart <= 0) _fail('Amount too small after 1% fee');
 
     final sender = KeyPair.fromSecretSeed(secretSeed);
-    final recv = double.parse((amount * 0.99).toStringAsFixed(7));
-    final fee = double.parse((amount * 0.01).toStringAsFixed(7));
+    final acc = await _loadAccount(sender.accountId);
 
-    final tx1 = await _sendXlm(sender, destination.trim(), recv, memoText: memoText);
-    final tx2 = await _sendXlm(sender, profitAddress, fee, memoText: 'Profit Fee');
-    return [tx1, tx2];
-  }
+    // Estimate a sane per-op fee from /fee_stats; 2 ops (user payment + fee)
+    final opCount = feePart > 0 ? 2 : 1;
+    final feeXlm = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+    final perOpStroops = (feeXlm / 1e-7 / opCount).ceil(); // XLM -> stroops/op
 
-  Future<String> _sendXlm(
-      KeyPair sender,
-      String destination,
-      double amount, {
-        String? memoText,
-      }) async {
-    try {
-      final acc = await _loadAccount(sender.accountId);
+    final tb = TransactionBuilder(acc)
+      ..setMaxOperationFee(perOpStroops)
+      ..addOperation(
+        PaymentOperationBuilder(dest, _xlm, _fmt7(_fromStroops(recvPart))).build(),
+      );
 
-      final builder = TransactionBuilder(acc)
-        ..addOperation(PaymentOperationBuilder(destination, _xlm, _fmt7(amount)).build())
-        ..setMaxOperationFee(100);
-
-      if (memoText != null && memoText.isNotEmpty) {
-        builder.addMemo(Memo.text(memoText));
-      }
-
-      final tx = builder.build();
-      tx.sign(sender, _network);
-
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) _fail('XLM payment failed: ${res.resultXdr}');
-      return res.hash!;
-    } catch (e) {
-      _fail('Failed to send XLM', e);
+    if (feePart > 0) {
+      tb.addOperation(
+        PaymentOperationBuilder(feeAddr, _xlm, _fmt7(_fromStroops(feePart))).build(),
+      );
     }
+
+    if (memoText != null && memoText.isNotEmpty) {
+      tb.addMemo(Memo.text(memoText));
+    }
+
+    final tx = tb.build();
+    tx.sign(sender, _network);
+
+    final res = await sdk.submitTransaction(tx);
+    if (!res.success) _fail('XLM payment failed: ${res.resultXdr}');
+    return [res.hash!]; // single atomic tx hash
   }
 
   // ---------- Swaps: XLM ↔ USDC (PathPaymentStrictSend) ----------
-  // Notes:
-  // - Destination must have USDC trustline when receiving USDC.
-  // - For best prices across multi-hop routes, add a path discovery step.
-
   /// Swap XLM → USDC (strict-send).
   /// If [destination] is omitted, swap to self and auto-create USDC trustline if missing.
   Future<String> swapXlmToUsdc({
@@ -289,9 +302,7 @@ class StellarWalletService {
     }
   }
 
-
   // ---------- Quote helpers (strict-send path) ----------
-// ---------- Quote helpers (strict-send path) ----------
   Future<double?> quoteStrictSend({
     required Asset sourceAsset,
     required String sourceAmount,
@@ -302,8 +313,8 @@ class StellarWalletService {
     String _destAssetToQuery(Asset a) {
       if (a is AssetTypeNative) return 'native';
       if (a is AssetTypeCreditAlphaNum) {
-        final code = a.code;         // e.g., "USDC"
-        final issuer = a.issuerId;   // G... issuer account
+        final code = a.code;       // e.g., "USDC"
+        final issuer = a.issuerId; // G... issuer account
         return '$code:$issuer';
       }
       return 'native';
@@ -327,7 +338,6 @@ class StellarWalletService {
 
     try {
       final resp = await http.get(uri).timeout(const Duration(seconds: 20));
-      // Optional: quick visibility while debugging
       // ignore: avoid_print
       print('[quoteStrictSend] GET $uri => ${resp.statusCode}');
       if (resp.statusCode != 200) return null;
@@ -353,10 +363,8 @@ class StellarWalletService {
   Future<double?> quoteUsdcToXlm(double sendAmountUsdc) => quoteStrictSend(
     sourceAsset: _usdc,
     sourceAmount: _fmt7(sendAmountUsdc),
-    destinationAssets: [_xlm],  // becomes "native"
+    destinationAssets: [_xlm], // becomes "native"
   );
-
-
 
   Future<double> estimateNetworkFeeXlm({int opCount = 1, int percentile = 90}) async {
     final ops = opCount <= 0 ? 1 : opCount;

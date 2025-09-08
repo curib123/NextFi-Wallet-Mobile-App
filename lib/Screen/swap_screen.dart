@@ -7,6 +7,11 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
+// ✅ Use AssetLogo from your shared UI kit
+import 'package:next_fi/Screen/SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
+
+import 'SwapScreenWidgets/swap_widgets.dart';
+
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
   @override
@@ -91,7 +96,7 @@ class _SwapScreenState extends State<SwapScreen> {
       final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
 
       // MAINNET service
-      _stellar = StellarWalletService(profitAddress: kp.accountId, testnet: false);
+      _stellar = StellarWalletService(testnet: false);
 
       setState(() {
         _secretSeed = kp.secretSeed;
@@ -453,7 +458,8 @@ class _BalanceRow extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(assetKey == 'XLM' ? LucideIcons.star : LucideIcons.coins, size: 16, color: c.textSecondary),
+          // ✅ Apply token logos here
+          AssetLogo(asset: assetKey, size: 16),
           const SizedBox(width: 6),
           Text('$assetKey: ', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
           Text(value, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),

@@ -143,26 +143,38 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 
   /* ================= Data ================= */
+/* ================= Data ================= */
+  bool _loadingWallet = false;
+
   Future<void> _loadWallet() async {
-    if (!mounted) return;
-
-    final mnemonic = await _getMnemonicWithWarmup();
-    if (!mounted) return;
-
-    if (mnemonic == null) {
-      // Truly no wallet on device after warm-up → show 0 and stop spinner.
-      setState(() {
-        _xlmBalance = 0;
-        _usdcBalance = 0;
-        _loadingBalances = false;
-        _lastBalancesAt = DateTime.now();
-      });
-      return;
-    }
+    if (!mounted || _loadingWallet) return;
+    _loadingWallet = true;
 
     try {
+      // Ensure the UI shows a spinner while we derive keys and fetch balances.
+      setState(() => _loadingBalances = true);
+
+      final mnemonic = await _getMnemonicWithWarmup();
+      if (!mounted) return;
+
+      // No wallet on device after warm-up → show zeros but keep UI stable.
+      if (mnemonic == null || mnemonic.isEmpty) {
+        setState(() {
+          _stellarAccountId = null;
+          _secretSeed = null;
+          _xlmBalance = 0;
+          _usdcBalance = 0;
+          _loadingBalances = false;
+          _lastBalancesAt = DateTime.now();
+        });
+        return;
+      }
+
+      // Derive account (index 0).
       final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
       final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
+
+      final accountChanged = _stellarAccountId != kp.accountId;
 
       setState(() {
         _stellarAccountId = kp.accountId;
@@ -170,9 +182,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         // keep _loadingBalances = true until _fetchBalances completes
       });
 
+      // If account changed, restart realtime (if your impl supports stop).
+      if (accountChanged) {
+        try {
+          _stopRealtime.call(); // optional: if you have a stopper
+        } catch (_) {}
+      }
+
       await _fetchBalances(force: true);
+
+      // Start (or restart) realtime after balances load.
       _startRealtime();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       // On any error, still fall back to zeros so the UI is stable
       setState(() {
@@ -183,9 +204,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       });
       showFloatingSnackBar(
         context,
-        message: 'Failed to load Stellar wallet. Please check your mnemonic.',
+        message: 'Failed to load Stellar wallet. Please check your mnemonic or network.',
         type: SnackBarType.error,
       );
+    } finally {
+      _loadingWallet = false;
     }
   }
 

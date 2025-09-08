@@ -54,15 +54,15 @@ class _SendScreenState extends State<SendScreen> {
   bool _isSending = false;
 
   // Stellar service + SDK
+  // NOTE: This uses the service which reads the immutable profit address from secure vault.
   late final StellarWalletService _stellar = StellarWalletService();
   late final StellarSDK _sdk = _stellar.sdk;
   bool get _isTestnet => identical(_sdk, StellarSDK.TESTNET);
   Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
-
-
   Asset get _assetXlm => Asset.NATIVE;
-  Asset get _assetUsdc => AssetTypeCreditAlphaNum4('USDC', _stellar.usdcIssuerOverrideMainnet!);
+  // ✅ Use the resolved issuer from the service (not the override field)
+  Asset get _assetUsdc => AssetTypeCreditAlphaNum4('USDC', _stellar.usdcIssuer);
 
   // Lightweight “estimate” / checks (USDC trustline etc.)
   Timer? _debounce;
@@ -188,13 +188,15 @@ class _SendScreenState extends State<SendScreen> {
     // Check balances to see if trustline already exists
     final acc = await _sdk.accounts.account(kp.accountId);
     final exists = acc.balances.any(
-          (b) => b.assetCode == 'USDC' && b.assetIssuer == _stellar.usdcIssuerOverrideMainnet!,
+          (b) => b.assetCode == 'USDC' && b.assetIssuer == _stellar.usdcIssuer,
     );
     if (exists) return;
 
     // Create trustline
     final tx = (TransactionBuilder(acc)
-      ..addOperation(ChangeTrustOperationBuilder(_assetUsdc, '922337203685.4775807').build())
+      ..addOperation(
+        ChangeTrustOperationBuilder(_assetUsdc, '922337203685.4775807').build(),
+      )
       ..setMaxOperationFee(100))
         .build();
     tx.sign(kp, _network);
@@ -205,32 +207,6 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  Future<String> _sendPayment({
-    required Asset asset,
-    required String destination,
-    required String amount, // already 7dp string
-    String? memoText,
-  }) async {
-    final kp = _keyPair!;
-    final acc = await _sdk.accounts.account(kp.accountId);
-
-    final builder = TransactionBuilder(acc)
-      ..addOperation(PaymentOperationBuilder(destination, asset, amount).build())
-      ..setMaxOperationFee(100); // 100 stroops/op
-
-    if (memoText != null && memoText.isNotEmpty) {
-      builder.addMemo(Memo.text(memoText));
-    }
-
-    final tx = builder.build();
-    tx.sign(kp, _network);
-    final res = await _sdk.submitTransaction(tx);
-    if (!res.success) {
-      throw Exception('Payment failed: ${res.resultXdr}');
-    }
-    return res.hash!;
-  }
-
   // ✅ Helper: works whether KeyPair.secretSeed is a String or bytes.
   String _seedStringFromKeyPair(KeyPair kp) {
     final dynamic ss = kp.secretSeed; // sdk types vary across versions
@@ -238,12 +214,44 @@ class _SendScreenState extends State<SendScreen> {
       throw Exception('KeyPair has no secret seed');
     }
     if (ss is String) {
-      return ss; // already a base32 seed string (e.g., "SA...").
+      return ss; // "SA..."
     }
     if (ss is Iterable<int>) {
-      return String.fromCharCodes(ss); // convert Uint8List/bytes → String
+      return String.fromCharCodes(ss);
     }
     throw Exception('Unsupported secretSeed type: ${ss.runtimeType}');
+  }
+
+  /// Direct USDC payment helper (no fee skim).
+  Future<String> _sendUsdcPayment({
+    required String destination,
+    required double amount,
+    String? memoText,
+  }) async {
+    final kp = _keyPair!;
+    final acc = await _sdk.accounts.account(kp.accountId);
+
+    // Estimate network fee for 1 operation
+    final perTxFeeXlm = await _stellar.estimateNetworkFeeXlm(opCount: 1, percentile: 90);
+    final perOpStroops = (perTxFeeXlm / 1e-7).ceil().clamp(100, 100 * 50); // clamp to [base, base*50]
+
+    final tb = TransactionBuilder(acc)
+      ..setMaxOperationFee(perOpStroops)
+      ..addOperation(
+        PaymentOperationBuilder(destination, _assetUsdc, amount.toStringAsFixed(7)).build(),
+      );
+
+    if (memoText != null && memoText.isNotEmpty) {
+      tb.addMemo(Memo.text(memoText));
+    }
+
+    final tx = tb.build();
+    tx.sign(kp, _network);
+    final res = await _sdk.submitTransaction(tx);
+    if (!res.success) {
+      throw Exception('USDC payment failed: ${res.resultXdr}');
+    }
+    return res.hash!;
   }
 
   Future<void> _sendTokenNow() async {
@@ -267,31 +275,24 @@ class _SendScreenState extends State<SendScreen> {
       String txId;
 
       if (isXLM) {
-        if ((_stellar.profitAddress).trim().isNotEmpty) {
-          final hashes = await _stellar.sendXlmWithFee(
-            secretSeed: _seedStringFromKeyPair(_keyPair!),
-            destination: to,
-            amount: amt,
-            memoText: null,
-          );
-          txId = hashes.first; // main transfer hash
-        } else {
-          txId = await _sendPayment(
-            asset: _assetXlm,
-            destination: to,
-            amount: amt.toStringAsFixed(7),
-          );
-        }
+        // 🔒 Uses secure vault profit address inside the service (cannot be tampered).
+        final hashes = await _stellar.sendXlmWithFee(
+          secretSeed: _seedStringFromKeyPair(_keyPair!),
+          destination: to,
+          amount: amt,
+          memoText: null,
+        );
+        txId = hashes.first; // atomic tx hash
       } else {
         // USDC: ensure sender trustline; recipient must already have it
         if (_destHasUsdcTL == false) {
           throw Exception('Recipient has no USDC trustline.');
         }
         await _ensureSenderUsdcTrustline();
-        txId = await _sendPayment(
-          asset: _assetUsdc,
+        txId = await _sendUsdcPayment(
           destination: to,
-          amount: amt.toStringAsFixed(7),
+          amount: amt,
+          memoText: null,
         );
       }
 
@@ -411,16 +412,15 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  void _confirmAndSend(CurrencyProvider currency, bool isXLM) {
+  Future<void> _confirmAndSend(CurrencyProvider currency, bool isXLM) async {
     final colors = AppColor.of(context);
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final fiat = isXLM ? currency.xlmToFiat(amount) : currency.usdcToFiat(amount);
 
-    // Stellar fee ≈ 100 stroops/op = 0.0000100 XLM for a single Payment op
-    const feePerOpXlm = 0.0000100;
-    final ops = 1;
-    final estFee = feePerOpXlm * ops;
+    // Live network fee estimate from Horizon fee_stats
+    final ops = isXLM ? 2 : 1; // XLM path = user payment + fee skim
+    final estFee = await _stellar.estimateNetworkFeeXlm(opCount: ops, percentile: 90);
 
     final toText = () {
       final addr = _recipientController.text.trim();
@@ -451,7 +451,6 @@ class _SendScreenState extends State<SendScreen> {
               ),
 
               const SizedBox(height: 8),
-              // Removed top-level address in the main screen already; keep details in review:
               ReviewRow(label: 'From', value: (_stellarAddress ?? widget.address), mono: true),
               ReviewRow(label: 'To', value: toText, mono: true),
               ReviewRow(label: 'Amount', value: '${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}'),
@@ -459,7 +458,7 @@ class _SendScreenState extends State<SendScreen> {
               const SizedBox(height: 6),
               ReviewRow(
                 label: 'Network Fee',
-                value: '≈ ${estFee.toStringAsFixed(6)} XLM (${ops} op)',
+                value: '≈ ${estFee.toStringAsFixed(7)} XLM (${ops} op${ops > 1 ? 's' : ''})',
               ),
               if ((widget.token.toUpperCase() == 'USDC') && (_checking || _destHasUsdcTL == false || (_checkMsg ?? '').isNotEmpty)) ...[
                 const SizedBox(height: 4),
@@ -551,8 +550,6 @@ class _SendScreenState extends State<SendScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         children: [
-          // 🗑️ Removed the top "From" address chip per request
-
           // Price + balance (compact)
           PriceHeader(
             token: widget.token,
@@ -655,7 +652,6 @@ class _SendScreenState extends State<SendScreen> {
                     labelText: 'Amount (${widget.token.toUpperCase()})',
                     filled: true,
                     fillColor: colors.primary.withOpacity(0.04),
-                    // ✅ Token logo instead of generic icon
                     prefixIcon: Padding(
                       padding: const EdgeInsets.all(10),
                       child: AssetLogo(asset: widget.token, size: 20),
@@ -692,7 +688,6 @@ class _SendScreenState extends State<SendScreen> {
                     const Spacer(),
                     Row(
                       children: [
-                        // ✅ Token logo beside fiat approximation
                         AssetLogo(asset: widget.token, size: 14),
                         const SizedBox(width: 6),
                         Text(

@@ -445,19 +445,31 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
 
   /// Pushes AuthGateScreen and runs the secure-save logic inside its `goNext`.
   Future<void> _startAuthFlow() async {
-    if (_obscured || !_ack1 || !_ack2 || _isLoading) return;
+    if (!mounted || _obscured || !_ack1 || !_ack2 || _isLoading) return;
 
-    Navigator.push(
-      context,
+    // Normalize the phrase early (lowercase + single spaces)
+    final phrase = _mnemonic.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (phrase.isEmpty || phrase.split(' ').length < 12) {
+      showFloatingSnackBar(
+        context,
+        message: "Please enter a valid 12/24-word recovery phrase.",
+        type: SnackBarType.error,
+      );
+      return;
+    }
+
+    // Prevent double-taps while the auth screen is active
+    setState(() => _isLoading = true);
+
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AuthGateScreen(
           goNext: () async {
-            if (_isLoading) return;
             if (!mounted) return;
-            setState(() => _isLoading = true);
-
+            bool restarted = false;
             try {
-              final ok = await SeedStorage.saveSeed(_mnemonic);
+              // Save to active wallet (or create a Primary Wallet if none exists).
+              final ok = await SeedStorage.saveSeed(phrase);
               if (!ok) {
                 showFloatingSnackBar(
                   context,
@@ -467,6 +479,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 return;
               }
 
+              // Verify round-trip read
               final stored = await SeedStorage.getSeed();
               if (stored == null || stored.isEmpty) {
                 showFloatingSnackBar(
@@ -477,9 +490,18 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 return;
               }
 
+              // Optional: move the user to the Wallet tab before restart
               if (!mounted) return;
               context.read<TabProvider>().setTab(1);
+
+              // Close the auth screen before hard-restart to avoid context leaks
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+
+              // Full app restart to clear any sensitive in-memory state
               Phoenix.rebirth(context);
+              restarted = true;
             } catch (e) {
               showFloatingSnackBar(
                 context,
@@ -487,13 +509,20 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 type: SnackBarType.error,
               );
             } finally {
-              if (mounted) setState(() => _isLoading = false);
+              // Avoid setState on a widget that is about to be torn down
+              if (!restarted && mounted) {
+                setState(() => _isLoading = false);
+              }
             }
           },
         ),
       ),
     );
+
+    // If the user canceled AuthGateScreen, clear the loading state.
+    if (mounted) setState(() => _isLoading = false);
   }
+
 
   @override
   Widget build(BuildContext context) {

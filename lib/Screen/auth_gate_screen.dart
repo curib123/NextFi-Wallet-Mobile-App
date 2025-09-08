@@ -18,7 +18,7 @@ class AuthGateScreen extends StatefulWidget {
   State<AuthGateScreen> createState() => _AuthGateScreenState();
 }
 
-class _AuthGateScreenState extends State<AuthGateScreen> {
+class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObserver {
   final LocalAuthentication _localAuth = LocalAuthentication();
   final TextEditingController _pinController = TextEditingController();
 
@@ -35,31 +35,45 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   Duration? _lockoutRemaining;
   Timer? _lockoutTimer;
 
+  // Avoid repeated auto biometric prompts
+  bool _autoBioTried = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initAuthCheck();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pinController.dispose();
     _lockoutTimer?.cancel();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When app resumes, refresh lockout timer and optionally reprompt biometrics.
+    if (state == AppLifecycleState.resumed) {
+      _refreshLockout();
+      _maybeAutoBiometric();
+    }
+  }
+
   Future<void> _initAuthCheck() async {
     // Ensure secure storage is actually available
     final ready = await SecurityStorage.ensureReady();
+    if (!mounted) return;
+
     if (!ready) {
-      if (mounted) {
-        showFloatingSnackBar(
-          context,
-          message:
-          "Secure storage is unavailable on this environment. PIN cannot be saved (e.g., web private mode/emulator).",
-          type: SnackBarType.error,
-        );
-      }
+      showFloatingSnackBar(
+        context,
+        message:
+        "Secure storage is unavailable on this environment. PIN cannot be saved (e.g., web private mode/emulator).",
+        type: SnackBarType.error,
+      );
       setState(() {
         _isNewUser = true;
         _deviceSupportsBiometrics = false;
@@ -84,9 +98,8 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       isSupported = await _localAuth.isDeviceSupported();
       available = await _localAuth.getAvailableBiometrics();
     } catch (_) {}
-    final bioEnabled = await SecurityStorage.isBiometricsEnabled();
 
-    // Current lockout (if any)
+    final bioEnabled = await SecurityStorage.isBiometricsEnabled();
     final rem = await SecurityStorage.lockoutRemaining();
 
     if (!mounted) return;
@@ -98,6 +111,9 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     });
 
     _startOrStopLockoutTimer(rem);
+
+    // If returning user with biometrics enabled, gently prompt once.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoBiometric());
   }
 
   void _startOrStopLockoutTimer(Duration? remaining) {
@@ -116,6 +132,22 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     });
   }
 
+  Future<void> _refreshLockout() async {
+    final rem = await SecurityStorage.lockoutRemaining();
+    if (!mounted) return;
+    setState(() => _lockoutRemaining = rem);
+    _startOrStopLockoutTimer(rem);
+  }
+
+  void _maybeAutoBiometric() {
+    if (_autoBioTried) return;
+    final isLocked = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
+    if (!_isNewUser && _deviceSupportsBiometrics && _biometricsEnabled && !isLocked) {
+      _autoBioTried = true; // set before to avoid double prompts
+      _authenticateWithBiometrics();
+    }
+  }
+
   Future<void> _authenticateWithBiometrics() async {
     try {
       final didAuthenticate = await _localAuth.authenticate(
@@ -131,6 +163,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
       if (didAuthenticate) {
         await SecurityStorage.markSuccessfulAuth(); // clears attempts/lockout
+        FocusScope.of(context).unfocus();
         showFloatingSnackBar(
           context,
           message: "Authentication successful",
@@ -145,12 +178,27 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         );
       }
     } on PlatformException catch (e) {
-      showFloatingSnackBar(
-        context,
-        message: "Biometric error: ${e.code}",
-        type: SnackBarType.error,
-      );
+      // Handle common local_auth errors gracefully
+      final msg = switch (e.code) {
+        auth_error_notEnrolled => "No biometrics enrolled. Set up Face/Touch ID or fingerprint.",
+        auth_error_notAvailable => "Biometrics not available on this device.",
+        auth_error_passcodeNotSet => "Device passcode/lock is not set.",
+        _ => "Biometric error: ${e.code}",
+      };
+      if (!mounted) return;
+      showFloatingSnackBar(context, message: msg, type: SnackBarType.error);
+
+      // If biometrics were toggled on in-app but OS no longer supports it, disable the flag.
+      if (_biometricsEnabled &&
+          (e.code == auth_error_notEnrolled ||
+              e.code == auth_error_notAvailable ||
+              e.code == auth_error_passcodeNotSet)) {
+        await SecurityStorage.setBiometricsEnabled(false);
+        if (!mounted) return;
+        setState(() => _biometricsEnabled = false);
+      }
     } catch (e) {
+      if (!mounted) return;
       showFloatingSnackBar(
         context,
         message: "Biometric error: $e",
@@ -166,16 +214,17 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     if (_lockoutRemaining != null && _lockoutRemaining! > Duration.zero) {
       showFloatingSnackBar(
         context,
-        message: "Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.",
+        message: "Too many attempts. Try again in ${_fmtDuration(_lockoutRemaining!)}.",
         type: SnackBarType.warning,
       );
       return;
     }
 
-    final pin = _pinController.text.trim();
+    final raw = _pinController.text;
+    final pin = raw.replaceAll(RegExp(r'\D'), ''); // sanitize
 
     // Enforce exact 6 digits to match SecurityStorage policy
-    if (pin.length != 6 || !_isAllDigits(pin)) {
+    if (pin.length != 6) {
       showFloatingSnackBar(
         context,
         message: "PIN must be exactly 6 digits",
@@ -238,6 +287,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
           type: SnackBarType.success,
         );
         _pinController.clear();
+        FocusScope.of(context).unfocus();
         _onAuthSuccess();
         return;
       }
@@ -251,6 +301,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
           type: SnackBarType.success,
         );
         _pinController.clear();
+        FocusScope.of(context).unfocus();
         _onAuthSuccess();
       } else {
         // After a failed verify, lockout may have started; refresh it.
@@ -264,7 +315,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         showFloatingSnackBar(
           context,
           message: rem != null && rem > Duration.zero
-              ? "Too many attempts. Try again in ${rem.inSeconds}s."
+              ? "Too many attempts. Try again in ${_fmtDuration(rem)}."
               : "Invalid PIN",
           type: SnackBarType.error,
         );
@@ -302,179 +353,192 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         : "Re-enter the same 6-digit PIN")
         : "Unlock your wallet securely";
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
-        backgroundColor: colors.background,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          "Security",
-          style: TextStyle(
-            color: colors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
+    return WillPopScope(
+      onWillPop: () async => Navigator.canPop(context),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.background,
+            elevation: 0,
+            centerTitle: true,
+            title: Text(
+              "Security",
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            leading: Navigator.canPop(context)
+                ? IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              color: colors.textPrimary,
+              onPressed: () => Navigator.pop(context),
+            )
+                : null,
           ),
-        ),
-        leading: Navigator.canPop(context)
-            ? IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          color: colors.textPrimary,
-          onPressed: () => Navigator.pop(context),
-        )
-            : null,
-      ),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Lock icon
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.lock_rounded, size: 60, color: colors.primary),
-                ),
-                const SizedBox(height: 28),
-
-                // Headline
-                Text(
-                  headline,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: colors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Subhead
-                Text(
-                  subhead,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: colors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                // Lockout banner
-                if (isLockedOut) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.withOpacity(0.2)),
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Lock icon
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: colors.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.lock_rounded, size: 60, color: colors.primary),
                     ),
-                    child: Text(
-                      "Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.",
-                      style: TextStyle(color: Colors.red.shade700),
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 28),
 
-                const SizedBox(height: 28),
-
-                // PIN input (centered)
-                Align(
-                  alignment: Alignment.center,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 280),
-                    child: TextField(
-                      controller: _pinController,
-                      enabled: !isLockedOut && !_submitting,
-                      autofocus: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      obscureText: _obscurePin,
-                      maxLength: 6,
-                      textAlign: TextAlign.center,
-                      textAlignVertical: TextAlignVertical.center,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _onSubmitPin(),
+                    // Headline
+                    Text(
+                      headline,
                       style: TextStyle(
-                        fontSize: 20,
-                        letterSpacing: 8,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
                         color: colors.textPrimary,
                       ),
-                      decoration: InputDecoration(
-                        counterText: "",
-                        filled: true,
-                        fillColor: colors.surface,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: colors.primary.withOpacity(0.2)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: colors.primary, width: 1.5),
-                        ),
-                        hintText: "••••••",
-                        hintStyle: TextStyle(
-                          fontSize: 20,
-                          letterSpacing: 6,
-                          color: colors.textSecondary.withOpacity(0.4),
-                        ),
-                        prefixIcon: const SizedBox(width: 48),
-                        prefixIconConstraints: const BoxConstraints(minWidth: 48),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePin ? Icons.visibility_off : Icons.visibility,
-                            color: colors.textSecondary,
-                          ),
-                          onPressed: () => setState(() => _obscurePin = !_obscurePin),
-                        ),
-                        suffixIconConstraints: const BoxConstraints(minWidth: 48),
-                      ),
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 8),
 
-                const SizedBox(height: 24),
-
-                // Primary action
-                CustomButton(
-                  text: _isNewUser
-                      ? (_firstPinEntry == null ? "Continue" : "Save PIN")
-                      : "Unlock",
-                  onPressed: () {
-                    if (_submitting) return;
-                    final isLockedOut = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
-                    if (isLockedOut) return;
-                    _onSubmitPin(); // ignore the Future on purpose
-                  },
-                  type: ButtonType.filled,
-                  icon: _isNewUser
-                      ? (_firstPinEntry == null ? Icons.arrow_forward : Icons.save)
-                      : Icons.lock_open,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Biometrics (shown only if user has a PIN AND enabled biometrics)
-                if (!_isNewUser && _deviceSupportsBiometrics && _biometricsEnabled)
-                  TextButton.icon(
-                    onPressed: _authenticateWithBiometrics,
-                    icon: Icon(Icons.fingerprint_rounded, color: colors.primary),
-                    label: Text(
-                      "Use Biometrics",
+                    // Subhead
+                    Text(
+                      subhead,
                       style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        color: colors.primary,
+                        fontSize: 14,
+                        color: colors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    // Lockout banner
+                    if (isLockedOut) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.red.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          "Too many attempts. Try again in ${_fmtDuration(_lockoutRemaining!)}.",
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 28),
+
+                    // PIN input (centered)
+                    Align(
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 280),
+                        child: TextField(
+                          controller: _pinController,
+                          enabled: !isLockedOut && !_submitting,
+                          autofocus: true,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          obscureText: _obscurePin,
+                          maxLength: 6,
+                          textAlign: TextAlign.center,
+                          textAlignVertical: TextAlignVertical.center,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _onSubmitPin(),
+                          onChanged: (v) {
+                            // Auto-submit when 6 digits entered
+                            if (v.length == 6) {
+                              _onSubmitPin();
+                            }
+                          },
+                          style: TextStyle(
+                            fontSize: 20,
+                            letterSpacing: 8,
+                            fontWeight: FontWeight.bold,
+                            color: colors.textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            counterText: "",
+                            filled: true,
+                            fillColor: colors.surface,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: colors.primary.withOpacity(0.2)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(color: colors.primary, width: 1.5),
+                            ),
+                            hintText: "••••••",
+                            hintStyle: TextStyle(
+                              fontSize: 20,
+                              letterSpacing: 6,
+                              color: colors.textSecondary.withOpacity(0.4),
+                            ),
+                            prefixIcon: const SizedBox(width: 48),
+                            prefixIconConstraints: const BoxConstraints(minWidth: 48),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePin ? Icons.visibility_off : Icons.visibility,
+                                color: colors.textSecondary,
+                              ),
+                              onPressed: () => setState(() => _obscurePin = !_obscurePin),
+                            ),
+                            suffixIconConstraints: const BoxConstraints(minWidth: 48),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-              ],
+
+                    const SizedBox(height: 24),
+
+                    // Primary action
+                    CustomButton(
+                      text: _isNewUser
+                          ? (_firstPinEntry == null ? "Continue" : "Save PIN")
+                          : "Unlock",
+                      onPressed: () {
+                        if (_submitting) return;
+                        final isLocked = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
+                        if (isLocked) return;
+                        _onSubmitPin(); // fire and forget
+                      },
+                      type: ButtonType.filled,
+                      icon: _isNewUser
+                          ? (_firstPinEntry == null ? Icons.arrow_forward : Icons.save)
+                          : Icons.lock_open,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Biometrics (shown only if user has a PIN AND enabled biometrics)
+                    if (!_isNewUser && _deviceSupportsBiometrics && _biometricsEnabled)
+                      TextButton.icon(
+                        onPressed: _authenticateWithBiometrics,
+                        icon: Icon(Icons.fingerprint_rounded, color: colors.primary),
+                        label: Text(
+                          "Use Biometrics",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: colors.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -482,5 +546,16 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     );
   }
 
-  bool _isAllDigits(String s) => RegExp(r'^\d+$').hasMatch(s);
+  String _fmtDuration(Duration d) {
+    final total = d.inSeconds;
+    final m = (total ~/ 60).toString().padLeft(2, '0');
+    final s = (total % 60).toString().padLeft(2, '0');
+    return "$m:$s";
+  }
 }
+
+// local_auth error codes (string constants) differ by platform;
+// we use common identifiers here to keep messages friendly.
+const auth_error_notEnrolled = 'NotEnrolled';
+const auth_error_notAvailable = 'NotAvailable';
+const auth_error_passcodeNotSet = 'PasscodeNotSet';
