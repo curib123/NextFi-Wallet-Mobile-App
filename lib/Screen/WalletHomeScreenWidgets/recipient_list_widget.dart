@@ -175,7 +175,7 @@ class _EmptyRecipients extends StatelessWidget {
                 style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             Text(
-              'Save frequently used TRON addresses for faster sends.',
+              'Save frequently used XLM/USDC addresses for faster sends.',
               style: TextStyle(color: colors.textSecondary),
               textAlign: TextAlign.center,
             ),
