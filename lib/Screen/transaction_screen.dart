@@ -14,8 +14,10 @@ import 'package:next_fi/Services/seed_storage.dart';
 
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/model/recipient_address.dart';
-
 import 'package:next_fi/Provider/AssetProvider.dart';
+
+// ⬇️ Adjust this path to where you placed the sheet code you sent me.
+import 'package:next_fi/Components/recipient_upsert_sheet.dart';
 
 typedef Tx = Map<String, dynamic>;
 
@@ -36,6 +38,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   bool _loadingMore = false;
   bool _hasMore = true;
   String? _errorMsg;
+  bool _accountMissing = false; // ✅ unfunded / not yet created on-chain
 
   // Horizon pagination uses a cursor (paging token), not offset.
   String? _cursor; // next cursor to request when loading more
@@ -50,11 +53,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   static final DateFormat _listFmt = DateFormat('MMM d, h:mm a');
   static final DateFormat _detailFmt = DateFormat('MMM d, yyyy • h:mm a');
-
-  // Nice default color choices for contacts
-  static const List<int> _colorChoices = <int>[
-    0xFF5B8CFF, 0xFFFF6B6B, 0xFF2ED573, 0xFFFFC107, 0xFF6A5ACD, 0xFF00C2A8, 0xFFEA4C89,
-  ];
 
   // Fallback if AssetProvider isn't available for some reason
   static const String _FALLBACK_XLM_LOGO =
@@ -106,15 +104,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       await _fetchTransactions();
 
-      // Live incoming payments stream
-      _incomingSub = _stellar.sdk.payments
-          .forAccount(_userAddress!)
-          .cursor("now")
-          .stream()
-          .listen((op) {
-        final tx = _opToTx(op, _userAddress!);
-        if (tx != null) _handleIncomingTx(tx);
-      }, onError: (_) {});
+      // ✅ Live incoming payments stream — only if account is on-chain
+      if (!_accountMissing && _userAddress != null) {
+        _incomingSub = _stellar.sdk.payments
+            .forAccount(_userAddress!)
+            .cursor("now")
+            .stream()
+            .listen((op) {
+          final tx = _opToTx(op, _userAddress!);
+          if (tx != null) _handleIncomingTx(tx);
+        }, onError: (_) {
+          // optionally log
+        });
+      }
     } catch (e) {
       _set(() {
         _loading = false;
@@ -211,6 +213,31 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
+// NEW:
+  bool _isAccountMissingError(Object e) {
+    // Try to read structured fields if the thrown object has them.
+    try {
+      final dynamic x = e;
+      final int? code = x.response?.statusCode as int?;
+      final String? body = x.response?.body as String?;
+      if (code == 404) return true;
+      if (body != null &&
+          (body.contains('Resource Missing') ||
+              body.contains('"title":"Resource Missing"') ||
+              body.contains('not_found'))) {
+        return true;
+      }
+    } catch (_) {
+      // ignore — fall back to string checks
+    }
+
+    // Fallback: inspect the message text.
+    final s = e.toString();
+    return s.contains('404') ||
+        s.contains('Resource Missing') ||
+        s.contains('not_found');
+  }
+
   Future<void> _fetchTransactions({bool loadMore = false}) async {
     final addr = _userAddress;
     if (addr == null) return;
@@ -253,6 +280,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       _attachRecipientMetaTo(newTx);
 
       _set(() {
+        _accountMissing = false; // ✅ success means account exists
         if (loadMore) {
           _transactions.addAll(newTx);
         } else {
@@ -271,14 +299,27 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _hasMore = ops.length == _limit;
       });
     } catch (e) {
-      _set(() => _errorMsg = 'Error fetching history: $e');
+      if (myToken != _fetchGen) return;
+
+      if (_isAccountMissingError(e)) {
+        // ✅ Treat unfunded / not-on-chain as clean "no transactions" state
+        _set(() {
+          _accountMissing = true;
+          _transactions = const [];
+          _hasMore = false;
+          _errorMsg = null; // no scary error for first-time wallets
+        });
+      } else {
+        _set(() {
+          _errorMsg = 'Error fetching history: $e';
+        });
+      }
     } finally {
       _set(() {
         _loading = false;
         _loadingMore = false;
       });
-    }
-  }
+    }  }
 
   // Enrich a list of Tx with cached recipient name/color (if present)
   void _attachRecipientMetaTo(List<Tx> list) {
@@ -385,10 +426,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
         ),
       );
     } else if (_transactions.isEmpty) {
+      final msg = _accountMissing
+          ? 'This wallet is new or not yet funded on-chain. Once you receive your first XLM or USDC, your transactions will appear here.'
+          : 'When you send or receive XLM or USDC, they’ll appear here.';
       content = Center(
         child: EmptyState.noData(
           title: 'No transactions yet',
-          message: 'When you send or receive XLM or USDC, they’ll appear here.',
+          message: msg,
           primaryActionLabel: 'Refresh',
           onPrimaryAction: _resetAndFetch,
           context: context,
@@ -521,11 +565,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Modal: transaction details + Save/Edit contact by address
+  // Modal: transaction details + use the shared Recipient Upsert Sheet
   // ───────────────────────────────────────────────────────────────────────────
-  // ───────────────────────────────────────────────────────────────────────────
-// Modal: transaction details + auto-apply contact name/color from address book
-// ───────────────────────────────────────────────────────────────────────────
   void _showTxDetailsBottomSheet(
       BuildContext context,
       AppColor colors,
@@ -545,14 +586,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final explorerUrl = _stellarExplorerTx(hash, _stellar);
 
-    // 🔹 Look up existing contact by the peer address and APPLY to the tx cache
+    // Lookup existing contact for this peer
     final recipProv = context.read<RecipientAddressProvider>();
     final existing = recipProv.byAddress(peerAddr);
     if (existing != null) {
       tx['recName'] = existing.name;
       tx['recColor'] = existing.color;
-      // If you want the list behind the modal to reflect this immediately:
-      if (mounted) setState(() {});
+      if (mounted) setState(() {}); // reflect immediately in list
     }
 
     showModalBottomSheet(
@@ -646,17 +686,53 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // 🔹 Contact chip shown using existing (auto-applied if present)
-                  _ContactRow(
-                    colors: colors,
-                    peerAddr: peerAddr,
-                    existing: existing,
-                    onChanged: (rec) {
-                      // if user edits/saves, persist change into tx cache and rebuild
-                      tx['recName'] = rec?.name;
-                      tx['recColor'] = rec?.color;
-                      setState(() {});
-                    },
+                  // 🔹 Existing contact chip + "Save/Edit Contact" via external sheet
+                  Row(
+                    children: [
+                      if (existing != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Color(existing.color).withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: Color(existing.color).withOpacity(0.35)),
+                          ),
+                          child: Text(
+                            existing.name,
+                            style: TextStyle(
+                              color: Color(existing.color),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      if (existing != null) const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () async {
+                          final saved = await showRecipientUpsertSheet(
+                            context,
+                            initial: existing, // null -> Add, existing -> Edit
+                          );
+                          if (saved == true && mounted) {
+                            // Refresh from provider and update tx cache
+                            final updated = context.read<RecipientAddressProvider>().byAddress(peerAddr);
+                            tx['recName']  = updated?.name;
+                            tx['recColor'] = updated?.color;
+                            setState(() {}); // refresh modal + list
+                          }
+                        },
+                        icon: Icon(
+                          existing != null ? LucideIcons.userCog : LucideIcons.userPlus,
+                          size: 16,
+                          color: colors.primary,
+                        ),
+                        label: Text(
+                          existing != null ? 'Edit Contact' : 'Save Contact',
+                          style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700),
+                        ),
+                        style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 8),
@@ -674,7 +750,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   const Divider(height: 1),
                   const SizedBox(height: 12),
 
-                  // 🔹 From/To rows automatically show contact name if it exists
+                  // From/To
                   _kv(
                     context: context,
                     colors: colors,
@@ -777,8 +853,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-
-  // Inside _TransactionScreenState
+  // Key-Value row
   Widget _kv({
     required BuildContext context,
     required AppColor colors,
@@ -922,7 +997,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             width: size,
             height: size,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.black12,
               shape: BoxShape.circle,
             ),
@@ -950,211 +1025,4 @@ class _TransactionScreenState extends State<TransactionScreen> {
     if (!matches) return addr;
     return '${rec.name}  •  $addr';
   }
-}
-
-/* ===================== Contact row (save / edit) ===================== */
-class _ContactRow extends StatelessWidget {
-  final AppColor colors;
-  final String peerAddr;
-  final RecipientAddress? existing;
-  final ValueChanged<RecipientAddress?> onChanged;
-
-  const _ContactRow({
-    required this.colors,
-    required this.peerAddr,
-    required this.existing,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rec = existing ??
-        context.read<RecipientAddressProvider>().byAddress(peerAddr);
-    final has = rec != null;
-
-    return Row(
-      children: [
-        if (has)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Color(rec!.color).withOpacity(0.14),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Color(rec.color).withOpacity(0.35)),
-            ),
-            child: Text(
-              rec.name,
-              style: TextStyle(
-                color: Color(rec.color),
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        if (has) const SizedBox(width: 8),
-        TextButton.icon(
-          onPressed: () =>
-              _showContactEditor(context, peerAddr, rec, onChanged),
-          icon: Icon(has ? LucideIcons.userCog : LucideIcons.userPlus, size: 16,
-              color: colors.primary),
-          label: Text(has ? 'Edit Contact' : 'Save Contact',
-              style: TextStyle(
-                  color: colors.primary, fontWeight: FontWeight.w700)),
-          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-        ),
-      ],
-    );
-  }
-
-  static Future<void> _showContactEditor(BuildContext context,
-      String addr,
-      RecipientAddress? existing,
-      ValueChanged<RecipientAddress?> onChanged,) async {
-    final colors = AppColor.of(context);
-    final prov = context.read<RecipientAddressProvider>();
-
-    final nameCtl = TextEditingController(text: existing?.name ?? '');
-    int chosen = existing?.color ?? _TransactionScreenState._colorChoices.first;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
-                bottom: MediaQuery
-                    .of(ctx)
-                    .viewInsets
-                    .bottom + 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: colors.primary.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    existing == null ? 'Save Contact' : 'Edit Contact',
-                    style: TextStyle(fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: colors.textPrimary),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameCtl,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: 'Name',
-                      hintText: 'e.g. Alice',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                        'Color', style: TextStyle(color: colors.textSecondary)),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _TransactionScreenState._colorChoices.map((c) {
-                      final sel = c == chosen;
-                      return GestureDetector(
-                        onTap: () => setModalState(() => chosen = c),
-                        // ✅ FIX: no void-expression error
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Color(c),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: sel ? Colors.white : Colors.transparent,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: sel
-                              ? const Icon(
-                              Icons.check, size: 18, color: Colors.white)
-                              : null,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text('Cancel', style: TextStyle(
-                              color: colors.primary,
-                              fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            final name = nameCtl.text.trim();
-                            if (name.isEmpty) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Please enter a name')),
-                              );
-                              return;
-                            }
-                            RecipientAddress saved;
-                            if (existing == null) {
-                              saved = await prov.add(
-                                  name: name, address: addr, color: chosen);
-                            } else {
-                              saved = (await prov.update(
-                                  existing.id, name: name, color: chosen)) ??
-                                  existing;
-                            }
-                            onChanged(saved);
-                            if (context.mounted) Navigator.pop(ctx);
-                          },
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: colors.primary, elevation: 0),
-                          child: const Text('Save'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
 }

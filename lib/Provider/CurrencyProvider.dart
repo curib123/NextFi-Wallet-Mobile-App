@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:next_fi/Services/security_storage.dart';
 
 /// CoinGecko-free provider with multi-exchange fallbacks
 /// - XLM/USDT spot & candles: Binance → OKX → KuCoin → Bybit → Kraken (spot)
@@ -13,9 +14,11 @@ class CurrencyProvider extends ChangeNotifier {
     this.pollEvery = const Duration(seconds: 30),
     this.httpTimeout = const Duration(seconds: 10),
   }) {
-    _refreshAll();
-    _startPolling();
+    _boot(); // load saved fiat then start polling + initial refresh
   }
+
+  // ---- Secure storage key ----
+  static const String _kFiatStorageKey = 'pref_fiat_currency_v1';
 
   // ---- Config ----
   final Duration pollEvery;
@@ -79,13 +82,45 @@ class CurrencyProvider extends ChangeNotifier {
   Stream<double> get xlmPriceStream  => _xlmPriceController.stream;
   Stream<double> get usdcPriceStream => _usdcPriceController.stream;
 
+  // ---- Init / Boot ----
+  void _boot() {
+    // Load saved fiat (if any), then refresh + start polling.
+    () async {
+      try {
+        final saved = await SecurityStorage.read(_kFiatStorageKey);
+        if (saved != null && saved.trim().isNotEmpty) {
+          _fiat = saved.trim().toLowerCase();
+        }
+      } catch (e) {
+        debugPrint("CurrencyProvider: failed to read saved fiat: $e");
+      } finally {
+        await _refreshAll();
+        _startPolling();
+      }
+    }();
+  }
+
   // ---- Lifecycle ----
+  /// Change fiat and persist securely.
   void setFiat(String newFiat) {
     final lower = newFiat.toLowerCase();
     if (lower != _fiat) {
       _fiat = lower;
+      // fire-and-forget; we don't block UI on storage write
+      SecurityStorage.save(_kFiatStorageKey, lower);
       _refreshAll();
+      notifyListeners();
     }
+  }
+
+  /// Optional helper to reset to default USD and clear storage.
+  Future<void> resetFiatToUsd() async {
+    _fiat = 'usd';
+    try {
+      await SecurityStorage.delete(_kFiatStorageKey);
+    } catch (_) {}
+    await _refreshAll();
+    notifyListeners();
   }
 
   void _startPolling() {
@@ -335,7 +370,6 @@ class CurrencyProvider extends ChangeNotifier {
 
   Future<double?> _fetchUsdcUsdFromBitstamp() async {
     try {
-      // https://www.bitstamp.net/api/v2/ticker/usdcusd/
       final url = Uri.parse('https://www.bitstamp.net/api/v2/ticker/usdcusd/');
       final r = await http.get(url).timeout(httpTimeout);
       if (r.statusCode == 200) {
@@ -418,13 +452,12 @@ class CurrencyProvider extends ChangeNotifier {
 
   // 24H XLM: 1h candles (24 points) with fallbacks
   Future<List<double>> _fetchXlmIntradayUsdt({required int hours}) async {
-    // Binance → OKX → KuCoin → Bybit → Kraken
     final tryOrder = <Future<List<double>?> Function()>[
           () => _binanceKlines('1h', hours),
           () => _okxCandles('1H', hours),
           () => _kucoinCandles('1hour', hours),
-          () => _bybitKline('60', hours),   // interval minutes
-          () => _krakenOhlc(60, hours),     // interval minutes
+          () => _bybitKline('60', hours),
+          () => _krakenOhlc(60, hours),
     ];
 
     for (final fn in tryOrder) {
@@ -448,8 +481,8 @@ class CurrencyProvider extends ChangeNotifier {
           () => _binanceKlines('1d', days),
           () => _okxCandles('1D', days),
           () => _kucoinCandles('1day', days),
-          () => _bybitKline('D', days),     // Bybit accepts 'D' for 1 day
-          () => _krakenOhlc(1440, days),    // 1440 minutes = 1 day
+          () => _bybitKline('D', days),
+          () => _krakenOhlc(1440, days),
     ];
 
     for (final fn in tryOrder) {
@@ -641,7 +674,7 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   // ---- Converters ----
-  double xlmToFiat(double xlmAmount)  => xlmAmount * _xlmRate;
+  double xlmToFiat(double xlmAmount)   => xlmAmount * _xlmRate;
   double usdcToFiat(double usdcAmount) => usdcAmount * _usdcRate;
 
   double fiatToUsdc(double fiatAmount) => (_usdcRate != 0) ? fiatAmount / _usdcRate : 0.0;

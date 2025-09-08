@@ -3,19 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-
-// Compact UI kit (XLM/USDC variants)
-import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
-
-
 
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
@@ -26,76 +21,61 @@ class SwapScreen extends StatefulWidget {
 enum _SwapDir { xlmToUsdc, usdcToXlm }
 
 class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
-  // Keep at least this much XLM to cover base reserve/fees.
+  // Keep at least this much XLM for fees/account reserve.
   static const double _kDustXlm = 1.0;
-  static const double _EPS = 1e-6; // use 6-decimal epsilon (matches UI precision)
+  static const double _EPS = 1e-6;
 
-  // Controllers
   final _amountCtl = TextEditingController();
-
-  // Format (UI only)
   final _fmt = NumberFormat('#,##0.######');
 
-  // State
   _SwapDir _dir = _SwapDir.xlmToUsdc;
   bool _loading = true;
   String? _errorMsg;
 
-  String? _secretSeed; // Stellar secret seed (S...)
-  String? _accountId;  // Stellar account id (G...)
-
+  String? _secretSeed; // S...
+  String? _accountId;  // G...
   double _xlmBal = 0.0;
   double _usdcBal = 0.0;
 
-  // Anim
-  late final AnimationController _swapSpin =
-  AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+  late final AnimationController _flipAnim =
+  AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
 
-  // Stellar
   StellarWalletService? _stellar;
-
-  /* ---------------- Helpers ---------------- */
-  double _floor6(double v) => (v * 1e6).floor() / 1e6;
 
   bool get _isXlmToUsdc => _dir == _SwapDir.xlmToUsdc;
   String get _fromSymbol => _isXlmToUsdc ? 'XLM' : 'USDC';
   String get _toSymbol => _isXlmToUsdc ? 'USDC' : 'XLM';
 
-  String get _fromKey => _fromSymbol; // used by TokenLogo
-  String get _toKey => _toSymbol;
+  double _floor6(double v) => (v * 1e6).floor() / 1e6;
 
-  /// Available balance from the selected "from" side (dust-aware for XLM).
   double get _availableFrom {
     if (_isXlmToUsdc) {
       final spendable = (_xlmBal - _kDustXlm).clamp(0, double.infinity);
-      return _floor6(spendable.toDouble()); // floor to avoid rounding above cap
+      return _floor6(spendable.toDouble());
     }
     return _floor6(_usdcBal);
   }
 
-  /// True when the typed amount is positive and <= available balance (with epsilon).
-  bool get _hasEnoughBalance {
-    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
-    return amount > 0 && amount <= _availableFrom + _EPS;
+  bool get _hasEnough {
+    final a = double.tryParse(_amountCtl.text.trim()) ?? 0;
+    return a > 0 && a <= _availableFrom + _EPS;
   }
 
   @override
   void initState() {
     super.initState();
-    _loadWalletAndData();
-    _amountCtl.addListener(_onAmountInput);
+    _bootstrap();
+    _amountCtl.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _amountCtl.removeListener(_onAmountInput);
     _amountCtl.dispose();
-    _swapSpin.dispose();
+    _flipAnim.dispose();
     super.dispose();
   }
 
-  /* ---------------- Wallet + balances ---------------- */
-  Future<void> _loadWalletAndData() async {
+  Future<void> _bootstrap() async {
     final mn = await SeedStorage.getSeed();
     if (!mounted) return;
 
@@ -108,11 +88,8 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
     }
 
     try {
-      // Derive Stellar keys from mnemonic
       final wallet = await StellarWalletService.walletFromMnemonic(mn);
       final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-
-      // Lazy-create the service AFTER we know an address (use self as profit sink; not used here)
       _stellar = StellarWalletService(profitAddress: kp.accountId);
 
       setState(() {
@@ -122,7 +99,7 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
 
       await _refreshBalances();
 
-      // Start listening for incoming payments to refresh balances (fire-and-forget).
+      // Auto-refresh when payments stream in.
       _stellar!.streamPayments(kp.accountId, (_) => _refreshBalances());
 
       if (mounted) setState(() => _loading = false);
@@ -148,53 +125,41 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
         _xlmBal = res[0];
         _usdcBal = res[1];
       });
-      _sanityClampToAvailable(); // keep field legal if balances changed
+      _clampToAvailable();
     } catch (_) {
-      // Keep previous on errors
+      // keep previous values on error
     }
   }
 
-  /* ---------------- UI/logic helpers ---------------- */
-  void _flipDirection() {
-    HapticFeedback.lightImpact();
-    _swapSpin.forward(from: 0);
-    setState(() {
-      _dir = _isXlmToUsdc ? _SwapDir.usdcToXlm : _SwapDir.xlmToUsdc;
-    });
-    _sanityClampToAvailable();
+  String _seedStringFromKeyPair(KeyPair kp) {
+    final s = kp.secretSeed; // already a String in stellar_flutter_sdk
+    if (s == null || s.isEmpty) {
+      throw Exception('KeyPair has no secret seed');
+    }
+    return s;
   }
 
-  // Set to the true maximum spendable (auto leaves 1 XLM on XLM→USDC).
+
+  void _flipDir() {
+    HapticFeedback.lightImpact();
+    _flipAnim.forward(from: 0);
+    setState(() => _dir = _isXlmToUsdc ? _SwapDir.usdcToXlm : _SwapDir.xlmToUsdc);
+    _clampToAvailable();
+  }
+
   void _useMax() {
     final max = _availableFrom;
     _amountCtl.text = max <= 0 ? '' : max.toStringAsFixed(6);
   }
 
-  void _quickPercent(double p) {
+  void _usePct(double p) {
     final base = _availableFrom;
-    var v = _floor6(base * p);       // floor to 6 to prevent rounding above cap
-    v = v.clamp(0, base);
+    var v = _floor6(base * p).clamp(0, base);
     _amountCtl.text = v <= 0 ? '' : v.toStringAsFixed(6);
   }
 
-  void _onAmountInput() {
-    _sanityClampToAvailable();
-    setState(() {}); // re-eval button enable state
-  }
-
-  // ✅ Works whether KeyPair.secretSeed is a String or bytes.
-  String _seedStringFromKeyPair(KeyPair kp) {
-    final dynamic ss = kp.secretSeed;
-    if (ss == null) throw Exception('KeyPair has no secret seed');
-    if (ss is String) return ss;
-    if (ss is Iterable<int>) return String.fromCharCodes(ss);
-    throw Exception('Unsupported secretSeed type: ${ss.runtimeType}');
-  }
-
-  // Clamp typed amount to available (no snackbars).
-  void _sanityClampToAvailable() {
-    final raw = _amountCtl.text.trim();
-    final a = double.tryParse(raw);
+  void _clampToAvailable() {
+    final a = double.tryParse(_amountCtl.text.trim());
     if (a == null) return;
     final cap = _availableFrom;
     if (a > cap && cap > 0) {
@@ -202,110 +167,95 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
     }
   }
 
-  /* ---------------- Confirm → Execute ---------------- */
-  Future<void> _openConfirmSheet() async {
-    if (_secretSeed == null || _accountId == null || _stellar == null) {
+  Future<void> _confirmAndSwap() async {
+    if (_secretSeed == null || _stellar == null) {
       showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.error);
       return;
     }
 
-    // Final guard: never allow spending above the allowed cap.
-    _sanityClampToAvailable();
-
+    _clampToAvailable();
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amount <= 0) {
       showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.error);
       return;
     }
-    if (!_hasEnoughBalance) {
+    if (!_hasEnough) {
       showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error);
       return;
     }
 
     final colors = AppColor.of(context);
-
     await showModalBottomSheet(
       context: context,
       backgroundColor: colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(999),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: colors.primary.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text('Confirm Swap',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+            const SizedBox(height: 10),
+            _RoutePill(from: _fromSymbol, to: _toSymbol),
+            const SizedBox(height: 10),
+            _SummaryRow(label: 'Route', value: '$_fromSymbol → $_toSymbol'),
+            _SummaryRow(label: 'Amount', value: '${_fmt.format(amount)} $_fromSymbol'),
+            const _SummaryRow(label: 'Network fee', value: 'Tiny (base fee)'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: colors.primary.withOpacity(0.35)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Cancel', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Confirm Swap',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary),
-              ),
-              const SizedBox(height: 10),
-
-              // ✅ Logo route pill inside confirm
-              _RoutePill(fromKey: _fromKey, toKey: _toKey, colors: colors),
-
-              const SizedBox(height: 8),
-              SummaryRow(label: 'Route', value: '$_fromSymbol → $_toSymbol'),
-              SummaryRow(label: 'Amount', value: '${_fmt.format(amount)} $_fromSymbol'),
-              const SummaryRow(label: 'Network fee', value: '≈ 0.0000100 XLM per op'),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: Text('Cancel', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await _doSwap(amount);
+                    },
+                    icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
+                    label: const Text('Swap now'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await _executeSwap(amount: amount);
-                      },
-                      icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
-                      label: const Text('Confirm'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Future<void> _executeSwap({required double amount}) async {
-    final svc = _stellar;
-    final seed = _secretSeed;
-    if (svc == null || seed == null) return;
-
+  Future<void> _doSwap(double amount) async {
+    final svc = _stellar!;
+    final seed = _secretSeed!;
     FocusScope.of(context).unfocus();
     setState(() => _loading = true);
 
     try {
-      // UI has no “min receive” now — pass 0 to disable slippage guard at service level.
       final txid = _isXlmToUsdc
           ? await svc.swapXlmToUsdc(secretSeed: seed, sendAmountXlm: amount, minUsdcOut: 0)
           : await svc.swapUsdcToXlm(secretSeed: seed, sendAmountUsdc: amount, minXlmOut: 0);
@@ -323,11 +273,10 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
     }
   }
 
-  /* ---------------- UI ---------------- */
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0.0;
+    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -343,9 +292,9 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
         ],
       ),
       body: _loading && _accountId == null
-          ? const PageLoader()
+          ? const _PageLoader()
           : _errorMsg != null
-          ? ErrorCard(message: _errorMsg!)
+          ? _ErrorCard(message: _errorMsg!)
           : RefreshIndicator(
         onRefresh: _refreshBalances,
         child: SingleChildScrollView(
@@ -354,52 +303,40 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BalanceRow(xlm: _xlmBal, usdc: _usdcBal),
-
+              _BalanceRow(xlm: _xlmBal, usdc: _usdcBal),
               const SizedBox(height: 10),
-              // Reuse segmented control; pass our direction bool.
-              DirectionSegmented(
-                isXlmToUsdc: _isXlmToUsdc, // bool only controls left/right selection
-                onFlip: _flipDirection,
-                controller: _swapSpin,
+              _DirectionSwitcher(
+                isXlmToUsdc: _isXlmToUsdc,
+                onFlip: _flipDir,
+                controller: _flipAnim,
               ),
-
               const SizedBox(height: 10),
-
-              // ✅ Logo route pill under the segmented control
-              _RoutePill(fromKey: _fromKey, toKey: _toKey, colors: colors),
-
+              _RoutePill(from: _fromSymbol, to: _toSymbol),
               const SizedBox(height: 10),
-              AmountField(
+              _AmountField(
                 label: 'You send ($_fromSymbol)',
                 controller: _amountCtl,
                 onUseMax: _useMax,
-                onPct: _quickPercent,
-                colors: colors,
+                onPct: _usePct,
               ),
-
-              // Tiny inline guide when doing XLM → USDC.
               if (_isXlmToUsdc) ...[
                 const SizedBox(height: 6),
-                _DustGuide(colors: colors),
+                _HintBox(
+                  text:
+                  'We keep 1 XLM for fees & account reserve. “MAX” uses only your spendable amount.',
+                ),
               ],
-
               const SizedBox(height: 10),
-              SummaryCard(
-                from: _fromSymbol,
-                to: _toSymbol,
-                amount: amount,
-                feeText: 'Auto (base fee)',
-                colors: colors,
-                fmt: _fmt,
+              _SummaryCard(
+                rows: [
+                  _SummaryData('Route', '$_fromSymbol → $_toSymbol'),
+                  _SummaryData('Amount', '${_fmt.format(amount)} $_fromSymbol'),
+                  const _SummaryData('Fee', 'Auto (base fee)'),
+                ],
               ),
-
-              const SizedBox(height: 10),
-              _TipsCard(colors: colors),
-
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               ElevatedButton.icon(
-                onPressed: (_loading || !_hasEnoughBalance) ? null : _openConfirmSheet,
+                onPressed: (_loading || !_hasEnough) ? null : _confirmAndSwap,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colors.primary,
                   foregroundColor: Colors.white,
@@ -418,196 +355,417 @@ class _SwapScreenState extends State<SwapScreen> with TickerProviderStateMixin {
   }
 }
 
-/* ---------- Small inline “dust” guide ---------- */
-class _DustGuide extends StatelessWidget {
-  final AppColor colors;
-  const _DustGuide({required this.colors});
+/* ---------------- Small, tidy UI bits ---------------- */
+
+class _PageLoader extends StatelessWidget {
+  const _PageLoader();
+  @override
+  Widget build(BuildContext context) => const Center(
+    child: Padding(
+      padding: EdgeInsets.only(top: 60),
+      child: SizedBox(height: 26, width: 26, child: CircularProgressIndicator(strokeWidth: 2)),
+    ),
+  );
+}
+
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  const _ErrorCard({required this.message});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 0),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: c.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.error.withOpacity(0.2)),
+        ),
+        child: Text(message, style: TextStyle(color: c.error)),
+      ),
+    );
+  }
+}
+
+class _BalanceRow extends StatelessWidget {
+  final double xlm, usdc;
+  const _BalanceRow({required this.xlm, required this.usdc});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final c = AppColor.of(context);
+    String _num(double v) => v.toStringAsFixed(v >= 100 ? 2 : 4);
+
+    Widget chip(String assetKey, String value) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.primary.withOpacity(0.12)),
+        color: c.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AssetLogo(asset: assetKey, size: 16),
+          const SizedBox(width: 6),
+          Text('$assetKey: ', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+          Text(value, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+
+    return Row(
+      children: [
+        Expanded(child: chip('XLM', _num(xlm))),
+        const SizedBox(width: 8),
+        Expanded(child: chip('USDC', _num(usdc))),
+      ],
+    );
+  }
+}
+
+class _DirectionSwitcher extends StatelessWidget {
+  final bool isXlmToUsdc;
+  final VoidCallback onFlip;
+  final AnimationController controller;
+  const _DirectionSwitcher({
+    required this.isXlmToUsdc,
+    required this.onFlip,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.14)),
       ),
       child: Row(
         children: [
-          const Icon(LucideIcons.info, size: 16),
-          const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              'We keep 1 XLM in your wallet for network fees & account reserve. '
-                  'Using “Max” or “100%” won’t empty your last XLM.',
-              style: TextStyle(fontSize: 12.5, color: colors.textSecondary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/* ---------- “Other needs” compact tips ---------- */
-class _TipsCard extends StatelessWidget {
-  final AppColor colors;
-  const _TipsCard({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    final style = TextStyle(fontSize: 12.5, color: colors.textSecondary, height: 1.35);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.primary.withOpacity(0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Swap tips', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: colors.textPrimary)),
-          const SizedBox(height: 6),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('•  '),
-            Expanded(child: Text('100% uses your spendable amount (we leave 1 XLM for reserve & fees).', style: style)),
-          ]),
-          const SizedBox(height: 4),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('•  '),
-            Expanded(child: Text('Network fee is tiny (base fee per operation).', style: style)),
-          ]),
-          const SizedBox(height: 4),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('•  '),
-            Expanded(child: Text('USDC may require a trustline on first use.', style: style)),
-          ]),
-          const SizedBox(height: 4),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('•  '),
-            Expanded(child: Text('Tap Refresh to update balances if funds arrive mid-swap.', style: style)),
-          ]),
-        ],
-      ),
-    );
-  }
-}
-
-/* ---------- Logo route pill (no overflow) ---------- */
-class _RoutePill extends StatelessWidget {
-  final String fromKey;
-  final String toKey;
-  final AppColor colors; // keep consistent with AppColor.of(context)
-  const _RoutePill({
-    required this.fromKey,
-    required this.toKey,
-    required this.colors,
-  });
-
-  String _norm(String k) {
-    final t = k.trim().toUpperCase();
-    if (t.contains('XLM') || t.contains('STELLAR')) return 'XLM';
-    return 'USDC';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AssetProvider>(
-      builder: (context, assets, _) {
-        final from = _norm(fromKey);
-        final to = _norm(toKey);
-
-        // Pull logo URLs from provider
-        final fromUrl = assets.logoFor(from);
-        final toUrl = assets.logoFor(to);
-
-        final titleStyle = TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          color: colors.textPrimary,
-        );
-        final subStyle = TextStyle(
-          fontSize: 11.5,
-          color: colors.textSecondary,
-        );
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.primary.withOpacity(0.10)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _PillLogo(url: fromUrl, size: 22),               // FROM logo
-              const SizedBox(width: 8),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(from, style: titleStyle),
-                      const SizedBox(width: 6),
-                      Icon(LucideIcons.arrowRight, size: 14, color: colors.textSecondary),
-                      const SizedBox(width: 6),
-                      Text(to, style: titleStyle),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text('Swap route', style: subStyle),
-                ],
-              ),
-              const SizedBox(width: 8),
-              _PillLogo(url: toUrl, size: 22),                 // TO logo
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-/* ---------- Tiny overflow-proof network logo ---------- */
-class _PillLogo extends StatelessWidget {
-  final String url;
-  final double size;
-  final double radius;
-  const _PillLogo({
-    required this.url,
-    this.size = 22,
-    this.radius = 999, // circle
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: Container(
-          color: Colors.transparent,
-          padding: const EdgeInsets.all(2),
-          child: FittedBox(
-            fit: BoxFit.contain,
-            child: Image.network(
-              url,
-              cacheWidth: (size * 3).round(),     // keep memory small & crisp
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) {
-                // Keep layout stable on error
-                return Icon(LucideIcons.circle, size: size * 0.6, color: Colors.black12);
+            child: _SegBtn(
+              active: isXlmToUsdc,
+              label: 'XLM → USDC',
+              onTap: () {
+                if (!isXlmToUsdc) onFlip();
               },
             ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _SegBtn(
+              active: !isXlmToUsdc,
+              label: 'USDC → XLM',
+              onTap: () {
+                if (isXlmToUsdc) onFlip();
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          RotationTransition(
+            turns: Tween(begin: 0.0, end: 0.5).animate(
+              CurvedAnimation(parent: controller, curve: Curves.easeOut),
+            ),
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: onFlip,
+              icon: Icon(LucideIcons.arrowUpDown, color: c.primary),
+              tooltip: 'Flip',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegBtn extends StatelessWidget {
+  final bool active;
+  final String label;
+  final VoidCallback onTap;
+  const _SegBtn({required this.active, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? c.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? Colors.white : c.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12.5,
           ),
         ),
       ),
     );
   }
+}
 
+class _AmountField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final VoidCallback onUseMax;
+  final void Function(double pct) onPct;
+  const _AmountField({
+    required this.label,
+    required this.controller,
+    required this.onUseMax,
+    required this.onPct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
+                decoration: InputDecoration(
+                  hintText: '0.0',
+                  filled: true,
+                  fillColor: c.primary.withOpacity(0.05),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.primary.withOpacity(0.15)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.primary, width: 1.2),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: onUseMax,
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: c.primary.withOpacity(0.35)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                minimumSize: const Size(52, 40),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text('MAX', style: TextStyle(color: c.primary, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          children: [
+            _PctBtn('25%', () => onPct(0.25)),
+            _PctBtn('50%', () => onPct(0.50)),
+            _PctBtn('75%', () => onPct(0.75)),
+            _PctBtn('100%', () => onPct(1.00)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PctBtn extends StatelessWidget {
+  final String text;
+  final VoidCallback onTap;
+  const _PctBtn(this.text, this.onTap);
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        foregroundColor: c.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _HintBox extends StatelessWidget {
+  final String text;
+  const _HintBox({required this.text});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.primary.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.info, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, color: c.textSecondary))),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoutePill extends StatelessWidget {
+  final String from, to;
+  const _RoutePill({required this.from, required this.to});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final titleStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.textPrimary);
+    final subStyle = TextStyle(fontSize: 11.5, color: c.textSecondary);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _AssetLogo(asset: from, size: 22),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(from, style: titleStyle),
+                  const SizedBox(width: 6),
+                  Icon(LucideIcons.arrowRight, size: 14, color: c.textSecondary),
+                  const SizedBox(width: 6),
+                  Text(to, style: titleStyle),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text('Swap route', style: subStyle),
+            ],
+          ),
+          const SizedBox(width: 8),
+          _AssetLogo(asset: to, size: 22),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryData {
+  final String label, value;
+  const _SummaryData(this.label, this.value);
+}
+
+class _SummaryCard extends StatelessWidget {
+  final List<_SummaryData> rows;
+  const _SummaryCard({required this.rows});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.14)),
+      ),
+      child: Column(
+        children: rows.map((r) => _SummaryRow(label: r.label, value: r.value)).toList(),
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _SummaryRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 110, child: Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12.5))),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssetLogo extends StatelessWidget {
+  final String asset; // 'XLM' or 'USDC'
+  final double size;
+  final double radius;
+  const _AssetLogo({required this.asset, required this.size, this.radius = 999});
+
+  static const String _fallbackXlm =
+      'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png';
+
+  @override
+  Widget build(BuildContext context) {
+    String url = _fallbackXlm;
+    try {
+      final ap = context.read<AssetProvider>();
+      url = ap.logoFor(asset);
+    } catch (_) {
+      // provider might not be present in some previews
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: Colors.black12, shape: BoxShape.circle),
+          child: Text(
+            asset.isNotEmpty ? asset.characters.first.toUpperCase() : '•',
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+    );
+  }
 }

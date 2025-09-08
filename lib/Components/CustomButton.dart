@@ -78,9 +78,9 @@ class CustomButton extends StatelessWidget {
       ],
     );
 
-    final Size minSize = const Size(0, 36);
+    final Size minSize = const Size(0, 40);
     final EdgeInsets padding =
-    const EdgeInsets.symmetric(vertical: 10, horizontal: 14);
+    const EdgeInsets.symmetric(vertical: 13, horizontal: 14);
     final BorderRadius radius = BorderRadius.circular(10);
 
     // Choose the underlying button widget based on type.

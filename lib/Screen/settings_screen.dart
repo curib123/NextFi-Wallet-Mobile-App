@@ -1,9 +1,11 @@
 // lib/Screen/settings_screen.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/showFiatPickerBottomSheet.dart';
 import 'package:next_fi/Components/showPinChangeBottomSheet.dart';
+import 'package:next_fi/Screen/wallet_screen_settings.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
@@ -105,11 +107,26 @@ class SettingsRegistry {
         header: 'Account',
         items: [
           SettingItem.tapWithContext(
+            title: 'Wallet',
+            subtitle: 'View recovery phrases securely',
+            icon: LucideIcons.wallet2, // or LucideIcons.wallet
+            onPressedWithContext: (context) {
+              HapticFeedback.selectionClick();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const WalletScreenSettings(),
+                ),
+              );
+            },
+          ),
+
+          SettingItem.tapWithContext(
             title: 'Security',
-            subtitle: 'Biometrics, PIN, and recovery',
+            subtitle: 'Change pin code',
             icon: LucideIcons.shield,
             onPressedWithContext: showPinChangeBottomSheet,
           ),
+
         ],
       ),
       SettingSection(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/Services/wallet_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
@@ -414,32 +415,87 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 }
 
-/* ================= Small widgets / keep-alive ================= */
+class _TopBar extends StatefulWidget {
+  const _TopBar({
+    required this.colors,
+    this.walletName, // optional initial/fallback label
+  });
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({required this.colors});
   final AppColor colors;
+  final String? walletName;
+
+  @override
+  State<_TopBar> createState() => _TopBarState();
+}
+
+class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
+  String _name = WalletSecureStorage.defaultWalletName;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    // Start with provided label (if any), else default.
+    _name = (widget.walletName?.trim().isNotEmpty ?? false)
+        ? widget.walletName!.trim()
+        : WalletSecureStorage.defaultWalletName;
+
+    _loadName();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Refresh when returning from background (e.g., after renaming in settings)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadName();
+    }
+  }
+
+  Future<void> _loadName() async {
+    // Reads saved name; falls back to default if none, and writes default if you prefer:
+    // final saved = await WalletSecureStorage.ensureWalletName();
+    final saved = await WalletSecureStorage.readWalletNameOrDefault();
+    if (!mounted) return;
+
+    final trimmed = saved.trim();
+    if (trimmed != _name) {
+      setState(() => _name = trimmed);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
       IconButton(
-        icon: Icon(LucideIcons.fileText, color: colors.textPrimary, size: 26),
+        icon: Icon(LucideIcons.package, color: widget.colors.textPrimary, size: 26),
         onPressed: () {},
         tooltip: 'Activity',
       ),
-      const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Stellar Wallet',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-          SizedBox(width: 4),
-          Icon(LucideIcons.chevronDown, size: 18),
-        ],
+      // Center title (runtime value → no `const`)
+      GestureDetector(
+        onTap: () {}, // e.g., open wallet switcher later
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _name,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+            const SizedBox(width: 4),
+            Icon(LucideIcons.chevronDown, size: 18, color: widget.colors.textPrimary),
+          ],
+        ),
       ),
       IconButton(
-        icon: Icon(LucideIcons.settings, color: colors.textPrimary, size: 26),
+        icon: Icon(LucideIcons.settings, color: widget.colors.textPrimary, size: 26),
         onPressed: () {},
         tooltip: 'Settings',
       ),
