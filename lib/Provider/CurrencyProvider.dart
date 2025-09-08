@@ -9,11 +9,6 @@ import 'package:http/io_client.dart';
 import 'package:next_fi/Services/currency_secure_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
-/// Compact, hotspot/ISP-resilient provider
-/// - Prefers XLM/USDC; falls back to XLM/USDT → convert/approx to USDC
-/// - USDC→FIAT via Coinbase (fallbacks + USD peg) × USD→FIAT via multiple FX sources
-/// - When CEX hosts are blocked: falls back to Stellar DEX via Horizon (paths + orderbook + trade aggs)
-/// - Never persists zeros; reuses last-good cache when hosts are blocked
 class CurrencyProvider extends ChangeNotifier {
   CurrencyProvider({
     this.pollEvery = const Duration(seconds: 30),
@@ -83,11 +78,16 @@ class CurrencyProvider extends ChangeNotifier {
 
   void setFiat(String v) {
     final n = v.trim().toLowerCase();
-    if (n == _fiat || n.isEmpty) return;
-    _fiat = n;
-    CurrencySecureStorage.saveFiat(n);
-    _refreshAll();
-    notifyListeners();
+    if (n.isEmpty || n == _fiat) return;
+    // Validate & persist via hardened storage
+    CurrencySecureStorage.saveFiat(n).then((_) {
+      _fiat = n;
+      _refreshAll();
+      notifyListeners();
+    }).catchError((e) {
+      // Invalid fiat (e.g., not 3–5 letters) – ignore change
+      debugPrint('setFiat ignored (invalid): $e');
+    });
   }
 
   Future<void> resetFiatToUsd() async {
@@ -101,21 +101,24 @@ class CurrencyProvider extends ChangeNotifier {
   void _boot() {
     () async {
       try {
-        final saved = await CurrencySecureStorage.readFiat();
-        if (saved != null && saved.trim().isNotEmpty) {
-          _fiat = saved.trim().toLowerCase();
+        // Read stored fiat (validated helper, default 'usd')
+        _fiat = await CurrencySecureStorage.readFiatOrDefault(_fiat);
+
+        // Warm-start from ANY cache (ignore freshness) to avoid zeros at launch
+        final cachedAny = await CurrencySecureStorage.readLastGoodRates(); // no maxAge
+        final hadWarm = _applyCacheIfValid(cachedAny);
+        if (hadWarm) {
+          _emitIfPositive(); // push immediately so UI has non-zero
+          notifyListeners();
         }
 
-        // Warm start from cache (if same fiat)
-        final cache = await CurrencySecureStorage.readLastGoodRates();
-        if (cache != null && cache['fiat'] == _fiat) {
-          _usdcRate = (cache['usdcRate'] as num?)?.toDouble() ?? _usdcRate;
-          _xlmRate  = (cache['xlmRate']  as num?)?.toDouble() ?? _xlmRate;
-        }
+        // Then do the normal fresh fetch cycle
+        await _refreshAll();
+        _t?.cancel();
+        _t = Timer.periodic(pollEvery, (_) => _refreshAll());
       } catch (e) {
         debugPrint('CurrencyProvider boot warn: $e');
-      } finally {
-        await _refreshAll();
+        // still schedule refreshes even if boot failed
         _t?.cancel();
         _t = Timer.periodic(pollEvery, (_) => _refreshAll());
       }
@@ -136,18 +139,19 @@ class CurrencyProvider extends ChangeNotifier {
     final hadPrev = _usdcRate > 0 && _xlmRate > 0;
     Map<String, dynamic>? cached;
     try {
-      cached = await CurrencySecureStorage.readLastGoodRates();
+      cached = await CurrencySecureStorage.readLastGoodRates(
+        maxAge: const Duration(hours: 24),
+      );
     } catch (_) {}
 
     if (!await _hasInternet()) {
       // Offline → use cache (if we don't already have valid rates)
-      if (!hadPrev && cached != null && (cached['fiat'] as String?)?.toLowerCase() == _fiat) {
-        _usdcRate = (cached['usdcRate'] as num?)?.toDouble() ?? _usdcRate;
-        _xlmRate  = (cached['xlmRate']  as num?)?.toDouble() ?? _xlmRate;
+      if (!hadPrev) {
+        cached ??= await CurrencySecureStorage.readLastGoodRates(); // ignore maxAge
+        _applyCacheIfValid(cached);
       }
       _setLoading(false);
-      _xlmCtrl.add(_xlmRate);
-      _usdcCtrl.add(_usdcRate);
+      _emitIfPositive();
       notifyListeners();
       return;
     }
@@ -159,11 +163,11 @@ class CurrencyProvider extends ChangeNotifier {
 
       // Only save if both are positive (avoid committing zeros)
       if (_usdcRate > 0 && _xlmRate > 0) {
-        CurrencySecureStorage.saveLastGoodRates({
+        await CurrencySecureStorage.saveLastGoodRates({
           'fiat': _fiat,
           'usdcRate': _usdcRate,
           'xlmRate': _xlmRate,
-          'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          // no need to include timestamp; helper adds `_ts` (epoch ms)
         });
       }
     } finally {
@@ -184,8 +188,7 @@ class CurrencyProvider extends ChangeNotifier {
       }
 
       _setLoading(false);
-      _xlmCtrl.add(_xlmRate);
-      _usdcCtrl.add(_usdcRate);
+      _emitIfPositive();
       notifyListeners();
     }
   }
@@ -195,6 +198,26 @@ class CurrencyProvider extends ChangeNotifier {
       _loading = v;
       notifyListeners();
     }
+  }
+
+  // ---- Helpers to avoid zero flash ----------------------------------------
+  bool _applyCacheIfValid(Map<String, dynamic>? cache) {
+    if (cache == null) return false;
+    final fiatIn = (cache['fiat'] as String?)?.toLowerCase();
+    final usdc = (cache['usdcRate'] as num?)?.toDouble() ?? 0;
+    final xlm  = (cache['xlmRate']  as num?)?.toDouble() ?? 0;
+    if (fiatIn == _fiat && usdc > 0 && xlm > 0) {
+      _usdcRate = usdc;
+      _xlmRate  = xlm;
+      _loading  = false;
+      return true;
+    }
+    return false;
+  }
+
+  void _emitIfPositive() {
+    if (_usdcRate > 0) _usdcCtrl.add(_usdcRate);
+    if (_xlmRate  > 0) _xlmCtrl.add(_xlmRate);
   }
 
   // ---- Rates (CEX + DEX fallback) ------------------------------------------
@@ -323,8 +346,7 @@ class CurrencyProvider extends ChangeNotifier {
           () => _krakenPrice('USDCUSD'),
           () => _binancePrice('USDCUSDT'),
           () async => 1.0,
-    ]) ??
-        1.0;
+    ]) ?? 1.0;
     if (usdcUsd <= 0) return xlmUsdt * usdtUsd;
     return xlmUsdt * (usdtUsd / usdcUsd);
   }

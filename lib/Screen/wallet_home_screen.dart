@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
+
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/Screen/wallet_screen_settings.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import 'package:provider/provider.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/Screen/swap_screen.dart';
 import 'package:next_fi/Components/token_chooser.dart';
@@ -73,8 +74,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Future.microtask(() => mounted ? context.read<AssetProvider>().startRealtimeUpdates() : null);
-    _loadWallet();
+
+    // Defer critical storage reads until after first frame to avoid cold-boot race
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // If you keep an AssetProvider with realtime price updates:
+      final assetProv = context.read<AssetProvider>();
+      assetProv.startRealtimeUpdates();
+      await _loadWallet();
+    });
   }
 
   @override
@@ -125,19 +133,30 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     _debounceBalanceKick = Timer(delay, () => unawaited(_fetchBalances(force: true)));
   }
 
+  Future<String?> _getMnemonicWithWarmup() async {
+    for (final d in <Duration>[Duration.zero, const Duration(milliseconds: 120), const Duration(milliseconds: 300)]) {
+      if (d > Duration.zero) await Future.delayed(d);
+      final m = await SeedStorage.getActiveSeed();
+      if (m != null && m.trim().isNotEmpty) return m.trim();
+    }
+    return null;
+  }
+
   /* ================= Data ================= */
   Future<void> _loadWallet() async {
-    final mnemonic = await SeedStorage.getSeed(); // active wallet seed
-    if (!mounted || mnemonic == null || mnemonic.isEmpty) {
-      // New user: no wallet yet → show 0 total instead of endless loader
-      if (mounted) {
-        setState(() {
-          _xlmBalance = 0;
-          _usdcBalance = 0;
-          _loadingBalances = false;
-          _lastBalancesAt = DateTime.now();
-        });
-      }
+    if (!mounted) return;
+
+    final mnemonic = await _getMnemonicWithWarmup();
+    if (!mounted) return;
+
+    if (mnemonic == null) {
+      // Truly no wallet on device after warm-up → show 0 and stop spinner.
+      setState(() {
+        _xlmBalance = 0;
+        _usdcBalance = 0;
+        _loadingBalances = false;
+        _lastBalancesAt = DateTime.now();
+      });
       return;
     }
 
@@ -148,6 +167,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       setState(() {
         _stellarAccountId = kp.accountId;
         _secretSeed = kp.secretSeed;
+        // keep _loadingBalances = true until _fetchBalances completes
       });
 
       await _fetchBalances(force: true);
@@ -170,16 +190,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 
   Future<void> _fetchBalances({bool force = false}) async {
-    if (_stellarAccountId == null) {
-      // No account yet — treat as 0 balances
-      if (mounted && _loadingBalances) {
-        setState(() {
-          _xlmBalance = 0;
-          _usdcBalance = 0;
-          _loadingBalances = false;
-          _lastBalancesAt = DateTime.now();
-        });
-      }
+    // Gate: only fetch after wallet (address) is ready.
+    if (_stellarAccountId == null || _stellarAccountId!.isEmpty) {
+      // Keep spinner until _loadWallet completes or no-wallet path sets zeros.
       return;
     }
     if (_balancesInFlight) return;
@@ -200,8 +213,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _lastBalancesAt = DateTime.now();
       });
     } catch (_) {
-      // Any unexpected error → show zeros so Total still renders
       if (!mounted) return;
+      // Unexpected error: keep UI stable but stop the spinner.
       setState(() {
         _xlmBalance = 0;
         _usdcBalance = 0;
@@ -215,10 +228,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   /* ================= Pull-to-refresh action ================= */
   Future<void> _onRefresh() async {
-    // Force a live refresh of balances; hints will update via stream automatically.
     await _fetchBalances(force: true);
-
-    // Defensive: if stream hiccups, kick a delayed fetch.
     _scheduleBalanceKick(delay: const Duration(milliseconds: 400));
   }
 
@@ -226,39 +236,40 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void _startRealtime() {
     _stopRealtime();
 
+    // Only start once wallet is known.
+    if (_stellarAccountId == null || _stellarAccountId!.isEmpty) return;
+
     // Periodic gentle refresh (if user leaves app open for long time)
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) => unawaited(_fetchBalances()));
 
-    if (_stellarAccountId != null && _stellarAccountId!.isNotEmpty) {
-      try {
-        _incomingSub = _stellar.sdk.payments
-            .forAccount(_stellarAccountId!)
-            .cursor("now")
-            .stream()
-            .listen((op) {
-          if (!mounted) return;
+    try {
+      _incomingSub = _stellar.sdk.payments
+          .forAccount(_stellarAccountId!)
+          .cursor("now")
+          .stream()
+          .listen((op) {
+        if (!mounted) return;
 
-          if (op is PaymentOperationResponse && op.transactionSuccessful == true) {
-            final to = op.to;
-            if (to == _stellarAccountId) {
-              final map = <String, dynamic>{
-                'hash': op.transactionHash ?? '',
-                'from': op.from,
-                'to': to,
-                'amount': op.amount,
-                'assetCode': op.assetCode ?? (op.assetType == Asset.TYPE_NATIVE ? 'XLM' : null),
-                'assetType': op.assetType,
-              };
-              setState(() => _safeAddHint(map));
-              _scheduleBalanceKick();
-            }
+        if (op is PaymentOperationResponse && op.transactionSuccessful == true) {
+          final to = op.to;
+          if (to == _stellarAccountId) {
+            final map = <String, dynamic>{
+              'hash': op.transactionHash ?? '',
+              'from': op.from,
+              'to': to,
+              'amount': op.amount,
+              'assetCode': op.assetCode ?? (op.assetType == Asset.TYPE_NATIVE ? 'XLM' : null),
+              'assetType': op.assetType,
+            };
+            setState(() => _safeAddHint(map));
+            _scheduleBalanceKick();
           }
-        }, onError: (_) {
-          // Silent; periodic timer + manual refresh cover outages.
-        });
-      } catch (_) {
-        // Swallow; user can still pull-to-refresh.
-      }
+        }
+      }, onError: (_) {
+        // Silent; periodic timer + manual refresh cover outages.
+      });
+    } catch (_) {
+      // Swallow; user can still pull-to-refresh.
     }
   }
 
@@ -291,7 +302,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                 onRefresh: _onRefresh,
                 edgeOffset: 8,
                 displacement: 48,
-                // Listen to scroll notifications from nested scrollables (e.g., inside tabs)
                 notificationPredicate: (notification) => true,
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -345,7 +355,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                         child: buildTabBar(colors),
                       ),
                     ),
-                    // Tabs body (fills remaining; still scrolls for pull-to-refresh)
+                    // Tabs body
                     SliverFillRemaining(
                       hasScrollBody: true,
                       child: TabBarView(
@@ -455,7 +465,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 class _TopBar extends StatefulWidget {
   const _TopBar({
     required this.colors,
-    this.walletName, // optional initial/fallback label
+    this.walletName,
   });
 
   final AppColor colors;
@@ -478,7 +488,8 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
         ? widget.walletName!.trim()
         : _defaultWalletName;
 
-    _loadName();
+    // Defer name load post-frame to avoid early storage race
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadName());
   }
 
   @override
@@ -487,7 +498,6 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Refresh when returning from background (e.g., after renaming/switching/import)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -525,10 +535,7 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
                 MaterialPageRoute(
                   builder: (_) => const WalletScreenSettings(),
                 ),
-              ).then((_) {
-                // After returning from settings, refresh the name
-                _loadName();
-              });
+              ).then((_) => _loadName());
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
