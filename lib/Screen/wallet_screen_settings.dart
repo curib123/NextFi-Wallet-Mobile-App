@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Components/CustomButton.dart';
@@ -380,6 +381,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       await _loadSecrets();
       if (!mounted) return;
       showFloatingSnackBar(context, message: "Wallet imported and set active.", type: SnackBarType.success);
+      Phoenix.rebirth(context);
     } catch (e) {
       if (!mounted) return;
       showFloatingSnackBar(context, message: "Import failed: $e", type: SnackBarType.error);
@@ -436,7 +438,9 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
                         subtitle: (m.publicAddress?.isNotEmpty ?? false)
                             ? Text(m.publicAddress!, style: TextStyle(color: colors.textSecondary, fontSize: 12))
                             : null,
-                        onTap: () { Navigator.pop(ctx, m.id); },
+                        onTap: () {
+                          Navigator.pop(ctx, m.id);
+                          },
                       );
                     },
                   ),
@@ -454,6 +458,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     if (ok) {
       await _loadSecrets();
       showFloatingSnackBar(context, message: "Switched active wallet.", type: SnackBarType.success);
+      Phoenix.rebirth(context);
     } else {
       showFloatingSnackBar(context, message: "Failed to switch wallet.", type: SnackBarType.error);
     }

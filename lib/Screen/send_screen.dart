@@ -267,7 +267,7 @@ class _SendScreenState extends State<SendScreen> {
       String txId;
 
       if (isXLM) {
-        if ((_stellar.profitAddress).trim().isNotEmpty) {
+        if ((_stellar.profitVault).toString().isNotEmpty) {
           final hashes = await _stellar.sendXlmWithFee(
             secretSeed: _seedStringFromKeyPair(_keyPair!),
             destination: to,
