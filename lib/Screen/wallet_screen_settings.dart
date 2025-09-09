@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:flutter_phoenix/flutter_phoenix.dart'; // ⬅️ added
 
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Components/SnackBar.dart';
@@ -34,9 +34,6 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
   // Active wallet meta
   String? _activeWalletId;
   String _walletName = "My Wallet";
-
-  // ⬇️ Restart guard
-  bool _restarting = false;
 
   @override
   void initState() {
@@ -111,20 +108,6 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
         type: SnackBarType.error,
       );
     }
-  }
-
-  // ⬇️ Centralized, safe restart
-  Future<void> _restartApp() async {
-    if (!mounted || _restarting) return;
-    _restarting = true;
-
-    // Close any remaining sheets/dialogs/overlays
-    Navigator.of(context, rootNavigator: true).popUntil((r) => r.isFirst);
-
-    // Let the frame settle to avoid “deactivated widget” errors
-    await Future.delayed(const Duration(milliseconds: 50));
-
-    if (mounted) Phoenix.rebirth(context);
   }
 
   Future<bool> _requireAuth() async {
@@ -393,14 +376,12 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     if (payload == null) return;
 
     try {
-      // Persist first (await!)
       final newId = await SeedStorage.addWallet(payload['seed']!, name: payload['name']!);
       await SeedStorage.setActiveWallet(newId);
-
+      await _loadSecrets();
       if (!mounted) return;
-
-      // Hard restart to reload providers/state from the new active wallet
-      await _restartApp();
+      showFloatingSnackBar(context, message: "Wallet imported and set active.", type: SnackBarType.success);
+      Phoenix.rebirth(context);
     } catch (e) {
       if (!mounted) return;
       showFloatingSnackBar(context, message: "Import failed: $e", type: SnackBarType.error);
@@ -457,7 +438,9 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
                         subtitle: (m.publicAddress?.isNotEmpty ?? false)
                             ? Text(m.publicAddress!, style: TextStyle(color: colors.textSecondary, fontSize: 12))
                             : null,
-                        onTap: () { Navigator.pop(ctx, m.id); }, // just return id
+                        onTap: () {
+                          Navigator.pop(ctx, m.id);
+                          },
                       );
                     },
                   ),
@@ -470,13 +453,12 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     );
 
     if (chosenId == null || chosenId == _activeWalletId) return;
-
     final ok = await SeedStorage.setActiveWallet(chosenId);
     if (!mounted) return;
-
     if (ok) {
-      // Hard restart to fully reload the app with the new active wallet
-      await _restartApp();
+      await _loadSecrets();
+      showFloatingSnackBar(context, message: "Switched active wallet.", type: SnackBarType.success);
+      Phoenix.rebirth(context);
     } else {
       showFloatingSnackBar(context, message: "Failed to switch wallet.", type: SnackBarType.error);
     }
