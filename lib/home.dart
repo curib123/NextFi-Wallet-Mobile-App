@@ -6,8 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Components/SnackBar.dart';
-import 'package:next_fi/Screen/wallet_splash_screen.dart';
-import 'package:next_fi/Screen/wallet_creation_screen.dart'; // TODO: keep if you still have a creation/onboarding screen
+import 'package:next_fi/Screen/wallet_creation_screen.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
@@ -75,7 +74,7 @@ class _HomeState extends State<Home> {
 
     // 1) Always show the splash first.
     if (_showSplash) {
-      return const WalletSplashScreen();
+      return const WalletCreationScreen(isSplash: true,);
     }
 
     // 2) While still loading state (edge), show a simple loader.

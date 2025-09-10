@@ -11,7 +11,13 @@ import 'package:next_fi/Screen/import_wallet_screen.dart';
 import 'package:next_fi/Screen/seed_phrase_screen.dart';
 
 class WalletCreationScreen extends StatefulWidget {
-  const WalletCreationScreen({super.key});
+  const WalletCreationScreen({
+    super.key,
+    this.isSplash = false,
+  });
+
+  /// When true, acts as a splash: hides action buttons (no ticker).
+  final bool isSplash;
 
   @override
   State<WalletCreationScreen> createState() => _WalletCreationScreenState();
@@ -40,21 +46,23 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+    final dpr = MediaQuery.of(context).devicePixelRatio;
 
     return Scaffold(
       backgroundColor: colors.surface,
       body: SafeArea(
         child: Stack(
           children: [
-            // Animated background, CLIPPED to the TOP band only.
+            // Animated background (top-band only)
             IgnorePointer(
               child: AnimatedBuilder(
                 animation: _bgCtrl,
                 builder: (_, __) => CustomPaint(
-                  painter: _AuroraFintechPainter(
+                  painter: _FintechBackgroundPainter(
                     progress: _bgCtrl.value,
                     colors: colors,
-                    topBandFraction: .45, // adjust 0.38–0.55 to taste
+                    topBandFraction: .45,
+                    devicePixelRatio: dpr,
                   ),
                   child: const SizedBox.expand(),
                 ),
@@ -87,18 +95,17 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      // Round logo (asset clipped to a perfect circle)
-                                      ClipOval(
-                                        child: Image.asset(
-                                          _logoAsset,
-                                          width: 96,
-                                          height: 96,
-                                          fit: BoxFit.cover,
-                                          filterQuality: FilterQuality.high,
-                                        ),
+                                      // Conic gradient brand ring + logo (crisp, no glow)
+                                      _ConicRingAvatar(
+                                        size: 112,
+                                        ringWidth: 3,
+                                        asset: _logoAsset,
+                                        imageSize: 96,
+                                        baseColor: colors.primary,
+                                        // spin ring slowly using same controller value
+                                        rotationTurns: _bgCtrl.value,
                                       ),
                                       const SizedBox(height: 16),
-                                      // Shimmer title
                                       _ShimmerText(
                                         "NextFI Wallet",
                                         baseColor: colors.textPrimary,
@@ -127,42 +134,44 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                     ),
                   ),
 
-                  // Actions
-                  FadeInUp(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 120),
-                    child: CustomButton(
-                      text: "Create New Wallet",
-                      icon: LucideIcons.plusCircle,
-                      type: ButtonType.filled,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SeedPhraseScreen(),
-                          ),
-                        );
-                      },
+                  // Actions (hidden in splash mode)
+                  if (!widget.isSplash) ...[
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 120),
+                      child: CustomButton(
+                        text: "Create New Wallet",
+                        icon: LucideIcons.plusCircle,
+                        type: ButtonType.filled,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SeedPhraseScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  FadeInUp(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 220),
-                    child: CustomButton(
-                      text: "Import Wallet",
-                      icon: LucideIcons.download,
-                      type: ButtonType.outlined,
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ImportWalletScreen(),
-                          ),
-                        );
-                      },
+                    const SizedBox(height: 12),
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 220),
+                      child: CustomButton(
+                        text: "Import Wallet",
+                        icon: LucideIcons.download,
+                        type: ButtonType.outlined,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ImportWalletScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -173,7 +182,7 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
   }
 }
 
-/// Transparent card (no blur, clean border & soft shadow)
+/// Transparent card (no blur)
 class _GlassCard extends StatelessWidget {
   const _GlassCard({required this.child, required this.colors});
   final Widget child;
@@ -183,18 +192,115 @@ class _GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: const DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.transparent, // no tint
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Colors.transparent,
         ),
-      ).copyWith(child: child),
+        child: child,
+      ),
     );
   }
 }
 
-extension on DecoratedBox {
-  DecoratedBox copyWith({Widget? child}) =>
-      DecoratedBox(decoration: decoration, position: position, child: child);
+/// Brand avatar with a conic (sweep) gradient ring around the logo.
+class _ConicRingAvatar extends StatelessWidget {
+  const _ConicRingAvatar({
+    required this.size,
+    required this.ringWidth,
+    required this.asset,
+    required this.imageSize,
+    required this.baseColor,
+    this.rotationTurns = 0.0,
+  });
+
+  final double size;
+  final double ringWidth;
+  final String asset;
+  final double imageSize;
+  final Color baseColor;
+  final double rotationTurns;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(size),
+            painter: _ConicRingPainter(
+              color: baseColor,
+              strokeWidth: ringWidth,
+              rotationTurns: rotationTurns,
+            ),
+          ),
+          ClipOval(
+            child: Image.asset(
+              asset,
+              width: imageSize,
+              height: imageSize,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConicRingPainter extends CustomPainter {
+  _ConicRingPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.rotationTurns,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double rotationTurns;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = (size.shortestSide - strokeWidth) / 2;
+
+    // Sweep gradient = conic gradient
+    final gradient = SweepGradient(
+      startAngle: 0,
+      endAngle: math.pi * 2,
+      colors: [
+        color.withOpacity(.95),
+        color.withOpacity(.25),
+        color.withOpacity(.95),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+      transform: GradientRotation(rotationTurns * math.pi * 2),
+    );
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..shader = gradient.createShader(rect);
+
+    canvas.drawCircle(center, radius, paint);
+
+    // Crisp inner hairline
+    final inner = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = color.withOpacity(.15);
+    canvas.drawCircle(center, radius - strokeWidth / 2 - 1, inner);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConicRingPainter old) =>
+      old.color != color ||
+          old.strokeWidth != strokeWidth ||
+          old.rotationTurns != rotationTurns;
 }
 
 /// Shimmering title using an animated gradient shader.
@@ -247,7 +353,7 @@ class _ShimmerTextState extends State<_ShimmerText>
           },
           blendMode: BlendMode.srcIn,
           child: Text(
-            widget.text, // <-- use the passed text (fixed)
+            widget.text,
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 28,
@@ -272,98 +378,141 @@ class GradientTranslation extends GradientTransform {
   }
 }
 
-/// Fintech background with aurora blobs + soft grid + flowing line.
-/// All animated elements are clipped to the TOP band so they don't sit behind the title.
-/// Fintech background with full-screen grid, while aurora & chart stay in the top band.
-class _AuroraFintechPainter extends CustomPainter {
-  _AuroraFintechPainter({
+/// Clean fintech background: micro-dot matrix on high-DPI, soft lines otherwise,
+/// plus diagonal band and flowing line with faint area fill. (No glow.)
+class _FintechBackgroundPainter extends CustomPainter {
+  _FintechBackgroundPainter({
     required this.progress,
     required this.colors,
-    this.topBandFraction = .45, // 0..1 of screen height
+    required this.devicePixelRatio,
+    this.topBandFraction = .45,
   });
 
   final double progress; // 0..1
   final AppColor colors;
+  final double devicePixelRatio;
   final double topBandFraction;
 
   @override
   void paint(Canvas canvas, Size size) {
     final double topH = (size.height * topBandFraction).clamp(0.0, size.height);
 
-    // --- FULL-SCREEN GRID (draw first; no clipping) ---
+    // 1) Full-screen texture: dot matrix on hi-DPI, otherwise soft grid lines
+    final hiDpi = devicePixelRatio >= 2.75;
     const step = 30.0;
     final drift = progress * step;
-    final gridPaint = Paint()
-      ..color = colors.primary.withOpacity(.05)
-      ..strokeWidth = 1;
 
-    // Vertical lines across entire height
-    for (double x = -step + drift; x <= size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    // Horizontal lines across entire width
-    for (double y = -step + drift; y <= size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    if (hiDpi) {
+      final dotPaint = Paint()
+        ..color = colors.textSecondary.withOpacity(.08)
+        ..style = PaintingStyle.fill;
+
+      // diagonal drift feels nicer on dots
+      final dxDrift = drift;
+      final dyDrift = drift * .6;
+
+      for (double x = -step + dxDrift; x <= size.width; x += step) {
+        for (double y = -step + dyDrift; y <= size.height; y += step) {
+          canvas.drawCircle(Offset(x, y), 0.7, dotPaint);
+        }
+      }
+    } else {
+      final gridPaint = Paint()
+        ..color = colors.textSecondary.withOpacity(.06)
+        ..strokeWidth = 1;
+
+      for (double x = -step + drift; x <= size.width; x += step) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      }
+      for (double y = -step + drift; y <= size.height; y += step) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      }
     }
 
-    // --- TOP-BAND ANIMATED LAYER (aurora blobs + flowing line) ---
+    // 2) Top-band: subtle diagonal band/gradient (no glow)
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(0, 0, size.width, topH));
+    final topRect = Rect.fromLTWH(0, 0, size.width, topH);
+    canvas.clipRect(topRect);
 
-    // Aurora blobs (additive)
-    final blobPaint = Paint()..blendMode = BlendMode.plus;
-    void blob(Offset c, double r, Color color, double opacity) {
-      final radial = RadialGradient(
-        colors: [color.withOpacity(opacity), color.withOpacity(0)],
-      );
-      blobPaint.shader =
-          radial.createShader(Rect.fromCircle(center: c, radius: r));
-      canvas.drawCircle(c, r, blobPaint);
-    }
+    final diag = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colors.primary.withOpacity(.08),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(topRect);
+    canvas.drawRect(topRect, diag);
 
+    // 3) Flowing “price” line with faint area fill
     final ph = progress * 2 * math.pi;
-    final cx = size.width * (.3 + .2 * math.sin(ph * .8));
-    final cy = topH * (.35 + .1 * math.cos(ph * 1.1));
-    final cx2 = size.width * (.75 + .1 * math.cos(ph * 1.3));
-    final cy2 = topH * (.75 + .08 * math.sin(ph * .9));
-
-    blob(Offset(cx, cy), size.shortestSide * .40, colors.primary, .16);
-    blob(Offset(cx2, cy2), size.shortestSide * .32, colors.success, .10);
-
-    // Flowing price-like line
     final base = topH * .62;
     final p = Path()..moveTo(0, base);
+
     final amp1 = topH * .12;
     final amp2 = topH * .06;
     final wavelength = size.width * .95;
 
+    final points = <Offset>[];
     for (double x = 0; x <= size.width; x += 3) {
       final t = (x / wavelength) * 2 * math.pi;
-      final y = base +
-          amp1 * math.sin(t + ph) +
-          amp2 * math.sin(2 * t + ph * 1.7);
-      p.lineTo(x, y.clamp(0, topH));
+      final y =
+          base + amp1 * math.sin(t + ph) + amp2 * math.sin(2 * t + ph * 1.7);
+      final yy = y.clamp(0, topH).toDouble();
+      p.lineTo(x, yy);
+      points.add(Offset(x, yy));
     }
 
+    // Area fill under the line (to bottom of top band)
+    final area = Path.from(p)
+      ..lineTo(size.width, topH)
+      ..lineTo(0, topH)
+      ..close();
+
+    final areaPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          colors.primary.withOpacity(.08),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 1.0],
+      ).createShader(topRect);
+
+    canvas.drawPath(area, areaPaint);
+
+    // Line strokes (halo + hairline)
     final halo = Paint()
-      ..color = colors.primary.withOpacity(.07)
+      ..color = colors.primary.withOpacity(.09)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 6;
 
     final stroke = Paint()
-      ..color = colors.primary.withOpacity(.16)
+      ..color = colors.primary.withOpacity(.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
     canvas.drawPath(p, halo);
     canvas.drawPath(p, stroke);
 
+    // Minimal nodes
+    final nodePaint = Paint()
+      ..color = colors.primary.withOpacity(.22)
+      ..style = PaintingStyle.fill;
+    for (var i = 0; i < points.length; i += 36) {
+      canvas.drawCircle(points[i], 1.3, nodePaint);
+    }
+
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _AuroraFintechPainter old) =>
+  bool shouldRepaint(covariant _FintechBackgroundPainter old) =>
       old.progress != progress ||
           old.colors != colors ||
-          old.topBandFraction != topBandFraction;
+          old.topBandFraction != topBandFraction ||
+          old.devicePixelRatio != devicePixelRatio;
 }
