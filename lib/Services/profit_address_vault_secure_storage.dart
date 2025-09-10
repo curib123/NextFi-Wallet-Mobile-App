@@ -78,7 +78,7 @@ final class ProfitConfigVaultSecureStorage {
   // ────────────────────────────────────────────────────────────────────────────
   // DEV: one-shot initializer using SeedStorage
   Future<bool> initSignedConfigFromActiveWallet({
-    double feeXlm = 0.05,
+    double feeXlm = 0.01,
     String? recipientOverride,
   }) async {
     return await _devInitFromActiveWallet(feeXlm: feeXlm, recipientOverride: recipientOverride);
