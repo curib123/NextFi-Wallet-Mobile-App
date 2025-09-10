@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/AppAlert.dart';
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
@@ -259,10 +260,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void _startRealtime() {
     _stopRealtime();
 
-    // Only start once wallet is known.
     if (_stellarAccountId == null || _stellarAccountId!.isEmpty) return;
 
-    // Periodic gentle refresh (if user leaves app open for long time)
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) => unawaited(_fetchBalances()));
 
     try {
@@ -276,6 +275,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         if (op is PaymentOperationResponse && op.transactionSuccessful == true) {
           final to = op.to;
           if (to == _stellarAccountId) {
+            // existing: stash a lightweight “hint” and refresh balances
             final map = <String, dynamic>{
               'hash': op.transactionHash ?? '',
               'from': op.from,
@@ -286,6 +286,36 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
             };
             setState(() => _safeAddHint(map));
             _scheduleBalanceKick();
+
+            final String asset =
+            (op.assetType == Asset.TYPE_NATIVE) ? 'XLM' : (op.assetCode ?? 'ASSET');
+            final double amount = double.tryParse(op.amount ) ?? 0.0;
+
+
+            late final AppAlertController ctl;
+
+            // Show a modern, top-center alert with a “View” action.
+             ctl = showAppAlert(
+              context,
+              type: AppAlertType.success, // success|info|warning|error are supported
+              title: 'Incoming $asset',
+              subtitle: 'You received ${amount.toStringAsFixed(6)} $asset.',
+              primaryText: 'View',
+              barrierDismissible: true,
+              onPrimary: () {
+                // Jump to the Activity/Transactions tab so the user can inspect it.
+                try {
+                  context.read<TabProvider>().setTab(1);
+                } catch (_) {}
+                // Close the alert after navigating
+                ctl.close();
+              },
+            );
+
+            // Auto-close after a short delay if ignored
+            Timer(const Duration(seconds: 5), () {
+              if (mounted) ctl.close();
+            });
           }
         }
       }, onError: (_) {

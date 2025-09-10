@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
@@ -13,19 +14,17 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Screen/qr_code_scanner.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-
-// Shared UI kit (now includes AssetLogo)
 import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
 
 class SendScreen extends StatefulWidget {
-  final String address;                 // fallback (replaced by derived)
-  final String token;                   // XLM | USDC
+  final String address;
+  final String token;
   final double balance;
   final bool autoOpenScanner;
 
   /// optional recipient prefill
-  final String? prefillAddress;         // if non-empty ⇒ auto-populate the recipient
-  final String? prefillName;            // optional alias shown in confirm sheet
+  final String? prefillAddress;
+  final String? prefillName;
 
   const SendScreen({
     super.key,
@@ -46,35 +45,26 @@ class _SendScreenState extends State<SendScreen> {
   final _recipientController = TextEditingController();
   final _amountController = TextEditingController();
 
-  // Wallet (Stellar)
   Wallet? _wallet;
   KeyPair? _keyPair;            // used to sign
   String? _stellarAddress;      // G...
 
   bool _isSending = false;
 
-  // Stellar service + SDK
+  // Stellar service (uses fee-in-XLM logic)
   late final StellarWalletService _stellar = StellarWalletService();
-  late final StellarSDK _sdk = _stellar.sdk;
-  bool get _isTestnet => identical(_sdk, StellarSDK.TESTNET);
-  Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
-
-
-  Asset get _assetXlm => Asset.NATIVE;
-  Asset get _assetUsdc => AssetTypeCreditAlphaNum4('USDC', _stellar.usdcIssuerOverrideMainnet!);
-
-  // Lightweight “estimate” / checks (USDC trustline etc.)
+  // Debounced checks (USDC trustline, etc.)
   Timer? _debounce;
   bool _checking = false;
   bool? _destHasUsdcTL;
   String? _checkMsg;
   String _lastCheckKey = ''; // from|to|amount|token
 
+
   @override
   void initState() {
     super.initState();
-    // Prefill recipient if provided
     final pre = (widget.prefillAddress ?? '').trim();
     if (pre.isNotEmpty) _recipientController.text = pre;
 
@@ -93,6 +83,7 @@ class _SendScreenState extends State<SendScreen> {
     super.dispose();
   }
 
+
   /* ---------------- Wallet ---------------- */
   Future<void> _loadWallet() async {
     final mnemonic = await SeedStorage.getSeed();
@@ -109,7 +100,7 @@ class _SendScreenState extends State<SendScreen> {
       });
 
       _scheduleChecks();
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       showFloatingSnackBar(
         context,
@@ -154,7 +145,6 @@ class _SendScreenState extends State<SendScreen> {
 
     try {
       if (token == 'USDC') {
-        // Recipient must have USDC trustline
         final hasTL = await _stellar.hasUsdcTrustline(to);
         if (!mounted) return;
         setState(() {
@@ -164,7 +154,6 @@ class _SendScreenState extends State<SendScreen> {
               : 'Recipient must add USDC trustline first.';
         });
       } else {
-        // XLM needs no trustline
         if (!mounted) return;
         setState(() {
           _destHasUsdcTL = null;
@@ -182,67 +171,19 @@ class _SendScreenState extends State<SendScreen> {
 
   /* ---------------- Send ---------------- */
 
-  /// Ensure SENDER has USDC trustline (creates if missing).
   Future<void> _ensureSenderUsdcTrustline() async {
     final kp = _keyPair!;
-    // Check balances to see if trustline already exists
-    final acc = await _sdk.accounts.account(kp.accountId);
-    final exists = acc.balances.any(
-          (b) => b.assetCode == 'USDC' && b.assetIssuer == _stellar.usdcIssuerOverrideMainnet!,
-    );
-    if (exists) return;
-
-    // Create trustline
-    final tx = (TransactionBuilder(acc)
-      ..addOperation(ChangeTrustOperationBuilder(_assetUsdc, '922337203685.4775807').build())
-      ..setMaxOperationFee(100))
-        .build();
-    tx.sign(kp, _network);
-
-    final res = await _sdk.submitTransaction(tx);
-    if (!res.success) {
-      throw Exception('ChangeTrust(USDC) failed: ${res.resultXdr}');
-    }
+    final has = await _stellar.hasUsdcTrustline(kp.accountId);
+    if (has) return;
+    await _stellar.createUsdcTrustline(secretSeed: _seedStringFromKeyPair(kp));
   }
 
-  Future<String> _sendPayment({
-    required Asset asset,
-    required String destination,
-    required String amount, // already 7dp string
-    String? memoText,
-  }) async {
-    final kp = _keyPair!;
-    final acc = await _sdk.accounts.account(kp.accountId);
-
-    final builder = TransactionBuilder(acc)
-      ..addOperation(PaymentOperationBuilder(destination, asset, amount).build())
-      ..setMaxOperationFee(100); // 100 stroops/op
-
-    if (memoText != null && memoText.isNotEmpty) {
-      builder.addMemo(Memo.text(memoText));
-    }
-
-    final tx = builder.build();
-    tx.sign(kp, _network);
-    final res = await _sdk.submitTransaction(tx);
-    if (!res.success) {
-      throw Exception('Payment failed: ${res.resultXdr}');
-    }
-    return res.hash!;
-  }
-
-  // ✅ Helper: works whether KeyPair.secretSeed is a String or bytes.
+  // Works whether KeyPair.secretSeed is a String or bytes.
   String _seedStringFromKeyPair(KeyPair kp) {
-    final dynamic ss = kp.secretSeed; // sdk types vary across versions
-    if (ss == null) {
-      throw Exception('KeyPair has no secret seed');
-    }
-    if (ss is String) {
-      return ss; // already a base32 seed string (e.g., "SA...").
-    }
-    if (ss is Iterable<int>) {
-      return String.fromCharCodes(ss); // convert Uint8List/bytes → String
-    }
+    final dynamic ss = kp.secretSeed;
+    if (ss == null) throw Exception('KeyPair has no secret seed');
+    if (ss is String) return ss;
+    if (ss is Iterable<int>) return String.fromCharCodes(ss);
     throw Exception('Unsupported secretSeed type: ${ss.runtimeType}');
   }
 
@@ -262,42 +203,67 @@ class _SendScreenState extends State<SendScreen> {
     }
 
     setState(() => _isSending = true);
+
+    // 🔔 Show "loading first" alert
+    final alert = showAppAlert(
+      context,
+      type: AppAlertType.loading,
+      title: 'Sending…',
+      subtitle: 'Broadcasting your transaction to the network. Please wait.',
+      primaryText: 'Hide',
+    );
+
     try {
       final isXLM = widget.token.toUpperCase() == 'XLM';
       String txId;
 
       if (isXLM) {
-        if ((_stellar.profitVault).toString().isNotEmpty) {
-          final hashes = await _stellar.sendXlmWithFee(
-            secretSeed: _seedStringFromKeyPair(_keyPair!),
-            destination: to,
-            amount: amt,
-            memoText: null,
-          );
-          txId = hashes.first; // main transfer hash
-        } else {
-          txId = await _sendPayment(
-            asset: _assetXlm,
-            destination: to,
-            amount: amt.toStringAsFixed(7),
-          );
-        }
+        final hashes = await _stellar.sendXlmWithFee(
+          secretSeed: _seedStringFromKeyPair(_keyPair!),
+          destination: to,
+          amount: amt,
+          memoText: null,
+        );
+        txId = hashes.first;
       } else {
-        // USDC: ensure sender trustline; recipient must already have it
         if (_destHasUsdcTL == false) {
           throw Exception('Recipient has no USDC trustline.');
         }
         await _ensureSenderUsdcTrustline();
-        txId = await _sendPayment(
-          asset: _assetUsdc,
+
+        final hashes = await _stellar.sendUsdcWithFee(
+          secretSeed: _seedStringFromKeyPair(_keyPair!),
           destination: to,
-          amount: amt.toStringAsFixed(7),
+          usdcAmount: amt,
+          memoText: null,
         );
+        txId = hashes.first;
       }
 
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      await _showTxSubmittedModal(txId);
+
+      // ✅ Update alert to SUCCESS (top-center icon + button)
+      alert.update(
+        AppAlertType.success,
+        title: 'Submitted',
+        subtitle: 'Your transfer has been submitted.\n\nTxID:\n$txId',
+        primaryText: 'Copy TxID',
+        onPrimary: () async {
+          await Clipboard.setData(ClipboardData(text: txId));
+          HapticFeedback.lightImpact();
+          if (mounted) {
+            showFloatingSnackBar(
+              context,
+              message: 'TxID copied',
+              type: SnackBarType.success,
+            );
+            // Optionally pop the screen after copy:
+            Navigator.of(context).pop(); // close the alert (handled inside too)
+            Navigator.of(context).pop(); // go back to previous screen
+          }
+        },
+      );
 
       if (mounted) {
         showFloatingSnackBar(
@@ -305,10 +271,18 @@ class _SendScreenState extends State<SendScreen> {
           message: '${amt.toStringAsFixed(6)} ${widget.token.toUpperCase()} sent',
           type: SnackBarType.success,
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (!mounted) return;
+
+      // ❌ Update alert to ERROR with details
+      alert.update(
+        AppAlertType.error,
+        title: 'Send failed',
+        subtitle: '$e',
+        primaryText: 'Close',
+      );
+
       showFloatingSnackBar(context, message: 'Failed to send: $e', type: SnackBarType.error);
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -339,8 +313,7 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   void _onTapPercent(double pct, {required bool isXLM}) {
-    // Keep tiny buffer when sending XLM to avoid going below reserves (very conservative)
-    final bufferXlm = isXLM ? 0.1 : 0.0;
+    final bufferXlm = isXLM ? 0.1 : 0.0; // small buffer for XLM reserve
     final maxSpend = isXLM ? (widget.balance - bufferXlm).clamp(0.0, widget.balance) : widget.balance;
     final v = (maxSpend * pct).clamp(0.0, widget.balance);
     _amountController.text = v.toStringAsFixed(6);
@@ -350,85 +323,71 @@ class _SendScreenState extends State<SendScreen> {
 
   void _onTapMax({required bool isXLM}) => _onTapPercent(1.0, isXLM: isXLM);
 
-  Future<void> _showTxSubmittedModal(String txId) {
+// 🔥 Preflight confirm with dynamic profit fee (in XLM) + network fee
+  Future<void> _confirmAndSend(CurrencyProvider currency, bool isXLM) async {
     final colors = AppColor.of(context);
-    return showModalBottomSheet(
-      context: context,
-      backgroundColor: colors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
-              const SizedBox(height: 10),
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(LucideIcons.checkCircle2, color: Colors.green, size: 20),
-                const SizedBox(width: 8),
-                Text('Transfer submitted', style: TextStyle(fontWeight: FontWeight.w800, color: colors.textPrimary)),
-              ]),
-              const SizedBox(height: 8),
-              SelectableText(txId, textAlign: TextAlign.center, style: TextStyle(color: colors.textSecondary, fontFamily: 'monospace', fontSize: 12)),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: txId));
-                      HapticFeedback.lightImpact();
-                      if (mounted) showFloatingSnackBar(context, message: 'TxID copied', type: SnackBarType.success);
-                    },
-                    icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
-                    label: Text('Copy TxID', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
-                    label: const Text('Done'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colors.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ]),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _confirmAndSend(CurrencyProvider currency, bool isXLM) {
-    final colors = AppColor.of(context);
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
     final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final fiat = isXLM ? currency.xlmToFiat(amount) : currency.usdcToFiat(amount);
 
-    // Stellar fee ≈ 100 stroops/op = 0.0000100 XLM for a single Payment op
-    const feePerOpXlm = 0.0000100;
-    final ops = 1;
-    final estFee = feePerOpXlm * ops;
+    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final to = _recipientController.text.trim();
+    if (amount <= 0 || !_looksLikeStellar(to)) {
+      showFloatingSnackBar(context, message: 'Fill in recipient and amount', type: SnackBarType.error);
+      return;
+    }
+
+    // ⬇️ Read dynamic fee from signed vault (via service)
+    final feeBps = await _stellar.getCurrentFeeBps();       // e.g. 100 = 1%
+    final feeLabel = await _stellar.getCurrentFeeLabel();   // e.g. "1%"
+
+    // Compute fee preview
+    double? profitFeeXlm;        // in XLM
+    double? recipientReceives;   // same unit as token
+    double estNetworkFeeXlm = 0; // in XLM (per tx, across ops)
+
+    // helper: floor(bps) from a stroops amount
+    int _cutBpsFromStroops(int stroops, int bps) => (stroops * bps) ~/ 10000;
+
+    if (isXLM) {
+      // Profit fee = floor(bps of amount) in stroops
+      final totalStroops = (amount * 1e7).round();
+      final feeStroops = _cutBpsFromStroops(totalStroops, feeBps);
+      profitFeeXlm = feeStroops / 1e7;
+
+      // Recipient receives = amount - fee
+      recipientReceives = (totalStroops - feeStroops) / 1e7;
+
+      // 2 ops: user payment + fee (if any)
+      estNetworkFeeXlm = await _stellar.estimateNetworkFeeXlm(
+        opCount: feeStroops > 0 ? 2 : 1,
+        percentile: 90,
+      );
+    } else {
+      // USDC: quote XLM equivalent, take bps in XLM (floored to stroops)
+      final quoteXlm = await _stellar.quoteUsdcToXlm(amount);
+      if (quoteXlm != null) {
+        final xlmStroops = (quoteXlm * 1e7).round();
+        final feeStroops  = _cutBpsFromStroops(xlmStroops, feeBps);
+        profitFeeXlm = feeStroops / 1e7;
+      } else {
+        profitFeeXlm = null; // quote failed → we won't add profit to “total”
+      }
+      recipientReceives = amount; // full USDC amount goes to recipient
+      estNetworkFeeXlm = await _stellar.estimateNetworkFeeXlm(opCount: 2, percentile: 90);
+    }
+
+    // ⬇️ Combine profit + network into one figure for display
+    final totalFeeXlm = estNetworkFeeXlm + (profitFeeXlm ?? 0);
+    final totalFeeFiat = totalFeeXlm * currency.xlmToFiat(1);
+    final labelNetworkFee = (profitFeeXlm != null && profitFeeXlm > 0)
+        ? 'Network Fee (incl. $feeLabel)'
+        : 'Network Fee';
 
     final toText = () {
-      final addr = _recipientController.text.trim();
       final name = (widget.prefillName ?? '').trim();
-      return name.isEmpty ? addr : '$name  •  $addr';
+      return name.isEmpty ? to : '$name  •  $to';
     }();
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       backgroundColor: colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -438,30 +397,43 @@ class _SendScreenState extends State<SendScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
-
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: colors.primary.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   AssetLogo(asset: widget.token, size: 18),
                   const SizedBox(width: 8),
-                  Text('Review', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
+                  Text('Review',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
                 ],
               ),
-
               const SizedBox(height: 8),
-              // Removed top-level address in the main screen already; keep details in review:
               ReviewRow(label: 'From', value: (_stellarAddress ?? widget.address), mono: true),
               ReviewRow(label: 'To', value: toText, mono: true),
               ReviewRow(label: 'Amount', value: '${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}'),
-              ReviewRow(label: '≈ Fiat', value: fiatFmt.format(fiat)),
-              const SizedBox(height: 6),
               ReviewRow(
-                label: 'Network Fee',
-                value: '≈ ${estFee.toStringAsFixed(6)} XLM (${ops} op)',
+                label: 'Recipient Receives',
+                value: isXLM
+                    ? '${(recipientReceives ?? 0).toStringAsFixed(6)} XLM'
+                    : '${(recipientReceives ?? 0).toStringAsFixed(6)} USDC',
               ),
-              if ((widget.token.toUpperCase() == 'USDC') && (_checking || _destHasUsdcTL == false || (_checkMsg ?? '').isNotEmpty)) ...[
+              const SizedBox(height: 6),
+
+              // ✅ Single combined fee line
+              ReviewRow(
+                label: labelNetworkFee,
+                value: '${totalFeeXlm.toStringAsFixed(7)} XLM  •  ${fiatFmt.format(totalFeeFiat)}',
+              ),
+
+              if ((widget.token.toUpperCase() == 'USDC') &&
+                  (_checking || _destHasUsdcTL == false || (_checkMsg ?? '').isNotEmpty)) ...[
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerRight,
@@ -474,6 +446,7 @@ class _SendScreenState extends State<SendScreen> {
                   ),
                 ),
               ],
+
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
@@ -551,8 +524,6 @@ class _SendScreenState extends State<SendScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         children: [
-          // 🗑️ Removed the top "From" address chip per request
-
           // Price + balance (compact)
           PriceHeader(
             token: widget.token,
@@ -574,7 +545,7 @@ class _SendScreenState extends State<SendScreen> {
 
           const SizedBox(height: 14),
 
-          // Simple hint card (Stellar fee info / trustline message)
+          // Hint card
           if (_checking || (_checkMsg ?? '').isNotEmpty) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -600,7 +571,7 @@ class _SendScreenState extends State<SendScreen> {
             const SizedBox(height: 12),
           ],
 
-          // Form (compact)
+          // Form
           Form(
             key: _formKey,
             child: Column(
@@ -655,7 +626,6 @@ class _SendScreenState extends State<SendScreen> {
                     labelText: 'Amount (${widget.token.toUpperCase()})',
                     filled: true,
                     fillColor: colors.primary.withOpacity(0.04),
-                    // ✅ Token logo instead of generic icon
                     prefixIcon: Padding(
                       padding: const EdgeInsets.all(10),
                       child: AssetLogo(asset: widget.token, size: 20),
@@ -692,7 +662,6 @@ class _SendScreenState extends State<SendScreen> {
                     const Spacer(),
                     Row(
                       children: [
-                        // ✅ Token logo beside fiat approximation
                         AssetLogo(asset: widget.token, size: 14),
                         const SizedBox(width: 6),
                         Text(
@@ -713,10 +682,10 @@ class _SendScreenState extends State<SendScreen> {
             child: ElevatedButton.icon(
               onPressed: _isSending || _keyPair == null
                   ? null
-                  : () {
+                  : () async {
                 if (_formKey.currentState!.validate()) {
                   HapticFeedback.selectionClick();
-                  _confirmAndSend(currency, isXLM);
+                  await _confirmAndSend(currency, isXLM); // preflight compute
                 }
               },
               icon: _isSending

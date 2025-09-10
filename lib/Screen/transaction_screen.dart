@@ -3,11 +3,11 @@ import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
-import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/empty_state.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
@@ -16,8 +16,8 @@ import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/model/recipient_address.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
 
-// ⬇️ Adjust this path to where you placed the sheet code you sent me.
 import 'package:next_fi/Components/recipient_upsert_sheet.dart';
+
 
 typedef Tx = Map<String, dynamic>;
 
@@ -38,10 +38,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
   bool _loadingMore = false;
   bool _hasMore = true;
   String? _errorMsg;
-  bool _accountMissing = false; // ✅ unfunded / not yet created on-chain
+  bool _accountMissing = false; // unfunded / not yet created on-chain
 
-  // Horizon pagination uses a cursor (paging token), not offset.
-  String? _cursor; // next cursor to request when loading more
+  String? _cursor; // horizon paging token
   final int _limit = 20;
   List<Tx> _transactions = [];
   final Set<String> _seenIds = <String>{};
@@ -54,9 +53,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
   static final DateFormat _listFmt = DateFormat('MMM d, h:mm a');
   static final DateFormat _detailFmt = DateFormat('MMM d, yyyy • h:mm a');
 
-  // Fallback if AssetProvider isn't available for some reason
   static const String _FALLBACK_XLM_LOGO =
       'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png';
+
+  // ─── Pending Incoming Chips (flash at top on new incoming) ─────────────
+  final List<_IncomingChip> _incomingChips = [];
+  void _pushIncomingChip({required String text, required Color color, IconData? icon}) {
+    final chip = _IncomingChip(text: text, color: color, icon: icon ?? LucideIcons.arrowDownCircle);
+    setState(() => _incomingChips.add(chip));
+    chip.timer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() => _incomingChips.remove(chip));
+    });
+  }
 
   @override
   void initState() {
@@ -74,6 +83,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   @override
   void dispose() {
+    for (final c in _incomingChips) {
+      c.timer?.cancel();
+    }
     _incomingSub?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -104,7 +116,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       await _fetchTransactions();
 
-      // ✅ Live incoming payments stream — only if account is on-chain
+      // Live incoming stream (only if account exists)
       if (!_accountMissing && _userAddress != null) {
         _incomingSub = _stellar.sdk.payments
             .forAccount(_userAddress!)
@@ -114,7 +126,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
           final tx = _opToTx(op, _userAddress!);
           if (tx != null) _handleIncomingTx(tx);
         }, onError: (_) {
-          // optionally log
+          // optional: log
         });
       }
     } catch (e) {
@@ -138,7 +150,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
       from = op.from;
       to = op.to;
     } else if (op is stellar.PathPaymentStrictSendOperationResponse) {
-      // amount here is the *destination* amount/asset
       assetCode = (op.assetType == 'native') ? 'XLM' : (op.assetCode ?? 'ASSET');
       amount = double.tryParse(op.amount ?? '');
       from = op.from;
@@ -149,13 +160,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
       from = op.from;
       to = op.to;
     } else if (op is stellar.CreateAccountOperationResponse) {
-      // Treat as incoming XLM payment (account creation funding)
       assetCode = 'XLM';
       amount = double.tryParse(op.startingBalance ?? '');
       from = op.funder;
       to = op.account;
     } else {
-      return null; // skip non-payment-like ops
+      return null;
     }
 
     final hash = op.transactionHash ?? '';
@@ -174,7 +184,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
       'from': from ?? '',
       'to': to ?? '',
       'direction': isIncoming ? 'in' : 'out',
-      // Will be filled by _attachRecipientMetaTo()
       'recName': null,
       'recColor': null,
     };
@@ -194,7 +203,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final id = (tx['id'] ?? '').toString();
     if (id.isEmpty || _seenIds.contains(id)) return;
 
-    // Enrich with recipient meta before inserting
     _attachRecipientMetaTo([tx]);
 
     _set(() {
@@ -202,20 +210,46 @@ class _TransactionScreenState extends State<TransactionScreen> {
       _transactions.insert(0, tx);
     });
 
+    final colors = AppColor.of(context);
     final asset = (tx['asset'] ?? 'XLM').toString();
     final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-    AppAlert.show(
-      context: context,
-      title: "Incoming $asset",
-      description:
-      "You received ${amount.toStringAsFixed(6)} $asset.\nTap to view the transaction details.",
-      confirmText: "OK",
+    final from = (tx['from'] ?? '').toString();
+    final isIncoming = true;
+    final peerAddr = from.trim();
+
+    // 1) Top-center "incoming" chip (auto dismiss)
+    _pushIncomingChip(
+      text: 'Incoming ${amount.toStringAsFixed(6)} $asset',
+      color: colors.success,
+      icon: LucideIcons.arrowDownCircle,
     );
+
+    // 2) AppAlert (info) with "View" button to open details
+    final ctl = showAppAlert(
+      context,
+      type: AppAlertType.info,
+      title: 'Incoming $asset',
+      subtitle: 'You received ${amount.toStringAsFixed(6)} $asset.\nTap below to view details.',
+      primaryText: 'View',
+      barrierDismissible: true,
+      onPrimary: () {
+        // open details, then close
+        _showTxDetailsBottomSheet(
+          context,
+          colors,
+          tx,
+          peerAddr: peerAddr,
+          isIncoming: isIncoming,
+        );
+      },
+    );
+    // Auto-close alert after a short delay if user ignores it
+    Timer(const Duration(seconds: 5), () {
+      if (mounted) ctl.close();
+    });
   }
 
-// NEW:
   bool _isAccountMissingError(Object e) {
-    // Try to read structured fields if the thrown object has them.
     try {
       final dynamic x = e;
       final int? code = x.response?.statusCode as int?;
@@ -227,15 +261,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
               body.contains('not_found'))) {
         return true;
       }
-    } catch (_) {
-      // ignore — fall back to string checks
-    }
-
-    // Fallback: inspect the message text.
+    } catch (_) {}
     final s = e.toString();
-    return s.contains('404') ||
-        s.contains('Resource Missing') ||
-        s.contains('not_found');
+    return s.contains('404') || s.contains('Resource Missing') || s.contains('not_found');
   }
 
   Future<void> _fetchTransactions({bool loadMore = false}) async {
@@ -264,10 +292,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
         builder.cursor(_cursor!);
       }
 
-      final page = await builder.execute(); // Page<OperationResponse>
+      final page = await builder.execute();
       final ops = page.records ?? const <stellar.OperationResponse>[];
 
-      // Map into Tx list (payments & path-payments & create-account only)
       final newTx = <Tx>[];
       for (final op in ops) {
         final tx = _opToTx(op, addr);
@@ -276,11 +303,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       if (myToken != _fetchGen) return;
 
-      // ✅ Iterate all fetched txs and attach name/color from address book
       _attachRecipientMetaTo(newTx);
 
       _set(() {
-        _accountMissing = false; // ✅ success means account exists
+        _accountMissing = false;
         if (loadMore) {
           _transactions.addAll(newTx);
         } else {
@@ -291,8 +317,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
           final id = (t['id'] ?? '').toString();
           if (id.isNotEmpty) _seenIds.add(id);
         }
-
-        // Prepare next cursor from the last op received
         if (ops.isNotEmpty) {
           _cursor = ops.last.pagingToken;
         }
@@ -302,12 +326,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
       if (myToken != _fetchGen) return;
 
       if (_isAccountMissingError(e)) {
-        // ✅ Treat unfunded / not-on-chain as clean "no transactions" state
         _set(() {
           _accountMissing = true;
           _transactions = const [];
           _hasMore = false;
-          _errorMsg = null; // no scary error for first-time wallets
+          _errorMsg = null;
         });
       } else {
         _set(() {
@@ -319,13 +342,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _loading = false;
         _loadingMore = false;
       });
-    }  }
+    }
+  }
 
-  // Enrich a list of Tx with cached recipient name/color (if present)
   void _attachRecipientMetaTo(List<Tx> list) {
     if (!mounted) return;
     final recipProv = context.read<RecipientAddressProvider>();
-    if (recipProv.loading) return; // will resolve next rebuild
+    if (recipProv.loading) return;
 
     for (final tx in list) {
       final direction = (tx['direction'] ?? 'other').toString();
@@ -406,7 +429,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
 
-    // Watch provider so tiles update when the saved address book changes.
     final recipProv = context.watch<RecipientAddressProvider>();
 
     final visibleTxs = _visibleTxs;
@@ -468,6 +490,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
       );
     }
 
+    // Wrap content in a Stack to overlay the incoming chips at the very top.
     return Scaffold(
       backgroundColor: colors.surface,
       appBar: AppBar(
@@ -479,15 +502,44 @@ class _TransactionScreenState extends State<TransactionScreen> {
           child: _buildFilterChips(colors),
         ),
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        child: content,
+      body: Stack(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: content,
+          ),
+
+          // Top-center incoming chips
+          Positioned(
+            top: 8,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              ignoring: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _incomingChips.map((c) {
+                  return AnimatedSlide(
+                    key: ValueKey(c.id),
+                    duration: const Duration(milliseconds: 250),
+                    offset: Offset(0, 0),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 250),
+                      opacity: 1.0,
+                      child: _IncomingChipWidget(chip: c, surface: colors.surface),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // List tile builder (uses provider.byAddress to resolve name/color)
+  // List tile builder
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildTxTile(
       BuildContext context,
@@ -508,7 +560,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final peerAddr = (isIncoming ? from : to).trim();
 
-    // Prefer cached meta; fallback to provider for live updates
     String? recName = (tx['recName'] as String?);
     int? recColor = (tx['recColor'] as int?);
     RecipientAddress? rec;
@@ -518,7 +569,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
       if (rec != null) {
         recName = rec.name;
         recColor = rec.color;
-        // store back so future rebuilds use cached
         tx['recName'] = recName;
         tx['recColor'] = recColor;
       }
@@ -565,7 +615,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // Modal: transaction details + use the shared Recipient Upsert Sheet
+  // Modal: transaction details
   // ───────────────────────────────────────────────────────────────────────────
   void _showTxDetailsBottomSheet(
       BuildContext context,
@@ -586,13 +636,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final explorerUrl = _stellarExplorerTx(hash, _stellar);
 
-    // Lookup existing contact for this peer
     final recipProv = context.read<RecipientAddressProvider>();
     final existing = recipProv.byAddress(peerAddr);
     if (existing != null) {
       tx['recName'] = existing.name;
       tx['recColor'] = existing.color;
-      if (mounted) setState(() {}); // reflect immediately in list
+      if (mounted) setState(() {});
     }
 
     showModalBottomSheet(
@@ -667,7 +716,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Amount + asset logo
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -686,7 +734,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // 🔹 Existing contact chip + "Save/Edit Contact" via external sheet
                   Row(
                     children: [
                       if (existing != null)
@@ -711,14 +758,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
                         onPressed: () async {
                           final saved = await showRecipientUpsertSheet(
                             context,
-                            initial: existing, // null -> Add, existing -> Edit
+                            initial: existing,
                           );
                           if (saved == true && mounted) {
-                            // Refresh from provider and update tx cache
                             final updated = context.read<RecipientAddressProvider>().byAddress(peerAddr);
                             tx['recName']  = updated?.name;
                             tx['recColor'] = updated?.color;
-                            setState(() {}); // refresh modal + list
+                            setState(() {});
                           }
                         },
                         icon: Icon(
@@ -750,7 +796,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   const Divider(height: 1),
                   const SizedBox(height: 12),
 
-                  // From/To
                   _kv(
                     context: context,
                     colors: colors,
@@ -904,13 +949,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   String? _stellarExplorerTx(String hash, StellarWalletService svc) {
     if (hash.isEmpty) return null;
-    // Use Stellar.Expert (public/testnet)
     final isTestnet = identical(svc.sdk, stellar.StellarSDK.TESTNET);
     final net = isTestnet ? 'testnet' : 'public';
     return 'https://stellar.expert/explorer/$net/tx/$hash';
   }
 
-  // Leading avatar with optional contact color and overlaid asset logo from AssetProvider
   Widget _buildLeadingAvatarWithLogo({
     required BuildContext context,
     required AppColor colors,
@@ -919,7 +962,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
     String? recName,
     int? recColor,
   }) {
-    // Base avatar (contact-colored or direction arrow)
     Widget baseAvatar;
     if (recName != null && recColor != null) {
       final bg = Color(recColor);
@@ -941,7 +983,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
       );
     }
 
-    // Size + overlay logo (overflow-proof)
     const double outer = 40;
     const double logoSize = 16;
 
@@ -972,7 +1013,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
     );
   }
 
-  // Asset logo using AssetProvider.logoFor(); graceful fallback to XLM logo if provider missing.
   Widget _assetLogo({
     required BuildContext context,
     required String asset,
@@ -982,9 +1022,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     try {
       final ap = context.read<AssetProvider>();
       url = ap.logoFor(asset);
-    } catch (_) {
-      // Provider not found; keep fallback.
-    }
+    } catch (_) {}
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: Image.network(
@@ -1017,12 +1055,66 @@ class _TransactionScreenState extends State<TransactionScreen> {
     return '${addr.substring(0, 6)}…${addr.substring(addr.length - 4)}';
   }
 
-  /// If [isThisTo] == true we highlight the "to" address if it matches [rec],
-  /// if false we highlight the "from", if null we just render name+address.
   static String _prettyAddr(String addr, RecipientAddress? rec, bool? isThisTo) {
     if (rec == null) return addr;
     final matches = rec.address.trim().toLowerCase() == addr.trim().toLowerCase();
     if (!matches) return addr;
     return '${rec.name}  •  $addr';
+  }
+}
+
+/* ───────────────────── Incoming Chip classes ───────────────────── */
+
+class _IncomingChip {
+  _IncomingChip({
+    required this.text,
+    required this.color,
+    required this.icon,
+  }) : id = UniqueKey().toString();
+  final String id;
+  final String text;
+  final Color color;
+  final IconData icon;
+  Timer? timer;
+}
+
+class _IncomingChipWidget extends StatelessWidget {
+  const _IncomingChipWidget({required this.chip, required this.surface});
+  final _IncomingChip chip;
+  final Color surface;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: chip.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: chip.color.withOpacity(0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(chip.icon, size: 16, color: chip.color),
+          const SizedBox(width: 8),
+          Text(
+            chip.text,
+            style: TextStyle(
+              color: chip.color,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

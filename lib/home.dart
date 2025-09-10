@@ -1,5 +1,6 @@
 // lib/Screen/home.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -31,6 +32,9 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> _boot() async {
+
+    await ProfitConfigVaultSecureStorage().initSignedConfigFromActiveWallet();
+
     // Show splash for at least this long while we check storage.
     final minSplash = Future.delayed(const Duration(seconds: 5 ));
     final check = _checkMnemonic();

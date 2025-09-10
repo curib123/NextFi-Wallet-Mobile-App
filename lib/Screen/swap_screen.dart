@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
@@ -322,21 +323,65 @@ class _SwapScreenState extends State<SwapScreen> {
     final svc = _stellar!;
     final seed = _secretSeed!;
     FocusScope.of(context).unfocus();
+
+    // Show a top-center INFO alert while submitting
+    late final AppAlertController submittingCtl;
+    submittingCtl = showAppAlert(
+      context,
+      type: AppAlertType.info,
+      title: 'Submitting swap…',
+      subtitle: _isXlmToUsdc
+          ? 'Swapping ${_fmt.format(amount)} XLM → at least ${_fmt.format(minOut)} USDC'
+          : 'Swapping ${_fmt.format(amount)} USDC → at least ${_fmt.format(minOut)} XLM',
+      primaryText: 'Hide',
+      barrierDismissible: true,
+      onPrimary: () => submittingCtl.close(),
+    );
+
     setState(() => _loading = true);
 
     try {
       final txid = _isXlmToUsdc
-          ? await svc.swapXlmToUsdc(secretSeed: seed, sendAmountXlm: amount, minUsdcOut: minOut)
-          : await svc.swapUsdcToXlm(secretSeed: seed, sendAmountUsdc: amount, minXlmOut: minOut);
+          ? await svc.swapXlmToUsdc(
+          secretSeed: seed, sendAmountXlm: amount, minUsdcOut: minOut)
+          : await svc.swapUsdcToXlm(
+          secretSeed: seed, sendAmountUsdc: amount, minXlmOut: minOut);
 
       if (!mounted) return;
+      submittingCtl.close(); // close the loading alert first
       HapticFeedback.mediumImpact();
-      showFloatingSnackBar(context, type: SnackBarType.success, message: 'Swap submitted\n$txid');
+
+      // Success alert with “Copy TxID”
+      late final AppAlertController okCtl;
+      okCtl = showAppAlert(
+        context,
+        type: AppAlertType.success,
+        title: 'Swap submitted',
+        subtitle: txid,
+        primaryText: 'Copy TxID',
+        onPrimary: () async {
+          await Clipboard.setData(ClipboardData(text: txid));
+          okCtl.close();
+        },
+      );
+
       _amountCtl.clear();
       await _refreshBalances();
     } catch (e) {
       if (!mounted) return;
-      showFloatingSnackBar(context, message: 'Swap failed: $e', type: SnackBarType.error);
+      submittingCtl.close(); // close the loading alert first
+
+      // Error alert with details (trim long errors a bit)
+      final msg = e.toString();
+      showAppAlert(
+        context,
+        type: AppAlertType.error,
+        title: 'Swap failed',
+        subtitle: msg.length > 220 ? '${msg.substring(0, 220)}…' : msg,
+        primaryText: 'OK',
+        onPrimary: () {}, // closes by tap outside or button depending on your impl
+        barrierDismissible: true,
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

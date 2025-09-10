@@ -18,11 +18,11 @@ class AssetWidget extends StatelessWidget {
     required this.logos,
     required this.xlmBalance,
     required this.usdcBalance,
-    required this.address,                 // used to open ReceiveScreen
+    required this.address, // used to open ReceiveScreen
     this.loading = false,
     this.onRefresh,
     this.window = PriceWindow.h24,
-    this.onItemTap,                        // optional override
+    this.onItemTap, // optional override
   });
 
   final AppColor colors;
@@ -30,7 +30,7 @@ class AssetWidget extends StatelessWidget {
   final Map<String, String> logos;
   final double xlmBalance;
   final double usdcBalance;
-  final String address;                    // wallet public address
+  final String address; // wallet public address
   final bool loading;
   final Future<void> Function()? onRefresh;
   final PriceWindow window;
@@ -73,6 +73,35 @@ class AssetWidget extends StatelessWidget {
       case PriceWindow.y1:
         return a.priceChangePercent1y;
     }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Formatting helpers
+  // ────────────────────────────────────────────────────────────────────────────
+
+  // Always prints a normal number string (never scientific).
+  // ≥1 uses grouping and up to 4 decimals; <1 shows up to 7 decimals.
+  // If tiny but non-zero (<1e-7), shows "< 0.0000001".
+  String formatTokenAmount(double v,
+      {int bigMaxDecimals = 4, int smallMaxDecimals = 7, double tinyCutoff = 1e-7}) {
+    if (v == 0 || v.isNaN) return '0';
+    if (v.abs() < tinyCutoff) return '< 0.0000001';
+
+    if (v.abs() >= 1.0) {
+      final fmt = NumberFormat('#,##0.${'#' * bigMaxDecimals}');
+      return _trimZeros(fmt.format(v));
+    } else {
+      final fmt = NumberFormat('0.${'#' * smallMaxDecimals}');
+      return _trimZeros(fmt.format(v));
+    }
+  }
+
+  String _trimZeros(String s) {
+    if (!s.contains('.')) return s;
+    // remove trailing zeros then a trailing dot if any
+    s = s.replaceFirst(RegExp(r'0+$'), '');
+    s = s.replaceFirst(RegExp(r'\.$'), '');
+    return s;
   }
 
   void _openReceive(BuildContext context, AssetModel a) {
@@ -142,8 +171,10 @@ class AssetWidget extends StatelessWidget {
                                   fontWeight: FontWeight.bold,
                                   color: colors.textPrimary)),
                           const SizedBox(height: 2),
-                          Text("$bal ${a.symbol}",
-                              style: TextStyle(color: colors.textSecondary)),
+                          Text(
+                            "${formatTokenAmount(bal)} ${a.symbol}",
+                            style: TextStyle(color: colors.textSecondary),
+                          ),
                         ],
                       ),
                     ),
