@@ -9,19 +9,24 @@ import 'package:next_fi/home.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:provider/provider.dart';
 
+import 'Provider/HomeWalletProvider.dart';
+
 void main() {
   runApp(
-    Phoenix( // ✅ Wrap your app with Phoenix
+    Phoenix(
       child:MultiProvider(
         providers: [
           ChangeNotifierProvider<CurrencyProvider>(
-            create: (_) => CurrencyProvider(), // already starts polling in ctor
+            create: (_) => CurrencyProvider(),
           ),
           ChangeNotifierProvider<TabProvider>(
             create: (_) => TabProvider(),
           ),
           ChangeNotifierProvider<RecipientAddressProvider>(
             create: (_) => RecipientAddressProvider(),
+          ),
+          ChangeNotifierProvider<WalletHomeProvider>(
+            create: (_) => WalletHomeProvider(),
           ),
           ChangeNotifierProxyProvider<CurrencyProvider, AssetProvider>(
             create: (ctx) => AssetProvider(ctx.read<CurrencyProvider>()),

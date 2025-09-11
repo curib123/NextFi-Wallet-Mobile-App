@@ -1,32 +1,28 @@
-// lib/Screen/wallet_home_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Components/AppAlert.dart';
 import 'package:provider/provider.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-import 'package:next_fi/Provider/TabProvider.dart';
-import 'package:next_fi/Screen/wallet_screen_settings.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-
-import 'package:next_fi/Screen/swap_screen.dart';
-import 'package:next_fi/Components/token_chooser.dart';
-import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
-import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
-import 'package:next_fi/Screen/receive_screen.dart';
-import 'package:next_fi/Screen/send_screen.dart';
+import 'package:next_fi/Provider/HomeWalletProvider.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/home_fab_and_hints.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/Provider/CurrencyProvider.dart';
+import 'package:next_fi/Provider/TabProvider.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/action_button.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/build_tab_bar.dart';
+import 'package:next_fi/Screen/receive_screen.dart';
+import 'package:next_fi/Screen/send_screen.dart';
+import 'package:next_fi/Screen/swap_screen.dart';
+import 'package:next_fi/Screen/wallet_screen_settings.dart';
 
-import 'WalletHomeScreenWidgets/action_button.dart';
-import 'WalletHomeScreenWidgets/build_tab_bar.dart';
-import 'WalletHomeScreenWidgets/home_fab_and_hints.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/Components/token_chooser.dart';
 
 class WalletHomeScreen extends StatefulWidget {
   const WalletHomeScreen({super.key});
@@ -36,372 +32,123 @@ class WalletHomeScreen extends StatefulWidget {
 
 class _WalletHomeScreenState extends State<WalletHomeScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  /* ================= Services ================= */
-  late final StellarWalletService _stellar = StellarWalletService();
+  late final WalletHomeProvider _home =
+  WalletHomeProvider(stellar: StellarWalletService());
 
-  /* ================= Wallet (Stellar) ================= */
-  String? _stellarAccountId; // "G..." public address
-  String? _secretSeed;
-
-  /* ================= Balances (XLM/USDC) ================= */
-  double _xlmBalance = 0, _usdcBalance = 0;
-  bool _hideBalance = false, _loadingBalances = true;
-
-  /* ================= Incoming Hints (light) ================= */
-  final _incomingHints = <Map<String, dynamic>>[];
-  final _seenTxIds = <String>{};
-  static const int _maxHints = 4;
-
-  /* ================= Throttle / Schedules ================= */
-  static const Duration _minBalancesGap = Duration(minutes: 10);
-  static const Duration _incomingWatchInterval = Duration(seconds: 55);
-  DateTime? _lastBalancesAt;
-  bool _balancesInFlight = false;
-
-  Timer? _balancesTimer;
-  StreamSubscription<OperationResponse>? _incomingSub;
-  Timer? _debounceBalanceKick;
-
-  /* ================= Pull-to-refresh ================= */
-  final GlobalKey<RefreshIndicatorState> _refreshKey = GlobalKey<RefreshIndicatorState>();
-
-  /* ================= Anim ================= */
   late final AnimationController _livePulse =
   AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
     ..repeat(reverse: true);
 
-  /* ================= Lifecycle ================= */
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Defer critical storage reads until after first frame to avoid cold-boot race
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      // If you keep an AssetProvider with realtime price updates:
-      final assetProv = context.read<AssetProvider>();
-      assetProv.startRealtimeUpdates();
-      await _loadWallet();
-    });
+    context.read<AssetProvider>().startRealtimeUpdates();
+
+    unawaited(_home.boot());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _stopRealtime();
     _livePulse.dispose();
+
+    _home.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _startRealtime();
-      if (_isStale(_lastBalancesAt, _minBalancesGap)) {
-        unawaited(_fetchBalances(force: true));
-      }
+      _home.startRealtime();
+      unawaited(_home.refresh());
     } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      _stopRealtime();
+      _home.stopRealtime();
     }
   }
 
-  /* ================= Helpers ================= */
-  static String _txIdOf(Map<String, dynamic> tx) => (tx['hash'] ?? tx['txHash'] ?? '').toString();
-
-  bool _isStale(DateTime? last, Duration gap) => last == null || DateTime.now().difference(last) >= gap;
-
-  void _safeAddHint(Map<String, dynamic> tx) {
-    final id = _txIdOf(tx);
-    if (id.isEmpty || _seenTxIds.contains(id)) return;
-    _seenTxIds.add(id);
-    _incomingHints.insert(0, tx);
-    if (_incomingHints.length > _maxHints) {
-      final removed = _incomingHints.removeLast();
-      _seenTxIds.remove(_txIdOf(removed));
-    }
-  }
-
-  void _scheduleBalanceKick({Duration delay = const Duration(milliseconds: 600)}) {
-    _debounceBalanceKick?.cancel();
-    _debounceBalanceKick = Timer(delay, () => unawaited(_fetchBalances(force: true)));
-  }
-
-  Future<String?> _getMnemonicWithWarmup() async {
-    for (final d in <Duration>[Duration.zero, const Duration(milliseconds: 120), const Duration(milliseconds: 300)]) {
-      if (d > Duration.zero) await Future.delayed(d);
-      final m = await SeedStorage.getActiveSeed();
-      if (m != null && m.trim().isNotEmpty) return m.trim();
-    }
-    return null;
-  }
-
-  /* ================= Data ================= */
-/* ================= Data ================= */
-  bool _loadingWallet = false;
-
-  Future<void> _loadWallet() async {
-    if (!mounted || _loadingWallet) return;
-    _loadingWallet = true;
-
-    try {
-      // Ensure the UI shows a spinner while we derive keys and fetch balances.
-      setState(() => _loadingBalances = true);
-
-      final mnemonic = await _getMnemonicWithWarmup();
-      if (!mounted) return;
-
-      // No wallet on device after warm-up → show zeros but keep UI stable.
-      if (mnemonic == null || mnemonic.isEmpty) {
-        setState(() {
-          _stellarAccountId = null;
-          _secretSeed = null;
-          _xlmBalance = 0;
-          _usdcBalance = 0;
-          _loadingBalances = false;
-          _lastBalancesAt = DateTime.now();
-        });
-        return;
-      }
-
-      // Derive account (index 0).
-      final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
-      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-
-      final accountChanged = _stellarAccountId != kp.accountId;
-
-      setState(() {
-        _stellarAccountId = kp.accountId;
-        _secretSeed = kp.secretSeed;
-        // keep _loadingBalances = true until _fetchBalances completes
-      });
-
-      // If account changed, restart realtime (if your impl supports stop).
-      if (accountChanged) {
-        try {
-          _stopRealtime.call(); // optional: if you have a stopper
-        } catch (_) {}
-      }
-
-      await _fetchBalances(force: true);
-
-      // Start (or restart) realtime after balances load.
-      _startRealtime();
-    } catch (e) {
-      if (!mounted) return;
-      // On any error, still fall back to zeros so the UI is stable
-      setState(() {
-        _xlmBalance = 0;
-        _usdcBalance = 0;
-        _loadingBalances = false;
-        _lastBalancesAt = DateTime.now();
-      });
-      showFloatingSnackBar(
-        context,
-        message: 'Failed to load Stellar wallet. Please check your mnemonic or network.',
-        type: SnackBarType.error,
-      );
-    } finally {
-      _loadingWallet = false;
-    }
-  }
-
-  Future<void> _fetchBalances({bool force = false}) async {
-    // Gate: only fetch after wallet (address) is ready.
-    if (_stellarAccountId == null || _stellarAccountId!.isEmpty) {
-      // Keep spinner until _loadWallet completes or no-wallet path sets zeros.
-      return;
-    }
-    if (_balancesInFlight) return;
-    if (!force && !_isStale(_lastBalancesAt, _minBalancesGap)) return;
-
-    _balancesInFlight = true;
-    try {
-      final results = await Future.wait<double>([
-        _stellar.getXlmBalance(_stellarAccountId!).catchError((_) => 0.0),
-        _stellar.getUsdcBalance(_stellarAccountId!).catchError((_) => 0.0),
-      ], eagerError: false);
-
-      if (!mounted) return;
-      setState(() {
-        _xlmBalance = results[0];
-        _usdcBalance = results[1];
-        _loadingBalances = false;
-        _lastBalancesAt = DateTime.now();
-      });
-    } catch (_) {
-      if (!mounted) return;
-      // Unexpected error: keep UI stable but stop the spinner.
-      setState(() {
-        _xlmBalance = 0;
-        _usdcBalance = 0;
-        _loadingBalances = false;
-        _lastBalancesAt = DateTime.now();
-      });
-    } finally {
-      _balancesInFlight = false;
-    }
-  }
-
-  /* ================= Pull-to-refresh action ================= */
-  Future<void> _onRefresh() async {
-    await _fetchBalances(force: true);
-    _scheduleBalanceKick(delay: const Duration(milliseconds: 400));
-  }
-
-  /* ================= Realtime ================= */
-  void _startRealtime() {
-    _stopRealtime();
-
-    if (_stellarAccountId == null || _stellarAccountId!.isEmpty) return;
-
-    _balancesTimer = Timer.periodic(_minBalancesGap, (_) => unawaited(_fetchBalances()));
-
-    try {
-      _incomingSub = _stellar.sdk.payments
-          .forAccount(_stellarAccountId!)
-          .cursor("now")
-          .stream()
-          .listen((op) {
-        if (!mounted) return;
-
-        if (op is PaymentOperationResponse && op.transactionSuccessful == true) {
-          final to = op.to;
-          if (to == _stellarAccountId) {
-            // existing: stash a lightweight “hint” and refresh balances
-            final map = <String, dynamic>{
-              'hash': op.transactionHash ?? '',
-              'from': op.from,
-              'to': to,
-              'amount': op.amount,
-              'assetCode': op.assetCode ?? (op.assetType == Asset.TYPE_NATIVE ? 'XLM' : null),
-              'assetType': op.assetType,
-            };
-            setState(() => _safeAddHint(map));
-            _scheduleBalanceKick();
-
-            final String asset =
-            (op.assetType == Asset.TYPE_NATIVE) ? 'XLM' : (op.assetCode ?? 'ASSET');
-            final double amount = double.tryParse(op.amount ) ?? 0.0;
-
-
-            late final AppAlertController ctl;
-
-            // Show a modern, top-center alert with a “View” action.
-             ctl = showAppAlert(
-              context,
-              type: AppAlertType.success, // success|info|warning|error are supported
-              title: 'Incoming $asset',
-              subtitle: 'You received ${amount.toStringAsFixed(6)} $asset.',
-              primaryText: 'View',
-              barrierDismissible: true,
-              onPrimary: () {
-                // Jump to the Activity/Transactions tab so the user can inspect it.
-                try {
-                  context.read<TabProvider>().setTab(1);
-                } catch (_) {}
-                // Close the alert after navigating
-                ctl.close();
-              },
-            );
-
-            // Auto-close after a short delay if ignored
-            Timer(const Duration(seconds: 5), () {
-              if (mounted) ctl.close();
-            });
-          }
-        }
-      }, onError: (_) {
-        // Silent; periodic timer + manual refresh cover outages.
-      });
-    } catch (_) {
-      // Swallow; user can still pull-to-refresh.
-    }
-  }
-
-  void _stopRealtime() {
-    _balancesTimer?.cancel();
-    _balancesTimer = null;
-    _incomingSub?.cancel();
-    _incomingSub = null;
-    _debounceBalanceKick?.cancel();
-    _debounceBalanceKick = null;
-  }
-
-  /* ================= UI ================= */
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final currency = context.watch<CurrencyProvider>();
-    final assetProv = context.watch<AssetProvider>();
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: colors.surface,
-        body: SafeArea(
-          child: Stack(
-            children: [
-              // ── Pull-to-refresh wrapper ─────────────────────────────────────
-              RefreshIndicator.adaptive(
-                key: _refreshKey,
-                onRefresh: _onRefresh,
-                edgeOffset: 8,
-                displacement: 48,
-                notificationPredicate: (notification) => true,
+    return ChangeNotifierProvider<WalletHomeProvider>.value(
+      value: _home,
+      builder: (context, _) {
+        final home = context.watch<WalletHomeProvider>();
+        final currency = context.watch<CurrencyProvider>();
+        final assets = context.watch<AssetProvider>();
+
+        final currencyFmt =
+        NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+        final fxXlm = currency.xlmToFiat(home.xlm);
+        final fxUsdc = currency.usdcToFiat(home.usdc);
+        final totalFiat =
+            (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: colors.surface,
+            body: SafeArea(
+              child: RefreshIndicator.adaptive(
+                onRefresh: () => _home.refresh(force: true),
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
-                    // Top bar
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _TopBar(colors: colors),
+                        child: _TopBar(
+                          colors: colors,
+                          walletName: home.walletName, // shows active wallet name
+                        ),
                       ),
                     ),
-                    // Header: total balance, actions, incoming strip
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: _HeaderSection(
                           colors: colors,
-                          currency: currency,
-                          hideBalance: _hideBalance,
-                          onToggleHide: () => setState(() => _hideBalance = !_hideBalance),
-                          loadingBalances: _loadingBalances,
-                          stellarAddress: _stellarAccountId,
-                          xlmBalance: _xlmBalance,
-                          usdcBalance: _usdcBalance,
-                          incomingStrip: (_stellarAccountId != null)
+                          currencyFmt: currencyFmt,
+                          loadingBalances: home.loadingBalances,
+                          totalFiat: totalFiat,
+                          lastBalancesAt: home.lastBalancesAt,
+                          onSwap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SwapScreen()),
+                          ),
+                          onSend: _onSend,
+                          onReceive: _onReceive,
+                          livePulse: _livePulse,
+                          incomingStrip: (home.hasWallet)
                               ? IncomingHintsStrip(
                             colors: colors,
-                            stellarAddress: _stellarAccountId!,
-                            incomingHints: _incomingHints,
+                            stellarAddress: home.address!,
+                            incomingHints: home.hints
+                                .map((h) => {
+                              'hash': h.id,
+                              'from': h.from,
+                              'to': h.to,
+                              'amount': h.amount.toStringAsFixed(6),
+                              'assetCode': h.assetCode,
+                            })
+                                .toList(),
                             onAcknowledge: (tx) {
-                              final id = _txIdOf(tx);
-                              setState(() {
-                                _incomingHints.removeWhere((e) => _txIdOf(e) == id);
-                                _seenTxIds.remove(id);
-                              });
+                              final String id = (tx['hash'] ?? '').toString();
+                              _home.ackHint(id);
                             },
                           )
                               : const SizedBox.shrink(),
-                          onSend: _onSend,
-                          onReceive: _onReceive,
-                          isUpdatingBalances: _balancesInFlight,
-                          lastBalancesAt: _lastBalancesAt,
-                          livePulse: _livePulse,
                         ),
                       ),
                     ),
-                    // Tab bar
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
                         child: buildTabBar(colors),
                       ),
                     ),
-                    // Tabs body
                     SliverFillRemaining(
                       hasScrollBody: true,
                       child: TabBarView(
@@ -410,17 +157,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                             storageKey: 'assetsTab',
                             child: AssetWidget(
                               colors: colors,
-                              assets: assetProv.assets,
-                              logos: assetProv.logos,
-                              xlmBalance: _xlmBalance,
-                              usdcBalance: _usdcBalance,
-                              address: _stellarAccountId ?? '',
-                              loading: assetProv.loading || currency.loading || _loadingBalances,
+                              assets: assets.assets,
+                              logos: assets.logos,
+                              xlmBalance: home.xlm,
+                              usdcBalance: home.usdc,
+                              address: home.address ?? '',
+                              loading: assets.loading ||
+                                  currency.loading ||
+                                  home.loadingBalances,
                               onItemTap: (token) {
-                                final addr = _stellarAccountId;
+                                final addr = home.address;
                                 if (addr == null) {
                                   showFloatingSnackBar(context,
-                                      message: "No address available", type: SnackBarType.error);
+                                      message: 'No address available',
+                                      type: SnackBarType.error);
                                   return;
                                 }
                                 Navigator.push(
@@ -428,9 +178,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                                   MaterialPageRoute(
                                     builder: (_) => ReceiveScreen(
                                       address: addr,
-                                      xlmBalance: _xlmBalance,
-                                      usdcBalance: _usdcBalance,
-                                      initialToken: token, // 'XLM' or 'USDC'
+                                      xlmBalance: home.xlm,
+                                      usdcBalance: home.usdc,
+                                      initialToken: token,
                                     ),
                                   ),
                                 );
@@ -441,9 +191,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                             storageKey: 'recipientsTab',
                             child: RecipientListWidget(
                               colors: colors,
-                              fromAddress: _stellarAccountId,
-                              xlmBalance: _xlmBalance,
-                              usdcBalance: _usdcBalance,
+                              fromAddress: home.address,
+                              xlmBalance: home.xlm,
+                              usdcBalance: home.usdc,
                             ),
                           ),
                         ],
@@ -452,46 +202,37 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                   ],
                 ),
               ),
-
-              // Floating Actions / Hints
-              HomeFab(
-                colors: colors,
-                incomingHints: _incomingHints,
-                stellarAddress: _stellarAccountId ?? '',
-                xlmBalance: _xlmBalance,
-                usdcBalance: _usdcBalance,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  /* ================= Actions ================= */
+  // ---- Actions ----
   void _onSend() {
-    final addr = _stellarAccountId;
+    final addr = _home.address;
     if (addr == null) {
-      showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
+      showFloatingSnackBar(context,
+          message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
     }
     showTokenSelector(
       context,
       addr,
-      _xlmBalance,
-      _usdcBalance,
+      _home.xlm,
+      _home.usdc,
       title: 'Send Token',
       screenBuilder: (address, token, balance) =>
           SendScreen(address: address, token: token, balance: balance),
-    ).then((_) {
-      _scheduleBalanceKick(delay: const Duration(milliseconds: 200));
-    });
+    ).then((_) => _home.refresh(force: true));
   }
 
   void _onReceive() {
-    final addr = _stellarAccountId;
+    final addr = _home.address;
     if (addr == null) {
-      showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
+      showFloatingSnackBar(context,
+          message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
     }
     Navigator.push(
@@ -499,8 +240,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: addr,
-          xlmBalance: _xlmBalance,
-          usdcBalance: _usdcBalance,
+          xlmBalance: _home.xlm,
+          usdcBalance: _home.usdc,
           initialToken: 'XLM',
         ),
       ),
@@ -508,58 +249,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 }
 
-class _TopBar extends StatefulWidget {
-  const _TopBar({
-    required this.colors,
-    this.walletName,
-  });
+/* -------------------------- rest of your widgets -------------------------- */
 
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.colors, this.walletName});
   final AppColor colors;
   final String? walletName;
-
-  @override
-  State<_TopBar> createState() => _TopBarState();
-}
-
-class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
-  static const String _defaultWalletName = "My Wallet";
-  String _name = _defaultWalletName;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-
-    _name = (widget.walletName?.trim().isNotEmpty ?? false)
-        ? widget.walletName!.trim()
-        : _defaultWalletName;
-
-    // Defer name load post-frame to avoid early storage race
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadName());
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _loadName();
-    }
-  }
-
-  Future<void> _loadName() async {
-    final meta = await SeedStorage.getActiveWalletMeta();
-    if (!mounted) return;
-    final fallback = _defaultWalletName;
-    final next = (meta?.name.trim().isNotEmpty ?? false) ? meta!.name.trim() : fallback;
-    if (next != _name) {
-      setState(() => _name = next);
-    }
-  }
 
   @override
   Widget build(BuildContext context) => Consumer<TabProvider>(
@@ -568,38 +263,33 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: Icon(LucideIcons.package, color: widget.colors.textPrimary, size: 26),
-            onPressed: () {
-              tabs.setTab(1);
-            },
+            icon: Icon(LucideIcons.package, color: colors.textPrimary, size: 26),
+            onPressed: () => tabs.setTab(1),
             tooltip: 'Activity',
           ),
-          // Center title → opens wallet settings on tap
           GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const WalletScreenSettings(),
-                ),
-              ).then((_) => _loadName());
+            onTap: () async {
+              // Open settings, then refresh the displayed active wallet name
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const WalletScreenSettings()),
+              );
+              await context.read<WalletHomeProvider>().reloadActiveWalletName();
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _name,
+                  walletName ?? 'My Wallet',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
                 ),
                 const SizedBox(width: 4),
-                Icon(LucideIcons.chevronDown, size: 18, color: widget.colors.textPrimary),
+                Icon(LucideIcons.chevronDown, size: 18, color: colors.textPrimary),
               ],
             ),
           ),
           IconButton(
-            icon: Icon(LucideIcons.settings, color: widget.colors.textPrimary, size: 26),
-            onPressed: () {
-              tabs.setTab(3);
-            },
+            icon: Icon(LucideIcons.settings, color: colors.textPrimary, size: 26),
+            onPressed: () => tabs.setTab(3),
             tooltip: 'Settings',
           ),
         ],
@@ -608,45 +298,39 @@ class _TopBarState extends State<_TopBar> with WidgetsBindingObserver {
   );
 }
 
-class _HeaderSection extends StatelessWidget {
+class _HeaderSection extends StatefulWidget {
   const _HeaderSection({
     required this.colors,
-    required this.currency,
-    required this.hideBalance,
-    required this.onToggleHide,
+    required this.currencyFmt,
     required this.loadingBalances,
-    required this.stellarAddress,
-    required this.xlmBalance,
-    required this.usdcBalance,
-    required this.incomingStrip,
+    required this.totalFiat,
+    required this.lastBalancesAt,
+    required this.onSwap,
     required this.onSend,
     required this.onReceive,
-    required this.isUpdatingBalances,
-    required this.lastBalancesAt,
     required this.livePulse,
+    required this.incomingStrip,
   });
 
   final AppColor colors;
-  final CurrencyProvider currency;
-  final bool hideBalance;
-  final VoidCallback onToggleHide;
+  final NumberFormat currencyFmt;
   final bool loadingBalances;
-  final String? stellarAddress;
-  final double xlmBalance, usdcBalance;
-  final Widget incomingStrip;
-  final VoidCallback onSend, onReceive;
-  final bool isUpdatingBalances;
+  final double totalFiat;
   final DateTime? lastBalancesAt;
+  final VoidCallback onSwap;
+  final VoidCallback onSend;
+  final VoidCallback onReceive;
   final AnimationController livePulse;
+  final Widget incomingStrip;
 
   @override
+  State<_HeaderSection> createState() => _HeaderSectionState();
+}
+
+class _HeaderSectionState extends State<_HeaderSection> {
+  bool _hideBalance = false;
+  @override
   Widget build(BuildContext context) {
-    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-
-    final fxXlm = currency.xlmToFiat(xlmBalance);
-    final fxUsdc = currency.usdcToFiat(usdcBalance);
-    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -654,14 +338,16 @@ class _HeaderSection extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           margin: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: colors.surface,
+            color: widget.colors.surface,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6))],
+            boxShadow: const [
+              BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 6)),
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // left
+              // Left: balance
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -669,44 +355,44 @@ class _HeaderSection extends StatelessWidget {
                     children: [
                       Text('Total Balance',
                           style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w500, color: colors.textSecondary)),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: widget.colors.textSecondary)),
                       const SizedBox(width: 6),
                       GestureDetector(
-                        onTap: onToggleHide,
-                        child: Icon(hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
-                            color: colors.textSecondary, size: 18),
+                        onTap: () => setState(() => _hideBalance = !_hideBalance),
+                        child: Icon(
+                          _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
+                          color: widget.colors.textSecondary,
+                          size: 18,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  if (loadingBalances)
-                    const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                  if (widget.loadingBalances)
+                    const SizedBox(
+                        height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
                   else
-                    _AnimatedFiat(
-                      value: hideBalance ? null : totalFiat,
-                      currencyFmt: currencyFmt,
-                      textColor: colors.textPrimary,
+                    _LiveCountingBalance(
+                      hidden: _hideBalance,
+                      targetValue: widget.totalFiat,
+                      fmt: widget.currencyFmt,
+                      baseColor: widget.colors.textPrimary,
                     ),
                   const SizedBox(height: 4),
-                  _UpdatedAgoLabel(last: lastBalancesAt, colors: colors),
+                  _UpdatedAgoLabel(last: widget.lastBalancesAt, colors: widget.colors),
                 ],
               ),
-              // right
+              // Right: swap
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: colors.primary,
+                  backgroundColor: widget.colors.primary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
                   elevation: 3,
                 ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SwapScreen(),
-                    ),
-                  );
-                },
+                onPressed: widget.onSwap,
                 child: const Row(
                   children: [
                     Icon(LucideIcons.shuffle, size: 22, color: Colors.white),
@@ -722,45 +408,25 @@ class _HeaderSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            actionButton(colors, Icons.send, 'Send', gradient: true, onTap: onSend),
-            actionButton(colors, Icons.call_received, 'Receive', gradient: true, onTap: onReceive),
-            actionButton(colors, LucideIcons.wallet, 'Deposit', gradient: true, onTap: () => debugPrint('Deposit')),
-            actionButton(colors, Icons.arrow_upward, 'Withdraw',
-                gradient: true, onTap: () => debugPrint('Withdraw')),
+            actionButton(widget.colors, Icons.send, 'Send', gradient: true, onTap: widget.onSend),
+            actionButton(widget.colors, Icons.call_received, 'Receive', gradient: true, onTap: widget.onReceive),
+            actionButton(widget.colors, LucideIcons.wallet, 'Deposit', gradient: true,
+                onTap: () => debugPrint('Deposit')),
+            actionButton(widget.colors, Icons.arrow_upward, 'Withdraw', gradient: true,
+                onTap: () => debugPrint('Withdraw')),
           ],
         ),
         const SizedBox(height: 20),
-        incomingStrip,
+        widget.incomingStrip,
       ],
     );
   }
-}
-
-class _AnimatedFiat extends StatelessWidget {
-  const _AnimatedFiat({required this.value, required this.currencyFmt, required this.textColor});
-  final double? value;
-  final NumberFormat currencyFmt;
-  final Color textColor;
-
-  @override
-  Widget build(BuildContext context) => value == null
-      ? Text('••••', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: textColor))
-      : AnimatedSwitcher(
-    duration: const Duration(milliseconds: 250),
-    transitionBuilder: (c, a) => FadeTransition(opacity: a, child: c),
-    child: Text(
-      currencyFmt.format(value),
-      key: ValueKey(value),
-      style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: textColor),
-    ),
-  );
 }
 
 class _UpdatedAgoLabel extends StatefulWidget {
   const _UpdatedAgoLabel({required this.last, required this.colors});
   final DateTime? last;
   final AppColor colors;
-
   @override
   State<_UpdatedAgoLabel> createState() => _UpdatedAgoLabelState();
 }
@@ -771,7 +437,8 @@ class _UpdatedAgoLabelState extends State<_UpdatedAgoLabel> {
   void initState() {
     super.initState();
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
     });
   }
 
@@ -796,12 +463,12 @@ class _TabKeepAlive extends StatefulWidget {
   const _TabKeepAlive({super.key, required this.child, required this.storageKey});
   final Widget child;
   final String storageKey;
-
   @override
   State<_TabKeepAlive> createState() => _TabKeepAliveState();
 }
 
-class _TabKeepAliveState extends State<_TabKeepAlive> with AutomaticKeepAliveClientMixin {
+class _TabKeepAliveState extends State<_TabKeepAlive>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
   @override
@@ -811,5 +478,116 @@ class _TabKeepAliveState extends State<_TabKeepAlive> with AutomaticKeepAliveCli
   }
 }
 
-// ignore: unused_element
-void unawaited(Future<void> f) {}
+/* ---------------------- Animated Counting Balance ---------------------- */
+
+class _LiveCountingBalance extends StatefulWidget {
+  const _LiveCountingBalance({
+    required this.targetValue,
+    required this.fmt,
+    required this.baseColor,
+    this.upColor = const Color(0xFF22C55E),   // green-500
+    this.downColor = const Color(0xFFEF4444), // red-500
+    this.hidden = false,
+  });
+
+  final double targetValue;
+  final NumberFormat fmt;
+  final Color baseColor;
+  final Color upColor;
+  final Color downColor;
+  final bool hidden;
+
+  @override
+  State<_LiveCountingBalance> createState() => _LiveCountingBalanceState();
+}
+
+class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
+  late double _display;     // animated number
+  int _dir = 0;             // -1 ↓, 0 =, +1 ↑
+  Timer? _ticker;
+
+  static const _tick = Duration(seconds: 1);
+  static const _minStep = 0.01; // currency smallest step
+
+  @override
+  void initState() {
+    super.initState();
+    _display = widget.targetValue;
+    _startTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveCountingBalance oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // ticker reads widget.targetValue each tick; no restart needed
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(_tick, (_) {
+      if (!mounted) return;
+      final target = widget.targetValue;
+      final delta = target - _display;
+
+      // close enough → snap & neutral color
+      if (delta.abs() <= _minStep) {
+        setState(() {
+          _display = target;
+          _dir = 0;
+        });
+        return;
+      }
+
+      // Smooth, size-aware step: reach the target in ≈ 4–6 ticks, min one cent
+      final dynamicStep = (delta.abs() / 4).clamp(_minStep, double.infinity);
+      final step = delta.isNegative ? -dynamicStep : dynamicStep;
+
+      setState(() {
+        _display = double.parse((_display + step).toStringAsFixed(4));
+        _dir = step > 0 ? 1 : -1;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _dir == 0
+        ? widget.baseColor
+        : (_dir > 0 ? widget.upColor : widget.downColor);
+
+    return Row(
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+          child: _dir == 0
+              ? const SizedBox(width: 0, key: ValueKey('eq'))
+              : Icon(
+            _dir > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+            key: ValueKey(_dir > 0 ? 'up' : 'down'),
+            size: 18,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 6),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 180),
+          style: TextStyle(
+            fontSize: 25,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+          child: Text(
+            widget.hidden ? '••••' : widget.fmt.format(_display),
+          ),
+        ),
+      ],
+    );
+  }
+}

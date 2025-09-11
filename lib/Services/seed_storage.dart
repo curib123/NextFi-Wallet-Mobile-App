@@ -9,9 +9,9 @@ import 'package:next_fi/Model/wallet_meta_model.dart';
 /// - We prune to **one** wallet entry after every mutating operation.
 class SeedStorage {
   // ---- Keys (versioned) ----
-  static const _kIndexKey   = 'nextfi.wallets.index.v1';  // JSON: ["w_..."] (kept to 1)
-  static const _kActiveKey  = 'nextfi.wallets.active.v1'; // "w_..."
-  static const _kLegacySeed = 'nextfi.seed.mnemonic.v1';  // old single-seed key
+  static const _kIndexKey   = 'nextfi.wallets.index.v1';
+  static const _kActiveKey  = 'nextfi.wallets.active.v1';
+  static const _kLegacySeed = 'nextfi.seed.mnemonic.v1';
 
   static String _seedKey(String id) => 'nextfi.wallets.$id.seed';
   static String _metaKey(String id) => 'nextfi.wallets.$id.meta';
@@ -121,10 +121,6 @@ class SeedStorage {
 
   // ---- Core single-wallet API ----
 
-  /// Create/import a wallet.
-  /// - If none exists → create **Primary** and set ACTIVE.
-  /// - If one exists → replace its seed and keep/ensure it ACTIVE.
-  /// Returns the ACTIVE wallet id.
   static Future<String> addWallet(String mnemonic, {String? name, String? publicAddress}) async {
     final value = mnemonic.trim();
     if (value.isEmpty) {
@@ -272,8 +268,6 @@ class SeedStorage {
 
   // ---- Backward-compat API (maps to ACTIVE wallet) ----
 
-  /// If no wallet exists, create **Primary Wallet** and set ACTIVE.
-  /// Otherwise update the ACTIVE wallet’s seed and re-assert ACTIVE.
   static Future<bool> saveSeed(String mnemonic) async {
     final activeId = await getActiveWalletId();
     if (activeId == null) {
