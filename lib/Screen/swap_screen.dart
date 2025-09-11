@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+
 import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-
-// ✅ Use AssetLogo from your shared UI kit
-import 'package:next_fi/Screen/SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
+import 'package:next_fi/Provider/SwapProvider.dart';
 
 import 'SwapScreenWidgets/swap_widgets.dart';
 
@@ -19,59 +17,34 @@ class SwapScreen extends StatefulWidget {
   State<SwapScreen> createState() => _SwapScreenState();
 }
 
-enum _SwapDir { xlmToUsdc, usdcToXlm }
-
 class _SwapScreenState extends State<SwapScreen> {
-  static const double _kDustXlm = 1.0;
-  static const double _EPS = 1e-6;
-  static const double _slippage = 0.01; // 1%
-
   final _amountCtl = TextEditingController();
   final _fmt = NumberFormat('#,##0.######');
 
-  _SwapDir _dir = _SwapDir.xlmToUsdc;
-  bool _loading = true;
-  String? _errorMsg;
-
-  String? _secretSeed; // S...
-  String? _accountId; // G...
-  double _xlmBal = 0.0;
-  double _usdcBal = 0.0;
-
-  double? _estReceive; // quote result
-  double? _feeXlm;     // estimated fee for this action
-  bool _needsTrustline = false; // will a USDC trustline be created?
-
-  StellarWalletService? _stellar;
-
-  bool get _isXlmToUsdc => _dir == _SwapDir.xlmToUsdc;
-  String get _fromSymbol => _isXlmToUsdc ? 'XLM' : 'USDC';
-  String get _toSymbol => _isXlmToUsdc ? 'USDC' : 'XLM';
-
-  double _floor6(double v) => (v * 1e6).floor() / 1e6;
-
-  double get _availableFrom {
-    if (_isXlmToUsdc) {
-      final spendable = (_xlmBal - _kDustXlm).clamp(0, double.infinity);
-      return _floor6(spendable.toDouble());
-    }
-    return _floor6(_usdcBal);
-  }
-
-  bool get _hasEnough {
-    final a = double.tryParse(_amountCtl.text.trim()) ?? 0;
-    return a > 0 && a <= _availableFrom + _EPS;
-  }
+  static const double _slippage = 0.01; // 1%
+  bool _started = false;
 
   @override
   void initState() {
     super.initState();
-    _bootstrap();
     _amountCtl.addListener(() {
-      setState(() {});
-      _updateQuote();
-      // fee does not depend on amount; no need to update here
+      final p = context.read<SwapProvider>();
+      final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
+      // live quote as user types
+      p.updateQuote(amt);
+      setState(() {}); // only for enabling/disabling button text etc.
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<SwapProvider>().start();
+    });
+    _started = true;
   }
 
   @override
@@ -80,164 +53,45 @@ class _SwapScreenState extends State<SwapScreen> {
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    final mn = await SeedStorage.getSeed();
-    if (!mounted) return;
-
-    if (mn == null || mn.isEmpty) {
-      setState(() {
-        _loading = false;
-        _errorMsg = 'No wallet found.';
-      });
-      return;
-    }
-
-    try {
-      final wallet = await StellarWalletService.walletFromMnemonic(mn);
-      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-
-      // MAINNET service
-      _stellar = StellarWalletService(testnet: false);
-
-      setState(() {
-        _secretSeed = kp.secretSeed;
-        _accountId = kp.accountId;
-      });
-
-      await _refreshBalances();
-
-      // Auto-refresh balances when payments stream in.
-      _stellar!.streamPayments(kp.accountId, (_) => _refreshBalances());
-
-      if (mounted) setState(() => _loading = false);
-    } catch (_) {
-      setState(() {
-        _loading = false;
-        _errorMsg = 'Failed to load Stellar wallet (is the account funded on mainnet?).';
-      });
-    }
-  }
-
-  Future<void> _refreshBalances() async {
-    final aid = _accountId;
-    final svc = _stellar;
-    if (aid == null || svc == null) return;
-    try {
-      final res = await Future.wait<double>([
-        svc.getXlmBalance(aid),
-        svc.getUsdcBalance(aid),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _xlmBal = res[0];
-        _usdcBal = res[1];
-      });
-      _clampToAvailable();
-      await _updateQuote();
-      await _updateFeeEstimate(); // <- update fee when balances (and trustline state) are known
-    } catch (_) {
-      // keep last balances/fee
-    }
-  }
-
-  Future<void> _updateFeeEstimate() async {
-    final svc = _stellar;
-    final aid = _accountId;
-    if (svc == null || aid == null) return;
-
-    // One op for the swap itself
-    int opCount = 1;
-
-    // If swapping XLM→USDC to self and no USDC trustline, include a ChangeTrust op
-    bool needsTl = false;
-    if (_isXlmToUsdc) {
-      try {
-        needsTl = !(await svc.hasUsdcTrustline(aid));
-      } catch (_) {
-        needsTl = false;
-      }
-      if (needsTl) opCount += 1;
-    }
-
-    double? fee;
-    try {
-      fee = await svc.estimateNetworkFeeXlm(opCount: opCount, percentile: 95);
-    } catch (_) {
-      fee = null;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _needsTrustline = needsTl;
-      _feeXlm = fee;
-    });
-  }
-
-  void _flipDir() async {
-    HapticFeedback.lightImpact();
-    setState(() => _dir = _isXlmToUsdc ? _SwapDir.usdcToXlm : _SwapDir.xlmToUsdc);
-    _clampToAvailable();
-    await _updateQuote();
-    await _updateFeeEstimate();
-  }
-
-  void _useMax() {
-    final max = _availableFrom;
+  void _useMax(SwapProvider p) {
+    final max = p.availableFrom;
     _amountCtl.text = max <= 0 ? '' : max.toStringAsFixed(6);
+    HapticFeedback.selectionClick();
   }
 
-  void _clampToAvailable() {
-    final a = double.tryParse(_amountCtl.text.trim());
-    if (a == null) return;
-    final cap = _availableFrom;
-    if (a > cap && cap > 0) {
-      _amountCtl.text = cap.toStringAsFixed(6);
-    }
-  }
-
-  Future<void> _updateQuote() async {
+  Future<void> _flipDir(SwapProvider p) async {
+    HapticFeedback.lightImpact();
+    await p.setDir(
+      p.isXlmToUsdc ? SwapDir.usdcToXlm : SwapDir.xlmToUsdc,
+    );
+    // re-clamp & re-quote
     final amt = double.tryParse(_amountCtl.text.trim());
-    final svc = _stellar;
-    if (svc == null || amt == null || amt <= 0) {
-      if (_estReceive != null) setState(() => _estReceive = null);
-      return;
-    }
-    try {
-      final q = _isXlmToUsdc
-          ? await svc.quoteXlmToUsdc(amt)
-          : await svc.quoteUsdcToXlm(amt);
-      if (!mounted) return;
-      setState(() => _estReceive = q);
-    } catch (_) {
-      // ignore transient errors; keep last estimate
+    if (amt != null) {
+      final cap = p.availableFrom;
+      if (amt > cap && cap > 0) {
+        _amountCtl.text = cap.toStringAsFixed(6);
+      }
+      await p.updateQuote(double.tryParse(_amountCtl.text.trim()) ?? 0);
     }
   }
 
-  Future<void> _confirmAndSwap() async {
-    final svc = _stellar;
-    final seed = _secretSeed;
-    if (svc == null || seed == null) {
-      showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.error);
-      return;
-    }
-
-    _clampToAvailable();
+  Future<void> _confirmAndSwap(SwapProvider p) async {
     final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amount <= 0) {
       showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.error);
       return;
     }
-    if (!_hasEnough) {
+    if (!p.hasEnough(amount)) {
       showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error);
       return;
     }
 
-    // Ensure a fresh-ish fee estimate before confirm
-    await _updateFeeEstimate();
+    // Ensure fee is fresh
+    await p.updateFeeEstimate();
 
-    // Require a current quote to compute minOut with slippage.
-    double? est = _estReceive;
-    est ??= _isXlmToUsdc ? await svc.quoteXlmToUsdc(amount) : await svc.quoteUsdcToXlm(amount);
+    // Ensure we have a current quote to compute minOut
+    double? est = p.estReceive;
+    est ??= await p.updateQuote(amount);
     if (est == null) {
       showFloatingSnackBar(
         context,
@@ -270,15 +124,15 @@ class _SwapScreenState extends State<SwapScreen> {
             Text('Confirm Swap',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary)),
             const SizedBox(height: 12),
-            _InfoRow('From', '${_fmt.format(amount)} $_fromSymbol'),
-            _InfoRow('To (est.)', '${_fmt.format(est)} $_toSymbol'),
+            _InfoRow('From', '${_fmt.format(amount)} ${p.isXlmToUsdc ? 'XLM' : 'USDC'}'),
+            _InfoRow('To (est.)', '${_fmt.format(est)} ${p.isXlmToUsdc ? 'USDC' : 'XLM'}'),
             _InfoRow('Slippage', '1%'),
-            _InfoRow('Min receive', '${_fmt.format(minOut)} $_toSymbol'),
+            _InfoRow('Min receive', '${_fmt.format(minOut)} ${p.isXlmToUsdc ? 'USDC' : 'XLM'}'),
             _InfoRow(
               'Network fee',
-              _feeXlm == null
+              p.feeXlm == null
                   ? '—'
-                  : '≈ ${_fmt.format(_feeXlm!)} XLM${_needsTrustline ? ' (incl. trustline)' : ''}',
+                  : '≈ ${_fmt.format(p.feeXlm!)} XLM${p.needsTrustline ? ' (incl. trustline)' : ''}',
             ),
             const SizedBox(height: 12),
             Row(
@@ -299,7 +153,7 @@ class _SwapScreenState extends State<SwapScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () async {
                       Navigator.pop(context);
-                      await _doSwap(amount, minOut);
+                      await _doSwap(p, amount, minOut);
                     },
                     icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
                     label: const Text('Swap now'),
@@ -319,18 +173,15 @@ class _SwapScreenState extends State<SwapScreen> {
     );
   }
 
-  Future<void> _doSwap(double amount, double minOut) async {
-    final svc = _stellar!;
-    final seed = _secretSeed!;
-    FocusScope.of(context).unfocus();
+  Future<void> _doSwap(SwapProvider p, double amount, double minOut) async {
 
-    // Show a top-center INFO alert while submitting
+    // Submitting alert
     late final AppAlertController submittingCtl;
     submittingCtl = showAppAlert(
       context,
       type: AppAlertType.info,
       title: 'Submitting swap…',
-      subtitle: _isXlmToUsdc
+      subtitle: p.isXlmToUsdc
           ? 'Swapping ${_fmt.format(amount)} XLM → at least ${_fmt.format(minOut)} USDC'
           : 'Swapping ${_fmt.format(amount)} USDC → at least ${_fmt.format(minOut)} XLM',
       primaryText: 'Hide',
@@ -338,17 +189,11 @@ class _SwapScreenState extends State<SwapScreen> {
       onPrimary: () => submittingCtl.close(),
     );
 
-    setState(() => _loading = true);
-
     try {
-      final txid = _isXlmToUsdc
-          ? await svc.swapXlmToUsdc(
-          secretSeed: seed, sendAmountXlm: amount, minUsdcOut: minOut)
-          : await svc.swapUsdcToXlm(
-          secretSeed: seed, sendAmountUsdc: amount, minXlmOut: minOut);
+      final txid = await p.executeSwap(amount: amount, minOut: minOut);
 
       if (!mounted) return;
-      submittingCtl.close(); // close the loading alert first
+      submittingCtl.close();
       HapticFeedback.mediumImpact();
 
       // Success alert with “Copy TxID”
@@ -366,12 +211,10 @@ class _SwapScreenState extends State<SwapScreen> {
       );
 
       _amountCtl.clear();
-      await _refreshBalances();
     } catch (e) {
       if (!mounted) return;
-      submittingCtl.close(); // close the loading alert first
+      submittingCtl.close();
 
-      // Error alert with details (trim long errors a bit)
       final msg = e.toString();
       showAppAlert(
         context,
@@ -379,17 +222,19 @@ class _SwapScreenState extends State<SwapScreen> {
         title: 'Swap failed',
         subtitle: msg.length > 220 ? '${msg.substring(0, 220)}…' : msg,
         primaryText: 'OK',
-        onPrimary: () {}, // closes by tap outside or button depending on your impl
+        onPrimary: () {},
         barrierDismissible: true,
       );
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+    final p = context.watch<SwapProvider>();
+
+    final loadingFirst = p.loading && p.accountId == null;
+
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
@@ -399,41 +244,55 @@ class _SwapScreenState extends State<SwapScreen> {
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(LucideIcons.refreshCcw),
-            onPressed: _refreshBalances,
+            onPressed: p.refreshBalances,
           ),
         ],
       ),
-      body: _loading && _accountId == null
+      body: loadingFirst
           ? const _PageLoader()
-          : _errorMsg != null
-          ? _ErrorCard(message: _errorMsg!)
+          : p.error != null
+          ? _ErrorCard(message: p.error!)
           : Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _BalanceRow(xlm: _xlmBal, usdc: _usdcBal),
+            _BalanceRow(xlm: p.xlmBal, usdc: p.usdcBal),
             const SizedBox(height: 10),
-            _DirectionSwitcher(isXlmToUsdc: _isXlmToUsdc, onFlip: _flipDir),
+            _DirectionSwitcher(
+              isXlmToUsdc: p.isXlmToUsdc,
+              onFlip: () => _flipDir(p),
+            ),
             const SizedBox(height: 10),
-            _AmountField(label: 'You send ($_fromSymbol)', controller: _amountCtl, onUseMax: _useMax),
-            if (_isXlmToUsdc) ...[
+            _AmountField(
+              label: 'You send (${p.isXlmToUsdc ? 'XLM' : 'USDC'})',
+              controller: _amountCtl,
+              onUseMax: () => _useMax(p),
+            ),
+            if (p.isXlmToUsdc) ...[
               const SizedBox(height: 6),
               const _HintBox(
-                text: 'We keep 1 XLM for fees & account reserve. “MAX” uses only your spendable amount.',
+                text:
+                'We keep 1 XLM for fees & account reserve. “MAX” uses only your spendable amount.',
               ),
             ],
             const SizedBox(height: 10),
             _TinyInfoRow(
               icon: LucideIcons.badgeDollarSign,
-              text: _estReceive == null
+              text: p.estReceive == null
                   ? 'Estimating receive on mainnet…'
-                  : 'Est. receive: ${_fmt.format(_estReceive!)} $_toSymbol · Slippage: 1%'
-                  '${_feeXlm == null ? '' : ' · Fee≈ ${_fmt.format(_feeXlm!)} XLM${_needsTrustline ? ' (incl. trustline)' : ''}'}',
+                  : 'Est. receive: ${_fmt.format(p.estReceive!)} ${p.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: 1%'
+                  '${p.feeXlm == null ? '' : ' · Fee≈ ${_fmt.format(p.feeXlm!)} XLM${p.needsTrustline ? ' (incl. trustline)' : ''}'}',
             ),
             const Spacer(),
             ElevatedButton.icon(
-              onPressed: (_loading || !_hasEnough) ? null : _confirmAndSwap,
+              onPressed: () {
+                final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
+                if (!p.hasEnough(amt)) {
+                  HapticFeedback.selectionClick();
+                }
+                _confirmAndSwap(p);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.primary,
                 foregroundColor: Colors.white,
@@ -442,7 +301,7 @@ class _SwapScreenState extends State<SwapScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: const Icon(LucideIcons.arrowRightLeft),
-              label: Text(_isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM'),
+              label: Text(p.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM'),
             ),
           ],
         ),
@@ -451,7 +310,7 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 }
 
-/* ---------------- Small UI bits ---------------- */
+/* ---------------- Small UI bits (unchanged) ---------------- */
 
 class _PageLoader extends StatelessWidget {
   const _PageLoader();
@@ -503,7 +362,7 @@ class _BalanceRow extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ✅ Apply token logos here
+          // ✅ token logos
           AssetLogo(asset: assetKey, size: 16),
           const SizedBox(width: 6),
           Text('$assetKey: ', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),

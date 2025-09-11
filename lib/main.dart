@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Provider/RecipientAddressProvider.dart';
+import 'package:next_fi/Provider/SwapProvider.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 import 'package:next_fi/home.dart';
 import 'package:next_fi/Helper/AppColor.dart';
@@ -25,6 +26,9 @@ void main() {
           ),
           ChangeNotifierProvider<RecipientAddressProvider>(
             create: (_) => RecipientAddressProvider(),
+          ),
+          ChangeNotifierProvider<SwapProvider>(
+            create: (_) => SwapProvider(),
           ),
           ChangeNotifierProvider<WalletHomeProvider>(
             create: (_) => WalletHomeProvider(),
