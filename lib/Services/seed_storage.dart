@@ -3,15 +3,15 @@ import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/Model/wallet_meta_model.dart';
 
-/// Single-wallet secure storage for seed phrases.
-/// - The FIRST wallet created/imported becomes the **Primary** and stays ACTIVE.
-/// - Any subsequent “add/import” will keep **exactly one** wallet and make it ACTIVE.
-/// - We prune to **one** wallet entry after every mutating operation.
+/// Multi-wallet secure storage for seed phrases (backward-compatible API).
+/// - FIRST wallet created/imported becomes **ACTIVE** (same as before).
+/// - Subsequent `addWallet` calls create **new** wallets and keep ACTIVE unchanged.
+/// - No more pruning; multiple wallets are preserved.
 class SeedStorage {
   // ---- Keys (versioned) ----
-  static const _kIndexKey   = 'nextfi.wallets.index.v1';
-  static const _kActiveKey  = 'nextfi.wallets.active.v1';
-  static const _kLegacySeed = 'nextfi.seed.mnemonic.v1';
+  static const _kIndexKey   = 'nextfi.wallets.index.v1';  // JSON: ["w_..."] (newest-first recommended)
+  static const _kActiveKey  = 'nextfi.wallets.active.v1'; // "w_..."
+  static const _kLegacySeed = 'nextfi.seed.mnemonic.v1';  // old single-seed key
 
   static String _seedKey(String id) => 'nextfi.wallets.$id.seed';
   static String _metaKey(String id) => 'nextfi.wallets.$id.meta';
@@ -38,7 +38,14 @@ class SeedStorage {
     final raw = await _storage.read(key: _kIndexKey);
     if (raw == null || raw.isEmpty) return <String>[];
     try {
-      return List<String>.from(jsonDecode(raw) as List);
+      final list = List<String>.from(jsonDecode(raw) as List);
+      // De-dup just in case
+      final seen = <String>{};
+      final uniq = <String>[];
+      for (final id in list) {
+        if (seen.add(id)) uniq.add(id);
+      }
+      return uniq;
     } catch (_) {
       return <String>[];
     }
@@ -71,34 +78,12 @@ class SeedStorage {
     }
   }
 
-  /// Ensure **exactly one** wallet exists; keep [keepId] (or active, or first).
-  static Future<void> _pruneToSingle({String? keepId}) async {
-    var ids = await _readIndex();
-    if (ids.isEmpty && keepId == null) return;
-
-    final active = await _storage.read(key: _kActiveKey);
-    final primary = keepId ?? active ?? (ids.isNotEmpty ? ids.first : null);
-    if (primary == null) return;
-
-    for (final id in List<String>.from(ids)) {
-      if (id == primary) continue;
-      await _storage.delete(key: _seedKey(id));
-      await _storage.delete(key: _metaKey(id));
-      ids.remove(id);
-    }
-
-    ids = [primary];
-    await _writeIndex(ids);
-    await _setActive(primary); // ← always ensure ACTIVE after pruning
-  }
-
-  /// If active is missing but we have an index, set it active.
+  /// Ensure there is an ACTIVE wallet if any exist (no pruning).
   static Future<void> ensureActiveExists() async {
     final active = await _storage.read(key: _kActiveKey);
     final ids = await _readIndex();
     if ((active == null || active.isEmpty) && ids.isNotEmpty) {
       await _setActive(ids.first);
-      await _pruneToSingle(keepId: ids.first);
     }
   }
 
@@ -109,18 +94,19 @@ class SeedStorage {
 
     final hasAny = (await _readIndex()).isNotEmpty;
     if (hasAny) {
+      // If we already have wallets, just drop legacy.
       await _storage.delete(key: _kLegacySeed);
-      await _pruneToSingle();
       return;
     }
 
-    // Import legacy as Primary and make ACTIVE
-    await addWallet(legacy.trim(), name: 'Imported Wallet'); // addWallet sets ACTIVE
+    // Import legacy as first (ACTIVE) wallet.
+    await addWallet(legacy.trim(), name: 'Imported Wallet');
     await _storage.delete(key: _kLegacySeed);
   }
 
-  // ---- Core single-wallet API ----
+  // ---- Multi-wallet API (backward-compatible method names) ----
 
+  /// Create a new wallet. If it's the first one, it becomes ACTIVE; otherwise ACTIVE is preserved.
   static Future<String> addWallet(String mnemonic, {String? name, String? publicAddress}) async {
     final value = mnemonic.trim();
     if (value.isEmpty) {
@@ -129,44 +115,43 @@ class SeedStorage {
 
     final index = await _readIndex();
 
+    // First wallet → create and activate (same behavior as before)
     if (index.isEmpty) {
-      // First (Primary) wallet → becomes ACTIVE
       final id = _makeId();
       final meta = WalletMetaModel(
         id: id,
         name: (name?.trim().isNotEmpty ?? false) ? name!.trim() : 'Primary Wallet',
         createdAt: _nowIso(),
         lastUsedAt: null,
-        publicAddress: publicAddress,
+        publicAddress: publicAddress?.trim().isEmpty ?? true ? null : publicAddress!.trim(),
       );
-
       await _writeIndex([id]);
       await _storage.write(key: _seedKey(id), value: value);
       await _writeMeta(meta);
-      await _setActive(id);                  // ← ensure ACTIVE
-      await _pruneToSingle(keepId: id);
+      await _setActive(id);
       return id;
     }
 
-    // Replace existing ACTIVE wallet's seed (no new id), then ensure ACTIVE
-    final activeId = await getActiveWalletId() ?? index.first;
-    await _storage.write(key: _seedKey(activeId), value: value);
+    // Additional wallet → create a NEW id and keep ACTIVE unchanged
+    final id = _makeId();
+    final meta = WalletMetaModel(
+      id: id,
+      name: (name?.trim().isNotEmpty ?? false) ? name!.trim() : 'Wallet ${index.length + 1}',
+      createdAt: _nowIso(),
+      lastUsedAt: null,
+      publicAddress: publicAddress?.trim().isEmpty ?? true ? null : publicAddress!.trim(),
+    );
 
-    // Update meta if provided
-    final meta = await _readMeta(activeId);
-    if (meta != null) {
-      if (name != null && name.trim().isNotEmpty) meta.name = name.trim();
-      if (publicAddress != null) {
-        meta.publicAddress = publicAddress.trim().isEmpty ? null : publicAddress.trim();
-      }
-      await _writeMeta(meta);
-    }
-
-    await _setActive(activeId);              // ← ensure ACTIVE on import/replace
-    await _pruneToSingle(keepId: activeId);
-    return activeId;
+    // Prepend new wallet id (newest-first)
+    final next = [id, ...index];
+    await _writeIndex(next);
+    await _storage.write(key: _seedKey(id), value: value);
+    await _writeMeta(meta);
+    // ACTIVE not changed here by design
+    return id;
   }
 
+  /// Update the seed of an existing wallet. Keeps behavior of promoting it to ACTIVE.
   static Future<bool> updateSeed(String id, String mnemonic) async {
     final value = mnemonic.trim();
     if (value.isEmpty) return false;
@@ -176,11 +161,12 @@ class SeedStorage {
     await _storage.write(key: _seedKey(id), value: value);
     final back = await _storage.read(key: _seedKey(id));
 
-    await _setActive(id);                    // ← NEW: make updated wallet ACTIVE
-    await _pruneToSingle(keepId: id);
+    // Preserve previous "make updated wallet ACTIVE" behavior for compatibility
+    await _setActive(id);
     return back == value;
   }
 
+  /// Rename a wallet. Keeps prior behavior of making it ACTIVE for compatibility.
   static Future<bool> renameWallet(String id, String newName) async {
     final meta = await _readMeta(id);
     if (meta == null) return false;
@@ -188,21 +174,22 @@ class SeedStorage {
     if (nm.isEmpty || nm.length > 32) return false;
     meta.name = nm;
     await _writeMeta(meta);
-    await _setActive(id);                    // ← keep ACTIVE invariant
-    await _pruneToSingle(keepId: id);
+    await _setActive(id);
     return true;
   }
 
+  /// Set or clear a wallet's public address. Keeps prior behavior of making it ACTIVE.
   static Future<bool> setWalletPublicAddress(String id, String address) async {
     final meta = await _readMeta(id);
     if (meta == null) return false;
-    meta.publicAddress = address.trim().isEmpty ? null : address.trim();
+    final trimmed = address.trim();
+    meta.publicAddress = trimmed.isEmpty ? null : trimmed;
     await _writeMeta(meta);
-    await _setActive(id);                    // ← keep ACTIVE invariant
-    await _pruneToSingle(keepId: id);
+    await _setActive(id);
     return true;
   }
 
+  /// Remove a wallet. If it was ACTIVE, move ACTIVE to the next available or clear it.
   static Future<bool> removeWallet(String id) async {
     final index = await _readIndex();
     if (!index.remove(id)) return false;
@@ -211,7 +198,6 @@ class SeedStorage {
     await _storage.delete(key: _seedKey(id));
     await _storage.delete(key: _metaKey(id));
 
-    // If we removed the active wallet, clear or set a remaining one active
     final active = await _storage.read(key: _kActiveKey);
     if (active == id) {
       if (index.isNotEmpty) {
@@ -220,8 +206,6 @@ class SeedStorage {
         await _storage.delete(key: _kActiveKey);
       }
     }
-
-    await _pruneToSingle(keepId: await getActiveWalletId());
     return true;
   }
 
@@ -243,12 +227,11 @@ class SeedStorage {
     return await _storage.read(key: _kActiveKey);
   }
 
-  /// In single-wallet mode, this also prunes to one, keeping [id] ACTIVE.
+  /// Set ACTIVE wallet (no pruning).
   static Future<bool> setActiveWallet(String id) async {
     final exists = (await _readIndex()).contains(id);
     if (!exists) return false;
     await _setActive(id);
-    await _pruneToSingle(keepId: id);
     return true;
   }
 
@@ -268,6 +251,8 @@ class SeedStorage {
 
   // ---- Backward-compat API (maps to ACTIVE wallet) ----
 
+  /// If no ACTIVE wallet exists, creates the first one and sets it ACTIVE.
+  /// Otherwise, updates the ACTIVE wallet's seed (kept for compatibility).
   static Future<bool> saveSeed(String mnemonic) async {
     final activeId = await getActiveWalletId();
     if (activeId == null) {
@@ -276,7 +261,6 @@ class SeedStorage {
       return saved == mnemonic.trim();
     } else {
       final ok = await updateSeed(activeId, mnemonic);              // sets ACTIVE
-      await _pruneToSingle(keepId: activeId);
       return ok;
     }
   }
