@@ -111,10 +111,10 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                                         baseColor: colors.textPrimary,
                                         highlightColor: colors.primary,
                                       ),
+                                      const SizedBox(height: 6),
 
-                                      // ▼▼ Only show subtitle under title when NOT splash ▼▼
-                                      if (!widget.isSplash) ...[
-                                        const SizedBox(height: 6),
+                                      // Subtitle inside the card ONLY when not splash.
+                                      if (!widget.isSplash)
                                         Text(
                                           'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
                                           textAlign: TextAlign.center,
@@ -126,8 +126,6 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                                             letterSpacing: .2,
                                           ),
                                         ),
-                                      ],
-                                      // ▲▲--------------------------------------------▲▲
                                     ],
                                   ),
                                 ),
@@ -177,31 +175,31 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                       ),
                     ),
                   ],
-
-                  // ▼▼ Place subtitle at the very bottom when splash ▼▼
-                  if (widget.isSplash)
-                    FadeInUp(
-                      duration: const Duration(milliseconds: 500),
-                      delay: const Duration(milliseconds: 150),
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: colors.textSecondary,
-                            height: 1.4,
-                            letterSpacing: .2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  // ▲▲---------------------------------------------▲▲
                 ],
               ),
             ),
+
+            // --- Subtitle pinned to bottom ONLY when splash ---
+            if (widget.isSplash)
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 20,
+                child: FadeInUp(
+                  duration: const Duration(milliseconds: 500),
+                  child: Text(
+                    'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colors.textSecondary,
+                      height: 1.4,
+                      letterSpacing: .2,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -220,10 +218,26 @@ class _GlassCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: const DecoratedBox(
-        decoration: BoxDecoration(color: Colors.transparent),
-        child: SizedBox.shrink(), // decoration holder; child injected below
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+        ),
+        child: SizedBox.shrink(),
       ),
-    );
+    ).buildWithChild(child);
+  }
+}
+
+// Small extension to keep code tidy for _GlassCard
+extension on Widget {
+  Widget buildWithChild(Widget child) {
+    if (this is DecoratedBox) {
+      final box = this as DecoratedBox;
+      return DecoratedBox(
+        decoration: box.decoration,
+        child: child,
+      );
+    }
+    return child;
   }
 }
 
@@ -403,7 +417,7 @@ class GradientTranslation extends GradientTransform {
   }
 }
 
-/// Clean fintech background (no glow).
+/// Clean fintech background...
 class _FintechBackgroundPainter extends CustomPainter {
   _FintechBackgroundPainter({
     required this.progress,
@@ -431,6 +445,7 @@ class _FintechBackgroundPainter extends CustomPainter {
         ..color = colors.textSecondary.withOpacity(.08)
         ..style = PaintingStyle.fill;
 
+      // diagonal drift feels nicer on dots
       final dxDrift = drift;
       final dyDrift = drift * .6;
 
@@ -452,7 +467,7 @@ class _FintechBackgroundPainter extends CustomPainter {
       }
     }
 
-    // 2) Top-band
+    // 2) Top-band gradient
     canvas.save();
     final topRect = Rect.fromLTWH(0, 0, size.width, topH);
     canvas.clipRect(topRect);
@@ -469,7 +484,7 @@ class _FintechBackgroundPainter extends CustomPainter {
       ).createShader(topRect);
     canvas.drawRect(topRect, diag);
 
-    // 3) Flowing line
+    // 3) Flowing line + area
     final ph = progress * 2 * math.pi;
     final base = topH * .62;
     final p = Path()..moveTo(0, base);
@@ -519,6 +534,7 @@ class _FintechBackgroundPainter extends CustomPainter {
     canvas.drawPath(p, halo);
     canvas.drawPath(p, stroke);
 
+    // Minimal nodes
     final nodePaint = Paint()
       ..color = colors.primary.withOpacity(.22)
       ..style = PaintingStyle.fill;
