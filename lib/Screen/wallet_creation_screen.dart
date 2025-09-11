@@ -111,18 +111,23 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                                         baseColor: colors.textPrimary,
                                         highlightColor: colors.primary,
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: colors.textSecondary,
-                                          height: 1.4,
-                                          letterSpacing: .2,
+
+                                      // ▼▼ Only show subtitle under title when NOT splash ▼▼
+                                      if (!widget.isSplash) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: colors.textSecondary,
+                                            height: 1.4,
+                                            letterSpacing: .2,
+                                          ),
                                         ),
-                                      )
+                                      ],
+                                      // ▲▲--------------------------------------------▲▲
                                     ],
                                   ),
                                 ),
@@ -172,6 +177,28 @@ class _WalletCreationScreenState extends State<WalletCreationScreen>
                       ),
                     ),
                   ],
+
+                  // ▼▼ Place subtitle at the very bottom when splash ▼▼
+                  if (widget.isSplash)
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 500),
+                      delay: const Duration(milliseconds: 150),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: colors.textSecondary,
+                            height: 1.4,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  // ▲▲---------------------------------------------▲▲
                 ],
               ),
             ),
@@ -192,11 +219,9 @@ class _GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Colors.transparent,
-        ),
-        child: child,
+      child: const DecoratedBox(
+        decoration: BoxDecoration(color: Colors.transparent),
+        child: SizedBox.shrink(), // decoration holder; child injected below
       ),
     );
   }
@@ -378,8 +403,7 @@ class GradientTranslation extends GradientTransform {
   }
 }
 
-/// Clean fintech background: micro-dot matrix on high-DPI, soft lines otherwise,
-/// plus diagonal band and flowing line with faint area fill. (No glow.)
+/// Clean fintech background (no glow).
 class _FintechBackgroundPainter extends CustomPainter {
   _FintechBackgroundPainter({
     required this.progress,
@@ -397,7 +421,7 @@ class _FintechBackgroundPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double topH = (size.height * topBandFraction).clamp(0.0, size.height);
 
-    // 1) Full-screen texture: dot matrix on hi-DPI, otherwise soft grid lines
+    // 1) Full-screen texture
     final hiDpi = devicePixelRatio >= 2.75;
     const step = 30.0;
     final drift = progress * step;
@@ -407,7 +431,6 @@ class _FintechBackgroundPainter extends CustomPainter {
         ..color = colors.textSecondary.withOpacity(.08)
         ..style = PaintingStyle.fill;
 
-      // diagonal drift feels nicer on dots
       final dxDrift = drift;
       final dyDrift = drift * .6;
 
@@ -429,7 +452,7 @@ class _FintechBackgroundPainter extends CustomPainter {
       }
     }
 
-    // 2) Top-band: subtle diagonal band/gradient (no glow)
+    // 2) Top-band
     canvas.save();
     final topRect = Rect.fromLTWH(0, 0, size.width, topH);
     canvas.clipRect(topRect);
@@ -446,7 +469,7 @@ class _FintechBackgroundPainter extends CustomPainter {
       ).createShader(topRect);
     canvas.drawRect(topRect, diag);
 
-    // 3) Flowing “price” line with faint area fill
+    // 3) Flowing line
     final ph = progress * 2 * math.pi;
     final base = topH * .62;
     final p = Path()..moveTo(0, base);
@@ -465,7 +488,6 @@ class _FintechBackgroundPainter extends CustomPainter {
       points.add(Offset(x, yy));
     }
 
-    // Area fill under the line (to bottom of top band)
     final area = Path.from(p)
       ..lineTo(size.width, topH)
       ..lineTo(0, topH)
@@ -484,7 +506,6 @@ class _FintechBackgroundPainter extends CustomPainter {
 
     canvas.drawPath(area, areaPaint);
 
-    // Line strokes (halo + hairline)
     final halo = Paint()
       ..color = colors.primary.withOpacity(.09)
       ..style = PaintingStyle.stroke
@@ -498,7 +519,6 @@ class _FintechBackgroundPainter extends CustomPainter {
     canvas.drawPath(p, halo);
     canvas.drawPath(p, stroke);
 
-    // Minimal nodes
     final nodePaint = Paint()
       ..color = colors.primary.withOpacity(.22)
       ..style = PaintingStyle.fill;
