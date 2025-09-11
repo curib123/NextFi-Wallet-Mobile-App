@@ -10,6 +10,7 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:provider/provider.dart';
 
 import 'Provider/HomeWalletProvider.dart';
+import 'Provider/TransactionProvider.dart';
 
 void main() {
   runApp(
@@ -27,6 +28,9 @@ void main() {
           ),
           ChangeNotifierProvider<WalletHomeProvider>(
             create: (_) => WalletHomeProvider(),
+          ),
+          ChangeNotifierProvider<TransactionsProvider>(
+            create: (_) => TransactionsProvider(),
           ),
           ChangeNotifierProxyProvider<CurrencyProvider, AssetProvider>(
             create: (ctx) => AssetProvider(ctx.read<CurrencyProvider>()),
