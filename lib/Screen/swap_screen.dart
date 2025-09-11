@@ -1,7 +1,9 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Components/modern_input.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/AppAlert.dart';
@@ -53,10 +55,26 @@ class _SwapScreenState extends State<SwapScreen> {
     super.dispose();
   }
 
-  void _useMax(SwapProvider p) {
-    final max = p.availableFrom;
-    _amountCtl.text = max <= 0 ? '' : max.toStringAsFixed(6);
+  // ── percentage chips helpers (same behavior as Send) ───────────────────────
+  double _floorTo(double v, int dec) {
+    final scale = math.pow(10, dec);
+    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
+  }
+
+  String _fmtAmount(double v, {int decimals = 7}) {
+    final s = v.toStringAsFixed(decimals);
+    return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
+  }
+
+  void _applyPercent(SwapProvider p, double percent) {
+    // use spendable base from provider; this already accounts for XLM reserves/fees
+    final base = p.availableFrom;
+    final v = _floorTo(base * percent, 7);
     HapticFeedback.selectionClick();
+    _amountCtl.text = v <= 0 ? '' : _fmtAmount(v);
+    _amountCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _amountCtl.text.length),
+    );
   }
 
   Future<void> _flipDir(SwapProvider p) async {
@@ -174,7 +192,6 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 
   Future<void> _doSwap(SwapProvider p, double amount, double minOut) async {
-
     // Submitting alert
     late final AppAlertController submittingCtl;
     submittingCtl = showAppAlert(
@@ -253,7 +270,7 @@ class _SwapScreenState extends State<SwapScreen> {
           : p.error != null
           ? _ErrorCard(message: p.error!)
           : Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+        padding:  const EdgeInsets.fromLTRB(14, 12, 14, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -264,19 +281,28 @@ class _SwapScreenState extends State<SwapScreen> {
               onFlip: () => _flipDir(p),
             ),
             const SizedBox(height: 10),
+
+            // Amount input
             _AmountField(
               label: 'You send (${p.isXlmToUsdc ? 'XLM' : 'USDC'})',
               controller: _amountCtl,
-              onUseMax: () => _useMax(p),
             ),
+
+            // Chips: 10 / 25 / 50 / 75 / 100
+            const SizedBox(height: 10),
+            _PercentChipsRow(
+              onPick: (pct) => _applyPercent(p, pct),
+            ),
+
             if (p.isXlmToUsdc) ...[
               const SizedBox(height: 6),
               const _HintBox(
                 text:
-                'We keep 1 XLM for fees & account reserve. “MAX” uses only your spendable amount.',
+                'We keep 1 XLM for fees & account reserve. Use the quick chips to prefill a percentage of your spendable amount.',
               ),
             ],
             const SizedBox(height: 10),
+
             _TinyInfoRow(
               icon: LucideIcons.badgeDollarSign,
               text: p.estReceive == null
@@ -459,8 +485,7 @@ class _SegBtn extends StatelessWidget {
 class _AmountField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
-  final VoidCallback onUseMax;
-  const _AmountField({required this.label, required this.controller, required this.onUseMax});
+  const _AmountField({required this.label, required this.controller});
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -469,43 +494,64 @@ class _AmountField extends StatelessWidget {
       children: [
         Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
         const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
-                decoration: InputDecoration(
-                  hintText: '0.0',
-                  filled: true,
-                  fillColor: c.primary.withOpacity(0.05),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: c.primary.withOpacity(0.15)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: c.primary, width: 1.2),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: onUseMax,
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: c.primary.withOpacity(0.35)),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                minimumSize: const Size(52, 40),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text('MAX', style: TextStyle(color: c.primary, fontWeight: FontWeight.w800)),
-            ),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
           ],
+          decoration: modernInput(
+            context,
+            placeholder: '0.0',
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _PercentChipsRow extends StatelessWidget {
+  const _PercentChipsRow({required this.onPick});
+  final void Function(double pct) onPick; // 0.10, 0.25, ...
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+
+    Widget chip(String label, double pct) => InkWell(
+      onTap: () => onPick(pct),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: c.primary.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: c.primary.withOpacity(0.18)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          chip('10%', 0.10),
+          chip('25%', 0.25),
+          chip('50%', 0.50),
+          chip('75%', 0.75),
+          chip('100%', 1.00),
+        ],
+      ),
     );
   }
 }

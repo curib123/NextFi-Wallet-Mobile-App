@@ -1,28 +1,24 @@
-import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+
+import 'package:next_fi/Components/modern_input.dart';
+import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
-import 'package:provider/provider.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
-
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Provider/SendProvider.dart';
+import 'package:next_fi/Provider/RecipientAddressProvider.dart';
+import 'package:next_fi/Components/recipient_upsert_sheet.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/CurrencyProvider.dart';
-import 'package:next_fi/Screen/qr_code_scanner.dart';
-import 'package:next_fi/Services/seed_storage.dart';
-import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
 
 class SendScreen extends StatefulWidget {
   final String address;
-  final String token;
+  final String token; // 'XLM' or 'USDC'
   final double balance;
   final bool autoOpenScanner;
-
-  /// optional recipient prefill
   final String? prefillAddress;
   final String? prefillName;
 
@@ -41,665 +37,431 @@ class SendScreen extends StatefulWidget {
 }
 
 class _SendScreenState extends State<SendScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _recipientController = TextEditingController();
-  final _amountController = TextEditingController();
+  final _form = GlobalKey<FormState>();
+  final _toCtl = TextEditingController();
+  final _amtCtl = TextEditingController();
+  final _numFmt = NumberFormat('#,##0.######');
 
-  Wallet? _wallet;
-  KeyPair? _keyPair;            // used to sign
-  String? _stellarAddress;      // G...
-
-  bool _isSending = false;
-
-  // Stellar service (uses fee-in-XLM logic)
-  late final StellarWalletService _stellar = StellarWalletService();
-
-  // Debounced checks (USDC trustline, etc.)
-  Timer? _debounce;
-  bool _checking = false;
-  bool? _destHasUsdcTL;
-  String? _checkMsg;
-  String _lastCheckKey = ''; // from|to|amount|token
-
+  bool _booted = false;
 
   @override
-  void initState() {
-    super.initState();
-    final pre = (widget.prefillAddress ?? '').trim();
-    if (pre.isNotEmpty) _recipientController.text = pre;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_booted) return;
 
-    _loadWallet();
+    final p = context.read<SendProvider>();
+    p.configure(
+      token: widget.token.toUpperCase() == 'XLM' ? SendToken.xlm : SendToken.usdc,
+      senderAddress: widget.address,
+      senderBalanceToken: widget.balance,
+      prefillTo: widget.prefillAddress,
+      prefillName: widget.prefillName,
+    );
 
-    if (widget.autoOpenScanner) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scanQRCode());
-    }
+    _toCtl.text = (widget.prefillAddress ?? '');
+    _amtCtl.addListener(() {
+      final v = double.tryParse(_amtCtl.text.trim()) ?? 0;
+      p.setTypedAmount(v);
+      setState(() {});
+    });
+    _toCtl.addListener(() {
+      p.setRecipient(_toCtl.text);
+      setState(() {}); // refresh badge/template as the user types
+    });
+
+    _booted = true;
   }
 
   @override
   void dispose() {
-    _recipientController.dispose();
-    _amountController.dispose();
-    _debounce?.cancel();
+    _toCtl.dispose();
+    _amtCtl.dispose();
     super.dispose();
   }
 
+  // ── helpers ────────────────────────────────────────────────────────────────
 
-  /* ---------------- Wallet ---------------- */
-  Future<void> _loadWallet() async {
-    final mnemonic = await SeedStorage.getSeed();
-    if (!mounted || mnemonic == null || mnemonic.isEmpty) return;
-
-    try {
-      final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
-      final kp = await StellarWalletService.getKeyPair(wallet);
-
-      setState(() {
-        _wallet = wallet;
-        _keyPair = kp;
-        _stellarAddress = kp.accountId;
-      });
-
-      _scheduleChecks();
-    } catch (_) {
-      if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        message: 'Failed to load wallet. Please check your mnemonic.',
-        type: SnackBarType.error,
-      );
-    }
-  }
-
-  /* ---------------- Checks (dest trustline for USDC, simple guards) ---------------- */
-  void _scheduleChecks() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), _runChecksIfNeeded);
-  }
-
-  bool _looksLikeStellar(String s) => s.isNotEmpty && s.startsWith('G') && s.length == 56;
-
-  Future<void> _runChecksIfNeeded() async {
-    final token = widget.token.toUpperCase();
-    final from = (_stellarAddress ?? widget.address).trim();
-    final to = _recipientController.text.trim();
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
-
-    final key = '$from|$to|$amount|$token';
-    if (amount <= 0 || !_looksLikeStellar(from) || !_looksLikeStellar(to)) {
-      _lastCheckKey = '';
-      setState(() {
-        _checking = false;
-        _destHasUsdcTL = null;
-        _checkMsg = null;
-      });
-      return;
-    }
-    if (key == _lastCheckKey) return;
-    _lastCheckKey = key;
-
-    setState(() {
-      _checking = true;
-      _destHasUsdcTL = null;
-      _checkMsg = null;
-    });
-
-    try {
-      if (token == 'USDC') {
-        final hasTL = await _stellar.hasUsdcTrustline(to);
-        if (!mounted) return;
-        setState(() {
-          _destHasUsdcTL = hasTL;
-          _checkMsg = hasTL
-              ? 'Recipient USDC trustline OK'
-              : 'Recipient must add USDC trustline first.';
-        });
-      } else {
-        if (!mounted) return;
-        setState(() {
-          _destHasUsdcTL = null;
-          _checkMsg = 'Ready';
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _checkMsg = 'Check failed');
-    } finally {
-      if (!mounted) return;
-      setState(() => _checking = false);
-    }
-  }
-
-  /* ---------------- Send ---------------- */
-
-  Future<void> _ensureSenderUsdcTrustline() async {
-    final kp = _keyPair!;
-    final has = await _stellar.hasUsdcTrustline(kp.accountId);
-    if (has) return;
-    await _stellar.createUsdcTrustline(secretSeed: _seedStringFromKeyPair(kp));
-  }
-
-  // Works whether KeyPair.secretSeed is a String or bytes.
-  String _seedStringFromKeyPair(KeyPair kp) {
-    final dynamic ss = kp.secretSeed;
-    if (ss == null) throw Exception('KeyPair has no secret seed');
-    if (ss is String) return ss;
-    if (ss is Iterable<int>) return String.fromCharCodes(ss);
-    throw Exception('Unsupported secretSeed type: ${ss.runtimeType}');
-  }
-
-  Future<void> _sendTokenNow() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final to = _recipientController.text.trim();
-    final amt = double.tryParse(_amountController.text.trim()) ?? 0;
-
-    if (amt <= 0 || amt > widget.balance) {
-      showFloatingSnackBar(context, message: 'Invalid amount', type: SnackBarType.error);
-      return;
-    }
-    if (_keyPair == null || _stellarAddress == null) {
-      showFloatingSnackBar(context, message: 'Wallet not loaded', type: SnackBarType.error);
-      return;
-    }
-
-    setState(() => _isSending = true);
-
-    // 🔔 Show "loading first" alert
-    final alert = showAppAlert(
-      context,
-      type: AppAlertType.loading,
-      title: 'Sending…',
-      subtitle: 'Broadcasting your transaction to the network. Please wait.',
-      primaryText: 'Hide',
+  Future<void> _refresh(BuildContext context) async {
+    // Re-run provider configure to refresh fees/estimates based on current inputs
+    final p = context.read<SendProvider>();
+    p.configure(
+      token: (p.isXlm ? SendToken.xlm : SendToken.usdc),
+      senderAddress: widget.address,
+      senderBalanceToken: widget.balance,
+      prefillTo: _toCtl.text.trim().isEmpty ? widget.prefillAddress : _toCtl.text.trim(),
+      prefillName: widget.prefillName,
     );
-
-    try {
-      final isXLM = widget.token.toUpperCase() == 'XLM';
-      String txId;
-
-      if (isXLM) {
-        final hashes = await _stellar.sendXlmWithFee(
-          secretSeed: _seedStringFromKeyPair(_keyPair!),
-          destination: to,
-          amount: amt,
-          memoText: null,
-        );
-        txId = hashes.first;
-      } else {
-        if (_destHasUsdcTL == false) {
-          throw Exception('Recipient has no USDC trustline.');
-        }
-        await _ensureSenderUsdcTrustline();
-
-        final hashes = await _stellar.sendUsdcWithFee(
-          secretSeed: _seedStringFromKeyPair(_keyPair!),
-          destination: to,
-          usdcAmount: amt,
-          memoText: null,
-        );
-        txId = hashes.first;
-      }
-
-      if (!mounted) return;
-      HapticFeedback.mediumImpact();
-
-      // ✅ Update alert to SUCCESS (top-center icon + button)
-      alert.update(
-        AppAlertType.success,
-        title: 'Submitted',
-        subtitle: 'Your transfer has been submitted.\n\nTxID:\n$txId',
-        primaryText: 'Copy TxID',
-        onPrimary: () async {
-          await Clipboard.setData(ClipboardData(text: txId));
-          HapticFeedback.lightImpact();
-          if (mounted) {
-            showFloatingSnackBar(
-              context,
-              message: 'TxID copied',
-              type: SnackBarType.success,
-            );
-            // Optionally pop the screen after copy:
-            Navigator.of(context).pop(); // close the alert (handled inside too)
-            Navigator.of(context).pop(); // go back to previous screen
-          }
-        },
-      );
-
-      if (mounted) {
-        showFloatingSnackBar(
-          context,
-          message: '${amt.toStringAsFixed(6)} ${widget.token.toUpperCase()} sent',
-          type: SnackBarType.success,
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      // ❌ Update alert to ERROR with details
-      alert.update(
-        AppAlertType.error,
-        title: 'Send failed',
-        subtitle: '$e',
-        primaryText: 'Close',
-      );
-
-      showFloatingSnackBar(context, message: 'Failed to send: $e', type: SnackBarType.error);
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
+    // small delay to let UI show the indicator nicely
+    await Future.delayed(const Duration(milliseconds: 250));
   }
 
-  /* ---------------- UI helpers ---------------- */
-  Future<void> _scanQRCode() async {
-    final code = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const QRScannerScreen()),
-    );
-    if (!mounted) return;
-    if (code != null && code.isNotEmpty) {
-      _recipientController.text = code.trim();
-      HapticFeedback.lightImpact();
-      _scheduleChecks();
-    }
+  double _floorTo(double v, int dec) {
+    final scale = math.pow(10, dec);
+    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
   }
 
-  Future<void> _pickFromAddressBook() async {
-    final picked = await Navigator.of(context).pushNamed<String>('/address-book');
-    if (!mounted) return;
-    if (picked != null && picked.trim().isNotEmpty) {
-      _recipientController.text = picked.trim();
-      HapticFeedback.selectionClick();
-      _scheduleChecks();
-    }
+  String _fmtAmount(double v, {int decimals = 7}) {
+    final s = v.toStringAsFixed(decimals);
+    return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
   }
 
-  void _onTapPercent(double pct, {required bool isXLM}) {
-    final bufferXlm = isXLM ? 0.1 : 0.0; // small buffer for XLM reserve
-    final maxSpend = isXLM ? (widget.balance - bufferXlm).clamp(0.0, widget.balance) : widget.balance;
-    final v = (maxSpend * pct).clamp(0.0, widget.balance);
-    _amountController.text = v.toStringAsFixed(6);
+  double _calcMaxTyped(SendProvider p) {
+    // For XLM: max spendable = balance - (txFee + networkFee)
+    if (p.isXlm) {
+      final fees = (p.txFeeXlm ?? 0) + (p.estNetworkFeeXlm ?? 0);
+      final raw = (p.senderBalanceToken - fees);
+      return _floorTo(raw > 0 ? raw : 0, 7);
+    }
+    // For USDC: use full balance
+    return _floorTo(p.senderBalanceToken, 7);
+  }
+
+  void _applyPercent(SendProvider p, double percent) {
+    final base = p.isXlm ? _calcMaxTyped(p) : p.senderBalanceToken;
+    final v = _floorTo(base * percent, 7);
     HapticFeedback.selectionClick();
-    _scheduleChecks();
+    _amtCtl.text = _fmtAmount(v);
+    _amtCtl.selection = TextSelection.fromPosition(TextPosition(offset: _amtCtl.text.length));
   }
 
-  void _onTapMax({required bool isXLM}) => _onTapPercent(1.0, isXLM: isXLM);
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final p = context.watch<SendProvider>();
+    final recipients = context.watch<RecipientAddressProvider>();
 
-// 🔥 Preflight confirm with dynamic profit fee (in XLM) + network fee
-  Future<void> _confirmAndSend(CurrencyProvider currency, bool isXLM) async {
-    final colors = AppColor.of(context);
-    final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final tokenStr = p.token == SendToken.xlm ? 'XLM' : 'USDC';
+    final isXLM = p.isXlm;
 
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0;
-    final to = _recipientController.text.trim();
-    if (amount <= 0 || !_looksLikeStellar(to)) {
-      showFloatingSnackBar(context, message: 'Fill in recipient and amount', type: SnackBarType.error);
-      return;
-    }
+    final recipientGets = isXLM ? p.recipientWillReceiveXlmFromBudget : p.typedAmount;
+    final netFee = p.estNetworkFeeXlm ?? 0;
+    final txFee = p.txFeeXlm ?? 0;
 
-    // ⬇️ Read dynamic fee from signed vault (via service)
-    final feeBps = await _stellar.getCurrentFeeBps();       // e.g. 100 = 1%
-    final feeLabel = await _stellar.getCurrentFeeLabel();   // e.g. "1%"
+    // Resolve current typed address
+    final typedAddr = _toCtl.text.trim();
+    final saved = (!recipients.loading && typedAddr.isNotEmpty)
+        ? recipients.byAddress(typedAddr)
+        : null;
 
-    // Compute fee preview
-    double? profitFeeXlm;        // in XLM
-    double? recipientReceives;   // same unit as token
-    double estNetworkFeeXlm = 0; // in XLM (per tx, across ops)
+    final list = ListView(
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 120), // leave space for bottom button
+      children: [
+        _BalanceLine(token: tokenStr, balance: p.senderBalanceToken),
+        const SizedBox(height: 12),
 
-    // helper: floor(bps) from a stroops amount
-    int _cutBpsFromStroops(int stroops, int bps) => (stroops * bps) ~/ 10000;
+        // Recipient name / template above input
+        if (recipients.loading) ...[
+          _RecipientLoadingLine(),
+          const SizedBox(height: 8),
+        ] else if (typedAddr.isNotEmpty && saved != null) ...[
+          _RecipientBadge(
+            name: saved.name,
+            colorValue: saved.color,
+            address: saved.address,
+            onEdit: () async {
+              final ok = await showRecipientUpsertSheet(context, initial: saved);
+              if (ok == true && mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+        ] else if (typedAddr.isNotEmpty) ...[
+          _RecipientAddTemplate(
+            address: typedAddr,
+            onAdd: () async {
+              final ok = await showRecipientUpsertSheet(context);
+              if (ok == true && mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
 
-    if (isXLM) {
-      // Profit fee = floor(bps of amount) in stroops
-      final totalStroops = (amount * 1e7).round();
-      final feeStroops = _cutBpsFromStroops(totalStroops, feeBps);
-      profitFeeXlm = feeStroops / 1e7;
+        // Form
+        Form(
+          key: _form,
+          child: Column(
+            children: [
+              // Recipient input
+              TextFormField(
+                controller: _toCtl,
+                decoration: modernInput(
+                  context,
+                  placeholder: 'Recipient Address',
+                  prefix: Icon(LucideIcons.contact, color: AppColor.of(context).primary),
+                ),
+                validator: (_) => p.blockingReason == null || !p.blockingReason!.contains('Stellar')
+                    ? null
+                    : 'Enter a valid Stellar address',
+              ),
+              const SizedBox(height: 10),
 
-      // Recipient receives = amount - fee
-      recipientReceives = (totalStroops - feeStroops) / 1e7;
+              // Amount (no MAX)
+              TextFormField(
+                controller: _amtCtl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                ],
+                decoration: modernInput(
+                  context,
+                  placeholder: p.isXlm ? 'Amount (XLM)' : 'Amount (USDC)',
+                  prefix: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: AssetLogo(asset: tokenStr, size: 18),
+                  ),
+                ),
+                validator: (_) => p.blockingReason == null ? null : p.blockingReason,
+              ),
 
-      // 2 ops: user payment + fee (if any)
-      estNetworkFeeXlm = await _stellar.estimateNetworkFeeXlm(
-        opCount: feeStroops > 0 ? 2 : 1,
-        percentile: 90,
-      );
-    } else {
-      // USDC: quote XLM equivalent, take bps in XLM (floored to stroops)
-      final quoteXlm = await _stellar.quoteUsdcToXlm(amount);
-      if (quoteXlm != null) {
-        final xlmStroops = (quoteXlm * 1e7).round();
-        final feeStroops  = _cutBpsFromStroops(xlmStroops, feeBps);
-        profitFeeXlm = feeStroops / 1e7;
-      } else {
-        profitFeeXlm = null; // quote failed → we won't add profit to “total”
-      }
-      recipientReceives = amount; // full USDC amount goes to recipient
-      estNetworkFeeXlm = await _stellar.estimateNetworkFeeXlm(opCount: 2, percentile: 90);
-    }
+              // Percentage chips (10 / 25 / 50 / 75 / 100)
+              const SizedBox(height: 10),
+              _PercentChipsRow(
+                onPick: (pct) => _applyPercent(p, pct),
+              ),
+            ],
+          ),
+        ),
 
-    // ⬇️ Combine profit + network into one figure for display
-    final totalFeeXlm = estNetworkFeeXlm + (profitFeeXlm ?? 0);
-    final totalFeeFiat = totalFeeXlm * currency.xlmToFiat(1);
-    final labelNetworkFee = (profitFeeXlm != null && profitFeeXlm > 0)
-        ? 'Network Fee (incl. $feeLabel)'
-        : 'Network Fee';
+        const SizedBox(height: 12),
 
-    final toText = () {
-      final name = (widget.prefillName ?? '').trim();
-      return name.isEmpty ? to : '$name  •  $to';
-    }();
+        // Slim preview
+        _SlimPreviewCard(
+          isXLM: isXLM,
+          token: tokenStr,
+          recipientGets: recipientGets,
+          estNetworkFeeXlm: netFee,
+          txFeeXlm: txFee,
+          totalBudgetXlm: isXLM ? p.totalDeductXlmIfXlmSend : null,
+          needsXlmForFeesIfUsdc: isXLM ? null : p.needsXlmForFeesIfUsdcSend,
+        ),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: c.surface,
+      appBar: AppBar(
+        backgroundColor: c.surface,
+        elevation: 0,
+        centerTitle: true,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AssetLogo(asset: tokenStr, size: 18),
+            const SizedBox(width: 8),
+            Text('Send $tokenStr', style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
+          ],
+        ),
+      ),
+      body: p.loading
+          ? const _PageLoader()
+          : p.error != null
+          ? _ErrorCard(message: p.error!)
+      // ↓ Pull-to-refresh wrapper
+          : RefreshIndicator(
+        onRefresh: () => _refresh(context),
+        color: c.primary,
+        displacement: 24,
+        child: list,
+      ),
+
+      // Pinned bottom Send button
+      bottomNavigationBar: (p.loading || p.error != null)
+          ? null
+          : AnimatedPadding(
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            decoration: BoxDecoration(
+              color: c.surface,
+              border: Border(top: BorderSide(color: c.primary.withOpacity(0.10))),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  color: Colors.black.withOpacity(0.04),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  if (!_form.currentState!.validate()) return;
+                  final reason = p.blockingReason;
+                  if (reason != null) {
+                    HapticFeedback.selectionClick();
+                    showFloatingSnackBar(context, message: reason, type: SnackBarType.error);
+                    return;
+                  }
+                  await _confirmAndSend(context, p);
+                },
+                icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
+                label: Text('Send $tokenStr',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: c.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmAndSend(BuildContext context, SendProvider p) async {
+    final tokenStr = p.isXlm ? 'XLM' : 'USDC';
+    final recipientGets = p.isXlm ? p.recipientWillReceiveXlmFromBudget : p.typedAmount;
 
     await showModalBottomSheet(
       context: context,
-      backgroundColor: colors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AssetLogo(asset: widget.token, size: 18),
-                  const SizedBox(width: 8),
-                  Text('Review',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ReviewRow(label: 'From', value: (_stellarAddress ?? widget.address), mono: true),
-              ReviewRow(label: 'To', value: toText, mono: true),
-              ReviewRow(label: 'Amount', value: '${amount.toStringAsFixed(6)} ${widget.token.toUpperCase()}'),
-              ReviewRow(
-                label: 'Recipient Receives',
-                value: isXLM
-                    ? '${(recipientReceives ?? 0).toStringAsFixed(6)} XLM'
-                    : '${(recipientReceives ?? 0).toStringAsFixed(6)} USDC',
-              ),
-              const SizedBox(height: 6),
-
-              // ✅ Single combined fee line
-              ReviewRow(
-                label: labelNetworkFee,
-                value: '${totalFeeXlm.toStringAsFixed(7)} XLM  •  ${fiatFmt.format(totalFeeFiat)}',
-              ),
-
-              if ((widget.token.toUpperCase() == 'USDC') &&
-                  (_checking || _destHasUsdcTL == false || (_checkMsg ?? '').isNotEmpty)) ...[
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    _checking ? 'Checking recipient trustline…' : (_checkMsg ?? ''),
-                    style: TextStyle(
-                      color: (_destHasUsdcTL == false) ? Colors.red : colors.textSecondary,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: Text('Cancel', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _sendTokenNow();
-                    },
-                    icon: const Icon(LucideIcons.send, size: 18, color: Colors.white),
-                    label: const Text('Confirm'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colors.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      elevation: 0,
-                    ),
-                  ),
-                ),
-              ]),
-            ],
+        return _FlatSheet(
+          maxHeightFactor: 0.50,
+          child: _SlimReviewSheet(
+            tokenStr: tokenStr,
+            sender: p.senderAddress,
+            to: p.to,
+            recipientGets: _numFmt.format(recipientGets),
+            txFeeXlm: (p.txFeeXlm ?? 0).toStringAsFixed(7),
+            netFeeXlm: (p.estNetworkFeeXlm ?? 0).toStringAsFixed(7),
+            extraLabel: p.isXlm ? 'Total budget (deducted)' : 'XLM required for fees',
+            extraValue: p.isXlm
+                ? '${_numFmt.format(p.typedAmount)} XLM'
+                : '${(p.needsXlmForFeesIfUsdcSend).toStringAsFixed(7)} XLM',
+            onCancel: () => Navigator.pop(context),
+            onConfirm: () async {
+              Navigator.pop(context);
+              await _doSend(context, p);
+            },
           ),
         );
       },
     );
   }
 
-  /* ---------------- Build ---------------- */
+  Future<void> _doSend(BuildContext context, SendProvider p) async {
+    late final AppAlertController ctl;
+    ctl = showAppAlert(
+      context,
+      type: AppAlertType.loading,
+      title: 'Submitting…',
+      subtitle: 'Broadcasting your transaction to the network.',
+      primaryText: 'Hide',
+    );
+    try {
+      final txid = await p.submit();
+      ctl.update(
+        AppAlertType.success,
+        title: 'Submitted',
+        subtitle: txid,
+        primaryText: 'Copy TxID',
+        onPrimary: () async {
+          await Clipboard.setData(ClipboardData(text: txid));
+          ctl.close();
+        },
+      );
+      _amtCtl.clear();
+    } catch (e) {
+      ctl.update(AppAlertType.error, title: 'Send failed', subtitle: '$e', primaryText: 'Close');
+    }
+  }
+}
+
+/* ───────────────────── Recipient UI helpers ───────────────────── */
+
+class _RecipientLoadingLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-    final currency = Provider.of<CurrencyProvider>(context, listen: true);
-
-    final isXLM = widget.token.toUpperCase() == 'XLM';
-    final balanceFiat = isXLM ? currency.xlmToFiat(widget.balance) : currency.usdcToFiat(widget.balance);
-
-    final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final numFmt = NumberFormat('#,##0.00');
-
-    final oneTokenInFiat = isXLM ? currency.xlmToFiat(1) : currency.usdcToFiat(1);
-    final typedAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
-
-    final t = widget.token.toUpperCase();
-
-    return Scaffold(
-      backgroundColor: colors.surface,
-      appBar: AppBar(
-        backgroundColor: colors.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AssetLogo(asset: t, size: 18),
-            const SizedBox(width: 8),
-            Text('Send $t', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary)),
-          ],
-        ),
-        centerTitle: true,
+    final c = AppColor.of(context);
+    return Container(
+      height: 18,
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+    );
+  }
+}
+
+class _RecipientBadge extends StatelessWidget {
+  const _RecipientBadge({
+    required this.name,
+    required this.colorValue,
+    required this.address,
+    required this.onEdit,
+  });
+
+  final String name;
+  final int colorValue;
+  final String address;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final color = Color(colorValue);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Row(
         children: [
-          // Price + balance (compact)
-          PriceHeader(
-            token: widget.token,
-            oneTokenInFiat: oneTokenInFiat,
-            changePct: 0,
-            rangeLabel: 'NOW',
-            colors: colors,
-            fiatFmt: fiatFmt,
+          Container(
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(height: 8),
-          BalanceHeader(
-            token: widget.token,
-            amountToken: widget.balance,
-            amountFiat: balanceFiat,
-            colors: colors,
-            numFmt: numFmt,
-            fiatFmt: fiatFmt,
-          ),
-
-          const SizedBox(height: 14),
-
-          // Hint card
-          if (_checking || (_checkMsg ?? '').isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.primary.withOpacity(0.2)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(LucideIcons.info, color: colors.primary, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _checking ? 'Checking recipient...' : _checkMsg!,
-                      style: TextStyle(color: colors.textSecondary),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // Form
-          Form(
-            key: _formKey,
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextFormField(
-                  controller: _recipientController,
-                  decoration: InputDecoration(
-                    labelText: 'Recipient',
-                    hintText: 'G... (Stellar address)',
-                    filled: true,
-                    fillColor: colors.primary.withOpacity(0.04),
-                    prefixIcon: Icon(LucideIcons.contact, color: colors.primary),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Address book',
-                          icon: Icon(LucideIcons.contact, color: colors.primary),
-                          onPressed: _pickFromAddressBook,
-                        ),
-                        IconButton(
-                          tooltip: 'Scan QR',
-                          icon: Icon(LucideIcons.qrCode, color: colors.primary),
-                          onPressed: _scanQRCode,
-                        ),
-                      ],
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.primary.withOpacity(0.15)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.primary.withOpacity(0.35), width: 1.3),
-                    ),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.5,
                   ),
-                  onChanged: (_) => _scheduleChecks(),
-                  validator: (value) {
-                    final v = value?.trim() ?? '';
-                    if (v.isEmpty) return 'Enter recipient address';
-                    if (!_looksLikeStellar(v)) return 'Invalid Stellar address';
-                    return null;
-                  },
                 ),
-                const SizedBox(height: 10),
-
-                TextFormField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Amount (${widget.token.toUpperCase()})',
-                    filled: true,
-                    fillColor: colors.primary.withOpacity(0.04),
-                    prefixIcon: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: AssetLogo(asset: widget.token, size: 20),
-                    ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.primary.withOpacity(0.15)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: colors.primary.withOpacity(0.35), width: 1.3),
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontFamily: 'monospace',
+                    fontSize: 12.5,
                   ),
-                  onChanged: (_) => _scheduleChecks(),
-                  validator: (value) {
-                    final v = double.tryParse(value?.trim() ?? '') ?? 0;
-                    if (v <= 0) return 'Enter amount';
-                    if (v > widget.balance) return 'Amount exceeds balance';
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    PctChip(label: '25%', onTap: () => _onTapPercent(0.25, isXLM: isXLM), colors: colors),
-                    const SizedBox(width: 8),
-                    PctChip(label: '50%', onTap: () => _onTapPercent(0.50, isXLM: isXLM), colors: colors),
-                    const SizedBox(width: 8),
-                    PctChip(label: '75%', onTap: () => _onTapPercent(0.75, isXLM: isXLM), colors: colors),
-                    const SizedBox(width: 8),
-                    PctChip(label: 'MAX', onTap: () => _onTapMax(isXLM: isXLM), colors: colors),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        AssetLogo(asset: widget.token, size: 14),
-                        const SizedBox(width: 6),
-                        Text(
-                          '≈ ${fiatFmt.format(isXLM ? currency.xlmToFiat(typedAmount) : currency.usdcToFiat(typedAmount))}',
-                          style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
               ],
             ),
           ),
-
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isSending || _keyPair == null
-                  ? null
-                  : () async {
-                if (_formKey.currentState!.validate()) {
-                  HapticFeedback.selectionClick();
-                  await _confirmAndSend(currency, isXLM); // preflight compute
-                }
-              },
-              icon: _isSending
-                  ? const SizedBox.shrink()
-                  : const Icon(LucideIcons.send, color: Colors.white, size: 18),
-              label: _isSending
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text('Send ${widget.token.toUpperCase()}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: colors.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: onEdit,
+            icon: const Icon(LucideIcons.edit, size: 16),
+            label: const Text('Edit'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ],
@@ -708,5 +470,487 @@ class _SendScreenState extends State<SendScreen> {
   }
 }
 
-/* ---------------- tiny util ---------------- */
-void unawaited(Future<void> f) {}
+class _RecipientAddTemplate extends StatelessWidget {
+  const _RecipientAddTemplate({required this.address, required this.onAdd});
+  final String address;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.12), style: BorderStyle.solid),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.userPlus, size: 18, color: c.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('No saved name for this address',
+                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(
+                  address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: c.textSecondary, fontFamily: 'monospace', fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: onAdd,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide(color: c.primary.withOpacity(0.35)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              foregroundColor: c.primary,
+            ),
+            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ───────────────────── Chips + Preview + Misc ───────────────────── */
+
+class _PercentChipsRow extends StatelessWidget {
+  const _PercentChipsRow({required this.onPick});
+  final void Function(double pct) onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+
+    Widget chip(String label, double pct) => InkWell(
+      onTap: () => onPick(pct),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: c.primary.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: c.primary.withOpacity(0.18)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          chip('10%', 0.10),
+          chip('25%', 0.25),
+          chip('50%', 0.50),
+          chip('75%', 0.75),
+          chip('100%', 1.00),
+        ],
+      ),
+    );
+  }
+}
+
+/* ───────────────────── Bottom sheet + review (unchanged) ─────────────────── */
+
+class _FlatSheet extends StatelessWidget {
+  const _FlatSheet({required this.child, this.maxHeightFactor = 0.92});
+  final Widget child;
+  final double maxHeightFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final h = MediaQuery.of(context).size.height;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Material(
+          color: c.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          elevation: 0,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: h * maxHeightFactor),
+            child: SafeArea(top: false, child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SlimReviewSheet extends StatelessWidget {
+  const _SlimReviewSheet({
+    required this.tokenStr,
+    required this.sender,
+    required this.to,
+    required this.recipientGets,
+    required this.txFeeXlm,
+    required this.netFeeXlm,
+    required this.extraLabel,
+    required this.extraValue,
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final String tokenStr;
+  final String sender;
+  final String to;
+  final String recipientGets;
+  final String txFeeXlm;
+  final String netFeeXlm;
+  final String extraLabel;
+  final String extraValue;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+
+    Widget _grabber() => Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        margin: const EdgeInsets.only(top: 8, bottom: 6),
+        decoration: BoxDecoration(
+          color: c.primary.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
+    );
+
+    Widget _header() => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Text(
+            'Review',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: c.textPrimary,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: c.primary.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: c.primary.withOpacity(0.14)),
+            ),
+            child: Row(
+              children: [
+                AssetLogo(asset: tokenStr, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  tokenStr,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Widget _summaryPill() => Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: c.primary.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.primary.withOpacity(0.12)),
+        ),
+        child: Row(
+          children: [
+            Icon(LucideIcons.badgeDollarSign, size: 16, color: c.textSecondary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Recipient receives',
+                style: TextStyle(color: c.textSecondary, fontSize: 12),
+              ),
+            ),
+            Text(
+              '$recipientGets $tokenStr',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'monospace',
+                fontSize: 13.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    TableRow _kv(String k, String v, {bool mono = false}) => TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            k,
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SelectableText(
+            v,
+            textAlign: TextAlign.right,
+            maxLines: 2,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontFamily: mono ? 'monospace' : null,
+              fontSize: 13,
+              height: 1.15,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    Widget _specCard({required List<TableRow> rows}) => Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.primary.withOpacity(0.10)),
+        ),
+        child: Table(
+          columnWidths: const {
+            0: IntrinsicColumnWidth(),
+            1: FlexColumnWidth(),
+          },
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: rows,
+        ),
+      ),
+    );
+
+    Widget _actions() => Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextButton(
+              onPressed: onCancel,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                foregroundColor: c.primary,
+              ),
+              child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: onConfirm,
+              icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
+              label: const Text('Confirm'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                backgroundColor: c.primary,
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Column(
+      children: [
+        _grabber(),
+        _header(),
+        _summaryPill(),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              _specCard(rows: [
+                _kv('From', sender, mono: true),
+                _kv('To', to, mono: true),
+              ]),
+              _specCard(rows: [
+                _kv('Transaction fee', '$txFeeXlm XLM'),
+                _kv('Network fee (est.)', '$netFeeXlm XLM'),
+                _kv(extraLabel, extraValue),
+              ]),
+            ],
+          ),
+        ),
+        _actions(),
+      ],
+    );
+  }
+}
+
+/* ───────────────────── Small shared widgets ───────────────────── */
+
+class _PageLoader extends StatelessWidget {
+  const _PageLoader();
+  @override
+  Widget build(BuildContext context) => const Center(
+    child: Padding(
+      padding: EdgeInsets.only(top: 60),
+      child: SizedBox(height: 26, width: 26, child: CircularProgressIndicator(strokeWidth: 2)),
+    ),
+  );
+}
+
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  const _ErrorCard({required this.message});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 0),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: c.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.error.withOpacity(0.2)),
+        ),
+        child: Text(message, style: TextStyle(color: c.error)),
+      ),
+    );
+  }
+}
+
+class _BalanceLine extends StatelessWidget {
+  final String token;
+  final double balance;
+  const _BalanceLine({required this.token, required this.balance});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Row(
+      children: [
+        AssetLogo(asset: token, size: 16),
+        const SizedBox(width: 8),
+        Text('Balance: ', style: TextStyle(color: c.textSecondary)),
+        Text(
+          '$token ${balance.toStringAsFixed(balance >= 100 ? 2 : 4)}',
+          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+}
+
+/* ───────────────────── Slim Preview Card (no "profit" text) ───────────────── */
+
+class _SlimPreviewCard extends StatelessWidget {
+  final bool isXLM;
+  final String token;
+  final double recipientGets;
+  final double estNetworkFeeXlm;
+  final double txFeeXlm;
+  final double? totalBudgetXlm; // for XLM sends
+  final double? needsXlmForFeesIfUsdc; // for USDC sends
+
+  const _SlimPreviewCard({
+    required this.isXLM,
+    required this.token,
+    required this.recipientGets,
+    required this.estNetworkFeeXlm,
+    required this.txFeeXlm,
+    required this.totalBudgetXlm,
+    required this.needsXlmForFeesIfUsdc,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+
+    Widget tinyRow(String k, String v) => Row(
+      children: [
+        Expanded(child: Text(k, style: TextStyle(color: c.textSecondary, fontSize: 12))),
+        const SizedBox(width: 6),
+        Text(v, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800, fontSize: 13)),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.primary.withOpacity(0.10)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.info, size: 14, color: c.textSecondary),
+              const SizedBox(width: 6),
+              Text('Preview', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+              const Spacer(),
+              Row(
+                children: [
+                  AssetLogo(asset: token, size: 14),
+                  const SizedBox(width: 6),
+                  Text(token, style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          tinyRow('Recipient receives', '${recipientGets.toStringAsFixed(6)} $token'),
+          const SizedBox(height: 4),
+          tinyRow('Transaction fee', '${txFeeXlm.toStringAsFixed(7)} XLM'),
+          tinyRow('Network fee (est.)', '${estNetworkFeeXlm.toStringAsFixed(7)} XLM'),
+          if (isXLM && (totalBudgetXlm ?? 0) > 0) ...[
+            const SizedBox(height: 4),
+            tinyRow('Total budget (deducted)', '${(totalBudgetXlm!).toStringAsFixed(6)} XLM'),
+          ],
+          if (!isXLM) ...[
+            const SizedBox(height: 4),
+            tinyRow('XLM required for fees', '${(needsXlmForFeesIfUsdc ?? 0).toStringAsFixed(7)} XLM'),
+          ],
+        ],
+      ),
+    );
+  }
+}
