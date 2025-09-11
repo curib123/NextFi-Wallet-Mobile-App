@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Provider/RecipientAddressProvider.dart';
-import 'package:provider/provider.dart';
-import '../model/recipient_address.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
+
+import 'package:next_fi/Provider/RecipientAddressProvider.dart';
+import '../model/recipient_address.dart';
 
 /// Call this to open the sheet.
 /// Returns true if something was saved.
@@ -62,10 +64,10 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     super.dispose();
   }
 
-  bool _looksLikeTron(String a) {
+  /// Validates Stellar classic (G...) and muxed (M...) addresses using SDK checksums.
+  bool _isValidStellarAddress(String a) {
     final s = a.trim();
-    // Quick check; replace with TronWalletService validator if available.
-    return s.isNotEmpty && s.startsWith('T') && s.length >= 34;
+    return StrKey.isValidStellarAccountId(s);
   }
 
   Future<void> _save() async {
@@ -137,7 +139,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'Name',
-                        hintText: 'e.g. Alice (USDT payouts)',
+                        hintText: 'e.g. Alice (USDC payouts)',
                         prefixIcon: Icon(Icons.badge_outlined),
                       ),
                       validator: (v) =>
@@ -146,19 +148,25 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _addr,
+                      textCapitalization: TextCapitalization.characters,
+                      textInputAction: TextInputAction.done,
                       decoration: const InputDecoration(
-                        labelText: 'Wallet Address (TRON)',
-                        hintText: 'e.g. T... (Base58)',
+                        labelText: 'Wallet Address (Stellar / XLM)',
+                        hintText: 'e.g. G... (56 chars) or M... (muxed)',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                       ),
                       inputFormatters: [
+                        // Force uppercase (Stellar base32 uses A–Z and 2–7)
+                        TextInputFormatter.withFunction((oldValue, newValue) =>
+                            newValue.copyWith(text: newValue.text.toUpperCase())),
                         FilteringTextInputFormatter.deny(RegExp(r'\s')), // no spaces
                       ],
                       minLines: 1,
                       maxLines: 2,
-                      validator: (v) => (v == null || !_looksLikeTron(v))
-                          ? 'Enter a valid TRON address'
+                      validator: (v) => (v == null || !_isValidStellarAddress(v))
+                          ? 'Enter a valid Stellar address (G… or muxed M…)'
                           : null,
+                      onFieldSubmitted: (_) => _save(),
                     ),
                     const SizedBox(height: 12),
                     Align(
@@ -188,8 +196,8 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                                 width: selected ? 3 : 1,
                               ),
                               boxShadow: selected
-                                  ? [
-                                const BoxShadow(
+                                  ? const [
+                                BoxShadow(
                                   color: Colors.black26,
                                   blurRadius: 6,
                                   offset: Offset(0, 2),
