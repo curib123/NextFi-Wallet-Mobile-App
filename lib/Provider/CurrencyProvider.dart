@@ -48,8 +48,13 @@ class CurrencyProvider extends ChangeNotifier {
   double _xlmRate  = 0; // XLM→FIAT
   double _prevUsdcRate = 0, _prevXlmRate = 0;
 
+  // Histories (FIAT)
   List<double> _xlm24 = [], _xlm7 = [], _xlm30 = [], _xlm365 = [];
   List<double> _usdc24 = [], _usdc7 = [], _usdc30 = [], _usdc365 = [];
+
+  // % deltas (coalesced; FIAT)
+  double _xlmPct24 = 0, _xlmPct7 = 0, _xlmPct30 = 0, _xlmPct365 = 0;
+  double _usdcPct24 = 0, _usdcPct7 = 0, _usdcPct30 = 0, _usdcPct365 = 0;
 
   bool _loading = true;
   Timer? _t;
@@ -73,6 +78,16 @@ class CurrencyProvider extends ChangeNotifier {
   List<double> get usdcHistory7    => _usdc7;
   List<double> get usdcHistory30   => _usdc30;
   List<double> get usdcHistory365  => _usdc365;
+
+  // New: % change getters (stable)
+  double get xlmPct24h => _xlmPct24;
+  double get xlmPct7d  => _xlmPct7;
+  double get xlmPct30d => _xlmPct30;
+  double get xlmPct1y  => _xlmPct365;
+  double get usdcPct24h => _usdcPct24;
+  double get usdcPct7d  => _usdcPct7;
+  double get usdcPct30d => _usdcPct30;
+  double get usdcPct1y  => _usdcPct365;
 
   Stream<double> get xlmPriceStream  => _xlmCtrl.stream;
   Stream<double> get usdcPriceStream => _usdcCtrl.stream;
@@ -212,30 +227,36 @@ class CurrencyProvider extends ChangeNotifier {
     return (usdcUsd ?? 1.0) * usdFiat;
   }
 
-  // XLM/USDC: try CEX, then DEX across multiple Horizon hosts (order book → trade → trade_agg),
-  // finally derive from XLM/USDT + pegs.
+  // XLM/USDC spot price: CEX → DEX → derive from XLM/USDT & pegs
   Future<double?> _xlmUsdc() async {
     // 1) CEX paths
     final cex = await _firstNonNull<double>([
-          () async { final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDC'));
-      final d = (m['data'] as List?)?.cast<dynamic>();
-      final s = (d != null && d.isNotEmpty) ? d.first['last'] as String? : null;
-      return s != null ? double.tryParse(s) : null; },
-          () async { final m = await _json(Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDC'));
-      final l = (m['result']?['list'] as List?) ?? const [];
-      final s = l.isNotEmpty ? l.first['lastPrice'] as String? : null;
-      return s != null ? double.tryParse(s) : null; },
-          () async { final m = await _json(Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDC'));
-      final s = m['data']?['price'] as String?;
-      return s != null ? double.tryParse(s) : null; },
-          () async { final m = await _json(Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDC'));
-      final s = m['price'] as String?;
-      return s != null ? double.tryParse(s) : null; },
+          () async {
+        final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDC'));
+        final d = (m['data'] as List?)?.cast<dynamic>();
+        final s = (d != null && d.isNotEmpty) ? d.first['last'] as String? : null;
+        return s != null ? double.tryParse(s) : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDC'));
+        final l = (m['result']?['list'] as List?) ?? const [];
+        final s = l.isNotEmpty ? l.first['lastPrice'] as String? : null;
+        return s != null ? double.tryParse(s) : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDC'));
+        final s = m['data']?['price'] as String?;
+        return s != null ? double.tryParse(s) : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDC'));
+        final s = m['price'] as String?;
+        return s != null ? double.tryParse(s) : null;
+      },
     ]);
     if (cex != null && cex > 0) return cex;
 
     // 2) DEX paths across Horizon hosts
-    // Try order_book mid, then last trade price, then last trade_agg close/avg
     for (final base in _HORIZON_BASES) {
       final ob = await _dexOrderBookMid(base).catchError((_) => null);
       if (ob != null && ob > 0) return ob;
@@ -338,68 +359,180 @@ class CurrencyProvider extends ChangeNotifier {
   // ── XLM/USDT (multi-venue) ────────────────────────────────────────────────
   Future<double?> _xlmUsdt() async {
     return _firstNonNull<double>([
-          () async { final m = await _json(Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT'));
-      final s = m['price']; return s is String ? double.tryParse(s) : (s is num ? s.toDouble() : null); },
-          () async { final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDT'));
-      final d = (m['data'] as List?) ?? const []; final s = d.isNotEmpty ? d.first['last'] as String? : null;
-      return s != null ? double.tryParse(s) : null; },
-          () async { final m = await _json(Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDT'));
-      final s = m['data']?['price'] as String?; return s != null ? double.tryParse(s) : null; },
-          () async { final m = await _json(Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDT'));
-      final l = (m['result']?['list'] as List?) ?? const []; final s = l.isNotEmpty ? l.first['lastPrice'] as String? : null;
-      return s != null ? double.tryParse(s) : null; },
-          () async { final m = await _json(Uri.parse('https://api.kraken.com/0/public/Ticker?pair=XLMUSDT'));
-      final r = (m['result'] as Map?) ?? {}; if (r.isNotEmpty) { final c = (r.values.first as Map)['c'] as List?;
-      return (c != null && c.isNotEmpty) ? double.tryParse(c.first.toString()) : null; } return null; },
+          () async {
+        final m = await _json(Uri.parse('https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT'));
+        final s = m['price']; return s is String ? double.tryParse(s) : (s is num ? s.toDouble() : null);
+      },
+          () async {
+        final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/ticker?instId=XLM-USDT'));
+        final d = (m['data'] as List?) ?? const []; final s = d.isNotEmpty ? d.first['last'] as String? : null;
+        return s != null ? double.tryParse(s) : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=XLM-USDT'));
+        final s = m['data']?['price'] as String?; return s != null ? double.tryParse(s) : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.bybit.com/v5/market/tickers?category=spot&symbol=XLMUSDT'));
+        final l = (m['result']?['list'] as List?) ?? const []; final s = l.isNotEmpty ? l.first['lastPrice'] as String? : null;
+        return s != null ? double.tryParse(s) : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.kraken.com/0/public/Ticker?pair=XLMUSDT'));
+        final r = (m['result'] as Map?) ?? {}; if (r.isNotEmpty) { final c = (r.values.first as Map)['c'] as List?;
+        return (c != null && c.isNotEmpty) ? double.tryParse(c.first.toString()) : null; } return null;
+      },
     ]);
   }
 
-  // ── Histories (USDT klines → scale by USDC→FIAT) ──────────────────────────
+  // ── Histories (CEX→DEX fallback) & % changes ──────────────────────────────
   Future<void> _fetchHistories() async {
     final now  = DateTime.now();
     final f7   = now.subtract(const Duration(days: 7));
     final f30  = now.subtract(const Duration(days: 30));
     final f365 = now.subtract(const Duration(days: 365));
 
+    // USDC histories = USD→FIAT series (peg), with safe fallback
     final usdcBase = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
     final usdc24 = List<double>.filled(24, usdcBase);
-    final usdc7  = await _usdToFiatSeries(f7, now, _fiat, 7);
+    final usdc7  = await _usdToFiatSeries(f7,  now, _fiat, 7);
     final usdc30 = await _usdToFiatSeries(f30, now, _fiat, 30);
-    final usdc365= await _usdToFiatSeries(f365, now, _fiat, 365);
+    final usdc365= await _usdToFiatSeries(f365,now, _fiat, 365);
 
+    // XLM histories (USDC quote): CEX klines (XLM/USDC) → DEX trade_agg → fallback: CEX XLM/USDT scaled
     final fx = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
-    final x24u  = await _klines('1h', 24);
-    final x7u   = await _klines('1d', 7);
-    final x30u  = await _klines('1d', 30);
-    final x365u = await _klines('1d', 365);
 
+    // 24h (1h buckets ×24)
+    final x24_usdc = await _histXlmUsdcCex(interval: '1h', limit: 24)
+        ?? await _histXlmUsdcDex(resolutionMs: 60*60*1000, limit: 24)
+        ?? await _klinesUsdtCex(interval: '1h', limit: 24);
+    final x24 = (x24_usdc ?? const <double>[])
+        .map((e) => e * fx) // USDC→FIAT
+        .toList();
+
+    // 7d (1d ×7)
+    final x7_usdc = await _histXlmUsdcCex(interval: '1d', limit: 7)
+        ?? await _histXlmUsdcDex(resolutionMs: 24*60*60*1000, limit: 7)
+        ?? await _klinesUsdtCex(interval: '1d', limit: 7);
+    final x7 = (x7_usdc ?? const <double>[])
+        .map((e) => e * fx)
+        .toList();
+
+    // 30d
+    final x30_usdc = await _histXlmUsdcCex(interval: '1d', limit: 30)
+        ?? await _histXlmUsdcDex(resolutionMs: 24*60*60*1000, limit: 30)
+        ?? await _klinesUsdtCex(interval: '1d', limit: 30);
+    final x30 = (x30_usdc ?? const <double>[])
+        .map((e) => e * fx)
+        .toList();
+
+    // 365d
+    final x365_usdc = await _histXlmUsdcCex(interval: '1d', limit: 365)
+        ?? await _histXlmUsdcDex(resolutionMs: 24*60*60*1000, limit: 365)
+        ?? await _klinesUsdtCex(interval: '1d', limit: 365);
+    final x365 = (x365_usdc ?? const <double>[])
+        .map((e) => e * fx)
+        .toList();
+
+    // Apply normalized/fallback arrays
     _usdc24 = usdc24; _usdc7 = usdc7; _usdc30 = usdc30; _usdc365 = usdc365;
-    _xlm24  = x24u.map((e) => e * fx).toList();
-    _xlm7   = x7u.map((e)  => e * fx).toList();
-    _xlm30  = x30u.map((e) => e * fx).toList();
-    _xlm365 = x365u.map((e)=> e * fx).toList();
+    _xlm24  = _normalize(x24.isNotEmpty ? x24 : _estimateFromSpot(24), 24);
+    _xlm7   = _normalize(x7.isNotEmpty  ? x7  : _estimateFromSpot(7),  7);
+    _xlm30  = _normalize(x30.isNotEmpty ? x30 : _estimateFromSpot(30), 30);
+    _xlm365 = _normalize(x365.isNotEmpty? x365: _estimateFromSpot(365),365);
+
+    // % changes (coalesced)
+    _xlmPct24 = _coalescePct(_xlmPct24, _pctFromSeries(_xlm24));
+    _xlmPct7  = _coalescePct(_xlmPct7 , _pctFromSeries(_xlm7));
+    _xlmPct30 = _coalescePct(_xlmPct30, _pctFromSeries(_xlm30));
+    _xlmPct365= _coalescePct(_xlmPct365,_pctFromSeries(_xlm365));
+
+    _usdcPct24 = _coalescePct(_usdcPct24, _pctFromSeries(_usdc24));
+    _usdcPct7  = _coalescePct(_usdcPct7 , _pctFromSeries(_usdc7));
+    _usdcPct30 = _coalescePct(_usdcPct30, _pctFromSeries(_usdc30));
+    _usdcPct365= _coalescePct(_usdcPct365,_pctFromSeries(_usdc365));
   }
 
-  Future<List<double>> _usdToFiatSeries(DateTime from, DateTime to, String fiat, int len) async {
-    if (fiat.toLowerCase() == 'usd') return List<double>.filled(len, 1.0);
-    String ymd(DateTime d) => '${d.year.toString().padLeft(4,'0')}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
-    try {
-      final m = await _json(Uri.parse('https://api.frankfurter.app/${ymd(from)}..${ymd(to)}?from=USD&to=${fiat.toUpperCase()}'));
-      final rates = (m['rates'] as Map?) ?? {};
-      final keys = rates.keys.toList()..sort();
-      final series = keys.map((k) {
-        final v = (rates[k] as Map?)?[fiat.toUpperCase()];
-        return (v is num) ? v.toDouble() : 1.0;
-      }).toList();
-      return _normalize(series, len);
-    } catch (_) {
-      final base = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
-      return List<double>.filled(len, base);
+  // CEX-first klines for XLM/USDC; returns USDC-per-XLM closes
+  Future<List<double>?> _histXlmUsdcCex({required String interval, required int limit}) async {
+    final tries = <Future<List<double>?> Function()>[
+      // Binance
+          () async {
+        final m = await _json(Uri.parse('https://api.binance.com/api/v3/klines?symbol=XLMUSDC&interval=$interval&limit=$limit'));
+        final raw = m['_'];
+        if (raw is List) {
+          final out = raw.map((e) => (e is List && e.length > 4) ? double.tryParse(e[4].toString()) : null)
+              .whereType<double>().toList();
+          return out.isNotEmpty ? _normalize(out, limit) : null;
+        }
+        return null;
+      },
+      // OKX
+          () async {
+        final bar = (interval == '1h') ? '1H' : '1D';
+        final m = await _json(Uri.parse('https://www.okx.com/api/v5/market/candles?instId=XLM-USDC&bar=$bar&limit=$limit'));
+        final l = (m['data'] as List?)?.cast<List>() ?? const [];
+        final c = l.reversed.map((r) => (r.length > 4) ? double.tryParse(r[4].toString()) : null)
+            .whereType<double>().toList();
+        return c.isNotEmpty ? _normalize(c, limit) : null;
+      },
+      // KuCoin
+          () async {
+        final ty = (interval == '1h') ? '1hour' : '1day';
+        final m = await _json(Uri.parse('https://api.kucoin.com/api/v1/market/candles?type=$ty&symbol=XLM-USDC'));
+        final l = (m['data'] as List?)?.cast<List>() ?? const [];
+        final c = l.reversed.map((r) => (r.length > 2) ? double.tryParse(r[2].toString()) : null)
+            .whereType<double>().toList();
+        return c.isNotEmpty ? _normalize(c, limit) : null;
+      },
+    ];
+
+    for (final f in tries) {
+      try { final v = await f(); if (v != null && v.isNotEmpty) return _normalize(v, limit); } catch (_) {}
     }
+    return null;
   }
 
-  // XLM/USDT klines (Binance → OKX → KuCoin)
-  Future<List<double>> _klines(String interval, int limit) async {
+  // DEX trade_aggregations series for XLM/USDC (USDC-per-XLM closes)
+  Future<List<double>?> _histXlmUsdcDex({required int resolutionMs, required int limit}) async {
+    for (final base in _HORIZON_BASES) {
+      try {
+        final s = await _dexTradeAggSeries(base, resolutionMs, limit);
+        if (s != null && s.isNotEmpty) return _normalize(s, limit);
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<List<double>?> _dexTradeAggSeries(String base, int resolutionMs, int limit) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final start = now - resolutionMs * limit;
+    final uri = Uri.parse('$base/trade_aggregations').replace(queryParameters: {
+      'base_asset_type': 'native',                  // XLM
+      'counter_asset_type': 'credit_alphanum4',     // USDC
+      'counter_asset_code': 'USDC',
+      'counter_asset_issuer': _USDC_ISSUER,
+      'resolution': '$resolutionMs',
+      'start_time': '$start',
+      'end_time': '$now',
+      'order': 'desc',
+      'limit': '$limit',
+    });
+    final m = await _json(uri);
+    final recs = (m['_embedded']?['records'] as List?) ?? const [];
+    if (recs.isEmpty) return null;
+    double? _num(x) => (x is num) ? x.toDouble() : (x is String ? double.tryParse(x) : null);
+    final valsDesc = recs.map((r) {
+      final rr = r as Map;
+      return _num(rr['close']) ?? _num(rr['avg']) ?? _num(rr['open']);
+    }).whereType<double>().toList();
+    if (valsDesc.isEmpty) return null;
+    final valsChrono = valsDesc.reversed.toList(); // chronological
+    return _normalize(valsChrono, limit);
+  }
+
+  // Fallback: XLM/USDT klines from CEX (closes)
+  Future<List<double>> _klinesUsdtCex({required String interval, required int limit}) async {
     final tries = <Future<List<double>?> Function()>[
           () async {
         final m = await _json(Uri.parse('https://api.binance.com/api/v3/klines?symbol=XLMUSDT&interval=$interval&limit=$limit'));
@@ -430,8 +563,28 @@ class CurrencyProvider extends ChangeNotifier {
     for (final f in tries) {
       try { final v = await f(); if (v != null && v.isNotEmpty) return _normalize(v, limit); } catch (_) {}
     }
+    // very last: flat guess from spot ratio
     final xlmUsdcGuess = (_xlmRate > 0 && _usdcRate > 0) ? _xlmRate / _usdcRate : 0.12;
     return List<double>.filled(limit, xlmUsdcGuess);
+  }
+
+  // ── USD→FIAT series (for USDC peg) ────────────────────────────────────────
+  Future<List<double>> _usdToFiatSeries(DateTime from, DateTime to, String fiat, int len) async {
+    if (fiat.toLowerCase() == 'usd') return List<double>.filled(len, 1.0);
+    String ymd(DateTime d) => '${d.year.toString().padLeft(4,'0')}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
+    try {
+      final m = await _json(Uri.parse('https://api.frankfurter.app/${ymd(from)}..${ymd(to)}?from=USD&to=${fiat.toUpperCase()}'));
+      final rates = (m['rates'] as Map?) ?? {};
+      final keys = rates.keys.toList()..sort();
+      final series = keys.map((k) {
+        final v = (rates[k] as Map?)?[fiat.toUpperCase()];
+        return (v is num) ? v.toDouble() : 1.0;
+      }).toList();
+      return _normalize(series, len);
+    } catch (_) {
+      final base = _usdcRate > 0 ? _usdcRate : (_prevUsdcRate > 0 ? _prevUsdcRate : 1.0);
+      return List<double>.filled(len, base);
+    }
   }
 
   // ── FX helpers ─────────────────────────────────────────────────────────────
@@ -439,23 +592,31 @@ class CurrencyProvider extends ChangeNotifier {
     final tgt = fiat.toUpperCase();
     if (tgt == 'USD') return 1.0;
     return _firstNonNull<double>([
-          () async { final m = await _json(Uri.parse('https://api.frankfurter.app/latest?from=USD&to=$tgt'));
-      final v = (m['rates'] as Map?)?[tgt]; return (v is num) ? v.toDouble() : null; },
-          () async { final m = await _json(Uri.parse('https://api.exchangerate.host/latest?base=USD&symbols=$tgt'));
-      final v = (m['rates'] as Map?)?[tgt]; return (v is num) ? v.toDouble() : null; },
-          () async { final m = await _json(Uri.parse('https://open.er-api.com/v6/latest/USD'));
-      final v = (m['rates'] as Map?)?[tgt]; return (v is num) ? v.toDouble() : null; },
+          () async {
+        final m = await _json(Uri.parse('https://api.frankfurter.app/latest?from=USD&to=$tgt'));
+        final v = (m['rates'] as Map?)?[tgt]; return (v is num) ? v.toDouble() : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://api.exchangerate.host/latest?base=USD&symbols=$tgt'));
+        final v = (m['rates'] as Map?)?[tgt]; return (v is num) ? v.toDouble() : null;
+      },
+          () async {
+        final m = await _json(Uri.parse('https://open.er-api.com/v6/latest/USD'));
+        final v = (m['rates'] as Map?)?[tgt]; return (v is num) ? v.toDouble() : null;
+      },
     ]);
   }
 
   Future<double?> _coinbaseRate({required String base, required String quote}) async {
     return _firstNonNull<double>([
-          () async { final m = await _json(Uri.parse('https://api.coinbase.com/v2/exchange-rates?currency=$base'));
-      final rates = (m['data']?['rates'] as Map?) ?? {};
-      final v = rates[quote];
-      if (v is String) return double.tryParse(v);
-      if (v is num) return v.toDouble();
-      return null; },
+          () async {
+        final m = await _json(Uri.parse('https://api.coinbase.com/v2/exchange-rates?currency=$base'));
+        final rates = (m['data']?['rates'] as Map?) ?? {};
+        final v = rates[quote];
+        if (v is String) return double.tryParse(v);
+        if (v is num) return v.toDouble();
+        return null;
+      },
           () async {
         if (quote.toUpperCase() == 'USD') {
           final m = await _json(Uri.parse('https://api.exchange.coinbase.com/products/${base.toUpperCase()}-$quote/ticker'));
@@ -503,12 +664,36 @@ class CurrencyProvider extends ChangeNotifier {
     return List<double>.filled(n - s.length, s.first)..addAll(s);
   }
 
+  // quick synthetic fill from current spot (flat)
+  List<double> _estimateFromSpot(int len) {
+    final v = (_xlmRate > 0) ? _xlmRate : (_prevXlmRate > 0 ? _prevXlmRate : 1.0);
+    return List<double>.filled(len, v);
+  }
+
   double xlmToFiat(double x) => x * _xlmRate;
   double usdcToFiat(double u) => u * _usdcRate;
   double fiatToUsdc(double f) => _usdcRate != 0 ? f / _usdcRate : 0.0;
   double fiatToXlm (double f) => _xlmRate  != 0 ? f / _xlmRate  : 0.0;
   double xlmToUsdc(double x)  => (_xlmRate != 0 && _usdcRate != 0) ? (x * _xlmRate) / _usdcRate : 0.0;
   double usdcToXlm(double u)  => (_xlmRate != 0 && _usdcRate != 0) ? (u * _usdcRate) / _xlmRate : 0.0;
+
+  // % helpers
+  double? _pctFromSeries(List<double> s) {
+    if (s.length < 2) return 0;
+    final first = s.first;
+    final last  = s.last;
+    if (first <= 0) return 0;
+    final pct = ((last - first) / first) * 100.0;
+    if (pct.isNaN || pct.isInfinite) return null;
+    // guard against wild spikes by truncating to +/- 100000%
+    if (pct.abs() > 100000) return null;
+    return pct;
+  }
+
+  double _coalescePct(double prev, double? next) {
+    if (next == null || next.isNaN || next.isInfinite) return prev;
+    return next;
+  }
 
   // Central GET+JSON with retries + per-request timeout + UA header
   Future<Map<String,dynamic>> _json(Uri url) async {
