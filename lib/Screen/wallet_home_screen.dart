@@ -109,13 +109,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   /* ================= Helpers ================= */
   static String _txIdOf(Map<String, dynamic> tx) => (tx['hash'] ?? tx['txHash'] ?? '').toString();
 
-  bool _isIncomingToMe(Map<String, dynamic> tx) {
-    final my = _stellarAccountId;
-    if (my == null || my.isEmpty) return false;
-    final to = (tx['to'] ?? '').toString();
-    return to == my;
-  }
-
   bool _isStale(DateTime? last, Duration gap) => last == null || DateTime.now().difference(last) >= gap;
 
   void _safeAddHint(Map<String, dynamic> tx) {

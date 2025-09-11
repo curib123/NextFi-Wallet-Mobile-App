@@ -32,7 +32,7 @@ class _HomeState extends State<Home> {
 
   Future<void> _boot() async {
 
-    await ProfitConfigVaultSecureStorage().initSignedConfigFromActiveWallet();
+    await TransactionFeeVaultSecureStorage().initSignedConfigFromActiveWallet();
 
     // Show splash for at least this long while we check storage.
     final minSplash = Future.delayed(const Duration(seconds: 5 ));

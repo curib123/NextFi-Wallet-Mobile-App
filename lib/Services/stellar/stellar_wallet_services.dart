@@ -1,15 +1,16 @@
-// lib/Services/stellar/stellar_wallet_services.dart
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+
 class StellarWalletService {
   /// Horizon SDK instance (PUBLIC or TESTNET).
   final StellarSDK sdk;
 
-  /// Immutable, signed config vault (address + fixed fee in stroops).
-  final ProfitConfigVaultSecureStorage configVault;
+  /// Immutable, signed **Transaction Fee** config vault (address + fixed fee in stroops).
+  final TransactionFeeVaultSecureStorage configVault;
 
   /// Default USDC issuer on Stellar Mainnet (configurable).
   // Official issuers
@@ -26,9 +27,9 @@ class StellarWalletService {
     bool testnet = false,
     this.usdcIssuerOverrideMainnet,
     this.usdcIssuerOverrideTestnet,
-    ProfitConfigVaultSecureStorage? configVault,
+    TransactionFeeVaultSecureStorage? configVault,
   })  : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-        configVault = configVault ?? const ProfitConfigVaultSecureStorage();
+        configVault = configVault ?? const TransactionFeeVaultSecureStorage();
 
   // ---------- Internals ----------
   bool get _isTestnet => identical(sdk, StellarSDK.TESTNET);
@@ -59,13 +60,23 @@ class StellarWalletService {
 
   String get usdcIssuer => _usdcIssuer;
 
-  /// Read-only profit address from signed vault
-  Future<String> getProfitAddress() async => (await configVault.readOrInit()).address;
+  /// Read-only **transaction fee** recipient address from the signed vault.
+  Future<String> getTransactionFeeAddress() async =>
+      (await configVault.readOrInit()).address;
 
-  /// Fixed fee (NEW API)
-  Future<int> getCurrentFeeStroops() async => (await configVault.readOrInit()).feeStroops;
-  Future<double> getCurrentFeeXlm() async => (await configVault.readOrInit()).feeXlm;
-  Future<String> getCurrentFeeLabel() async => (await configVault.readOrInit()).feeXlmLabel; // e.g. "0.0500000 XLM"
+  /// Fixed **transaction fee** (from vault)
+  Future<int> getCurrentFeeStroops() async =>
+      (await configVault.readOrInit()).feeStroops;
+
+  Future<double> getCurrentFeeXlm() async =>
+      (await configVault.readOrInit()).feeXlm;
+
+  Future<String> getCurrentFeeLabel() async =>
+      (await configVault.readOrInit()).feeXlmLabel; // e.g. "0.0500000 XLM"
+
+  // ---- Back-compat shims (optional) ----
+  @Deprecated('Use getTransactionFeeAddress() instead.')
+  Future<String> getProfitAddress() => getTransactionFeeAddress();
 
   // (Legacy percent API, now deprecated; kept to avoid callsite crashes)
   @Deprecated('Fixed-fee mode: use getCurrentFeeXlm() / getCurrentFeeStroops() instead.')
@@ -142,7 +153,7 @@ class StellarWalletService {
   }
 
   // =====================================================================
-  // XLM PAYMENTS (Fee = fixed XLM from config)
+  // XLM PAYMENTS (Transaction Fee = fixed XLM from vault; separate from network fee)
   // =====================================================================
   Future<List<String>> sendXlmWithFee({
     required String secretSeed,
@@ -154,24 +165,24 @@ class StellarWalletService {
     final dest = destination.trim();
     if (dest.isEmpty) _fail('Destination is required');
 
-    final feeAddr = await getProfitAddress();
-    final feeStroops = await getCurrentFeeStroops(); // fixed fee in stroops
+    final feeAddr = await getTransactionFeeAddress();
+    final feeStroops = await getCurrentFeeStroops(); // fixed transaction fee in stroops
     final feeXlm = _fromStroops(feeStroops);
 
     KeyPair.fromAccountId(dest);
     KeyPair.fromAccountId(feeAddr);
-    if (dest == feeAddr) _fail('Destination cannot be the fee address.');
+    if (dest == feeAddr) _fail('Destination cannot be the transaction fee address.');
 
     final totalStroops = _toStroops(amount);
     if (totalStroops <= feeStroops) {
-      _fail('Amount too small: must be greater than fixed fee of ${_fmt7(feeXlm)} XLM');
+      _fail('Amount too small: must be greater than fixed transaction fee of ${_fmt7(feeXlm)} XLM');
     }
     final recvPart = totalStroops - feeStroops;
 
     final sender = KeyPair.fromSecretSeed(secretSeed);
     final acc = await _loadAccount(sender.accountId);
 
-    // 2 ops: user payment + fixed fee (if fee > 0)
+    // 2 ops: user payment + fixed transaction fee (if fee > 0)
     final opCount = feeStroops > 0 ? 2 : 1;
     final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
     final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
@@ -199,7 +210,7 @@ class StellarWalletService {
   }
 
   // =====================================================================
-  // USDC PAYMENTS (Fee = fixed XLM; recipient gets full USDC)
+  // USDC PAYMENTS (Transaction Fee = fixed XLM; recipient gets full USDC)
   // =====================================================================
   Future<List<String>> sendUsdcWithFee({
     required String secretSeed,
@@ -211,13 +222,13 @@ class StellarWalletService {
     final dest = destination.trim();
     if (dest.isEmpty) _fail('Destination is required');
 
-    final feeAddr = await getProfitAddress();
+    final feeAddr = await getTransactionFeeAddress();
     final feeStroops = await getCurrentFeeStroops();
     final feeXlm = _fromStroops(feeStroops);
 
     KeyPair.fromAccountId(dest);
     KeyPair.fromAccountId(feeAddr);
-    if (dest == feeAddr) _fail('Destination cannot be the fee address.');
+    if (dest == feeAddr) _fail('Destination cannot be the transaction fee address.');
 
     // Require destination trustline
     if (!await hasUsdcTrustline(dest)) {
@@ -227,10 +238,10 @@ class StellarWalletService {
     final sender = KeyPair.fromSecretSeed(secretSeed);
     final acc = await _loadAccount(sender.accountId);
 
-    // Ensure sender has enough XLM to pay fixed fee
+    // Ensure sender has enough XLM to pay the fixed transaction fee
     final senderXlmBal = await getXlmBalance(sender.accountId);
     if (senderXlmBal + 1e-7 < feeXlm) {
-      _fail('Insufficient XLM to pay the fixed fee of ${_fmt7(feeXlm)} XLM.');
+      _fail('Insufficient XLM to pay the fixed transaction fee of ${_fmt7(feeXlm)} XLM.');
     }
 
     final opCount = feeStroops > 0 ? 2 : 1; // USDC payment + XLM fee
@@ -260,10 +271,10 @@ class StellarWalletService {
   }
 
   // =====================================================================
-  // Swaps: XLM ↔ USDC (Strict-Send) — Fee = fixed XLM
+  // Swaps: XLM ↔ USDC (Strict-Send) — Transaction Fee = fixed XLM
   // =====================================================================
 
-  /// Swap XLM → USDC and pay a fixed XLM fee.
+  /// Swap XLM → USDC and pay a fixed XLM transaction fee.
   Future<String> swapXlmToUsdc({
     required String secretSeed,
     required double sendAmountXlm,
@@ -282,21 +293,21 @@ class StellarWalletService {
         _fail('Destination has no USDC trustline. Ask recipient to add USDC first.');
       }
 
-      final feeAddr = await getProfitAddress();
+      final feeAddr = await getTransactionFeeAddress();
       KeyPair.fromAccountId(feeAddr);
 
       final feeStroops = await getCurrentFeeStroops();
       final feeXlm = _fromStroops(feeStroops);
 
-      // Check sender can cover source XLM + fixed fee
+      // Check sender can cover source XLM + fixed transaction fee
       final senderXlmBal = await getXlmBalance(kp.accountId);
       if (senderXlmBal + 1e-7 < (sendAmountXlm + feeXlm)) {
-        _fail('Insufficient XLM to swap ${_fmt7(sendAmountXlm)} and pay ${_fmt7(feeXlm)} fee.');
+        _fail('Insufficient XLM to swap ${_fmt7(sendAmountXlm)} and pay ${_fmt7(feeXlm)} transaction fee.');
       }
 
       final acc = await _loadAccount(kp.accountId);
 
-      // two ops: path payment + xlm fee
+      // two ops: path payment + xlm transaction fee
       final opCount = feeStroops > 0 ? 2 : 1;
       final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
@@ -332,14 +343,14 @@ class StellarWalletService {
     }
   }
 
-  /// Swap USDC → XLM and pay a fixed XLM fee.
+  /// Swap USDC → XLM and pay a fixed XLM transaction fee.
   ///
   /// If [destination] is omitted or equals the sender, we:
   ///  1) swap to self, then
-  ///  2) pay XLM fee out of the freshly received XLM (requires minXlmOut ≥ fee).
+  ///  2) pay XLM transaction fee out of the freshly received XLM (requires minXlmOut ≥ fee).
   ///
   /// If [destination] != self, the sender must already have enough XLM
-  /// to pay the fixed fee (since the XLM leaves the sender).
+  /// to pay the fixed transaction fee (since the XLM leaves the sender).
   Future<String> swapUsdcToXlm({
     required String secretSeed,
     required double sendAmountUsdc,
@@ -357,7 +368,7 @@ class StellarWalletService {
 
       await _ensureUsdcTrustlineSelf(secretSeed);
 
-      final feeAddr = await getProfitAddress();
+      final feeAddr = await getTransactionFeeAddress();
       KeyPair.fromAccountId(feeAddr);
 
       final feeStroops = await getCurrentFeeStroops();
@@ -365,7 +376,7 @@ class StellarWalletService {
 
       final acc = await _loadAccount(kp.accountId);
 
-      // two ops total: path payment + fee payment
+      // two ops total: path payment + transaction fee payment
       final opCount = feeStroops > 0 ? 2 : 1;
       final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
@@ -373,12 +384,12 @@ class StellarWalletService {
       final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);
 
       if (dest == self) {
-        // Require that at least minXlmOut covers the fee to avoid failure at op#2
+        // Require that at least minXlmOut covers the transaction fee to avoid failure at op#2
         if (minXlmOut + 1e-7 < feeXlm) {
-          _fail('minXlmOut too small to cover fixed fee of ${_fmt7(feeXlm)} XLM.');
+          _fail('minXlmOut too small to cover fixed transaction fee of ${_fmt7(feeXlm)} XLM.');
         }
 
-        // Path to self, then pay fee from received XLM
+        // Path to self, then pay transaction fee from received XLM
         final opPath = PathPaymentStrictSendOperationBuilder(
           _usdc,
           _fmt7(sendAmountUsdc),
@@ -387,8 +398,7 @@ class StellarWalletService {
           _fmt7(minXlmOut),
         ).build();
 
-        tb
-          ..addOperation(opPath);
+        tb.addOperation(opPath);
 
         if (feeStroops > 0) {
           tb.addOperation(
@@ -396,10 +406,10 @@ class StellarWalletService {
           );
         }
       } else {
-        // External destination: sender must already have XLM for fee
+        // External destination: sender must already have XLM for the transaction fee
         final senderXlmBal = await getXlmBalance(self);
         if (senderXlmBal + 1e-7 < feeXlm) {
-          _fail('Insufficient XLM to pay fixed fee of ${_fmt7(feeXlm)} XLM for external swap.');
+          _fail('Insufficient XLM to pay fixed transaction fee of ${_fmt7(feeXlm)} XLM for external swap.');
         }
 
         final opPath = PathPaymentStrictSendOperationBuilder(
@@ -410,8 +420,7 @@ class StellarWalletService {
           _fmt7(minXlmOut),
         ).build();
 
-        tb
-          ..addOperation(opPath);
+        tb.addOperation(opPath);
 
         if (feeStroops > 0) {
           tb.addOperation(
@@ -493,6 +502,7 @@ class StellarWalletService {
     destinationAssets: [_xlm],
   );
 
+  /// Estimates **network fee** for a transaction, separate from your fixed **transaction fee**.
   Future<double> estimateNetworkFeeXlm({int opCount = 1, int percentile = 90}) async {
     final ops = opCount <= 0 ? 1 : opCount;
     try {
