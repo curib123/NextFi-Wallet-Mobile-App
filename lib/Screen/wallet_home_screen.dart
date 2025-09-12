@@ -1,18 +1,20 @@
-// lib/Screen/wallet_home_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Components/wallet_switch_result.dart';
-import 'package:next_fi/Provider/HomeWalletProvider.dart';
+import 'package:next_fi/Provider/TransactionProvider.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Components/token_chooser.dart';
+import 'package:next_fi/Components/wallet_switch_result.dart';
+import 'package:next_fi/Components/AppAlert.dart';
+
 import 'package:next_fi/Helper/AppColor.dart';
 
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
+import 'package:next_fi/Provider/HomeWalletProvider.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/action_button.dart';
@@ -41,6 +43,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
     ..repeat(reverse: true);
 
+  // Alert + hint tracking
+  final Map<String, AppAlertController> _hintAlertCtrls = <String, AppAlertController>{};
+  final Set<String> _knownHintIds = <String>{};
+  StreamSubscription<dynamic>? _txIncomingSub;
+  VoidCallback? _homeHintsListener;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -48,13 +56,51 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Providers are hoisted; boot & realtime already started in main.dart
+
+    // Defer wiring until first frame so context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final home = context.read<WalletHomeProvider>();
+
+      // Seed known hints (avoid popping alerts for already-present hints)
+      _knownHintIds
+        ..clear()
+        ..addAll(home.hints.map((h) => h.id));
+
+      // Listen for NEW hints → show "Pending" alerts
+      _homeHintsListener = () {
+        if (!mounted) return;
+        _handleNewHints(home);
+      };
+      home.addListener(_homeHintsListener!);
+
+      // When a tx is confirmed on-chain, flip pending alert → success
+      _txIncomingSub = context.read<TransactionsProvider>().incomingStream.listen((tx) {
+        if (!mounted) return;
+        _handleConfirmedTx(tx);
+      });
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _livePulse.dispose();
+
+    // Clean up listeners
+    final home = mounted ? context.read<WalletHomeProvider>() : null;
+    if (_homeHintsListener != null && home != null) {
+      home.removeListener(_homeHintsListener!);
+    }
+    _txIncomingSub?.cancel();
+
+    // Close any open alerts
+    for (final ctl in _hintAlertCtrls.values) {
+      ctl.close();
+    }
+    _hintAlertCtrls.clear();
+
     super.dispose();
   }
 
@@ -73,17 +119,16 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    final colors   = AppColor.of(context);
-    final home     = context.watch<WalletHomeProvider>();
+    final colors = AppColor.of(context);
+    final home = context.watch<WalletHomeProvider>();
     final currency = context.watch<CurrencyProvider>();
-    final assets   = context.watch<AssetProvider>();
+    final assets = context.watch<AssetProvider>();
+    final stellar = context.read<StellarWalletService>();
 
     final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final fxXlm   = currency.xlmToFiat(home.xlm);
-    final fxUsdc  = currency.usdcToFiat(home.usdc);
+    final fxXlm = currency.xlmToFiat(home.xlm);
+    final fxUsdc = currency.usdcToFiat(home.usdc);
     final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
-
-    final stellar = context.read<StellarWalletService>();
 
     return DefaultTabController(
       length: 2,
@@ -121,16 +166,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           ? IncomingHintsStrip(
                         colors: colors,
                         stellarAddress: home.address!,
-                        incomingHints: home.hints.map((h) => {
+                        incomingHints: home.hints
+                            .map((h) => {
                           'hash': h.id,
                           'from': h.from,
                           'to': h.to,
                           'amount': h.amount.toStringAsFixed(6),
                           'assetCode': h.assetCode,
-                        }).toList(),
+                        })
+                            .toList(),
                         onAcknowledge: (tx) {
                           final String id = (tx['hash'] ?? '').toString();
                           context.read<WalletHomeProvider>().ackHint(id);
+                          final ctl = _hintAlertCtrls.remove(id);
+                          ctl?.close();
                         },
                       )
                           : const SizedBox.shrink(),
@@ -161,8 +210,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                             final addr = home.address;
                             if (addr == null) {
                               showFloatingSnackBar(context,
-                                  message: 'No address available',
-                                  type: SnackBarType.error);
+                                  message: 'No address available', type: SnackBarType.error);
                               return;
                             }
                             Navigator.push(
@@ -177,7 +225,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                               ),
                             );
                           },
-                          // IMPORTANT: use the shared service instance, not a new one
                           hasUsdcTrustline: stellar.hasUsdcTrustline(home.address ?? ''),
                         ),
                       ),
@@ -206,8 +253,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final home = context.read<WalletHomeProvider>();
     final addr = home.address;
     if (addr == null) {
-      showFloatingSnackBar(context,
-          message: 'Wallet not loaded yet', type: SnackBarType.warning);
+      showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
     }
     showTokenSelector(
@@ -225,8 +271,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final home = context.read<WalletHomeProvider>();
     final addr = home.address;
     if (addr == null) {
-      showFloatingSnackBar(context,
-          message: 'Wallet not loaded yet', type: SnackBarType.warning);
+      showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
     }
     Navigator.push(
@@ -240,6 +285,67 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         ),
       ),
     );
+  }
+
+  // ───────────────────── Incoming → Pending alert ─────────────────────
+  void _handleNewHints(WalletHomeProvider home) {
+    for (final h in home.hints) {
+      if (_knownHintIds.contains(h.id)) continue;
+      _knownHintIds.add(h.id);
+      _showPendingAlertForHint(h);
+    }
+  }
+
+  void _showPendingAlertForHint(IncomingHint h) {
+    if (!mounted) return;
+    final ctl = showAppAlert(
+      context,
+      type: AppAlertType.loading,
+      title: 'Incoming ${h.amount.toStringAsFixed(6)} ${h.assetCode}',
+      subtitle: 'From ${_short(h.from)} • Pending confirmation…',
+      primaryText: 'Acknowledge',
+      onPrimary: () {
+        if (!mounted) return;
+        context.read<WalletHomeProvider>().ackHint(h.id);
+      },
+      barrierDismissible: true,
+    );
+
+    _hintAlertCtrls[h.id] = ctl;
+  }
+
+  // ───────────────────── Confirmed tx → Success alert ─────────────────────
+  void _handleConfirmedTx(Map tx) {
+    final hash = (tx['hash'] ?? '').toString();
+    if (hash.isEmpty) return;
+
+    final ctl = _hintAlertCtrls.remove(hash);
+    if (ctl == null) return; // We only flip alerts created from hints
+
+    final asset = (tx['asset'] ?? 'XLM').toString();
+    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+
+    ctl.update(
+      AppAlertType.success,
+      title: 'Received ${amount.toStringAsFixed(6)} $asset',
+      subtitle: 'Confirmed on-chain.',
+      primaryText: 'Done',
+    );
+
+    if (mounted) {
+      context.read<WalletHomeProvider>().ackHint(hash);
+    }
+
+    Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      ctl.close();
+    });
+  }
+
+  String _short(String addr) {
+    if (addr.isEmpty) return '—';
+    if (addr.length <= 12) return addr;
+    return '${addr.substring(0, 6)}…${addr.substring(addr.length - 4)}';
   }
 }
 
@@ -265,7 +371,6 @@ class _TopBar extends StatelessWidget {
             onTap: () async {
               final activeId = await SeedStorage.getActiveWalletId();
 
-              // Open the wallet switch sheet
               final res = await showWalletSwitchSheet(
                 context,
                 currentActiveId: activeId,
@@ -273,7 +378,6 @@ class _TopBar extends StatelessWidget {
               );
               if (res == null) return;
 
-              // Create new wallet flow
               if (res.createNew) {
                 await Navigator.push(
                   context,
@@ -284,7 +388,6 @@ class _TopBar extends StatelessWidget {
                 return;
               }
 
-              // Switch to an existing wallet — no app restart, just reboot provider
               final chosenId = res.chosenWalletId;
               if (chosenId != null && chosenId != activeId) {
                 final ok = await context.read<WalletHomeProvider>().switchTo(chosenId);
@@ -500,8 +603,7 @@ class _TabKeepAlive extends StatefulWidget {
   State<_TabKeepAlive> createState() => _TabKeepAliveState();
 }
 
-class _TabKeepAliveState extends State<_TabKeepAlive>
-    with AutomaticKeepAliveClientMixin {
+class _TabKeepAliveState extends State<_TabKeepAlive> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
   @override
@@ -518,7 +620,7 @@ class _LiveCountingBalance extends StatefulWidget {
     required this.targetValue,
     required this.fmt,
     required this.baseColor,
-    this.upColor = const Color(0xFF22C55E),   // green-500
+    this.upColor = const Color(0xFF22C55E), // green-500
     this.downColor = const Color(0xFFEF4444), // red-500
     this.hidden = false,
     this.loading = false,
@@ -532,7 +634,6 @@ class _LiveCountingBalance extends StatefulWidget {
   final Color downColor;
   final bool hidden;
 
-  // New:
   final bool loading;
   final AnimationController? pulse;
 
@@ -541,12 +642,12 @@ class _LiveCountingBalance extends StatefulWidget {
 }
 
 class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
-  late double _display;   // animated number
-  int _dir = 0;           // -1 ↓, 0 =, +1 ↑
+  late double _display;
+  int _dir = 0; // -1 ↓, 0 =, +1 ↑
   Timer? _ticker;
 
   static const _tick = Duration(seconds: 1);
-  static const _minStep = 0.01; // currency smallest step
+  static const _minStep = 0.01;
 
   @override
   void initState() {
@@ -558,7 +659,6 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
   @override
   void didUpdateWidget(covariant _LiveCountingBalance oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Snap to neutral if target becomes invalid; ticker will hold value.
     if (!widget.targetValue.isFinite && _display.isFinite) {
       setState(() {
         _dir = 0;
@@ -571,7 +671,6 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
     _ticker = Timer.periodic(_tick, (_) {
       if (!mounted) return;
 
-      // Guard against NaN/Inf targets; hold last display until valid
       if (!widget.targetValue.isFinite) {
         setState(() => _dir = 0);
         return;
@@ -580,7 +679,6 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
       final target = widget.targetValue;
       final delta = target - _display;
 
-      // Close enough → snap & neutral color
       if (delta.abs() <= _minStep) {
         setState(() {
           _display = target;
@@ -589,7 +687,6 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
         return;
       }
 
-      // Smooth, size-aware step: reach the target in ≈ 4–6 ticks, min one cent
       final dynamicStep = (delta.abs() / 4).clamp(_minStep, double.infinity);
       final step = delta.isNegative ? -dynamicStep : dynamicStep;
 
@@ -608,13 +705,10 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
 
   @override
   Widget build(BuildContext context) {
-    final color = _dir == 0
-        ? widget.baseColor
-        : (_dir > 0 ? widget.upColor : widget.downColor);
+    final color = _dir == 0 ? widget.baseColor : (_dir > 0 ? widget.upColor : widget.downColor);
 
     return Row(
       children: [
-        // Direction icon (up/down/none)
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
           transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
@@ -628,8 +722,6 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
           ),
         ),
         const SizedBox(width: 6),
-
-        // The amount itself, animates color on direction
         AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           style: TextStyle(
@@ -639,8 +731,6 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
           ),
           child: Text(widget.hidden ? '••••' : widget.fmt.format(_display)),
         ),
-
-        // Subtle pulsing dot when we’re currently fetching (replaces spinner)
         if (widget.loading && widget.pulse != null) ...[
           const SizedBox(width: 8),
           ScaleTransition(
