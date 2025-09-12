@@ -8,6 +8,33 @@ import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 
 // ========== Helper models ==========
 
+class RateLimitInfo {
+  final int? limitPerWindow;      // e.g. 3600
+  final int? remaining;           // e.g. 3578
+  final Duration? window;         // e.g. 1 hour (some nodes use seconds)
+  final DateTime? resetAt;        // now + seconds, or absolute epoch seconds
+  final int? retryAfterSeconds;   // present on 429
+  final Map<String, String> rawHeaders;
+
+  const RateLimitInfo({
+    required this.limitPerWindow,
+    required this.remaining,
+    required this.window,
+    required this.resetAt,
+    required this.retryAfterSeconds,
+    required this.rawHeaders,
+  });
+
+  int? get used =>
+      (limitPerWindow != null && remaining != null) ? (limitPerWindow! - remaining!) : null;
+
+  Duration? get resetIn => resetAt == null ? null : resetAt!.difference(DateTime.now());
+
+  @override
+  String toString() =>
+      'RateLimitInfo(limit=$limitPerWindow, remaining=$remaining, window=$window, resetAt=$resetAt, retryAfter=$retryAfterSeconds)';
+}
+
 class AccountState {
   final double xlm;
   final double usdc;
@@ -116,6 +143,126 @@ class StellarWalletService {
 
   int _toStroops(double amount) => (amount * 1e7).round();
   double _fromStroops(int stroops) => stroops / 1e7;
+
+  // ===== Rate limit tracking =====
+
+  RateLimitInfo? _lastRateLimit;
+  final _rateLimitCtrl = StreamController<RateLimitInfo>.broadcast();
+
+  /// Last captured rate limit info from any Horizon HTTP call (may be null).
+  RateLimitInfo? get lastRateLimitInfo => _lastRateLimit;
+
+  /// Stream emits whenever a Horizon response contains recognizable rate-limit headers.
+  Stream<RateLimitInfo> rateLimitStream() => _rateLimitCtrl.stream;
+
+  void _captureRateLimit(Map<String, String> headers) {
+    final info = _parseRateLimit(headers);
+    if (info != null) {
+      _lastRateLimit = info;
+      if (!_rateLimitCtrl.isClosed) _rateLimitCtrl.add(info);
+    }
+  }
+
+  RateLimitInfo? _parseRateLimit(Map<String, String> headers) {
+    if (headers.isEmpty) return null;
+
+    // normalize keys for case-insensitive access
+    final h = <String, String>{};
+    headers.forEach((k, v) => h[k.toLowerCase()] = v);
+
+    String? _firstOf(List<String> keys) {
+      for (final k in keys) {
+        final v = h[k];
+        if (v != null && v.trim().isNotEmpty) return v.trim();
+      }
+      return null;
+    }
+
+    int? _parseIntish(String? s) {
+      if (s == null) return null;
+      final m = RegExp(r'\d+').firstMatch(s);
+      return (m == null) ? null : int.tryParse(m.group(0)!);
+    }
+
+    Duration? _parseWindow(String? s) {
+      if (s == null) return null;
+      // handles patterns like "101;w=1" (limit; window=1 sec)
+      final wm = RegExp(r'w=(\d+)').firstMatch(s);
+      if (wm != null) return Duration(seconds: int.parse(wm.group(1)!));
+      // sometimes reset header is the window length in seconds
+      final asInt = _parseIntish(s);
+      if (asInt != null) return Duration(seconds: asInt);
+      return null;
+    }
+
+    DateTime? _parseResetAt(String? s) {
+      if (s == null) return null;
+      final val = _parseIntish(s);
+      if (val == null) return null;
+      // Heuristic: if it's large (epoch seconds), treat as absolute time.
+      if (val > 100000000) {
+        return DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true).toLocal();
+      }
+      // Otherwise treat as seconds from now.
+      return DateTime.now().add(Duration(seconds: val));
+    }
+
+    final limitStr = _firstOf([
+      'x-ratelimit-limit',
+      'x-rate-limit-limit',
+      'ratelimit-limit',
+      'x-app-rate-limit', // some CDNs
+    ]);
+    final remainingStr = _firstOf([
+      'x-ratelimit-remaining',
+      'x-rate-limit-remaining',
+      'ratelimit-remaining',
+      'x-app-rate-limit-remaining',
+    ]);
+    final resetStr = _firstOf([
+      'x-ratelimit-reset',
+      'x-rate-limit-reset',
+      'ratelimit-reset',
+    ]);
+    final retryAfterStr = _firstOf(['retry-after']);
+
+    final limit = _parseIntish(limitStr);
+    final remaining = _parseIntish(remainingStr);
+    final window = _parseWindow(limitStr) ?? _parseWindow(resetStr);
+    final resetAt = _parseResetAt(resetStr);
+    final retryAfter = _parseIntish(retryAfterStr);
+
+    if (limit == null && remaining == null && window == null && retryAfter == null) {
+      return null; // headers not present (common behind some CDNs)
+    }
+
+    return RateLimitInfo(
+      limitPerWindow: limit,
+      remaining: remaining,
+      window: window,
+      resetAt: resetAt,
+      retryAfterSeconds: retryAfter,
+      rawHeaders: headers,
+    );
+  }
+
+  /// Lightweight probe using /fee_stats to get the latest rate-limit headers.
+  Future<RateLimitInfo?> fetchRateLimitInfo() async {
+    try {
+      final uri = Uri.parse('$horizonBase/fee_stats');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 6));
+      _captureRateLimit(resp.headers);
+      return _lastRateLimit;
+    } catch (_) {
+      return _lastRateLimit;
+    }
+  }
+
+  /// Convenience: returns remaining requests in the current window (if headers available).
+  Future<int?> getAvailableRequests() async {
+    final info = await fetchRateLimitInfo();
+    return info?.remaining;
+  }
 
   // ===== Basics =====
 
@@ -478,6 +625,7 @@ class StellarWalletService {
 
     try {
       final resp = await http.get(uri).timeout(const Duration(seconds: 20));
+      _captureRateLimit(resp.headers); // capture RL headers
       if (resp.statusCode != 200) return null;
 
       final data = json.decode(resp.body) as Map<String, dynamic>;
@@ -508,6 +656,7 @@ class StellarWalletService {
     try {
       final uri = Uri.parse('$horizonBase/fee_stats');
       final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      _captureRateLimit(resp.headers); // capture RL headers
       if (resp.statusCode == 200) {
         final data = json.decode(resp.body) as Map<String, dynamic>;
 
@@ -615,15 +764,18 @@ class StellarWalletService {
     Future<void> push(DateTime at) async {
       try {
         final x = await estimateNetworkFeeXlm(opCount: opCount, percentile: percentile);
+
         int base = 100;
         try {
           final uri = Uri.parse('$horizonBase/fee_stats');
           final resp = await http.get(uri).timeout(const Duration(seconds: 6));
+          _captureRateLimit(resp.headers); // capture RL headers
           if (resp.statusCode == 200) {
             final data = json.decode(resp.body) as Map<String, dynamic>;
             base = int.tryParse('${data['last_ledger_base_fee'] ?? '100'}') ?? 100;
           }
         } catch (_) {}
+
         final perOp = (x * 1e7 / (opCount <= 0 ? 1 : opCount)).round();
         final total = (x * 1e7).round();
         controller.add(FeeEstimate(
