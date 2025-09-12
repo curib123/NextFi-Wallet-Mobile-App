@@ -265,6 +265,24 @@ class _SwapScreenState extends State<SwapScreen> {
 
     final loadingFirst = p.loading && p.accountId == null;
 
+    // Build compact dynamic info line safely
+    String _quoteLine() {
+      if (p.estReceive == null) return 'Getting live quote…';
+      final buf = StringBuffer();
+      buf.write(
+          'Est. receive: ${_fmt.format(p.estReceive!)} ${p.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: 1%');
+      if (p.feeXlm != null) {
+        buf.write(' · Fee≈ ${_fmt.format(p.feeXlm!)} XLM');
+        if (p.needsTrustline) buf.write(' (incl. trustline)');
+      }
+      return buf.toString();
+    }
+
+    final canSwap = () {
+      final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
+      return amt > 0 && p.hasEnough(amt) && !p.loading;
+    }();
+
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
@@ -282,67 +300,149 @@ class _SwapScreenState extends State<SwapScreen> {
           ? const _PageLoader()
           : p.error != null
           ? _ErrorCard(message: p.error!)
-          : Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          : RefreshIndicator(
+        onRefresh: () async {
+          await p.refreshBalances();
+          final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
+          if (amt > 0) await p.updateQuote(amt);
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          physics: const AlwaysScrollableScrollPhysics(),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
-            _BalanceRow(xlm: p.xlmBal, usdc: p.usdcBal),
-            const SizedBox(height: 10),
-            _DirectionSwitcher(
-              isXlmToUsdc: p.isXlmToUsdc,
-              onFlip: () => _flipDir(p),
-            ),
-            const SizedBox(height: 10),
-
-            // Amount input
-            _AmountField(
-              label: 'You send (${p.isXlmToUsdc ? 'XLM' : 'USDC'})',
-              controller: _amountCtl,
-            ),
-
-            // Chips: 10 / 25 / 50 / 75 / 100
-            const SizedBox(height: 10),
-            _PercentChipsRow(
-              onPick: (pct) => _applyPercent(p, pct),
-            ),
-
-            if (p.isXlmToUsdc) ...[
-              const SizedBox(height: 6),
-              const _HintBox(
-                text:
-                'We keep 1 XLM for fees & account reserve. Use the quick chips to prefill a percentage of your spendable amount.',
+            // Balances
+            _SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CardHeader(
+                    icon: LucideIcons.wallet,
+                    title: 'Balances',
+                    subtitle: p.accountId == null ? '—' : 'Account: ${p.accountId}',
+                  ),
+                  const SizedBox(height: 8),
+                  _BalanceRow(xlm: p.xlmBal, usdc: p.usdcBal),
+                ],
               ),
-            ],
+            ),
             const SizedBox(height: 10),
 
-            _TinyInfoRow(
-              icon: LucideIcons.badgeDollarSign,
-              text: p.estReceive == null
-                  ? 'Getting live quote…'
-                  : 'Est. receive: ${_fmt.format(p.estReceive!)} ${p.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: 1%'
-                  '${p.feeXlm == null ? '' : ' · Fee≈ ${_fmt.format(p.feeXlm!)} XLM${p.needsTrustline ? ' (incl. trustline)' : ''}'}',
+            // Direction switcher
+            _SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CardHeader(
+                    icon: LucideIcons.arrowLeftRight,
+                    title: 'Swap Direction',
+                    trailing: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _flipDir(p),
+                      icon: Icon(LucideIcons.repeat2, color: colors.primary),
+                      tooltip: 'Flip',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _DirectionSwitcher(
+                    isXlmToUsdc: p.isXlmToUsdc,
+                    onFlip: () => _flipDir(p),
+                  ),
+                ],
+              ),
             ),
-            const Spacer(),
-            ElevatedButton.icon(
-              onPressed: () {
-                final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
-                if (!p.hasEnough(amt)) {
-                  HapticFeedback.selectionClick();
+            const SizedBox(height: 10),
+
+            // Amount + quick chips
+            _SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CardHeader(
+                    icon: LucideIcons.badgeDollarSign,
+                    title:
+                    'You send (${p.isXlmToUsdc ? 'XLM' : 'USDC'})',
+                  ),
+                  const SizedBox(height: 8),
+                  _AmountField(
+                    label: 'Amount',
+                    controller: _amountCtl,
+                  ),
+                  const SizedBox(height: 10),
+                  _PercentChipsRow(
+                    onPick: (pct) => _applyPercent(p, pct),
+                  ),
+                  if (p.isXlmToUsdc) ...[
+                    const SizedBox(height: 8),
+                    const _HintBox(
+                      text:
+                      'We keep ~1 XLM for fees & account reserve. Use quick chips to prefill a safe percentage.',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Live quote + fee
+            _SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CardHeader(
+                    icon: LucideIcons.activity,
+                    title: 'Quote',
+                    subtitle: p.loading
+                        ? 'Updating…'
+                        : 'Live path find result',
+                  ),
+                  const SizedBox(height: 8),
+                  _TinyInfoRow(
+                    icon: LucideIcons.info,
+                    text: _quoteLine(),
+                  ),
+                ],
+              ),
+            ),
+
+            // Spacer for the pinned CTA
+            const SizedBox(height: 96),
+          ],
+        ),
+      ),
+
+      // Pinned CTA for modern UX
+      bottomNavigationBar: (loadingFirst || p.error != null)
+          ? null
+          : SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: canSwap ? () => _confirmAndSwap(p) : () {
+                HapticFeedback.selectionClick();
+                if ((_amountCtl.text.trim()).isEmpty) {
+                  showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.warning);
+                } else {
+                  showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error);
                 }
-                _confirmAndSwap(p);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: const Icon(LucideIcons.arrowRightLeft),
-              label: Text(p.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM'),
+              icon: const Icon(LucideIcons.arrowRightLeft, size: 18),
+              label: Text(
+                p.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -379,6 +479,70 @@ class _ErrorCard extends StatelessWidget {
         ),
         child: Text(message, style: TextStyle(color: c.error)),
       ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final Widget child;
+  const _SectionCard({required this.child});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.primary.withOpacity(0.10)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CardHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  const _CardHeader({required this.icon, required this.title, this.subtitle, this.trailing});
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: c.primary.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: c.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13.5,
+                  )),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
     );
   }
 }
