@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Screen/SwapScreenWidgets/swap_widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -11,16 +10,12 @@ import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 
-import 'SendAndReceieveWidgets/shared_widget_send_and_recieve.dart';
-
-// === ReceiveScreen with XLM/USDC tabs ======================================
 class ReceiveScreen extends StatefulWidget {
   final String address;
   final double xlmBalance;
   final double usdcBalance;
-
-  /// Optional initial token for the tab (defaults to XLM).
-  final String initialToken; // 'XLM' | 'USDC'
+  /// 'XLM' or 'USDC'
+  final String initialToken;
 
   const ReceiveScreen({
     super.key,
@@ -34,231 +29,169 @@ class ReceiveScreen extends StatefulWidget {
   State<ReceiveScreen> createState() => _ReceiveScreenState();
 }
 
-class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProviderStateMixin {
-  // Range state (shared)
-  PriceRange _selected = PriceRange.h24;
-
-  // ---- Tabs ----
-  late final TabController _tabController;
-
-  bool get isXLM => _tabController.index == 0;
-  String get currentToken => isXLM ? 'XLM' : 'USDC';
+class _ReceiveScreenState extends State<ReceiveScreen> {
+  late bool _xlmSelected;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 2,
-      vsync: this,
-      initialIndex: widget.initialToken.toUpperCase() == 'USDC' ? 1 : 0,
-    )..addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  // Pick the right history series from provider given token + range
-  List<double> _historyFor(CurrencyProvider c, {required bool isXLM, required PriceRange r}) {
-    if (isXLM) {
-      return switch (r) {
-        PriceRange.h24 => c.xlmHistory24h,
-        PriceRange.d7  => c.xlmHistory7,
-        PriceRange.d30 => c.xlmHistory30,
-        PriceRange.y1  => c.xlmHistory365,
-      };
-    } else {
-      return switch (r) {
-        PriceRange.h24 => c.usdcHistory24h,
-        PriceRange.d7  => c.usdcHistory7,
-        PriceRange.d30 => c.usdcHistory30,
-        PriceRange.y1  => c.usdcHistory365,
-      };
-    }
+    _xlmSelected = widget.initialToken.toUpperCase() != 'USDC';
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-    final currency = Provider.of<CurrencyProvider>(context, listen: true);
-
-    final fiatFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-    final numFmt = NumberFormat("#,##0.00");
-
-    // streams / prices based on selected token
-    final priceStream   = isXLM ? currency.xlmPriceStream : currency.usdcPriceStream;
-    final lastPrice     = isXLM ? currency.xlmRate        : currency.usdcRate;
-    final oneTokenFiat  = isXLM ? currency.xlmToFiat(1)   : currency.usdcToFiat(1);
-
-    // selected balances & history
-    final double tokenBalance = isXLM ? widget.xlmBalance : widget.usdcBalance;
-    final double balanceFiat  = isXLM ? currency.xlmToFiat(tokenBalance) : currency.usdcToFiat(tokenBalance);
-
+    final c = AppColor.of(context);
     return Scaffold(
-      backgroundColor: colors.surface,
+      backgroundColor: c.surface,
       appBar: AppBar(
-        backgroundColor: colors.surface,
         elevation: 0,
+        backgroundColor: c.surface,
         leading: IconButton(
-          icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
+          icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        // ✅ Add logo in the title and remove address from the top (no address chip/action here)
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AssetLogo(asset: currentToken, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              "Receive",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textPrimary),
-            ),
-          ],
-        ),
         centerTitle: true,
-        // 🗑️ Removed the "copy address" action from the top app bar
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.primary.withOpacity(0.1)),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: colors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                labelColor: Colors.white,
-                unselectedLabelColor: colors.textSecondary,
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                // ✅ Tabs with logos
-                tabs: [
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        AssetLogo(asset: 'XLM', size: 14),
-                        SizedBox(width: 6),
-                        Text('XLM'),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        AssetLogo(asset: 'USDC', size: 14),
-                        SizedBox(width: 6),
-                        Text('USDC'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        title: Text(
+          'Receive',
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
-      body: StreamBuilder<double>(
-        stream: priceStream,
-        builder: (context, snapshot) {
-          final _ = snapshot.data ?? lastPrice; // triggers rebuilds
-          final series = _historyFor(currency, isXLM: isXLM, r: _selected);
+      body: Consumer<CurrencyProvider>(
+        builder: (context, currency, _) {
+          final fiat = currency.fiat.toUpperCase();
+          final fiatFmt = NumberFormat.simpleCurrency(name: fiat);
+          final numFmt = NumberFormat('#,##0.######');
 
-          final changePct = pctChangeFromSeries(series);
-          final changeUp = changePct >= 0;
-          final changeColor = changeUp ? Colors.green : Colors.red;
+          final isXLM = _xlmSelected;
+          final token = isXLM ? 'XLM' : 'USDC';
+          final tokenBalance = isXLM ? widget.xlmBalance : widget.usdcBalance;
+          final balanceFiat = isXLM
+              ? currency.xlmToFiat(tokenBalance)
+              : currency.usdcToFiat(tokenBalance);
+          final oneTokenFiat = isXLM
+              ? currency.xlmToFiat(1)
+              : currency.usdcToFiat(1);
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              // Price header
-              PriceHeader(
-                token: currentToken,
-                oneTokenInFiat: oneTokenFiat,
-                changePct: changePct,
-                rangeLabel: kRangeLabel[_selected]!,
-                colors: colors,
-                fiatFmt: fiatFmt,
-              ),
-              const SizedBox(height: 16),
-
-              // Balance
-              BalanceHeader(
-                token: currentToken,
-                amountToken: tokenBalance,
-                amountFiat: balanceFiat,
-                colors: colors,
-                numFmt: numFmt,
-                fiatFmt: fiatFmt,
-              ),
-              const SizedBox(height: 16),
-
-              // Range segmented
-              RangeSegmented(
-                selected: _selected,
-                onChanged: (r) => setState(() => _selected = r),
-                colors: colors,
+              // Token switch (simple, clean, no TabController)
+              _TokenSwitch(
+                xlmSelected: _xlmSelected,
+                onSelectXLM: () => setState(() => _xlmSelected = true),
+                onSelectUSDC: () => setState(() => _xlmSelected = false),
+                color: c,
               ),
               const SizedBox(height: 12),
 
-              // Main chart
-              MainLineChart(
-                history: series,
-                changeColor: changeColor,
-                fiatFmt: fiatFmt,
-                colors: colors,
+              // Price + Balance glance
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: c.primary.withOpacity(0.12)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TokenPill(token: token, color: c),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          '1 $token ≈ ',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          fiatFmt.format(oneTokenFiat),
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Text(
+                          numFmt.format(tokenBalance),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: c.textPrimary,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          token,
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          fiatFmt.format(balanceFiat),
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
-              // QR card
+              // QR card (tap to enlarge)
               GestureDetector(
-                onTap: () => _showQrDialog(context, colors),
+                onTap: () => _showQrDialog(context, token),
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: colors.surface,
+                    color: c.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colors.primary.withOpacity(0.08)),
+                    border: Border.all(color: c.primary.withOpacity(0.08)),
                   ),
                   child: Column(
                     children: [
-                      // ✅ Small logo above QR
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AssetLogo(asset: currentToken, size: 18),
-                          const SizedBox(width: 8),
-                          Text('Scan to receive $currentToken',
-                              style: TextStyle(
-                                color: colors.textPrimary,
-                                fontWeight: FontWeight.w800,
-                              )),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      QrImageView(
-                        data: widget.address,
-                        version: QrVersions.auto,
-                        size: 200,
-                        backgroundColor: Colors.white,
+                      Text(
+                        'Scan to receive $token',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          color: Colors.white,
+                          child: QrImageView(
+                            data: widget.address,
+                            version: QrVersions.auto,
+                            size: 220,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       Text(
-                        "Tap to enlarge QR",
-                        style: TextStyle(color: colors.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                        'Tap to enlarge',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -266,24 +199,22 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 16),
 
-              // Address card (still available lower on the page; top address removed)
+              // Address (monospace) + quick copy
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.05),
+                  color: c.primary.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
                   children: [
-                    // ✅ Token logo next to the address
-                    AssetLogo(asset: currentToken, size: 18),
+                    Icon(LucideIcons.wallet, size: 18, color: c.primary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: SelectableText(
                         widget.address,
-                        textAlign: TextAlign.left,
                         style: TextStyle(
-                          color: colors.textPrimary,
+                          color: c.textPrimary,
                           fontFamily: 'monospace',
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
@@ -291,12 +222,16 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
                       ),
                     ),
                     IconButton(
-                      tooltip: "Copy",
-                      icon: Icon(LucideIcons.copy, color: colors.primary, size: 20),
+                      tooltip: 'Copy',
+                      icon: Icon(LucideIcons.copy, size: 20, color: c.primary),
                       onPressed: () async {
                         await Clipboard.setData(ClipboardData(text: widget.address));
                         HapticFeedback.lightImpact();
-                        showFloatingSnackBar(context, message: "Address copied", type: SnackBarType.success);
+                        showFloatingSnackBar(
+                          context,
+                          message: 'Address copied',
+                          type: SnackBarType.success,
+                        );
                       },
                     ),
                   ],
@@ -304,27 +239,22 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 16),
 
-              // Safety (token-aware)
+              // Safety note
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(0.08),
+                  color: c.primary.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AssetLogo(asset: currentToken, size: 18), // ✅ small logo for context
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        isXLM
-                            ? "Send only XLM (native Stellar coin) to this address. Sending other networks or assets may result in permanent loss."
-                            : "Send only USDC on the Stellar network to this address. The receiver must have a USDC trustline to accept funds.",
-                        style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.28),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  _xlmSelected
+                      ? 'Send only XLM (native Stellar) to this address. Sending other assets or from other networks may result in permanent loss.'
+                      : 'Send only USDC on the Stellar network to this address. A USDC trustline is required to receive funds.',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
                 ),
               ),
             ],
@@ -334,85 +264,205 @@ class _ReceiveScreenState extends State<ReceiveScreen> with SingleTickerProvider
     );
   }
 
-  void _showQrDialog(BuildContext context, AppColor colors) {
+  void _showQrDialog(BuildContext context, String token) {
+    final c = AppColor.of(context);
     showDialog(
       context: context,
-      builder: (_) {
-        return Dialog(
-          backgroundColor: colors.surface,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (_) => Dialog(
+        backgroundColor: c.surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _TokenPill(token: token, color: c),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  color: Colors.white,
+                  child: QrImageView(
+                    data: widget.address,
+                    version: QrVersions.auto,
+                    size: 260,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SelectableText(
+                widget.address,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontFamily: 'monospace',
+                  fontSize: 12.5,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: widget.address));
+                        HapticFeedback.mediumImpact();
+                        Navigator.pop(context);
+                        showFloatingSnackBar(
+                          context,
+                          message: 'Address copied',
+                          type: SnackBarType.success,
+                        );
+                      },
+                      icon: Icon(LucideIcons.copy, size: 18, color: c.primary),
+                      label: Text(
+                        'Copy',
+                        style: TextStyle(color: c.primary, fontWeight: FontWeight.w700),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: c.primary.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(LucideIcons.x, size: 18, color: Colors.white),
+                      label: const Text('Close'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: c.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Simple two-button switch (XLM / USDC) with clean styles.
+class _TokenSwitch extends StatelessWidget {
+  const _TokenSwitch({
+    required this.xlmSelected,
+    required this.onSelectXLM,
+    required this.onSelectUSDC,
+    required this.color,
+  });
+
+  final bool xlmSelected;
+  final VoidCallback onSelectXLM;
+  final VoidCallback onSelectUSDC;
+  final AppColor color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _SegmentButton(
+            label: 'XLM',
+            selected: xlmSelected,
+            onTap: onSelectXLM,
+            color: color,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SegmentButton(
+            label: 'USDC',
+            selected: !xlmSelected,
+            onTap: onSelectUSDC,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SegmentButton extends StatelessWidget {
+  const _SegmentButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.color,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final AppColor color;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = selected ? color.primary : color.primary.withOpacity(0.06);
+    final fg = selected ? Colors.white : color.textSecondary;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.primary.withOpacity(selected ? 0.0 : 0.15)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ✅ Dialog title with logo
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AssetLogo(asset: currentToken, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Receive $currentToken",
-                      style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800),
-                    ),
-                  ],
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
                 ),
-                const SizedBox(height: 8),
-                QrImageView(
-                  data: widget.address,
-                  version: QrVersions.auto,
-                  size: 260,
-                  backgroundColor: Colors.white,
-                ),
-                const SizedBox(height: 8),
-                SelectableText(
-                  widget.address,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.textSecondary, fontFamily: 'monospace', fontSize: 12.5, height: 1.2),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await Clipboard.setData(ClipboardData(text: widget.address));
-                          HapticFeedback.mediumImpact();
-                          Navigator.pop(context);
-                          showFloatingSnackBar(context, message: "Address copied", type: SnackBarType.success);
-                        },
-                        icon: Icon(LucideIcons.copy, size: 18, color: colors.primary),
-                        label: Text("Copy", style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700)),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(LucideIcons.x, size: 18, color: Colors.white),
-                        label: const Text("Close"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+}
+
+/// Minimal token pill (no external assets).
+class _TokenPill extends StatelessWidget {
+  const _TokenPill({required this.token, required this.color});
+  final String token;
+  final AppColor color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        token,
+        style: TextStyle(
+          color: color.textPrimary,
+          fontWeight: FontWeight.w800,
+          fontSize: 12.5,
+        ),
+      ),
     );
   }
 }
