@@ -507,7 +507,7 @@ class _TipText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseSize = dense ? 13.0 : 13.5;
-    final weight = FontWeight.w700;
+    final weight = FontWeight.w300;
 
     // If two lines allowed, let Text handle wrapping; else autoshrink.
     if (allowTwoLines) {
