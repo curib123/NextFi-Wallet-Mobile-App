@@ -1,4 +1,4 @@
-
+// lib/Provider/TransactionsProvider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
@@ -36,7 +36,8 @@ class TransactionsProvider extends ChangeNotifier {
   final StreamController<Tx> _incomingController = StreamController<Tx>.broadcast();
   Stream<Tx> get incomingStream => _incomingController.stream;
 
-  StreamSubscription<stellar.OperationResponse>? _incomingSub;
+  // Use our service’s stream (event-driven; no polling)
+  StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
 
   TxFilter filter = TxFilter.all;
   List<Tx> get visibleTxs {
@@ -93,7 +94,7 @@ class TransactionsProvider extends ChangeNotifier {
     } else {
       loading = true;
       errorMsg = null;
-      if (!loadMore) _cursor = null;
+      _cursor = null;
     }
     notifyListeners();
 
@@ -182,10 +183,9 @@ class TransactionsProvider extends ChangeNotifier {
 
     _incomingSub?.cancel();
 
-    _incomingSub = _stellar.sdk.payments
-        .forAccount(addr)
-        .cursor('now')
-        .stream()
+    // Use the service’s paymentsStream (filters to successful payment-like ops)
+    _incomingSub = _stellar
+        .paymentsStream(addr)
         .listen((op) {
       final tx = _opToTx(op, addr);
       if (tx == null) return;
@@ -195,10 +195,10 @@ class TransactionsProvider extends ChangeNotifier {
 
       _seenIds.add(id);
       _txs.insert(0, tx);
-      _incomingController.add(tx); // let UI show a chip/toast
+      _incomingController.add(tx); // notify UI for chip/toast
       notifyListeners();
     }, onError: (_) {
-      // Silent; user can refresh manually
+      // Silent; user can pull-to-refresh
     });
   }
 
@@ -224,6 +224,7 @@ class TransactionsProvider extends ChangeNotifier {
       from = op.from;
       to = op.to;
     } else if (op is stellar.CreateAccountOperationResponse) {
+      // Note: create_account won't arrive on paymentsStream (we still get it via fetch)
       assetCode = 'XLM';
       amount = double.tryParse(op.startingBalance ?? '');
       from = op.funder;
@@ -259,8 +260,10 @@ class TransactionsProvider extends ChangeNotifier {
       final int? code = x.response?.statusCode as int?;
       final String? body = x.response?.body as String?;
       if (code == 404) return true;
-      if (body != null && (body.contains('Resource Missing') ||
-          body.contains('"title":"Resource Missing"') || body.contains('not_found'))) {
+      if (body != null &&
+          (body.contains('Resource Missing') ||
+              body.contains('"title":"Resource Missing"') ||
+              body.contains('not_found'))) {
         return true;
       }
     } catch (_) {}
@@ -284,4 +287,3 @@ class TransactionsProvider extends ChangeNotifier {
     super.dispose();
   }
 }
-
