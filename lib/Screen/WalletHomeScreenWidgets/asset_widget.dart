@@ -1,3 +1,5 @@
+// lib/Screen/WalletHomeScreenWidgets/asset_widget.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -6,7 +8,9 @@ import 'package:shimmer/shimmer.dart';
 import 'package:next_fi/Model/asset_model.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Screen/receive_screen.dart'; // <-- ensure path is correct
+import 'package:next_fi/Screen/receive_screen.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/Components/AppAlert.dart';
 
 enum PriceWindow { h24, d7, d30, y1 }
 
@@ -79,9 +83,6 @@ class AssetWidget extends StatelessWidget {
   // Formatting helpers
   // ────────────────────────────────────────────────────────────────────────────
 
-  // Always prints a normal number string (never scientific).
-  // ≥1 uses grouping and up to 4 decimals; <1 shows up to 7 decimals.
-  // If tiny but non-zero (<1e-7), shows "< 0.0000001".
   String formatTokenAmount(double v,
       {int bigMaxDecimals = 4, int smallMaxDecimals = 7, double tinyCutoff = 1e-7}) {
     if (v == 0 || v.isNaN) return '0';
@@ -98,7 +99,6 @@ class AssetWidget extends StatelessWidget {
 
   String _trimZeros(String s) {
     if (!s.contains('.')) return s;
-    // remove trailing zeros then a trailing dot if any
     s = s.replaceFirst(RegExp(r'0+$'), '');
     s = s.replaceFirst(RegExp(r'\.$'), '');
     return s;
@@ -139,62 +139,70 @@ class AssetWidget extends StatelessWidget {
 
     final listView = ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: assets.length,
+      itemCount: assets.length + 1, // +1 for the footer
       separatorBuilder: (_, __) => const SizedBox(height: 0),
       itemBuilder: (context, index) {
-        final a = assets[index];
-        final bal = _balanceFor(a);
-        final fiat = _fiatFor(context, a);
-        final pct = _pctFor(a);
-        final logoUrl = logos[a.id];
+        if (index < assets.length) {
+          final a = assets[index];
+          final bal = _balanceFor(a);
+          final fiat = _fiatFor(context, a);
+          final pct = _pctFor(a);
+          final logoUrl = logos[a.id];
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              onTap: () => _openReceive(context, a),
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Material(
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                child: Row(
-                  children: [
-                    _logo(logoUrl),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              child: InkWell(
+                onTap: () => _openReceive(context, a),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Row(
+                    children: [
+                      _logo(logoUrl),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(a.name,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: colors.textPrimary)),
+                            const SizedBox(height: 2),
+                            Text(
+                              "${formatTokenAmount(bal)} ${a.symbol}",
+                              style: TextStyle(color: colors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(a.name,
+                          Text(money.format(fiat),
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: colors.textPrimary)),
                           const SizedBox(height: 2),
-                          Text(
-                            "${formatTokenAmount(bal)} ${a.symbol}",
-                            style: TextStyle(color: colors.textSecondary),
-                          ),
+                          _pctBadge(pct),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(money.format(fiat),
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: colors.textPrimary)),
-                        const SizedBox(height: 2),
-                        _pctBadge(pct),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
+          );
+        } else {
+          // ---- Rate limit footer (single, after all tiles) ----
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: _RateLimitFooter(colors: colors),
+          );
+        }
       },
     );
 
@@ -298,6 +306,214 @@ class AssetWidget extends StatelessWidget {
             const SizedBox(width: 12),
             Container(width: 72, height: 14, color: Colors.white),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Rate Limit Footer (single banner shown once at the very bottom)
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _RateLimitFooter extends StatefulWidget {
+  const _RateLimitFooter({required this.colors});
+  final AppColor colors;
+
+  @override
+  State<_RateLimitFooter> createState() => _RateLimitFooterState();
+}
+
+class _RateLimitFooterState extends State<_RateLimitFooter> {
+  late StellarWalletService _svc;
+  StreamSubscription<RateLimitInfo>? _sub;
+  Timer? _ticker;
+  RateLimitInfo? _info;
+
+  // Alert control: show once per window
+  AppAlertController? _alertCtl;
+  String? _windowKeyShown; // key tied to resetAt to avoid duplicates
+
+  static const int _nearZeroThreshold = 25; // trigger "near zero" warning
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _svc = context.read<StellarWalletService>();
+    } catch (_) {
+      _svc = StellarWalletService(); // default (PUBLIC)
+    }
+    _sub = _svc.rateLimitStream().listen((rl) {
+      setState(() {
+        _info = rl;
+        _maybeShowAlert(rl);
+      });
+    });
+    _svc.fetchRateLimitInfo().then((rl) {
+      if (!mounted) return;
+      setState(() {
+        _info = rl ?? _info;
+        if (rl != null) _maybeShowAlert(rl);
+      });
+    });
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {}); // refresh countdown text
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _ticker?.cancel();
+    _alertCtl?.close();
+    _alertCtl = null;
+    super.dispose();
+  }
+
+  void _maybeShowAlert(RateLimitInfo rl) {
+    final remaining = rl.remaining;
+    if (remaining == null) return;
+
+    // Build a "window key" that changes whenever the reset time changes.
+    final key = rl.resetAt?.toIso8601String() ?? 'no-reset-${rl.limitPerWindow}-${remaining}';
+    final alreadyShown = (_windowKeyShown == key);
+
+    // Only alert once per window unless we escalate to 0 (error).
+    if (remaining > 0 && alreadyShown) return;
+
+    final resetIn = rl.resetIn;
+    final resetTxt = _fmtReset(resetIn);
+    final isZero = remaining == 0;
+    final isNear = remaining > 0 && remaining <= _nearZeroThreshold;
+
+    if (isZero) {
+      _windowKeyShown = key;
+      _alertCtl?.close();
+      _alertCtl = showAppAlert(
+        context,
+        type: AppAlertType.error,
+        title: 'Out of Horizon requests',
+        subtitle:
+        'You have 0 remaining API requests for this window.\n\n'
+            'Resets in $resetTxt.\n\nTips:\n'
+            '• Wait for the reset\n'
+            '• Reduce polling and prefer streaming\n'
+            '• Switch to another Horizon endpoint (if configured)',
+        primaryText: 'OK',
+        barrierDismissible: true,
+      );
+    } else if (isNear && !alreadyShown) {
+      _windowKeyShown = key;
+      _alertCtl?.close();
+      _alertCtl = showAppAlert(
+        context,
+        type: AppAlertType.warning,
+        title: 'Almost out of requests',
+        subtitle:
+        'Only $remaining request(s) left in this window.\n'
+            'Resets in $resetTxt.\n\nTo avoid interruptions, reduce polling or use streaming.',
+        primaryText: 'Got it',
+        barrierDismissible: true,
+      );
+    }
+  }
+
+  String _fmtReset(Duration? d) {
+    if (d == null) return '—';
+    if (d.isNegative) return '0s';
+    final s = d.inSeconds;
+    final m = s ~/ 60;
+    final r = s % 60;
+    if (m > 0) return '$m:${r.toString().padLeft(2, '0')}';
+    return '${s}s';
+  }
+
+  Color _pillColor(int? remaining) {
+    final c = widget.colors;
+    if (remaining == null) return c.textSecondary.withOpacity(0.25);
+    if (remaining == 0) return Colors.red.withOpacity(0.18);
+    if (remaining < 100) return Colors.red.withOpacity(0.15);
+    if (remaining < 500) return Colors.orange.withOpacity(0.18);
+    return Colors.green.withOpacity(0.15);
+  }
+
+  Color _pillText(int? remaining) {
+    if (remaining == null) return Colors.grey.shade600;
+    if (remaining == 0) return Colors.red.shade700;
+    if (remaining < 100) return Colors.red.shade700;
+    if (remaining < 500) return Colors.orange.shade800;
+    return Colors.green.shade800;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.colors;
+    final rl = _info;
+
+    final remaining = rl?.remaining;
+    final limit = rl?.limitPerWindow;
+    final resetIn = rl?.resetIn;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border.withOpacity(0.6)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.speed, size: 18, color: c.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Horizon rate limit',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: c.textPrimary,
+              ),
+            ),
+          ),
+          _ChipLabel(
+            bg: _pillColor(remaining),
+            fg: _pillText(remaining),
+            label: remaining == null
+                ? 'Unknown'
+                : (limit == null ? '$remaining left' : '$remaining / $limit left'),
+          ),
+          const SizedBox(width: 8),
+          _ChipLabel(
+            bg: c.border.withOpacity(0.18),
+            fg: c.textSecondary,
+            label: 'Resets in ${_fmtReset(resetIn)}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChipLabel extends StatelessWidget {
+  const _ChipLabel({required this.bg, required this.fg, required this.label});
+  final Color bg;
+  final Color fg;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: fg,
         ),
       ),
     );
