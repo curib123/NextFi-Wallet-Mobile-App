@@ -47,10 +47,74 @@ class PairPrice {
   const PairPrice(this.usdcPerXlm, this.at);
 }
 
+// ========== Minimal Soroban JSON-RPC client (fallback only) ==========
+// SOROBAN
+class _SorobanRpc {
+  final String base; // e.g. https://rpc.ankr.com/stellar_soroban
+  final Map<String, String>? headers;
+  _SorobanRpc(this.base, [this.headers]);
+
+  Future<Map<String, dynamic>?> _rpc(
+      String method, {
+        Object? params,
+        Duration timeout = const Duration(seconds: 20),
+      }) async {
+    final uri = Uri.parse(base);
+    final payload = json.encode({
+      'jsonrpc': '2.0',
+      'id': 1,
+      'method': method,
+      'params': params ?? {},
+    });
+    final resp = await http
+        .post(
+      uri,
+      headers: {
+        'content-type': 'application/json',
+        if (headers != null) ...headers!,
+      },
+      body: payload,
+    )
+        .timeout(timeout);
+    if (resp.statusCode != 200) return null;
+    final j = json.decode(resp.body) as Map<String, dynamic>;
+    if (j['error'] != null) return null;
+    return j['result'] as Map<String, dynamic>?;
+  }
+
+  Future<String?> sendTransaction(String envelopeB64) async {
+    final r = await _rpc('sendTransaction', params: {'transaction': envelopeB64});
+    // result: { hash, status, latestLedger, latestLedgerCloseTime, ... }
+    return (r?['hash'] as String?);
+  }
+
+  Future<int?> getLatestLedgerSequence() async {
+    final r = await _rpc('getLatestLedger');
+    final n = r?['sequence'];
+    if (n is int) return n;
+    if (n is num) return n.toInt();
+    return null;
+  }
+}
+
 // ========== StellarWalletService ==========
 
 class StellarWalletService {
+  // Primary SDK (SDF Horizon)
   final StellarSDK sdk;
+
+  // QuickNode Horizon fallback (optional)
+  final String? quickNodeUrlMainnet;
+  final String? quickNodeUrlTestnet;
+  final Map<String, String>? quickNodeDefaultHeaders;
+  final StellarSDK? _sdkQuickNode;
+
+  // Soroban JSON-RPC fallback (optional) — used for sendTransaction + ledger hints
+  final String? sorobanUrlMainnet;
+  final String? sorobanUrlTestnet;
+  final Map<String, String>? sorobanDefaultHeaders;
+  final _SorobanRpc? _soroban;
+
   final TransactionFeeVaultSecureStorage configVault;
 
   static const String _DEFAULT_USDC_ISSUER_MAINNET =
@@ -66,7 +130,25 @@ class StellarWalletService {
     this.usdcIssuerOverrideMainnet,
     this.usdcIssuerOverrideTestnet,
     TransactionFeeVaultSecureStorage? configVault,
+
+    // QuickNode Horizon
+    this.quickNodeUrlMainnet,
+    this.quickNodeUrlTestnet,
+    this.quickNodeDefaultHeaders,
+
+    // Soroban JSON-RPC
+    this.sorobanUrlMainnet,
+    this.sorobanUrlTestnet,
+    this.sorobanDefaultHeaders,
   })  : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+        _sdkQuickNode = (() {
+          final url = testnet ? quickNodeUrlTestnet : quickNodeUrlMainnet;
+          return (url != null && url.isNotEmpty) ? StellarSDK(url) : null;
+        })(),
+        _soroban = (() {
+          final url = testnet ? sorobanUrlTestnet : sorobanUrlMainnet;
+          return (url != null && url.isNotEmpty) ? _SorobanRpc(url, sorobanDefaultHeaders) : null;
+        })(),
         configVault = configVault ?? const TransactionFeeVaultSecureStorage();
 
   bool get _isTestnet => identical(sdk, StellarSDK.TESTNET);
@@ -86,14 +168,64 @@ class StellarWalletService {
     throw Exception(inner == null ? message : '$message (inner: $inner)');
   }
 
+  // Primary Horizon base (public)
+  String get horizonBase =>
+      _isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org';
+
+  // QuickNode base (fallback), if configured
+  String? get _qnBase => _isTestnet ? quickNodeUrlTestnet : quickNodeUrlMainnet;
+
+  // ===== HTTP helper with SDF ➜ QuickNode fallback (Soroban can’t serve Horizon REST) =====
+  Future<http.Response> _getWithFallback(
+      String path, {
+        Map<String, String>? query,
+        Duration timeout = const Duration(seconds: 20),
+      }) async {
+    // 1) Try SDF Horizon
+    final primary = Uri.parse('$horizonBase$path').replace(queryParameters: query);
+    try {
+      final r = await http.get(primary).timeout(timeout);
+      if (r.statusCode == 200) return r;
+
+      // If outage/429/5xx —> QuickNode Horizon
+      if (r.statusCode == 429 || (r.statusCode >= 500 && r.statusCode <= 599)) {
+        final fr = await _tryQuickNode(path, query: query, timeout: timeout);
+        if (fr != null) return fr;
+      }
+      return r;
+    } catch (_) {
+      // network/timeout —> QuickNode
+      final fr = await _tryQuickNode(path, query: query, timeout: timeout);
+      if (fr != null) return fr;
+      rethrow;
+    }
+  }
+
+  Future<http.Response?> _tryQuickNode(
+      String path, {
+        Map<String, String>? query,
+        Duration timeout = const Duration(seconds: 20),
+      }) async {
+    final base = _qnBase;
+    if (base == null || base.isEmpty) return null;
+    final uri = Uri.parse('$base$path').replace(queryParameters: query);
+    try {
+      return await http.get(uri, headers: quickNodeDefaultHeaders).timeout(timeout);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ===== Basics =====
+
+  static Future<String> generateMnemonic() => Wallet.generate24WordsMnemonic();
+  static Future<Wallet> walletFromMnemonic(String mnemonic) => Wallet.from(mnemonic);
+  static Future<KeyPair> getKeyPair(Wallet wallet, {int index = 0}) => wallet.getKeyPair(index: index);
+
   Future<AccountResponse> _loadAccount(String accountId) =>
       sdk.accounts.account(accountId);
 
   bool get isTestnet => _isTestnet;
-
-  String get horizonBase =>
-      _isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org';
-
   String get usdcIssuer => _usdcIssuer;
 
   Future<String> getTransactionFeeAddress() async =>
@@ -116,12 +248,6 @@ class StellarWalletService {
 
   int _toStroops(double amount) => (amount * 1e7).round();
   double _fromStroops(int stroops) => stroops / 1e7;
-
-  // ===== Basics =====
-
-  static Future<String> generateMnemonic() => Wallet.generate24WordsMnemonic();
-  static Future<Wallet> walletFromMnemonic(String mnemonic) => Wallet.from(mnemonic);
-  static Future<KeyPair> getKeyPair(Wallet wallet, {int index = 0}) => wallet.getKeyPair(index: index);
 
   // ===== Balances =====
 
@@ -170,13 +296,41 @@ class StellarWalletService {
           .addOperation(ChangeTrustOperationBuilder(_usdc, limit).build())
           .setMaxOperationFee(100)
           .build();
-
       tx.sign(kp, _network);
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) _fail('ChangeTrust(USDC) failed: ${res.resultXdr}');
-      return res.hash!;
+
+      // Submit: SDF ➜ Soroban ➜ QuickNode
+      try {
+        final res = await sdk.submitTransaction(tx);
+        if (!res.success) _fail('ChangeTrust(USDC) failed: ${res.resultXdr}');
+        return res.hash!;
+      } catch (_) {
+        // SOROBAN fallback
+        final hash = await _trySorobanSend(tx);
+        if (hash != null) return hash;
+
+        // QuickNode fallback
+        if (_sdkQuickNode != null) {
+          final res = await _sdkQuickNode.submitTransaction(tx);
+          if (!res.success) _fail('ChangeTrust(USDC) failed on QuickNode: ${res.resultXdr}');
+          return res.hash!;
+        }
+        rethrow;
+      }
     } catch (e) {
       _fail('Failed to create USDC trustline', e);
+    }
+  }
+
+  // SOROBAN: best-effort broadcast using JSON-RPC sendTransaction
+  Future<String?> _trySorobanSend(Transaction tx) async {
+    if (_soroban == null) return null;
+    try {
+      // NOTE: If your SDK uses a different name, change accordingly:
+      final envelopeB64 = tx.toEnvelopeXdrBase64(); // common in stellar_flutter_sdk
+      final hash = await _soroban.sendTransaction(envelopeB64);
+      return hash;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -230,14 +384,28 @@ class StellarWalletService {
         PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
       );
     }
-
     if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
     final tx = tb.build();
     tx.sign(sender, _network);
-    final res = await sdk.submitTransaction(tx);
-    if (!res.success) _fail('XLM payment failed: ${res.resultXdr}');
-    return [res.hash!];
+
+    try {
+      final res = await sdk.submitTransaction(tx);
+      if (!res.success) _fail('XLM payment failed: ${res.resultXdr}');
+      return [res.hash!];
+    } catch (_) {
+      // Soroban
+      final hash = await _trySorobanSend(tx);
+      if (hash != null) return [hash];
+
+      // QuickNode
+      if (_sdkQuickNode != null) {
+        final res = await _sdkQuickNode.submitTransaction(tx);
+        if (!res.success) _fail('XLM payment failed on QuickNode: ${res.resultXdr}');
+        return [res.hash!];
+      }
+      rethrow;
+    }
   }
 
   Future<List<String>> sendUsdcWithFee({
@@ -285,14 +453,26 @@ class StellarWalletService {
         PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
       );
     }
-
     if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
     final tx = tb.build();
     tx.sign(sender, _network);
-    final res = await sdk.submitTransaction(tx);
-    if (!res.success) _fail('USDC payment failed: ${res.resultXdr}');
-    return [res.hash!];
+
+    try {
+      final res = await sdk.submitTransaction(tx);
+      if (!res.success) _fail('USDC payment failed: ${res.resultXdr}');
+      return [res.hash!];
+    } catch (_) {
+      final hash = await _trySorobanSend(tx);
+      if (hash != null) return [hash];
+
+      if (_sdkQuickNode != null) {
+        final res = await _sdkQuickNode.submitTransaction(tx);
+        if (!res.success) _fail('USDC payment failed on QuickNode: ${res.resultXdr}');
+        return [res.hash!];
+      }
+      rethrow;
+    }
   }
 
   // ===== Swaps (Strict-Send) with fixed XLM transaction fee =====
@@ -349,14 +529,26 @@ class StellarWalletService {
           PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
         );
       }
-
       if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
       final tx = tb.build();
       tx.sign(kp, _network);
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed: ${res.resultXdr}');
-      return res.hash!;
+
+      try {
+        final res = await sdk.submitTransaction(tx);
+        if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed: ${res.resultXdr}');
+        return res.hash!;
+      } catch (_) {
+        final hash = await _trySorobanSend(tx);
+        if (hash != null) return hash;
+
+        if (_sdkQuickNode != null) {
+          final res = await _sdkQuickNode.submitTransaction(tx);
+          if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed on QuickNode: ${res.resultXdr}');
+          return res.hash!;
+        }
+        rethrow;
+      }
     } catch (e) {
       _fail('Failed to swap XLM→USDC', e);
     }
@@ -436,15 +628,28 @@ class StellarWalletService {
 
       final tx = tb.build();
       tx.sign(kp, _network);
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed: ${res.resultXdr}');
-      return res.hash!;
+
+      try {
+        final res = await sdk.submitTransaction(tx);
+        if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed: ${res.resultXdr}');
+        return res.hash!;
+      } catch (_) {
+        final hash = await _trySorobanSend(tx);
+        if (hash != null) return hash;
+
+        if (_sdkQuickNode != null) {
+          final res = await _sdkQuickNode.submitTransaction(tx);
+          if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed on QuickNode: ${res.resultXdr}');
+          return res.hash!;
+        }
+        rethrow;
+      }
     } catch (e) {
       _fail('Failed to swap USDC→XLM', e);
     }
   }
 
-  // ===== Quotes =====
+  // ===== Quotes (Horizon REST: SDF ➜ QuickNode) =====
 
   Future<double?> quoteStrictSend({
     required Asset sourceAsset,
@@ -474,10 +679,8 @@ class StellarWalletService {
       'destination_assets': destParam,
     };
 
-    final uri = Uri.parse('$horizonBase/paths/strict-send').replace(queryParameters: qp);
-
     try {
-      final resp = await http.get(uri).timeout(const Duration(seconds: 20));
+      final resp = await _getWithFallback('/paths/strict-send', query: qp, timeout: const Duration(seconds: 20));
       if (resp.statusCode != 200) return null;
 
       final data = json.decode(resp.body) as Map<String, dynamic>;
@@ -506,8 +709,7 @@ class StellarWalletService {
   Future<double> estimateNetworkFeeXlm({int opCount = 1, int percentile = 90}) async {
     final ops = opCount <= 0 ? 1 : opCount;
     try {
-      final uri = Uri.parse('$horizonBase/fee_stats');
-      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      final resp = await _getWithFallback('/fee_stats', timeout: const Duration(seconds: 10));
       if (resp.statusCode == 200) {
         final data = json.decode(resp.body) as Map<String, dynamic>;
 
@@ -533,22 +735,53 @@ class StellarWalletService {
   Future<FederationResponse> resolveFederationAddress(String stellarAddress) =>
       Federation.resolveStellarAddress(stellarAddress);
 
-  // ===== Streaming (event-driven, no polling) =====
+  // ===== Streaming (SDF SSE ➜ QN SSE; Soroban polling as last resort for ledgers) =====
+
+  Stream<T> _sseWithFallback<T>(Stream<T> Function(StellarSDK s) build) {
+    final controller = StreamController<T>();
+    StreamSubscription<T>? sub;
+    bool usingQuickNode = false;
+
+    Future<void> _start(StellarSDK s) async {
+      sub = build(s).listen(
+        controller.add,
+        onError: (e, st) async {
+          // If public fails, try once on QN
+          if (!usingQuickNode && _sdkQuickNode != null) {
+            usingQuickNode = true;
+            try {
+              await sub?.cancel();
+            } catch (_) {}
+            await _start(_sdkQuickNode);
+          } else {
+            controller.addError(e, st);
+            await controller.close();
+          }
+        },
+        onDone: () async => controller.close(),
+      );
+    }
+
+    _start(sdk);
+    controller.onCancel = () async {
+      try {
+        await sub?.cancel();
+      } catch (_) {}
+    };
+    return controller.stream;
+  }
 
   Stream<PaymentOperationResponse> paymentsStream(String accountId) {
-    final controller = StreamController<PaymentOperationResponse>();
-    final sub = sdk.payments
-        .forAccount(accountId)
-        .cursor("now")
-        .stream()
-        .listen((resp) {
-      if (resp is PaymentOperationResponse && resp.transactionSuccessful) {
-        controller.add(resp);
-      }
-    }, onError: controller.addError, onDone: controller.close);
-
-    controller.onCancel = () => sub.cancel();
-    return controller.stream;
+    Stream<PaymentOperationResponse> _build(StellarSDK s) {
+      return s.payments
+          .forAccount(accountId)
+          .cursor("now")
+          .stream()
+          .where((resp) => resp is PaymentOperationResponse && resp.transactionSuccessful)
+          .cast<PaymentOperationResponse>();
+    }
+    // Soroban can’t supply PaymentOperationResponse, so we do SDF ➜ QN only.
+    return _sseWithFallback<PaymentOperationResponse>(_build);
   }
 
   Stream<AccountState> accountStateStream(String accountId) {
@@ -582,35 +815,34 @@ class StellarWalletService {
 
     emitSnapshot();
 
-    final paySub = sdk.payments
-        .forAccount(accountId)
-        .cursor("now")
-        .stream()
-        .listen((_) {
+    // SSE (SDF ➜ QN)
+    Stream<void> _payStream(StellarSDK s) =>
+        s.payments.forAccount(accountId).cursor("now").stream().map((_) => null);
+    Stream<void> _effStream(StellarSDK s) =>
+        s.effects.forAccount(accountId).cursor("now").stream().map((_) => null);
+
+    final pay = _sseWithFallback<void>(_payStream).listen((_) {
       coolDown?.cancel();
       coolDown = Timer(const Duration(milliseconds: 250), emitSnapshot);
     }, onError: controller.addError);
 
-    final effSub = sdk.effects
-        .forAccount(accountId)
-        .cursor("now")
-        .stream()
-        .listen((_) {
+    final eff = _sseWithFallback<void>(_effStream).listen((_) {
       coolDown?.cancel();
       coolDown = Timer(const Duration(milliseconds: 250), emitSnapshot);
     }, onError: controller.addError);
 
-    controller.onCancel = () {
+    controller.onCancel = () async {
       closed = true;
       coolDown?.cancel();
-      paySub.cancel();
-      effSub.cancel();
+      await pay.cancel();
+      await eff.cancel();
     };
     return controller.stream;
   }
 
   Stream<FeeEstimate> feeEstimateStream({int opCount = 1, int percentile = 90}) {
     final controller = StreamController<FeeEstimate>();
+    int? lastSorobanLedger; // SOROBAN polling hint
 
     Future<void> push(DateTime at) async {
       try {
@@ -618,8 +850,7 @@ class StellarWalletService {
 
         int base = 100;
         try {
-          final uri = Uri.parse('$horizonBase/fee_stats');
-          final resp = await http.get(uri).timeout(const Duration(seconds: 6));
+          final resp = await _getWithFallback('/fee_stats', timeout: const Duration(seconds: 6));
           if (resp.statusCode == 200) {
             final data = json.decode(resp.body) as Map<String, dynamic>;
             base = int.tryParse('${data['last_ledger_base_fee'] ?? '100'}') ?? 100;
@@ -644,16 +875,40 @@ class StellarWalletService {
 
     push(DateTime.now());
 
-    final ledSub = sdk.ledgers.cursor("now").stream().listen((_) {
+    // SSE ledgers (SDF ➜ QN)
+    Stream<void> _ledgerStream(StellarSDK s) =>
+        s.ledgers.cursor("now").stream().map((_) => null);
+
+    final ledSub = _sseWithFallback<void>(_ledgerStream).listen((_) {
       push(DateTime.now());
     }, onError: controller.addError, onDone: controller.close);
 
-    controller.onCancel = () => ledSub.cancel();
+    // SOROBAN: polling fallback (if SSE is flaky anywhere)
+    Timer? sorobanTicker;
+    if (_soroban != null) {
+      sorobanTicker = Timer.periodic(const Duration(seconds: 8), (_) async {
+        try {
+          final seq = await _soroban.getLatestLedgerSequence();
+          if (seq == null) return;
+          if (lastSorobanLedger == null || seq > lastSorobanLedger!) {
+            lastSorobanLedger = seq;
+            await push(DateTime.now());
+          }
+        } catch (_) {
+          // ignore single poll errors
+        }
+      });
+    }
+
+    controller.onCancel = () async {
+      sorobanTicker?.cancel();
+      await ledSub.cancel();
+    };
     return controller.stream;
   }
 
-  // IMPORTANT: No extension methods. We set the /trades filters via a helper.
-  TradesRequestBuilder _tradesForPair(Asset base, Asset counter) {
+  // IMPORTANT: Build trades requests on a specific SDK (for SSE fallback)
+  TradesRequestBuilder _tradesForPairOn(StellarSDK s, Asset base, Asset counter) {
     String typeOf(Asset a) {
       if (a is AssetTypeNative) return 'native';
       if (a is AssetTypeCreditAlphaNum4) return 'credit_alphanum4';
@@ -661,7 +916,7 @@ class StellarWalletService {
       throw ArgumentError('Unsupported asset type: $a');
     }
 
-    final b = sdk.trades;
+    final b = s.trades;
     b.queryParameters['base_asset_type'] = typeOf(base);
     if (base is AssetTypeCreditAlphaNum) {
       b.queryParameters['base_asset_code'] = base.code;
@@ -676,33 +931,26 @@ class StellarWalletService {
   }
 
   Stream<PairPrice> xlmUsdcPriceStream() {
-    final controller = StreamController<PairPrice>();
-    final sub = _tradesForPair(_xlm, _usdc)
-        .cursor('now')
-        .stream()
-        .listen((t) {
-      try {
-        // Best-effort: compute from amounts; fall back to string price if present.
+    Stream<PairPrice> _build(StellarSDK s) {
+      return _tradesForPairOn(s, _xlm, _usdc)
+          .cursor('now')
+          .stream()
+          .map((t) {
         double? price;
         final ba = double.tryParse('${t.baseAmount}');
         final ca = double.tryParse('${t.counterAmount}');
         if (ba != null && ba > 0 && ca != null) {
           price = ca / ba; // USDC per XLM
         }
-        if (price == null) {
-          final sp = double.tryParse('${t.price}');
-          if (sp != null) price = sp;
-        }
+        price ??= double.tryParse('${t.price}');
         if (price != null && price > 0) {
-          controller.add(PairPrice(price, DateTime.now()));
+          return PairPrice(price, DateTime.now());
         }
-      } catch (_) {
-        // ignore malformed entries
-      }
-    }, onError: controller.addError, onDone: controller.close);
-
-    controller.onCancel = () => sub.cancel();
-    return controller.stream;
+        throw StateError('Invalid trade price');
+      });
+    }
+    // Soroban has no trades SSE; use SDF ➜ QN chain only.
+    return _sseWithFallback<PairPrice>(_build);
   }
 
   Stream<double> quoteXlmToUsdcStream(double sendAmountXlm) =>
