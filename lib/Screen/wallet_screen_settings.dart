@@ -6,8 +6,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Components/CustomButton.dart';
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Components/wallet_switch_result.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Screen/auth_gate_screen.dart';
+import 'package:next_fi/Screen/import_wallet_screen.dart';
+import 'package:next_fi/Screen/wallet_creation_screen.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
 class WalletScreenSettings extends StatefulWidget {
@@ -28,7 +31,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
   List<String> _words = [];
   bool _isLoading = true;
 
-  bool _obscured = true;    // hidden until after auth
+  bool _obscured = true; // hidden until after auth
   bool _authorized = false; // becomes true after AuthGateScreen
 
   // Active wallet meta
@@ -165,7 +168,14 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     );
   }
 
-  // ======= Sheets (Rename / Import / Switch) =======
+  // ======= Navigation (Import / Rename / Switch) =======
+
+  /// NEW: Instead of a modal, go to a simple screen with TODO.
+  Future<void> _goToImport() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ImportWalletScreen()),
+    );
+  }
 
   Future<void> _openRenameSheet() async {
     if (_activeWalletId == null) {
@@ -272,195 +282,37 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     }
   }
 
-  Future<void> _openImportWalletSheet() async {
-    final colors = AppColor.of(context);
-    final nameCtrl = TextEditingController(text: "Imported Wallet");
-    final seedCtrl = TextEditingController();
-
-    final payload = await showModalBottomSheet<Map<String, String>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: _pad, right: _pad, top: 12,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + _pad,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SheetHandle(colors: colors),
-                Text('Import Wallet',
-                    style: TextStyle(
-                      color: colors.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                    )),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: nameCtrl,
-                  maxLength: 32,
-                  decoration: InputDecoration(
-                    counterText: "",
-                    hintText: "Wallet name",
-                    isDense: true,
-                    filled: true,
-                    fillColor: colors.background,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(_radius),
-                      borderSide: BorderSide(color: colors.border.withOpacity(.55)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: seedCtrl,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: "Enter seed phrase (12/24 words)",
-                    isDense: true,
-                    filled: true,
-                    fillColor: colors.background,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(_radius),
-                      borderSide: BorderSide(color: colors.border.withOpacity(.55)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(LucideIcons.x, size: 16),
-                        label: const Text('Cancel'),
-                        onPressed: () { Navigator.pop(ctx); },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(LucideIcons.download, size: 16),
-                        label: const Text('Import'),
-                        onPressed: () {
-                          final name = nameCtrl.text.trim();
-                          final seed = seedCtrl.text.replaceAll(RegExp(r'\s+'), ' ').trim();
-                          if (seed.isEmpty) {
-                            showFloatingSnackBar(context, message: "Seed phrase required.", type: SnackBarType.warning);
-                            return;
-                          }
-                          if (name.isEmpty || name.length > 32) {
-                            showFloatingSnackBar(context, message: "Provide a valid name (1–32 chars).", type: SnackBarType.warning);
-                            return;
-                          }
-                          Navigator.pop(ctx, {'name': name, 'seed': seed});
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+  Future<void> _handleSwitch() async {
+    final res = await showWalletSwitchSheet(
+      context,
+      currentActiveId: _activeWalletId,
+      allowGenerate: true,
     );
+    if (res == null) return;
 
-    if (payload == null) return;
-
-    try {
-      final newId = await SeedStorage.addWallet(payload['seed']!, name: payload['name']!);
-      await SeedStorage.setActiveWallet(newId);
+    if (res.createNew) {
+      // Go to your existing create flow
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const WalletCreationScreen()),
+      );
       await _loadSecrets();
       if (!mounted) return;
-      showFloatingSnackBar(context, message: "Wallet imported and set active.", type: SnackBarType.success);
       Phoenix.rebirth(context);
-    } catch (e) {
-      if (!mounted) return;
-      showFloatingSnackBar(context, message: "Import failed: $e", type: SnackBarType.error);
+      return;
     }
-  }
 
-  Future<void> _openSwitchWalletSheet() async {
-    final colors = AppColor.of(context);
-    final wallets = await SeedStorage.listWallets();
-    if (!mounted) return;
-
-    final chosenId = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                _SheetHandle(colors: colors),
-                ListTile(
-                  title: Text(
-                    "Switch Wallet",
-                    style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const Divider(height: 1),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: wallets.length,
-                    itemBuilder: (_, i) {
-                      final m = wallets[i];
-                      final isActive = m.id == _activeWalletId;
-                      return ListTile(
-                        leading: Icon(
-                          isActive ? LucideIcons.checkCircle2 : LucideIcons.circle,
-                          color: isActive ? colors.success : colors.textSecondary,
-                        ),
-                        title: Text(
-                          m.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: (m.publicAddress?.isNotEmpty ?? false)
-                            ? Text(m.publicAddress!, style: TextStyle(color: colors.textSecondary, fontSize: 12))
-                            : null,
-                        onTap: () {
-                          Navigator.pop(ctx, m.id);
-                          },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (chosenId == null || chosenId == _activeWalletId) return;
-    final ok = await SeedStorage.setActiveWallet(chosenId);
-    if (!mounted) return;
-    if (ok) {
-      await _loadSecrets();
-      showFloatingSnackBar(context, message: "Switched active wallet.", type: SnackBarType.success);
-      Phoenix.rebirth(context);
-    } else {
-      showFloatingSnackBar(context, message: "Failed to switch wallet.", type: SnackBarType.error);
+    final chosenId = res.chosenWalletId;
+    if (chosenId != null && chosenId != _activeWalletId) {
+      final ok = await SeedStorage.setActiveWallet(chosenId);
+      if (!mounted) return;
+      if (ok) {
+        await _loadSecrets();
+        showFloatingSnackBar(context, message: "Switched active wallet.", type: SnackBarType.success);
+        Phoenix.rebirth(context);
+      } else {
+        showFloatingSnackBar(context, message: "Failed to switch wallet.", type: SnackBarType.error);
+      }
     }
   }
 
@@ -518,22 +370,22 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FadeInDown(
-                      duration: const Duration(milliseconds: 220),
+                      duration: const Duration(milliseconds: 200),
                       child: _headerCard(colors),
                     ),
                     const SizedBox(height: 12),
                     FadeInDown(
-                      duration: const Duration(milliseconds: 260),
+                      duration: const Duration(milliseconds: 230),
                       child: _warningBox(colors),
                     ),
                     const SizedBox(height: 14),
                     FadeInUp(
-                      duration: const Duration(milliseconds: 300),
+                      duration: const Duration(milliseconds: 260),
                       child: _metaHeader(colors, wordCount),
                     ),
                     const SizedBox(height: 8),
                     FadeInUp(
-                      duration: const Duration(milliseconds: 320),
+                      duration: const Duration(milliseconds: 280),
                       child: _seedCard(colors),
                     ),
                     const SizedBox(height: 12),
@@ -593,9 +445,9 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
         border: Border.all(color: colors.border.withOpacity(0.22)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.03),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
           )
         ],
       ),
@@ -642,7 +494,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
                 child: _QuickAction(
                   icon: LucideIcons.download,
                   label: 'Import',
-                  onTap: () { _openImportWalletSheet(); },
+                  onTap: () { _goToImport(); },
                   colors: colors,
                 ),
               ),
@@ -651,7 +503,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
                 child: _QuickAction(
                   icon: LucideIcons.shuffle,
                   label: 'Switch',
-                  onTap: () { _openSwitchWalletSheet(); },
+                  onTap: () => _handleSwitch() ,
                   colors: colors,
                 ),
               ),
@@ -716,14 +568,14 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
         border: Border.all(color: colors.border.withOpacity(0.22)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.035),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.03),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
           )
         ],
       ),
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 200),
         child: _obscured
             ? _blurredPlaceholder(colors)
             : Padding(
@@ -807,8 +659,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
                 ),
                 TextSpan(
                   text:
-                  "It’s the only way to access your funds. Do not share it with anyone. "
-                      "NextFi never stores your keys—you are in full control.",
+                  "It’s the only way to access your funds. Do not share it with anyone. NextFi never stores your keys—you are in full control.",
                   style: TextStyle(
                     color: colors.textSecondary,
                     fontWeight: FontWeight.w400,
@@ -829,7 +680,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,            // compact & readable
+        crossAxisCount: 3, // compact & readable
         mainAxisSpacing: 8,
         crossAxisSpacing: 8,
         childAspectRatio: 2.6,
@@ -908,7 +759,7 @@ class _QuickAction extends StatelessWidget {
       ),
       onPressed: onTap,
       icon: Icon(icon, size: 16, color: colors.textPrimary),
-      label: Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: colors.textPrimary,fontSize: 12)),
+      label: Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: colors.textPrimary, fontSize: 12)),
     );
   }
 }
