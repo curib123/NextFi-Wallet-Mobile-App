@@ -1,10 +1,10 @@
+// lib/Screen/wallet_home_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
-
 import 'package:next_fi/Provider/HomeWalletProvider.dart';
+import 'package:provider/provider.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/home_fab_and_hints.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';

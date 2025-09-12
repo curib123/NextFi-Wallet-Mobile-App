@@ -7,6 +7,7 @@ import 'package:next_fi/Provider/RecipientAddressProvider.dart';
 import 'package:next_fi/Provider/SendProvider.dart';
 import 'package:next_fi/Provider/SwapProvider.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/home.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:provider/provider.dart';
@@ -19,8 +20,13 @@ void main() {
     Phoenix(
       child:MultiProvider(
         providers: [
+          Provider<StellarWalletService>(
+            create: (_) => StellarWalletService(testnet: false),
+          ),
           ChangeNotifierProvider<CurrencyProvider>(
-            create: (_) => CurrencyProvider(),
+            create: (ctx) => CurrencyProvider(
+              stellar: ctx.read<StellarWalletService>(),
+            ),
           ),
           ChangeNotifierProvider<TabProvider>(
             create: (_) => TabProvider(),

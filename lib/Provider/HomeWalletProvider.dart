@@ -1,10 +1,11 @@
+// lib/Provider/WalletHomeProvider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
+as stellar show PaymentOperationResponse, Asset;
 
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-
 
 class IncomingHint {
   final String id;
@@ -30,7 +31,7 @@ class WalletHomeProvider extends ChangeNotifier {
   final StellarWalletService _stellar;
 
   String? address;
-  String? walletName; // NEW: expose active wallet name
+  String? walletName; // expose active wallet name
   bool get hasWallet => address != null && address!.isNotEmpty;
 
   // Balances
@@ -50,14 +51,15 @@ class WalletHomeProvider extends ChangeNotifier {
   DateTime? _lastFetch;
   Timer? _balancesTimer;
   Timer? _debounceBalanceKick;
-  StreamSubscription<stellar.OperationResponse>? _incomingSub;
+
+  // Now typed to the PaymentOperationResponse from the SDK (via the service stream)
+  StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
 
   bool _disposed = false;
   void _safeNotify() {
     if (!_disposed) notifyListeners();
   }
 
-  // Convenience display fallback (optional)
   String get walletDisplayName => walletName ?? 'Primary Wallet';
 
   // ---------- Public API ----------
@@ -68,8 +70,7 @@ class WalletHomeProvider extends ChangeNotifier {
     _safeNotify();
 
     try {
-      // Also fetch the ACTIVE wallet name up front
-      walletName = (await SeedStorage.getActiveWalletMeta())?.name; // NEW
+      walletName = (await SeedStorage.getActiveWalletMeta())?.name;
 
       final mnemonic = await SeedStorage.getActiveSeed();
       if (mnemonic == null || mnemonic.trim().isEmpty) {
@@ -128,14 +129,12 @@ class WalletHomeProvider extends ChangeNotifier {
     // periodic refresh (respects _minBalancesGap via refresh())
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) => refresh());
 
-    // Subscribe to payments → add hint + debounce balance refresh
-    _incomingSub = _stellar.sdk.payments
-        .forAccount(address!)
-        .cursor("now")
-        .stream()
+    // Subscribe to payments via the service (SSE under the hood)
+    _incomingSub = _stellar
+        .paymentsStream(address!)
         .listen((op) {
       if (_disposed) return;
-      if (op is! stellar.PaymentOperationResponse || op.transactionSuccessful != true) return;
+      if (op.transactionSuccessful != true) return;
       if (op.to != address) return;
 
       final id = op.transactionHash ?? '';
@@ -148,7 +147,9 @@ class WalletHomeProvider extends ChangeNotifier {
           id: id,
           from: op.from ?? '',
           to: op.to ?? '',
-          assetCode: op.assetType == stellar.Asset.TYPE_NATIVE ? 'XLM' : (op.assetCode ?? 'ASSET'),
+          assetCode: op.assetType == stellar.Asset.TYPE_NATIVE
+              ? 'XLM'
+              : (op.assetCode ?? 'ASSET'),
           amount: double.tryParse(op.amount) ?? 0.0,
           at: DateTime.now(),
         ),
@@ -161,7 +162,7 @@ class WalletHomeProvider extends ChangeNotifier {
       _scheduleBalanceKick(const Duration(milliseconds: 400));
       _safeNotify();
     }, onError: (_) {
-      // No-op; manual refresh covers outages
+      // No-op; manual refresh & timer cover transient issues
     });
   }
 
@@ -184,13 +185,13 @@ class WalletHomeProvider extends ChangeNotifier {
     _safeNotify();
   }
 
-  /// NEW: refresh only the active wallet metadata (e.g., after rename elsewhere)
+  /// Refresh only the active wallet metadata (e.g., after rename elsewhere)
   Future<void> reloadActiveWalletName() async {
     walletName = (await SeedStorage.getActiveWalletMeta())?.name;
     _safeNotify();
   }
 
-  /// NEW: convenience method to rename the ACTIVE wallet, then update provider
+  /// Rename the ACTIVE wallet, then update provider
   Future<bool> renameActiveWallet(String newName) async {
     final id = await SeedStorage.getActiveWalletId();
     if (id == null) return false;
