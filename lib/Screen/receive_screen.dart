@@ -68,12 +68,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           final isXLM = _xlmSelected;
           final token = isXLM ? 'XLM' : 'USDC';
           final tokenBalance = isXLM ? widget.xlmBalance : widget.usdcBalance;
-          final balanceFiat = isXLM
-              ? currency.xlmToFiat(tokenBalance)
-              : currency.usdcToFiat(tokenBalance);
-          final oneTokenFiat = isXLM
-              ? currency.xlmToFiat(1)
-              : currency.usdcToFiat(1);
+
+          // 🔌 Live fiat price streams from the provider (no polling)
+          final priceStream = isXLM ? currency.xlmPriceStream : currency.usdcPriceStream;
+          final lastPrice   = isXLM ? currency.xlmRate        : currency.usdcRate;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -87,69 +85,78 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Price + Balance glance
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: c.primary.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: c.primary.withOpacity(0.12)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _TokenPill(token: token, color: c),
-                    const SizedBox(height: 8),
-                    Row(
+              // Price + Balance (reactive via StreamBuilder)
+              StreamBuilder<double>(
+                stream: priceStream,
+                initialData: lastPrice,
+                builder: (context, snap) {
+                  final oneTokenFiat = (snap.data ?? lastPrice).clamp(0, double.infinity);
+                  final balanceFiat = oneTokenFiat * tokenBalance;
+
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: c.primary.withOpacity(0.12)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '1 $token ≈ ',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        _TokenPill(token: token, color: c),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              '1 $token ≈ ',
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              fiatFmt.format(oneTokenFiat),
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          fiatFmt.format(oneTokenFiat),
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Text(
+                              numFmt.format(tokenBalance),
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: c.textPrimary,
+                                height: 1.1,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              token,
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              fiatFmt.format(balanceFiat),
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Text(
-                          numFmt.format(tokenBalance),
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: c.textPrimary,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          token,
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          fiatFmt.format(balanceFiat),
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
 

@@ -1,6 +1,8 @@
+// lib/Provider/SendProvider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
+
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
@@ -74,8 +76,8 @@ class SendProvider extends ChangeNotifier {
   String? get error => _err;
 
   // ── Fee model (fixed tx fee + estimated network fee) ──────────────────────
-  double? _txFeeXlm;           // fixed transaction fee (profit fee) from vault
-  double? _estNetworkFeeXlm;   // estimated network fee (depends on opCount)
+  double? _txFeeXlm;           // fixed transaction fee (from vault)
+  double? _estNetworkFeeXlm;   // estimated network fee (updated via stream)
   double? get txFeeXlm => _txFeeXlm;
   double? get estNetworkFeeXlm => _estNetworkFeeXlm;
 
@@ -85,7 +87,11 @@ class SendProvider extends ChangeNotifier {
   bool get checking => _checking;
   bool? get destHasUsdcTL => _destHasUsdcTL;
 
-  // ── Boot wallet & prefetch fees ───────────────────────────────────────────
+  // Subscriptions / timers
+  StreamSubscription? _feeSub;
+  Timer? _debounce;
+
+  // ── Boot wallet & prefetch fees (now stream-driven) ───────────────────────
   Future<void> _start() async {
     _loading = true;
     _err = null;
@@ -104,9 +110,21 @@ class SendProvider extends ChangeNotifier {
       _kp = await StellarWalletService.getKeyPair(_wallet!, index: 0);
       _accountId = _kp!.accountId;
 
-      // Fees
+      // Fixed TX fee (from secure vault)
       _txFeeXlm = await _svc.getCurrentFeeXlm();
-      await _refreshNetworkFee(); // needs opCount
+
+      // Initial network fee snapshot (while stream warms up)
+      try {
+        _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
+          opCount: _opCount,
+          percentile: 90,
+        );
+      } catch (_) {
+        _estNetworkFeeXlm = null;
+      }
+
+      // Subscribe to network fee updates on each ledger close
+      _resubscribeFeeStream();
 
       _loading = false;
       notifyListeners();
@@ -115,6 +133,25 @@ class SendProvider extends ChangeNotifier {
       _err = 'Failed to load wallet.';
       notifyListeners();
     }
+  }
+
+  void _resubscribeFeeStream() {
+    _feeSub?.cancel();
+    _feeSub = _svc
+        .feeEstimateStream(opCount: _opCount, percentile: 90)
+        .listen((f) {
+      _estNetworkFeeXlm = f.totalXlm;
+      notifyListeners();
+    }, onError: (_) {
+      // keep last known estimate on errors
+    });
+  }
+
+  @override
+  void dispose() {
+    _feeSub?.cancel();
+    _debounce?.cancel();
+    super.dispose();
   }
 
   // ── User interactions ─────────────────────────────────────────────────────
@@ -127,11 +164,10 @@ class SendProvider extends ChangeNotifier {
   void setTypedAmount(double v) {
     _typedAmount = v.clamp(0, double.infinity);
     notifyListeners();
-    // network fee may change after amount? (opCount unchanged) – keep estimate
+    // opCount does not depend on amount, so fee stream remains valid
   }
 
   // ── Trustline guard (USDC) ────────────────────────────────────────────────
-  Timer? _debounce;
   void _debounceCheckTrustline() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), _checkTrustlineIfNeeded);
@@ -149,7 +185,7 @@ class SendProvider extends ChangeNotifier {
       return;
     }
     if (isXlm) {
-      _destHasUsdcTL = null; // not needed
+      _destHasUsdcTL = null; // not needed for XLM
       notifyListeners();
       return;
     }
@@ -168,31 +204,32 @@ class SendProvider extends ChangeNotifier {
 
   // ── Fee logic ─────────────────────────────────────────────────────────────
   int get _opCount {
-    // 1 op for token payment; +1 op for XLM profit fee if fee > 0
+    // 1 op for token payment; +1 op for XLM fee if fee > 0
     final hasTxFee = (_txFeeXlm ?? 0) > 0;
     return hasTxFee ? 2 : 1;
   }
 
-  Future<void> _refreshNetworkFee() async {
+  /// Refresh fees on demand (e.g., before submit).
+  Future<void> refreshFees() async {
+    // Fixed fee might change if vault rotates; re-read it.
+    _txFeeXlm = await _svc.getCurrentFeeXlm();
+    // If opCount changed due to fee toggling, resubscribe stream.
+    _resubscribeFeeStream();
+    // Also grab a fresh point estimate immediately.
     try {
       _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
         opCount: _opCount,
         percentile: 90,
       );
     } catch (_) {
-      _estNetworkFeeXlm = null;
+      // keep last
     }
-  }
-
-  Future<void> refreshFees() async {
-    _txFeeXlm = await _svc.getCurrentFeeXlm();
-    await _refreshNetworkFee();
     notifyListeners();
   }
 
   // ── Budget split (core requirement) ───────────────────────────────────────
   // If XLM and user types total budget T, we send:
-  //   amountParam = max(T − estNetwork, txFee)   (the "amount" passed to service)
+  //   amountParam = max(T − estNetwork, txFee)
   //   recipient    = amountParam − txFee
   // So total wallet deduction ≈ T (subject to fee variance).
   double _floor7(double v) => (v * 1e7).floor() / 1e7;
@@ -211,10 +248,8 @@ class SendProvider extends ChangeNotifier {
 
   double get totalDeductXlmIfXlmSend {
     if (!isXlm) return 0;
-    final net = _estNetworkFeeXlm ?? 0;
-    // We *intend* to deduct ~typedAmount; reality: sendParam + actual_network
-    // We expose the plan = typedAmount (budget) and show fee split lines
-    return _typedAmount > 0 ? _typedAmount : 0;
+    final budget = _typedAmount;
+    return budget > 0 ? budget : 0;
   }
 
   double get needsXlmForFeesIfUsdcSend {
@@ -240,9 +275,6 @@ class SendProvider extends ChangeNotifier {
     } else {
       // USDC: amount must not exceed USDC balance and sender must have XLM fees
       if (_typedAmount > _senderBalToken + 1e-9) return 'Amount exceeds USDC balance';
-      final feeXlmNeed = needsXlmForFeesIfUsdcSend;
-      // We cannot check actual XLM balance here unless you pass it—optional:
-      // (The service will still fail gracefully if XLM is insufficient.)
       if (_destHasUsdcTL == false) return 'Recipient has no USDC trustline';
       return null;
     }
@@ -252,7 +284,9 @@ class SendProvider extends ChangeNotifier {
   Future<String> submit({String? memo}) async {
     final reason = blockingReason;
     if (reason != null) throw StateError(reason);
-    await refreshFees(); // keep fresh just before submit
+
+    // Keep fees fresh just before submit
+    await refreshFees();
 
     final seed = _extractSeed(_kp!);
 
@@ -265,20 +299,24 @@ class SendProvider extends ChangeNotifier {
       if (amountParam <= fee + 1e-7) {
         throw StateError('Amount too small after fees.');
       }
-      return await _svc.sendXlmWithFee(
+      return await _svc
+          .sendXlmWithFee(
         secretSeed: seed,
         destination: _to,
         amount: _floor7(amountParam),
         memoText: memo,
-      ).then((h) => h.first);
+      )
+          .then((h) => h.first);
     } else {
       // USDC: send typed amount; XLM fees are charged separately
-      return await _svc.sendUsdcWithFee(
+      return await _svc
+          .sendUsdcWithFee(
         secretSeed: seed,
         destination: _to,
         usdcAmount: _typedAmount,
         memoText: memo,
-      ).then((h) => h.first);
+      )
+          .then((h) => h.first);
     }
   }
 

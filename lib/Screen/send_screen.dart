@@ -1,3 +1,4 @@
+// lib/Screen/SendScreen.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -82,16 +83,10 @@ class _SendScreenState extends State<SendScreen> {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   Future<void> _refresh(BuildContext context) async {
-    // Re-run provider configure to refresh fees/estimates based on current inputs
+    // lighter refresh: keep session, refresh fees & re-check trustline
     final p = context.read<SendProvider>();
-    p.configure(
-      token: (p.isXlm ? SendToken.xlm : SendToken.usdc),
-      senderAddress: widget.address,
-      senderBalanceToken: widget.balance,
-      prefillTo: _toCtl.text.trim().isEmpty ? widget.prefillAddress : _toCtl.text.trim(),
-      prefillName: widget.prefillName,
-    );
-    // small delay to let UI show the indicator nicely
+    await p.refreshFees();
+    p.setRecipient(_toCtl.text.trim());
     await Future.delayed(const Duration(milliseconds: 250));
   }
 
@@ -193,6 +188,10 @@ class _SendScreenState extends State<SendScreen> {
                     ? null
                     : 'Enter a valid Stellar address',
               ),
+
+              // NEW: tiny trustline hint for USDC
+              const SizedBox(height: 6),
+              _TrustlineHint(),
               const SizedBox(height: 10),
 
               // Amount (no MAX)
@@ -952,5 +951,59 @@ class _SlimPreviewCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/* ───────────────────── NEW: USDC Trustline hint ───────────────────── */
+
+class _TrustlineHint extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final p = context.watch<SendProvider>();
+    if (p.isXlm) return const SizedBox.shrink(); // not needed for XLM
+    if (p.to.trim().isEmpty) return const SizedBox.shrink();
+
+    if (p.checking) {
+      return Row(
+        children: [
+          SizedBox(
+            height: 14,
+            width: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
+          ),
+          const SizedBox(width: 8),
+          Text('Checking USDC trustline…', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        ],
+      );
+    }
+
+    if (p.destHasUsdcTL == false) {
+      return Row(
+        children: [
+          Icon(LucideIcons.alertTriangle, size: 14, color: c.error),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'This address has no USDC trustline.',
+              style: TextStyle(color: c.error, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (p.destHasUsdcTL == true) {
+      return Row(
+        children: [
+          Icon(LucideIcons.checkCircle, size: 14, color: c.success),
+          const SizedBox(width: 6),
+          Text('USDC trustline detected', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink(); // unknown / not checked
   }
 }
