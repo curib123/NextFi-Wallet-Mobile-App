@@ -111,7 +111,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                     ),
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 20,),
                         child: _HeaderSection(
                           colors: colors,
                           currencyFmt: currencyFmt,
@@ -149,7 +149,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                     ),
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                         child: buildTabBar(colors),
                       ),
                     ),
@@ -189,6 +189,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                                   ),
                                 );
                               },
+                              hasUsdcTrustline: StellarWalletService().hasUsdcTrustline(home.address ?? ''),
                             ),
                           ),
                           _TabKeepAlive(
