@@ -1,4 +1,3 @@
-// lib/Services/profit_config_vault_secure_storage.dart
 // NOTE: We keep the filename for now to avoid breaking imports.
 //       Internals are renamed to "transaction fee". A deprecated shim is provided.
 
@@ -34,7 +33,7 @@ final class TransactionFeeVaultSecureStorage {
 
   // Built-in safe defaults (used if verification fails or no bundle available)
   static const String _DEFAULT_ADDR = 'GANLHIBDIZHWW6ZPKGCKXMBK2E4TS3Z6QHCPEMVKUOTYKMIZFZHQIBGU';
-  static const int    _DEFAULT_FEE_STROOPS = 500000; // 0.05 XLM
+  static const int    _DEFAULT_FEE_STROOPS = 500000;
   static const int    _VERSION = 1;
 
   // Payload schema (fixed-fee) — updated name
@@ -288,4 +287,3 @@ class TransactionFeeConfig {
   double get feeXlm => feeStroops / 1e7;
   String get feeXlmLabel => '${feeXlm.toStringAsFixed(7)} XLM';
 }
-

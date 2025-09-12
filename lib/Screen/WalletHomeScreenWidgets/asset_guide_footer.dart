@@ -13,7 +13,6 @@ class AssetGuideFooter extends StatefulWidget {
     // Dynamic context (all optional)
     this.xlmBalance,
     this.usdcBalance,
-    this.hasUsdcTrustline, // bool or Future<bool>
     this.isTestnet,
 
     // UX
@@ -35,7 +34,6 @@ class AssetGuideFooter extends StatefulWidget {
 
   final double? xlmBalance;
   final double? usdcBalance;
-  final Object? hasUsdcTrustline; // bool or Future<bool>
   final bool? isTestnet;
 
   final Duration randomizeEvery;
@@ -310,16 +308,11 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   int _index = 0;
 
   Timer? _timer;
-  bool? _resolvedTrustline;
   bool _paused = false; // NEW: pause on long-press
 
   @override
   void initState() {
     super.initState();
-    _maybeResolveTrustline().then((_) {
-      _assembleTips();
-      _pickRandomNow();
-    });
     _assembleTips();
     _startTimer();
   }
@@ -327,8 +320,6 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   @override
   void didUpdateWidget(covariant AssetGuideFooter oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final trustlineChanged =
-        oldWidget.hasUsdcTrustline != widget.hasUsdcTrustline;
     final balancesChanged = oldWidget.xlmBalance != widget.xlmBalance ||
         oldWidget.usdcBalance != widget.usdcBalance;
     final envChanged = oldWidget.isTestnet != widget.isTestnet;
@@ -336,12 +327,6 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
         oldWidget.excludeTags != widget.excludeTags;
     final extrasChanged = oldWidget.extraTips != widget.extraTips;
 
-    if (trustlineChanged) {
-      _maybeResolveTrustline().then((_) {
-        _assembleTips();
-        _pickRandomNow();
-      });
-    }
     if (balancesChanged || envChanged || filtersChanged || extrasChanged) {
       _assembleTips();
       _pickRandomNow();
@@ -355,22 +340,6 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _maybeResolveTrustline() async {
-    final v = widget.hasUsdcTrustline;
-    if (v is Future<bool>) {
-      try {
-        final b = await v;
-        if (mounted) _resolvedTrustline = b;
-      } catch (_) {
-        if (mounted) _resolvedTrustline = null;
-      }
-    } else if (v is bool) {
-      _resolvedTrustline = v;
-    } else {
-      _resolvedTrustline = null;
-    }
   }
 
   void _startTimer() {
@@ -403,12 +372,9 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
     final ctx = TipContext(
       xlmBalance: widget.xlmBalance,
       usdcBalance: widget.usdcBalance,
-      hasUsdcTrustline: _resolvedTrustline ??
-          (widget.hasUsdcTrustline is bool
-              ? widget.hasUsdcTrustline as bool
-              : null),
       isTestnet: widget.isTestnet,
       lowXlmThreshold: widget.lowXlmThreshold,
+      hasUsdcTrustline: null,
     );
 
     final List<GuideTip> built = [];

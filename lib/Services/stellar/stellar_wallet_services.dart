@@ -1,9 +1,9 @@
-// lib/Services/stellar/stellar_wallet_services.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+// Keep this import as in your codebase (shim or direct):
 import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 
 // ========== Helper models ==========
@@ -50,7 +50,7 @@ class PairPrice {
 // ========== Minimal Soroban JSON-RPC client (fallback only) ==========
 // SOROBAN
 class _SorobanRpc {
-  final String base; // e.g. https://rpc.ankr.com/stellar_soroban
+   String base = 'https://rpc.ankr.com/stellar_soroban';
   final Map<String, String>? headers;
   _SorobanRpc(this.base, [this.headers]);
 
@@ -231,14 +231,55 @@ class StellarWalletService {
   Future<String> getTransactionFeeAddress() async =>
       (await configVault.readOrInit()).address;
 
-  Future<int> getCurrentFeeStroops() async =>
-      (await configVault.readOrInit()).feeStroops;
+  // === Dynamic tx-fee: always target 0.01 USDC paid in XLM (robust fallbacks) ===
+  static const double _kTxFeeUsdc = 0.01;
 
-  Future<double> getCurrentFeeXlm() async =>
-      (await configVault.readOrInit()).feeXlm;
+  /// Compute XLM required to equal _kTxFeeUsdc USDC at current paths/price.
+  /// Order of attempts:
+  ///  1) Horizon strict-send quote (USDC -> XLM)
+  ///  2) Fallback: quote XLM->USDC for 1 XLM, invert
+  ///  3) Fallback: use vault's stored fixed XLM fee
+  Future<double> _computeDynamicFeeXlm() async {
+    // 1) Try direct USDC -> XLM quote
+    try {
+      final x1 = await quoteUsdcToXlm(_kTxFeeUsdc);
+      if (x1 != null && x1 > 0) return x1;
+    } catch (_) {/* ignore and fall through */}
 
-  Future<String> getCurrentFeeLabel() async =>
-      (await configVault.readOrInit()).feeXlmLabel;
+    // 2) Try inverse via XLM -> USDC (1 XLM) then invert
+    try {
+      final usdcFor1Xlm = await quoteXlmToUsdc(1.0);
+      if (usdcFor1Xlm != null && usdcFor1Xlm > 0) {
+        final x2 = _kTxFeeUsdc / usdcFor1Xlm; // XLM per 0.01 USDC
+        if (x2 > 0) return x2;
+      }
+    } catch (_) {/* ignore and fall through */}
+
+    // 3) Last resort: stored fixed XLM fee from the vault
+    try {
+      return await configVault.getFeeXlm();
+    } catch (_) {
+      // Ultra-safe final fallback (keeps old default behavior)
+      return 0.05; // 0.05 XLM as a hard fallback if everything fails
+    }
+  }
+
+  // === Public getters: flow preserved (same method names), now dynamic ===
+  Future<int> getCurrentFeeStroops() async {
+    final xlm = await _computeDynamicFeeXlm();
+    final stroops = (xlm * 1e7).ceil(); // round up so we never collect < $0.01 USDC worth
+    return stroops;
+  }
+
+  Future<double> getCurrentFeeXlm() async {
+    final stroops = await getCurrentFeeStroops(); // keep same rounding basis
+    return _fromStroops(stroops);
+  }
+
+  Future<String> getCurrentFeeLabel() async {
+    final xlm = await getCurrentFeeXlm();
+    return '${xlm.toStringAsFixed(7)} XLM';
+  }
 
   @Deprecated('Use getTransactionFeeAddress() instead.')
   Future<String> getProfitAddress() => getTransactionFeeAddress();
@@ -310,7 +351,7 @@ class StellarWalletService {
 
         // QuickNode fallback
         if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode.submitTransaction(tx);
+          final res = await _sdkQuickNode!.submitTransaction(tx);
           if (!res.success) _fail('ChangeTrust(USDC) failed on QuickNode: ${res.resultXdr}');
           return res.hash!;
         }
@@ -325,9 +366,8 @@ class StellarWalletService {
   Future<String?> _trySorobanSend(Transaction tx) async {
     if (_soroban == null) return null;
     try {
-      // NOTE: If your SDK uses a different name, change accordingly:
       final envelopeB64 = tx.toEnvelopeXdrBase64(); // common in stellar_flutter_sdk
-      final hash = await _soroban.sendTransaction(envelopeB64);
+      final hash = await _soroban!.sendTransaction(envelopeB64);
       return hash;
     } catch (_) {
       return null;
@@ -340,7 +380,7 @@ class StellarWalletService {
     await createUsdcTrustline(secretSeed: secretSeed, limit: limit);
   }
 
-  // ===== Payments (fixed transaction fee in XLM; separate from network fee) =====
+  // ===== Payments (dynamic 0.01 USDC-worth in XLM; separate from network fee) =====
 
   Future<List<String>> sendXlmWithFee({
     required String secretSeed,
@@ -362,7 +402,7 @@ class StellarWalletService {
 
     final totalStroops = _toStroops(amount);
     if (totalStroops <= feeStroops) {
-      _fail('Amount too small: must be greater than fixed transaction fee of ${_fmt7(feeXlm)} XLM');
+      _fail('Amount too small: must be greater than transaction fee of ${_fmt7(feeXlm)} XLM');
     }
     final recvPart = totalStroops - feeStroops;
 
@@ -400,7 +440,7 @@ class StellarWalletService {
 
       // QuickNode
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode.submitTransaction(tx);
+        final res = await _sdkQuickNode!.submitTransaction(tx);
         if (!res.success) _fail('XLM payment failed on QuickNode: ${res.resultXdr}');
         return [res.hash!];
       }
@@ -435,7 +475,7 @@ class StellarWalletService {
 
     final senderXlmBal = await getXlmBalance(sender.accountId);
     if (senderXlmBal + 1e-7 < feeXlm) {
-      _fail('Insufficient XLM to pay the fixed transaction fee of ${_fmt7(feeXlm)} XLM.');
+      _fail('Insufficient XLM to pay the transaction fee of ${_fmt7(feeXlm)} XLM.');
     }
 
     final opCount = feeStroops > 0 ? 2 : 1;
@@ -467,7 +507,7 @@ class StellarWalletService {
       if (hash != null) return [hash];
 
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode.submitTransaction(tx);
+        final res = await _sdkQuickNode!.submitTransaction(tx);
         if (!res.success) _fail('USDC payment failed on QuickNode: ${res.resultXdr}');
         return [res.hash!];
       }
@@ -475,7 +515,7 @@ class StellarWalletService {
     }
   }
 
-  // ===== Swaps (Strict-Send) with fixed XLM transaction fee =====
+  // ===== Swaps (Strict-Send) with dynamic XLM transaction fee =====
 
   Future<String> swapXlmToUsdc({
     required String secretSeed,
@@ -543,7 +583,7 @@ class StellarWalletService {
         if (hash != null) return hash;
 
         if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode.submitTransaction(tx);
+          final res = await _sdkQuickNode!.submitTransaction(tx);
           if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed on QuickNode: ${res.resultXdr}');
           return res.hash!;
         }
@@ -587,7 +627,7 @@ class StellarWalletService {
 
       if (dest == self) {
         if (minXlmOut + 1e-7 < feeXlm) {
-          _fail('minXlmOut too small to cover fixed transaction fee of ${_fmt7(feeXlm)} XLM.');
+          _fail('minXlmOut too small to cover transaction fee of ${_fmt7(feeXlm)} XLM.');
         }
 
         final opPath = PathPaymentStrictSendOperationBuilder(
@@ -606,7 +646,7 @@ class StellarWalletService {
       } else {
         final senderXlmBal = await getXlmBalance(self);
         if (senderXlmBal + 1e-7 < feeXlm) {
-          _fail('Insufficient XLM to pay fixed transaction fee of ${_fmt7(feeXlm)} XLM for external swap.');
+          _fail('Insufficient XLM to pay transaction fee of ${_fmt7(feeXlm)} XLM for external swap.');
         }
 
         final opPath = PathPaymentStrictSendOperationBuilder(
@@ -638,7 +678,7 @@ class StellarWalletService {
         if (hash != null) return hash;
 
         if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode.submitTransaction(tx);
+          final res = await _sdkQuickNode!.submitTransaction(tx);
           if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed on QuickNode: ${res.resultXdr}');
           return res.hash!;
         }
@@ -752,7 +792,7 @@ class StellarWalletService {
             try {
               await sub?.cancel();
             } catch (_) {}
-            await _start(_sdkQuickNode);
+            await _start(_sdkQuickNode!);
           } else {
             controller.addError(e, st);
             await controller.close();
@@ -888,7 +928,7 @@ class StellarWalletService {
     if (_soroban != null) {
       sorobanTicker = Timer.periodic(const Duration(seconds: 8), (_) async {
         try {
-          final seq = await _soroban.getLatestLedgerSequence();
+          final seq = await _soroban!.getLatestLedgerSequence();
           if (seq == null) return;
           if (lastSorobanLedger == null || seq > lastSorobanLedger!) {
             lastSorobanLedger = seq;

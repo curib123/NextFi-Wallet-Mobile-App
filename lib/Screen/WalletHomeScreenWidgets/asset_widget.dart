@@ -206,7 +206,6 @@ class AssetWidget extends StatelessWidget {
               colors: AppColor.of(context),
               xlmBalance: xlmBalance,           // optional
               usdcBalance: usdcBalance,         // optional
-              hasUsdcTrustline: hasUsdcTrustline,   // optional
               // cycleDuration: Duration(seconds: 10),
               // showNextPrev: false,
             ),
