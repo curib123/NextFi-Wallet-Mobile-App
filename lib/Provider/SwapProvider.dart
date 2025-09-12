@@ -1,3 +1,4 @@
+// lib/Provider/SwapProvider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/Services/seed_storage.dart';
@@ -17,22 +18,24 @@ class SwapProvider extends ChangeNotifier {
   final StellarWalletService _svc;
   bool _booted = false;
 
+  StreamSubscription? _acctSub;
+  StreamSubscription? _feeSub;
+
   // ---- Public state ----
   bool loading = true;
   String? error;
 
   String? accountId;      // G...
-  String? _secretSeed;    // S... (kept in memory only; not persisted here)
+  String? _secretSeed;    // S... (memory only)
 
   double xlmBal = 0.0;
   double usdcBal = 0.0;
 
-  double? estReceive;     // latest quote result (depends on amount + dir)
-  double? feeXlm;         // estimated fee in XLM
+  double? estReceive;     // latest quote
+  double? feeXlm;         // live network fee estimate (in XLM)
   bool needsTrustline = false;
 
   SwapDir dir = SwapDir.xlmToUsdc;
-
   bool get isXlmToUsdc => dir == SwapDir.xlmToUsdc;
 
   // ---- Lifecycle ----
@@ -62,20 +65,44 @@ class SwapProvider extends ChangeNotifier {
       _secretSeed = kp.secretSeed;
       accountId   = kp.accountId;
 
+      // Prime state before streams tick
       await refreshBalances();
 
-      // Auto-refresh balances when payments stream in.
-      // (If your StellarWalletService returns a subscription, you can hold/cancel it.)
-      _svc.streamPayments(accountId!, (_) => refreshBalances());
+      // Live account stream (balances + trustline changes)
+      _acctSub?.cancel();
+      _acctSub = _svc.accountStateStream(accountId!).listen((s) async {
+        final oldNeeds = needsTrustline;
+        xlmBal = s.xlm;
+        usdcBal = s.usdc;
+        needsTrustline = isXlmToUsdc ? !s.hasUsdcTrustline : false;
+        notifyListeners();
+
+        // if trustline requirement toggles, recompute fee stream
+        if (oldNeeds != needsTrustline) {
+          await _wireFeeStream();
+        }
+      }, onError: (_) {
+        // keep last known state
+      });
+
+      // Start fee stream now (based on current dir + trustline state)
+      await _wireFeeStream();
 
       loading = false;
       error = null;
       notifyListeners();
     } catch (_) {
       loading = false;
-      error = 'Failed to load Stellar wallet (is the account funded on mainnet?).';
+      error = 'Failed to load Stellar wallet (is the account funded on this network?).';
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _acctSub?.cancel();
+    _feeSub?.cancel();
+    super.dispose();
   }
 
   // ---- State helpers ----
@@ -95,11 +122,15 @@ class SwapProvider extends ChangeNotifier {
   Future<void> setDir(SwapDir value) async {
     if (dir == value) return;
     dir = value;
+
+    // when direction changes, trustline requirement may change
+    needsTrustline = isXlmToUsdc ? needsTrustline : false;
     notifyListeners();
-    await updateFeeEstimate(); // fee changes if we need trustline for XLM→USDC
+
+    await _wireFeeStream();
   }
 
-  // ---- Refreshes ----
+  // ---- Balances (manual refresh; streams keep this up-to-date) ----
   Future<void> refreshBalances() async {
     final aid = accountId;
     if (aid == null) return;
@@ -110,42 +141,48 @@ class SwapProvider extends ChangeNotifier {
       ]);
       xlmBal = res[0];
       usdcBal = res[1];
-      notifyListeners();
 
-      await updateFeeEstimate();
+      // also refresh trustline check (affects fee op count)
+      try {
+        final hasTl = await _svc.hasUsdcTrustline(aid);
+        final prev = needsTrustline;
+        needsTrustline = isXlmToUsdc ? !hasTl : false;
+        if (prev != needsTrustline) {
+          await _wireFeeStream();
+        }
+      } catch (_) {}
+
+      notifyListeners();
     } catch (_) {
-      // keep last balances/fee
+      // keep last balances
     }
   }
 
-  Future<void> updateFeeEstimate() async {
-    final aid = accountId;
-    if (aid == null) return;
+  // ---- Live fee stream (re-subscribes when opCount context changes) ----
+  Future<void> _wireFeeStream() async {
+    _feeSub?.cancel();
 
-    // One op for the swap itself
-    int opCount = 1;
+    // base op: PathPaymentStrictSend
+    int ops = 1;
 
-    // If swapping XLM→USDC and no USDC trustline yet, include a ChangeTrust op
-    bool needsTl = false;
-    if (isXlmToUsdc) {
-      try {
-        needsTl = !(await _svc.hasUsdcTrustline(aid));
-      } catch (_) {
-        needsTl = false;
-      }
-      if (needsTl) opCount += 1;
-    }
-
-    double? fee;
+    // include your fixed XLM fee payment op if configured
+    int feeStroops = 0;
     try {
-      fee = await _svc.estimateNetworkFeeXlm(opCount: opCount, percentile: 95);
-    } catch (_) {
-      fee = null;
-    }
+      feeStroops = await _svc.getCurrentFeeStroops();
+    } catch (_) {}
+    if (feeStroops > 0) ops += 1;
 
-    needsTrustline = needsTl;
-    feeXlm = fee;
-    notifyListeners();
+    // include ChangeTrust if swapping XLM→USDC and no trustline yet
+    if (isXlmToUsdc && needsTrustline) ops += 1;
+
+    _feeSub = _svc
+        .feeEstimateStream(opCount: ops, percentile: 95)
+        .listen((f) {
+      feeXlm = f.totalXlm;
+      notifyListeners();
+    }, onError: (_) {
+      // keep last feeXlm on error
+    });
   }
 
   // ---- Quotes ----
@@ -185,7 +222,7 @@ class SwapProvider extends ChangeNotifier {
         : await _svc.swapUsdcToXlm(
         secretSeed: seed, sendAmountUsdc: amount, minXlmOut: minOut);
 
-    // After submit, refresh balances + fee/quote state
+    // Streams will update balances shortly; a manual refresh is still fine.
     await refreshBalances();
     return txid;
   }

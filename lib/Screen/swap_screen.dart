@@ -1,3 +1,4 @@
+// lib/Screen/SwapScreen.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,7 +35,7 @@ class _SwapScreenState extends State<SwapScreen> {
       final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
       // live quote as user types
       p.updateQuote(amt);
-      setState(() {}); // only for enabling/disabling button text etc.
+      setState(() {}); // enable/disable UI bits immediately
     });
   }
 
@@ -55,7 +56,7 @@ class _SwapScreenState extends State<SwapScreen> {
     super.dispose();
   }
 
-  // ── percentage chips helpers (same behavior as Send) ───────────────────────
+  // ── percentage chips helpers ───────────────────────────────────────────────
   double _floorTo(double v, int dec) {
     final scale = math.pow(10, dec);
     return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
@@ -67,8 +68,7 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 
   void _applyPercent(SwapProvider p, double percent) {
-    // use spendable base from provider; this already accounts for XLM reserves/fees
-    final base = p.availableFrom;
+    final base = p.availableFrom; // already accounts for reserves/fees
     final v = _floorTo(base * percent, 7);
     HapticFeedback.selectionClick();
     _amountCtl.text = v <= 0 ? '' : _fmtAmount(v);
@@ -104,16 +104,12 @@ class _SwapScreenState extends State<SwapScreen> {
       return;
     }
 
-    // Ensure fee is fresh
-    await p.updateFeeEstimate();
-
     // Ensure we have a current quote to compute minOut
-    double? est = p.estReceive;
-    est ??= await p.updateQuote(amount);
+    double? est = p.estReceive ?? await p.updateQuote(amount);
     if (est == null) {
       showFloatingSnackBar(
         context,
-        message: 'No price quote available on mainnet. Try a slightly different amount.',
+        message: 'No price quote available. Try a slightly different amount.',
         type: SnackBarType.error,
       );
       return;
@@ -270,7 +266,7 @@ class _SwapScreenState extends State<SwapScreen> {
           : p.error != null
           ? _ErrorCard(message: p.error!)
           : Padding(
-        padding:  const EdgeInsets.fromLTRB(14, 12, 14, 24),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -306,7 +302,7 @@ class _SwapScreenState extends State<SwapScreen> {
             _TinyInfoRow(
               icon: LucideIcons.badgeDollarSign,
               text: p.estReceive == null
-                  ? 'Estimating receive on mainnet…'
+                  ? 'Getting live quote…'
                   : 'Est. receive: ${_fmt.format(p.estReceive!)} ${p.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: 1%'
                   '${p.feeXlm == null ? '' : ' · Fee≈ ${_fmt.format(p.feeXlm!)} XLM${p.needsTrustline ? ' (incl. trustline)' : ''}'}',
             ),
