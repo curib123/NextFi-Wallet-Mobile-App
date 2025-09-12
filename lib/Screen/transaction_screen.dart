@@ -3,9 +3,8 @@ import 'package:flutter/material.dart' hide Page;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
-
 import 'package:next_fi/Provider/TransactionProvider.dart';
+import 'package:provider/provider.dart';
 import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/empty_state.dart';
 import 'package:next_fi/Components/recipient_upsert_sheet.dart';
@@ -30,20 +29,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   static const String _FALLBACK_XLM_LOGO =
       'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png';
 
-  // UI-only ephemeral chips
   final List<_IncomingChip> _incomingChips = [];
-
-  // Boot guard so we don’t call start() or subscribe multiple times
-  bool _booted = false;
-
-  void _pushIncomingChip({required String text, required Color color, IconData? icon}) {
-    final chip = _IncomingChip(text: text, color: color, icon: icon ?? LucideIcons.arrowDownCircle);
-    setState(() => _incomingChips.add(chip));
-    chip.timer = Timer(const Duration(seconds: 4), () {
-      if (!mounted) return;
-      setState(() => _incomingChips.remove(chip));
-    });
-  }
 
   @override
   void initState() {
@@ -53,7 +39,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
       final pos = _scrollController.position;
       if (!mounted || !pos.hasPixels) return;
       final p = context.read<TransactionsProvider>();
-      if (pos.pixels >= pos.maxScrollExtent - 200 && !p.loadingMore && p.hasMore) {
+      if (pos.pixels >= pos.maxScrollExtent - 200 && !p.loadingMore &&
+          p.hasMore) {
         p.fetch(loadMore: true);
       }
     });
@@ -62,45 +49,42 @@ class _TransactionScreenState extends State<TransactionScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // use existing provider from context; no local ChangeNotifierProvider here
+    // Subscribe once for incoming UI chips/toasts
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final p = context.read<TransactionsProvider>();
+      _incomingUiSub ??= context
+          .read<TransactionsProvider>()
+          .incomingStream
+          .listen((tx) {
+        final colors = AppColor.of(context);
+        final asset = (tx['asset'] ?? 'XLM').toString();
+        final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
 
-      if (!_booted) {
-        p.start(); // assume idempotent; guarded so it won’t spam
-        _incomingUiSub ??= p.incomingStream.listen((tx) {
-          final colors = AppColor.of(context);
-          final asset = (tx['asset'] ?? 'XLM').toString();
-          final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+        _pushIncomingChip(
+          text: 'Incoming ${amount.toStringAsFixed(6)} $asset',
+          color: colors.success,
+          icon: LucideIcons.arrowDownCircle,
+        );
 
-          _pushIncomingChip(
-            text: 'Incoming ${amount.toStringAsFixed(6)} $asset',
-            color: colors.success,
-            icon: LucideIcons.arrowDownCircle,
-          );
-
-          // toast alert with quick-view
-          final ctl = showAppAlert(
-            context,
-            type: AppAlertType.info,
-            title: 'Incoming $asset',
-            subtitle: 'You received ${amount.toStringAsFixed(6)} $asset. Tap below to view details.',
-            primaryText: 'View',
-            barrierDismissible: true,
-            onPrimary: () {
-              final peerAddr = (tx['from'] ?? '').toString().trim();
-              const isIncoming = true;
-              _showTxDetailsBottomSheet(context, AppColor.of(context), tx,
-                  peerAddr: peerAddr, isIncoming: isIncoming);
-            },
-          );
-          Timer(const Duration(seconds: 5), () {
-            if (mounted) ctl.close();
-          });
+        final ctl = showAppAlert(
+          context,
+          type: AppAlertType.info,
+          title: 'Incoming $asset',
+          subtitle: 'You received ${amount.toStringAsFixed(
+              6)} $asset. Tap below to view details.',
+          primaryText: 'View',
+          barrierDismissible: true,
+          onPrimary: () {
+            final peerAddr = (tx['from'] ?? '').toString().trim();
+            const isIncoming = true;
+            _showTxDetailsBottomSheet(context, AppColor.of(context), tx,
+                peerAddr: peerAddr, isIncoming: isIncoming);
+          },
+        );
+        Timer(const Duration(seconds: 5), () {
+          if (mounted) ctl.close();
         });
-        _booted = true;
-      }
+      });
     });
   }
 
@@ -111,14 +95,24 @@ class _TransactionScreenState extends State<TransactionScreen> {
     super.dispose();
   }
 
+  void _pushIncomingChip(
+      {required String text, required Color color, IconData? icon}) {
+    final chip = _IncomingChip(
+        text: text, color: color, icon: icon ?? LucideIcons.arrowDownCircle);
+    setState(() => _incomingChips.add(chip));
+    chip.timer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() => _incomingChips.remove(chip));
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-
     final colors = AppColor.of(context);
     final p = context.watch<TransactionsProvider>();
     final recipProv = context.watch<RecipientAddressProvider>();
 
-    // Attach contact meta on-demand (UI-only; provider stays pure)
+    // Attach contact meta (UI-only; provider stays pure)
     void attachRecipientMetaTo(List<Tx> list) {
       if (recipProv.loading) return;
       for (final tx in list) {
@@ -198,7 +192,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: colors.surface,
-        title: const Text('Transactions', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+            'Transactions', style: TextStyle(fontWeight: FontWeight.bold)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: _buildFilterChips(colors, p),
@@ -227,7 +222,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 250),
                       opacity: 1.0,
-                      child: _IncomingChipWidget(chip: c, surface: colors.surface),
+                      child: _IncomingChipWidget(chip: c,
+                          surface: colors.surface),
                     ),
                   );
                 }).toList(),
@@ -238,6 +234,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
       ),
     );
   }
+
+
 
   Widget _buildFilterChips(AppColor colors, TransactionsProvider p) {
     return Padding(

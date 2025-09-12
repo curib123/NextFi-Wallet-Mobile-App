@@ -52,7 +52,6 @@ class WalletHomeProvider extends ChangeNotifier {
   Timer? _balancesTimer;
   Timer? _debounceBalanceKick;
 
-  // Now typed to the PaymentOperationResponse from the SDK (via the service stream)
   StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
 
   bool _disposed = false;
@@ -96,6 +95,13 @@ class WalletHomeProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> switchTo(String walletId) async {
+    final ok = await SeedStorage.setActiveWallet(walletId);
+    if (!ok) return false;
+    await boot(); // re-reads active wallet, restarts SSE & refreshes balances
+    return true;
+  }
+
   Future<void> refresh({bool force = false}) async {
     if (!hasWallet) return;
     if (_balancesInFlight) return;
@@ -130,9 +136,7 @@ class WalletHomeProvider extends ChangeNotifier {
     _balancesTimer = Timer.periodic(_minBalancesGap, (_) => refresh());
 
     // Subscribe to payments via the service (SSE under the hood)
-    _incomingSub = _stellar
-        .paymentsStream(address!)
-        .listen((op) {
+    _incomingSub = _stellar.paymentsStream(address!).listen((op) {
       if (_disposed) return;
       if (op.transactionSuccessful != true) return;
       if (op.to != address) return;

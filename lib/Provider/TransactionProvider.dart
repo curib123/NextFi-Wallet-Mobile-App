@@ -1,9 +1,7 @@
-// lib/Provider/TransactionsProvider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
-import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
 typedef Tx = Map<String, dynamic>;
@@ -11,34 +9,39 @@ typedef Tx = Map<String, dynamic>;
 enum TxFilter { all, receive, send }
 
 class TransactionsProvider extends ChangeNotifier {
-  TransactionsProvider({StellarWalletService? stellarSvc})
-      : _stellar = stellarSvc ?? StellarWalletService();
+  TransactionsProvider({required StellarWalletService stellarSvc})
+      : _stellar = stellarSvc;
 
   final StellarWalletService _stellar;
 
-  String? address; // G...
+  // Bound address from WalletHomeProvider (G...)
+  String? address;
+
+  // UI state
   bool loading = true;
   bool loadingMore = false;
   bool hasMore = true;
   String? errorMsg;
   bool accountMissing = false; // unfunded
 
+  // Paging
   final int _limit = 20;
   String? _cursor;
   int _fetchGen = 0;
 
+  // Data
   final List<Tx> _txs = <Tx>[];
   List<Tx> get txs => List.unmodifiable(_txs);
-
   final Set<String> _seenIds = <String>{};
 
-  // Incoming payment stream for UI (chips, toasts, etc.)
+  // Incoming events for UI chips/toasts
   final StreamController<Tx> _incomingController = StreamController<Tx>.broadcast();
   Stream<Tx> get incomingStream => _incomingController.stream;
 
-  // Use our service’s stream (event-driven; no polling)
+  // SSE subscription
   StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
 
+  // Filter
   TxFilter filter = TxFilter.all;
   List<Tx> get visibleTxs {
     switch (filter) {
@@ -52,20 +55,44 @@ class TransactionsProvider extends ChangeNotifier {
     }
   }
 
-  bool get isTestnet => identical(_stellar.sdk, stellar.StellarSDK.TESTNET);
+  bool get isTestnet => _stellar.isTestnet ?? identical(_stellar.sdk, stellar.StellarSDK.TESTNET);
 
-  // ----- Lifecycle from UI -----
-  Future<void> start() async {
-    await _loadWallet();
-    await fetch(loadMore: false);
-    _subscribeIncomingIfReady();
+  // ───────────────── Bind to active wallet address (from WalletHomeProvider)
+  void bindToAddress(String? newAddr) {
+    final addr = (newAddr ?? '').trim();
+    if (addr.isEmpty) {
+      // No active wallet → clear
+      if (address != null) {
+        address = null;
+        _clearAll();
+        loading = false;
+        errorMsg = 'No wallet found. Please import or create a wallet.';
+        notifyListeners();
+      }
+      return;
+    }
+
+    if (address == addr) return; // no-op if unchanged
+
+    address = addr;
+    _restartForNewAddress();
   }
 
-  void stop() {
-    _incomingSub?.cancel();
-    _incomingSub = null;
+  void _restartForNewAddress() {
+    stop(); // cancel old SSE
+    _clearAll();
+    loading = true;
+    errorMsg = null;
+    notifyListeners();
+
+    // kick initial fetch then subscribe
+    scheduleMicrotask(() async {
+      await fetch(loadMore: false);
+      _subscribeIncomingIfReady();
+    });
   }
 
+  // ───────────────── Public API
   void setFilter(TxFilter v) {
     if (filter == v) return;
     filter = v;
@@ -90,11 +117,12 @@ class TransactionsProvider extends ChangeNotifier {
     final myToken = ++_fetchGen;
 
     if (loadMore) {
+      if (!hasMore || loadingMore) return;
       loadingMore = true;
     } else {
       loading = true;
       errorMsg = null;
-      _cursor = null;
+      if (_txs.isEmpty) _cursor = null; // fresh list
     }
     notifyListeners();
 
@@ -117,20 +145,18 @@ class TransactionsProvider extends ChangeNotifier {
         if (tx != null) newTx.add(tx);
       }
 
-      if (myToken != _fetchGen) return; // late response
+      // stale response guard
+      if (myToken != _fetchGen) return;
 
-      // merge
       if (loadMore) {
         _txs.addAll(newTx);
       } else {
         _txs
           ..clear()
           ..addAll(newTx);
-        _seenIds.clear();
-      }
-      for (final t in newTx) {
-        final id = (t['id'] ?? '').toString();
-        if (id.isNotEmpty) _seenIds.add(id);
+        _seenIds
+          ..clear()
+          ..addAll(newTx.map((t) => (t['id'] ?? '').toString()).where((s) => s.isNotEmpty));
       }
 
       if (ops.isNotEmpty) _cursor = ops.last.pagingToken;
@@ -154,27 +180,25 @@ class TransactionsProvider extends ChangeNotifier {
     }
   }
 
-  // ----- Internals -----
-  Future<void> _loadWallet() async {
-    // Try both APIs to be compatible with single- or multi-wallet storage
-    String? mnemonic;
-    try {
-      mnemonic = await SeedStorage.getActiveSeed();
-    } catch (_) {}
-    mnemonic ??= await SeedStorage.getSeed();
+  void stop() {
+    _incomingSub?.cancel();
+    _incomingSub = null;
+  }
 
-    if (mnemonic == null || mnemonic.trim().isEmpty) {
-      address = null;
-      loading = false;
-      errorMsg = 'No wallet found. Please import or create a wallet.';
-      notifyListeners();
-      return;
-    }
+  @override
+  void dispose() {
+    stop();
+    _incomingController.close();
+    super.dispose();
+  }
 
-    final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
-    final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-    address = kp.accountId;
-    notifyListeners();
+  // ───────────────── Internals
+  void _clearAll() {
+    _cursor = null;
+    hasMore = true;
+    _txs.clear();
+    _seenIds.clear();
+    accountMissing = false;
   }
 
   void _subscribeIncomingIfReady() {
@@ -183,10 +207,7 @@ class TransactionsProvider extends ChangeNotifier {
 
     _incomingSub?.cancel();
 
-    // Use the service’s paymentsStream (filters to successful payment-like ops)
-    _incomingSub = _stellar
-        .paymentsStream(addr)
-        .listen((op) {
+    _incomingSub = _stellar.paymentsStream(addr).listen((op) {
       final tx = _opToTx(op, addr);
       if (tx == null) return;
 
@@ -195,10 +216,10 @@ class TransactionsProvider extends ChangeNotifier {
 
       _seenIds.add(id);
       _txs.insert(0, tx);
-      _incomingController.add(tx); // notify UI for chip/toast
+      _incomingController.add(tx); // UI can show chip/toast
       notifyListeners();
     }, onError: (_) {
-      // Silent; user can pull-to-refresh
+      // Silent; pull-to-refresh remains available
     });
   }
 
@@ -224,13 +245,13 @@ class TransactionsProvider extends ChangeNotifier {
       from = op.from;
       to = op.to;
     } else if (op is stellar.CreateAccountOperationResponse) {
-      // Note: create_account won't arrive on paymentsStream (we still get it via fetch)
+      // Not emitted by paymentsStream, but we normalize just in case
       assetCode = 'XLM';
       amount = double.tryParse(op.startingBalance ?? '');
       from = op.funder;
       to = op.account;
     } else {
-      return null; // ignore non-payment ops
+      return null; // ignore other ops
     }
 
     final hash = op.transactionHash ?? '';
@@ -278,12 +299,5 @@ class TransactionsProvider extends ChangeNotifier {
     } catch (_) {
       return null;
     }
-  }
-
-  @override
-  void dispose() {
-    stop();
-    _incomingController.close();
-    super.dispose();
   }
 }

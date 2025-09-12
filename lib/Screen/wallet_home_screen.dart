@@ -1,12 +1,10 @@
 // lib/Screen/wallet_home_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Components/wallet_switch_result.dart';
-import 'package:next_fi/Screen/wallet_creation_screen.dart';
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/Provider/HomeWalletProvider.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
@@ -15,7 +13,6 @@ import 'package:next_fi/Helper/AppColor.dart';
 
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
-import 'package:next_fi/Provider/HomeWalletProvider.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
 
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/action_button.dart';
@@ -27,7 +24,9 @@ import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dar
 import 'package:next_fi/Screen/receive_screen.dart';
 import 'package:next_fi/Screen/send_screen.dart';
 import 'package:next_fi/Screen/swap_screen.dart';
+import 'package:next_fi/Screen/wallet_creation_screen.dart';
 
+import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
 class WalletHomeScreen extends StatefulWidget {
@@ -37,188 +36,175 @@ class WalletHomeScreen extends StatefulWidget {
 }
 
 class _WalletHomeScreenState extends State<WalletHomeScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  late final WalletHomeProvider _home =
-  WalletHomeProvider(stellar: StellarWalletService());
-
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final AnimationController _livePulse =
   AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
     ..repeat(reverse: true);
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    context.read<AssetProvider>().startRealtimeUpdates();
-
-    // Fire-and-forget boot
-    unawaited(_home.boot());
+    // Providers are hoisted; boot & realtime already started in main.dart
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _livePulse.dispose();
-    _home.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final home = context.read<WalletHomeProvider>();
     if (state == AppLifecycleState.resumed) {
-      _home.startRealtime();
-      unawaited(_home.refresh());
+      home.startRealtime();
+      unawaited(home.refresh());
     } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      _home.stopRealtime();
+      home.stopRealtime();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
+    super.build(context);
 
-    return ChangeNotifierProvider<WalletHomeProvider>.value(
-      value: _home,
-      builder: (context, _) {
-        final home = context.watch<WalletHomeProvider>();
-        final currency = context.watch<CurrencyProvider>();
-        final assets = context.watch<AssetProvider>();
+    final colors   = AppColor.of(context);
+    final home     = context.watch<WalletHomeProvider>();
+    final currency = context.watch<CurrencyProvider>();
+    final assets   = context.watch<AssetProvider>();
 
-        final currencyFmt =
-        NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-        final fxXlm = currency.xlmToFiat(home.xlm);
-        final fxUsdc = currency.usdcToFiat(home.usdc);
-        final totalFiat =
-            (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final fxXlm   = currency.xlmToFiat(home.xlm);
+    final fxUsdc  = currency.usdcToFiat(home.usdc);
+    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
-        return DefaultTabController(
-          length: 2,
-          child: Scaffold(
-            backgroundColor: colors.surface,
-            body: SafeArea(
-              child: RefreshIndicator.adaptive(
-                onRefresh: () => _home.refresh(force: true),
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _TopBar(
-                          colors: colors,
-                          walletName: home.walletName, // shows active wallet name
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20,),
-                        child: _HeaderSection(
-                          colors: colors,
-                          currencyFmt: currencyFmt,
-                          loadingBalances: home.loadingBalances,
-                          totalFiat: totalFiat,
-                          lastBalancesAt: home.lastBalancesAt,
-                          onSwap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const SwapScreen()),
-                          ),
-                          onSend: _onSend,
-                          onReceive: _onReceive,
-                          livePulse: _livePulse,
-                          incomingStrip: (home.hasWallet)
-                              ? IncomingHintsStrip(
-                            colors: colors,
-                            stellarAddress: home.address!,
-                            incomingHints: home.hints
-                                .map((h) => {
-                              'hash': h.id,
-                              'from': h.from,
-                              'to': h.to,
-                              'amount': h.amount.toStringAsFixed(6),
-                              'assetCode': h.assetCode,
-                            })
-                                .toList(),
-                            onAcknowledge: (tx) {
-                              final String id = (tx['hash'] ?? '').toString();
-                              _home.ackHint(id);
-                            },
-                          )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                        child: buildTabBar(colors),
-                      ),
-                    ),
-                    SliverFillRemaining(
-                      hasScrollBody: true,
-                      child: TabBarView(
-                        children: [
-                          _TabKeepAlive(
-                            storageKey: 'assetsTab',
-                            child: AssetWidget(
-                              colors: colors,
-                              assets: assets.assets,
-                              logos: assets.logos,
-                              xlmBalance: home.xlm,
-                              usdcBalance: home.usdc,
-                              address: home.address ?? '',
-                              loading: assets.loading ||
-                                  currency.loading ||
-                                  home.loadingBalances,
-                              onItemTap: (token) {
-                                final addr = home.address;
-                                if (addr == null) {
-                                  showFloatingSnackBar(context,
-                                      message: 'No address available',
-                                      type: SnackBarType.error);
-                                  return;
-                                }
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ReceiveScreen(
-                                      address: addr,
-                                      xlmBalance: home.xlm,
-                                      usdcBalance: home.usdc,
-                                      initialToken: token,
-                                    ),
-                                  ),
-                                );
-                              },
-                              hasUsdcTrustline: StellarWalletService().hasUsdcTrustline(home.address ?? ''),
-                            ),
-                          ),
-                          _TabKeepAlive(
-                            storageKey: 'recipientsTab',
-                            child: RecipientListWidget(
-                              colors: colors,
-                              fromAddress: home.address,
-                              xlmBalance: home.xlm,
-                              usdcBalance: home.usdc,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+    final stellar = context.read<StellarWalletService>();
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: colors.surface,
+        body: SafeArea(
+          child: RefreshIndicator.adaptive(
+            onRefresh: () => context.read<WalletHomeProvider>().refresh(force: true),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _TopBar(colors: colors, walletName: home.walletName),
+                  ),
                 ),
-              ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _HeaderSection(
+                      colors: colors,
+                      currencyFmt: currencyFmt,
+                      loadingBalances: home.loadingBalances,
+                      totalFiat: totalFiat,
+                      lastBalancesAt: home.lastBalancesAt,
+                      onSwap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SwapScreen()),
+                      ),
+                      onSend: _onSend,
+                      onReceive: _onReceive,
+                      livePulse: _livePulse,
+                      incomingStrip: (home.hasWallet)
+                          ? IncomingHintsStrip(
+                        colors: colors,
+                        stellarAddress: home.address!,
+                        incomingHints: home.hints.map((h) => {
+                          'hash': h.id,
+                          'from': h.from,
+                          'to': h.to,
+                          'amount': h.amount.toStringAsFixed(6),
+                          'assetCode': h.assetCode,
+                        }).toList(),
+                        onAcknowledge: (tx) {
+                          final String id = (tx['hash'] ?? '').toString();
+                          context.read<WalletHomeProvider>().ackHint(id);
+                        },
+                      )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: buildTabBar(colors),
+                  ),
+                ),
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  child: TabBarView(
+                    children: [
+                      _TabKeepAlive(
+                        storageKey: 'assetsTab',
+                        child: AssetWidget(
+                          colors: colors,
+                          assets: assets.assets,
+                          logos: assets.logos,
+                          xlmBalance: home.xlm,
+                          usdcBalance: home.usdc,
+                          address: home.address ?? '',
+                          loading: assets.loading || currency.loading || home.loadingBalances,
+                          onItemTap: (token) {
+                            final addr = home.address;
+                            if (addr == null) {
+                              showFloatingSnackBar(context,
+                                  message: 'No address available',
+                                  type: SnackBarType.error);
+                              return;
+                            }
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReceiveScreen(
+                                  address: addr,
+                                  xlmBalance: home.xlm,
+                                  usdcBalance: home.usdc,
+                                  initialToken: token,
+                                ),
+                              ),
+                            );
+                          },
+                          // IMPORTANT: use the shared service instance, not a new one
+                          hasUsdcTrustline: stellar.hasUsdcTrustline(home.address ?? ''),
+                        ),
+                      ),
+                      _TabKeepAlive(
+                        storageKey: 'recipientsTab',
+                        child: RecipientListWidget(
+                          colors: colors,
+                          fromAddress: home.address,
+                          xlmBalance: home.xlm,
+                          usdcBalance: home.usdc,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   // ---- Actions ----
   void _onSend() {
-    final addr = _home.address;
+    final home = context.read<WalletHomeProvider>();
+    final addr = home.address;
     if (addr == null) {
       showFloatingSnackBar(context,
           message: 'Wallet not loaded yet', type: SnackBarType.warning);
@@ -227,16 +213,17 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     showTokenSelector(
       context,
       addr,
-      _home.xlm,
-      _home.usdc,
+      home.xlm,
+      home.usdc,
       title: 'Send Token',
       screenBuilder: (address, token, balance) =>
           SendScreen(address: address, token: token, balance: balance),
-    ).then((_) => _home.refresh(force: true));
+    ).then((_) => context.read<WalletHomeProvider>().refresh(force: true));
   }
 
   void _onReceive() {
-    final addr = _home.address;
+    final home = context.read<WalletHomeProvider>();
+    final addr = home.address;
     if (addr == null) {
       showFloatingSnackBar(context,
           message: 'Wallet not loaded yet', type: SnackBarType.warning);
@@ -247,8 +234,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: addr,
-          xlmBalance: _home.xlm,
-          usdcBalance: _home.usdc,
+          xlmBalance: home.xlm,
+          usdcBalance: home.usdc,
           initialToken: 'XLM',
         ),
       ),
@@ -276,10 +263,9 @@ class _TopBar extends StatelessWidget {
           ),
           GestureDetector(
             onTap: () async {
-              // Get currently active id for highlighting in the sheet (optional)
               final activeId = await SeedStorage.getActiveWalletId();
 
-              // Open the sheet
+              // Open the wallet switch sheet
               final res = await showWalletSwitchSheet(
                 context,
                 currentActiveId: activeId,
@@ -287,35 +273,29 @@ class _TopBar extends StatelessWidget {
               );
               if (res == null) return;
 
-              // User chose “Generate New Wallet”
+              // Create new wallet flow
               if (res.createNew) {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const WalletCreationScreen()),
                 );
-
-                // Refresh providers and reboot UI shell so everything picks up the new wallet
-                final home = context.read<WalletHomeProvider>();
-                await home.refresh(force: true);
                 if (!context.mounted) return;
-                Phoenix.rebirth(context);
+                await context.read<WalletHomeProvider>().boot();
                 return;
               }
 
-              // User picked an existing wallet to switch to
+              // Switch to an existing wallet — no app restart, just reboot provider
               final chosenId = res.chosenWalletId;
               if (chosenId != null && chosenId != activeId) {
-                final ok = await SeedStorage.setActiveWallet(chosenId);
+                final ok = await context.read<WalletHomeProvider>().switchTo(chosenId);
                 if (!context.mounted) return;
 
                 if (ok) {
-                  await context.read<WalletHomeProvider>().refresh(force: true);
                   showFloatingSnackBar(
                     context,
                     message: 'Switched active wallet.',
                     type: SnackBarType.success,
                   );
-                  Phoenix.rebirth(context);
                 } else {
                   showFloatingSnackBar(
                     context,
@@ -422,13 +402,13 @@ class _HeaderSectionState extends State<_HeaderSection> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Always show the animated counter; no spinner.
+                  // Animated counter; subtle pulsing dot during fetch
                   _LiveCountingBalance(
                     hidden: _hideBalance,
                     targetValue: widget.totalFiat.isFinite ? widget.totalFiat : 0.0,
                     fmt: widget.currencyFmt,
                     baseColor: widget.colors.textPrimary,
-                    loading: widget.loadingBalances,     // show pulsing dot when fetching
+                    loading: widget.loadingBalances,
                     pulse: widget.livePulse,
                   ),
 

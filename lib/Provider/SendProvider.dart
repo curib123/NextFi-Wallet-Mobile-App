@@ -1,7 +1,5 @@
-// lib/Provider/SendProvider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/Services/seed_storage.dart';
@@ -9,17 +7,21 @@ import 'package:next_fi/Services/seed_storage.dart';
 enum SendToken { xlm, usdc }
 
 class SendProvider extends ChangeNotifier {
-  SendProvider({StellarWalletService? service})
-      : _svc = service ?? StellarWalletService();
+  SendProvider({
+    required StellarWalletService service,
+    Future<String?> Function()? getActiveSeed,
+  })  : _svc = service,
+        _getActiveSeed = getActiveSeed ?? SeedStorage.getActiveSeed;
 
-  // ── Service / wallet ───────────────────────────────────────────────────────
+  // ── Service / secrets access (DI) ─────────────────────────────────────────
   final StellarWalletService _svc;
-  Wallet? _wallet;
-  KeyPair? _kp;
-  String? _accountId; // G...
+  final Future<String?> Function() _getActiveSeed;
 
+  // We DO NOT hold wallet or keypair in memory for the session. Safer.
+  String? _accountId; // G... (display/source of truth for sender)
   String? get accountId => _accountId;
-  bool get ready => _kp != null && _accountId != null;
+
+  bool get ready => _configured && (_accountId?.isNotEmpty ?? false);
 
   // ── “Screen session” config (set when opening SendScreen) ─────────────────
   bool _configured = false;
@@ -50,6 +52,9 @@ class SendProvider extends ChangeNotifier {
     _senderBalToken = senderBalanceToken;
     _prefillName = prefillName;
 
+    // The sender address for UI. We also try to confirm an active seed exists.
+    _accountId = senderAddress;
+
     // reset session
     _to = (prefillTo ?? '').trim();
     _typedAmount = 0;
@@ -61,7 +66,7 @@ class SendProvider extends ChangeNotifier {
     _txFeeXlm = null;
 
     notifyListeners();
-    // kick wallet load & fee bootstrap
+    // kick fee bootstrap (no wallet derivation here)
     unawaited(_start());
   }
 
@@ -91,26 +96,23 @@ class SendProvider extends ChangeNotifier {
   StreamSubscription? _feeSub;
   Timer? _debounce;
 
-  // ── Boot wallet & prefetch fees (now stream-driven) ───────────────────────
+  // ── Boot prefetch fees (no mnemonic/keypair kept) ─────────────────────────
   Future<void> _start() async {
     _loading = true;
     _err = null;
     notifyListeners();
 
     try {
-      // Wallet
-      final m = await SeedStorage.getSeed();
+      // Ensure there is an active seed (but do NOT keep it)
+      final m = await _getActiveSeed();
       if (m == null || m.isEmpty) {
         _loading = false;
         _err = 'No wallet found.';
         notifyListeners();
         return;
       }
-      _wallet = await StellarWalletService.walletFromMnemonic(m);
-      _kp = await StellarWalletService.getKeyPair(_wallet!, index: 0);
-      _accountId = _kp!.accountId;
 
-      // Fixed TX fee (from secure vault)
+      // Fixed TX fee (from secure vault/service)
       _txFeeXlm = await _svc.getCurrentFeeXlm();
 
       // Initial network fee snapshot (while stream warms up)
@@ -130,7 +132,7 @@ class SendProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _loading = false;
-      _err = 'Failed to load wallet.';
+      _err = 'Failed to initialize sending.';
       notifyListeners();
     }
   }
@@ -177,7 +179,6 @@ class SendProvider extends ChangeNotifier {
 
   Future<void> _checkTrustlineIfNeeded() async {
     if (!_configured) return;
-    if (!ready) return;
     final dest = _to;
     if (!_looksStellar(dest)) {
       _destHasUsdcTL = null;
@@ -211,11 +212,8 @@ class SendProvider extends ChangeNotifier {
 
   /// Refresh fees on demand (e.g., before submit).
   Future<void> refreshFees() async {
-    // Fixed fee might change if vault rotates; re-read it.
     _txFeeXlm = await _svc.getCurrentFeeXlm();
-    // If opCount changed due to fee toggling, resubscribe stream.
     _resubscribeFeeStream();
-    // Also grab a fresh point estimate immediately.
     try {
       _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
         opCount: _opCount,
@@ -228,10 +226,6 @@ class SendProvider extends ChangeNotifier {
   }
 
   // ── Budget split (core requirement) ───────────────────────────────────────
-  // If XLM and user types total budget T, we send:
-  //   amountParam = max(T − estNetwork, txFee)
-  //   recipient    = amountParam − txFee
-  // So total wallet deduction ≈ T (subject to fee variance).
   double _floor7(double v) => (v * 1e7).floor() / 1e7;
 
   double get recipientWillReceiveXlmFromBudget {
@@ -262,18 +256,15 @@ class SendProvider extends ChangeNotifier {
   // ── Guards / validation ───────────────────────────────────────────────────
   String? get blockingReason {
     if (!_configured) return 'Not configured';
-    if (!ready) return 'Wallet not loaded';
     if (!_looksStellar(_to)) return 'Enter a valid Stellar address (G...)';
     if (_typedAmount <= 0) return 'Enter amount';
     if (isXlm) {
-      // Check balance: need at least budget
       if (_typedAmount > _senderBalToken + 1e-9) return 'Amount exceeds XLM balance';
       if (recipientWillReceiveXlmFromBudget <= 0) {
         return 'Amount too small after fees';
       }
       return null;
     } else {
-      // USDC: amount must not exceed USDC balance and sender must have XLM fees
       if (_typedAmount > _senderBalToken + 1e-9) return 'Amount exceeds USDC balance';
       if (_destHasUsdcTL == false) return 'Recipient has no USDC trustline';
       return null;
@@ -288,43 +279,44 @@ class SendProvider extends ChangeNotifier {
     // Keep fees fresh just before submit
     await refreshFees();
 
-    final seed = _extractSeed(_kp!);
-
-    if (isXlm) {
-      final net = _estNetworkFeeXlm ?? 0;
-      final fee = _txFeeXlm ?? 0;
-
-      // amount param = budget minus estimated network fee (never below fee)
-      final amountParam = (_typedAmount - net);
-      if (amountParam <= fee + 1e-7) {
-        throw StateError('Amount too small after fees.');
-      }
-      return await _svc
-          .sendXlmWithFee(
-        secretSeed: seed,
-        destination: _to,
-        amount: _floor7(amountParam),
-        memoText: memo,
-      )
-          .then((h) => h.first);
-    } else {
-      // USDC: send typed amount; XLM fees are charged separately
-      return await _svc
-          .sendUsdcWithFee(
-        secretSeed: seed,
-        destination: _to,
-        usdcAmount: _typedAmount,
-        memoText: memo,
-      )
-          .then((h) => h.first);
+    // Get the active seed JUST-IN-TIME; do not persist it in memory.
+    final seed = await _getActiveSeed();
+    if (seed == null || seed.isEmpty) {
+      throw StateError('No wallet found.');
     }
-  }
 
-  String _extractSeed(KeyPair kp) {
-    final dynamic ss = kp.secretSeed;
-    if (ss is String) return ss;
-    if (ss is Iterable<int>) return String.fromCharCodes(ss);
-    throw Exception('Unsupported secretSeed type: ${ss.runtimeType}');
+    try {
+      if (isXlm) {
+        final net = _estNetworkFeeXlm ?? 0;
+        final fee = _txFeeXlm ?? 0;
+
+        // amount param = budget minus estimated network fee (never below fee)
+        final amountParam = (_typedAmount - net);
+        if (amountParam <= fee + 1e-7) {
+          throw StateError('Amount too small after fees.');
+        }
+        final txids = await _svc.sendXlmWithFee(
+          secretSeed: seed,
+          destination: _to,
+          amount: _floor7(amountParam),
+          memoText: memo,
+        );
+        return txids.first;
+      } else {
+        final txids = await _svc.sendUsdcWithFee(
+          secretSeed: seed,
+          destination: _to,
+          usdcAmount: _typedAmount,
+          memoText: memo,
+        );
+        return txids.first;
+      }
+    } finally {
+      // Best-effort: clear local reference ASAP
+      // (Dart doesn't let us securely zero memory, but we can drop refs.)
+      // ignore: unused_local_variable
+      // // seed = '';  // (can’t reassign because it's final)
+    }
   }
 }
 

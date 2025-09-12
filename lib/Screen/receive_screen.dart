@@ -1,7 +1,6 @@
 // lib/Screen/receive_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Screen/price_chart_card.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +14,6 @@ class ReceiveScreen extends StatefulWidget {
   final String address;
   final double xlmBalance;
   final double usdcBalance;
-  /// 'XLM' or 'USDC'
   final String initialToken;
 
   const ReceiveScreen({
@@ -63,16 +61,9 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       body: Consumer<CurrencyProvider>(
         builder: (context, currency, _) {
           final fiat = currency.fiat.toUpperCase();
-          final fiatFmt = NumberFormat.simpleCurrency(name: fiat);
-          final numFmt = NumberFormat('#,##0.######');
 
           final isXLM = _xlmSelected;
           final token = isXLM ? 'XLM' : 'USDC';
-          final tokenBalance = isXLM ? widget.xlmBalance : widget.usdcBalance;
-
-          // 🔌 Live fiat price streams from the provider (no polling)
-          final priceStream = isXLM ? currency.xlmPriceStream : currency.usdcPriceStream;
-          final lastPrice   = isXLM ? currency.xlmRate        : currency.usdcRate;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

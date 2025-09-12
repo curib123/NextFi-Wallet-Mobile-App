@@ -1,16 +1,21 @@
 // lib/Screen/SwapScreen.dart
 import 'dart:math' as math;
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Components/modern_input.dart';
 import 'package:provider/provider.dart';
 
+import 'package:next_fi/Components/modern_input.dart';
 import 'package:next_fi/Components/AppAlert.dart';
 import 'package:next_fi/Components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
+
 import 'package:next_fi/Provider/SwapProvider.dart';
+import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
 import 'SwapScreenWidgets/swap_widgets.dart';
 
@@ -45,6 +50,7 @@ class _SwapScreenState extends State<SwapScreen> {
     if (_started) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Idempotent; ensures provider primes balances & wires streams.
       context.read<SwapProvider>().start();
     });
     _started = true;
@@ -203,7 +209,18 @@ class _SwapScreenState extends State<SwapScreen> {
     );
 
     try {
-      final txid = await p.executeSwap(amount: amount, minOut: minOut);
+      final txid = await p.executeSwap(
+        amount: amount,
+        minOut: minOut,
+        // Ephemeral secret supplier; replace with your secure unlock flow if available
+        secretSupplier: () async {
+          final mnemonic = await SeedStorage.getActiveSeed() ?? await SeedStorage.getSeed();
+          if (mnemonic == null || mnemonic.isEmpty) return null;
+          final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
+          final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
+          return kp.secretSeed; // return S...
+        },
+      );
 
       if (!mounted) return;
       submittingCtl.close();
@@ -332,7 +349,7 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 }
 
-/* ---------------- Small UI bits (unchanged) ---------------- */
+/* ---------------- Small UI bits ---------------- */
 
 class _PageLoader extends StatelessWidget {
   const _PageLoader();
