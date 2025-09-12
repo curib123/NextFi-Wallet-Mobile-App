@@ -19,14 +19,21 @@ class AuthGateScreen extends StatefulWidget {
 }
 
 class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObserver {
+  // Shared layout width so input and buttons always match
+  static const double _kFormWidth = 280;
+
   final LocalAuthentication _localAuth = LocalAuthentication();
   final TextEditingController _pinController = TextEditingController();
+  final FocusNode _pinFocus = FocusNode();
 
   bool _isNewUser = false;
   bool _deviceSupportsBiometrics = false;
   bool _biometricsEnabled = false;
   bool _obscurePin = true;
   bool _submitting = false;
+
+  // Visual: show unlocked icon when auth OK
+  bool _unlockedVisual = false;
 
   // First-time setup: step 1 (enter) → step 2 (confirm)
   String? _firstPinEntry;
@@ -49,6 +56,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pinController.dispose();
+    _pinFocus.dispose();
     _lockoutTimer?.cancel();
     super.dispose();
   }
@@ -169,6 +177,12 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
           message: "Authentication successful",
           type: SnackBarType.success,
         );
+
+        // Switch icon to unlocked for a quick visual confirmation
+        setState(() => _unlockedVisual = true);
+        // brief moment so the icon change is perceivable
+        await Future.delayed(const Duration(milliseconds: 200));
+
         _onAuthSuccess();
       } else {
         showFloatingSnackBar(
@@ -240,6 +254,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
         if (_firstPinEntry == null) {
           _firstPinEntry = pin;
           _pinController.clear();
+          _pinFocus.requestFocus();
           showFloatingSnackBar(
             context,
             message: "Re-enter your PIN to confirm",
@@ -253,6 +268,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
         if (pin != _firstPinEntry) {
           _firstPinEntry = null;
           _pinController.clear();
+          _pinFocus.requestFocus();
           HapticFeedback.mediumImpact();
           showFloatingSnackBar(
             context,
@@ -279,6 +295,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
         setState(() {
           _isNewUser = false;
           _firstPinEntry = null;
+          _unlockedVisual = true; // show unlocked on success
         });
 
         showFloatingSnackBar(
@@ -288,6 +305,9 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
         );
         _pinController.clear();
         FocusScope.of(context).unfocus();
+
+        // small delay to let users see the unlocked icon
+        await Future.delayed(const Duration(milliseconds: 200));
         _onAuthSuccess();
         return;
       }
@@ -302,8 +322,17 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
         );
         _pinController.clear();
         FocusScope.of(context).unfocus();
+
+        // Switch icon to unlocked
+        setState(() => _unlockedVisual = true);
+        await Future.delayed(const Duration(milliseconds: 200));
+
         _onAuthSuccess();
       } else {
+        // Clear input automatically on wrong PIN and refocus
+        _pinController.clear();
+        _pinFocus.requestFocus();
+
         // After a failed verify, lockout may have started; refresh it.
         final rem = await SecurityStorage.lockoutRemaining();
         if (mounted) {
@@ -337,6 +366,33 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
     } else {
       Navigator.pushReplacementNamed(context, "/home");
     }
+  }
+
+  Widget _buildLockIcon(AppColor colors) {
+    // Bigger circular badge; icon swaps lock ↔ unlock with a soft scale transition
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      width: 112,
+      height: 112,
+      decoration: BoxDecoration(
+        color: colors.primary.withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+        child: Icon(
+          _unlockedVisual ? Icons.lock_open_rounded : Icons.lock_rounded,
+          key: ValueKey<bool>(_unlockedVisual),
+          size: 80,
+          color: colors.primary,
+        ),
+      ),
+    );
   }
 
   @override
@@ -388,15 +444,8 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Lock icon
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: colors.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.lock_rounded, size: 60, color: colors.primary),
-                    ),
+                    // Lock / Unlock icon (bigger)
+                    _buildLockIcon(colors),
                     const SizedBox(height: 28),
 
                     // Headline
@@ -443,8 +492,9 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
                     Align(
                       alignment: Alignment.center,
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 280),
+                        constraints: const BoxConstraints(maxWidth: _kFormWidth),
                         child: TextField(
+                          focusNode: _pinFocus,
                           controller: _pinController,
                           enabled: !isLockedOut && !_submitting,
                           autofocus: true,
@@ -504,35 +554,53 @@ class _AuthGateScreenState extends State<AuthGateScreen> with WidgetsBindingObse
 
                     const SizedBox(height: 24),
 
-                    // Primary action
-                    CustomButton(
-                      text: _isNewUser
-                          ? (_firstPinEntry == null ? "Continue" : "Save PIN")
-                          : "Unlock",
-                      onPressed: () {
-                        if (_submitting) return;
-                        final isLocked = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
-                        if (isLocked) return;
-                        _onSubmitPin(); // fire and forget
-                      },
-                      type: ButtonType.filled,
-                      icon: _isNewUser
-                          ? (_firstPinEntry == null ? Icons.arrow_forward : Icons.save)
-                          : Icons.lock_open,
+                    // Primary action (matches input width)
+                    Align(
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: _kFormWidth),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: CustomButton(
+                            text: _isNewUser
+                                ? (_firstPinEntry == null ? "Continue" : "Save PIN")
+                                : "Unlock",
+                            onPressed: () {
+                              if (_submitting) return;
+                              final isLocked = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
+                              if (isLocked) return;
+                              _onSubmitPin(); // fire and forget
+                            },
+                            type: ButtonType.filled,
+                            icon: _unlockedVisual
+                                ? Icons.lock_open_rounded
+                                : (_isNewUser
+                                ? (_firstPinEntry == null ? Icons.arrow_forward : Icons.save)
+                                : Icons.lock_rounded),
+                          ),
+                        ),
+                      ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // Biometrics (shown only if user has a PIN AND enabled biometrics)
+                    // Biometrics (matches input width)
                     if (!_isNewUser && _deviceSupportsBiometrics && _biometricsEnabled)
-                      TextButton.icon(
-                        onPressed: _authenticateWithBiometrics,
-                        icon: Icon(Icons.fingerprint_rounded, color: colors.primary),
-                        label: Text(
-                          "Use Biometrics",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: colors.primary,
+                      Align(
+                        alignment: Alignment.center,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: _kFormWidth),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: TextButton.icon(
+                              onPressed: _authenticateWithBiometrics,
+                              icon: Icon(Icons.fingerprint_rounded, color: colors.primary),
+                              label: const Text("Use Biometrics"),
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
                           ),
                         ),
                       ),
