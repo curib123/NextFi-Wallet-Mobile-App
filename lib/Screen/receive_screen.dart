@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Screen/price_chart_card.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -84,81 +85,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 color: c,
               ),
               const SizedBox(height: 12),
-
-              // Price + Balance (reactive via StreamBuilder)
-              StreamBuilder<double>(
-                stream: priceStream,
-                initialData: lastPrice,
-                builder: (context, snap) {
-                  final oneTokenFiat = (snap.data ?? lastPrice).clamp(0, double.infinity);
-                  final balanceFiat = oneTokenFiat * tokenBalance;
-
-                  return Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: c.primary.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: c.primary.withOpacity(0.12)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _TokenPill(token: token, color: c),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              '1 $token ≈ ',
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              fiatFmt.format(oneTokenFiat),
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Text(
-                              numFmt.format(tokenBalance),
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: c.textPrimary,
-                                height: 1.1,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              token,
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              fiatFmt.format(balanceFiat),
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
+              PriceChartCard(title:token ,token: token,),
+              const SizedBox(height: 12),
 
               // QR card (tap to enlarge)
               GestureDetector(

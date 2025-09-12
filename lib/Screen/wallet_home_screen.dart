@@ -3,26 +3,30 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Provider/HomeWalletProvider.dart';
+import 'package:next_fi/Screen/price_chart_card.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Screen/WalletHomeScreenWidgets/home_fab_and_hints.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Components/token_chooser.dart';
 import 'package:next_fi/Helper/AppColor.dart';
+
 import 'package:next_fi/Provider/AssetProvider.dart';
 import 'package:next_fi/Provider/CurrencyProvider.dart';
+import 'package:next_fi/Provider/HomeWalletProvider.dart';
 import 'package:next_fi/Provider/TabProvider.dart';
-import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
-import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
+
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/action_button.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/asset_widget.dart';
 import 'package:next_fi/Screen/WalletHomeScreenWidgets/build_tab_bar.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/home_fab_and_hints.dart';
+import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dart';
+
 import 'package:next_fi/Screen/receive_screen.dart';
 import 'package:next_fi/Screen/send_screen.dart';
 import 'package:next_fi/Screen/swap_screen.dart';
 import 'package:next_fi/Screen/wallet_screen_settings.dart';
 
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/Components/token_chooser.dart';
 
 class WalletHomeScreen extends StatefulWidget {
   const WalletHomeScreen({super.key});
@@ -46,6 +50,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     context.read<AssetProvider>().startRealtimeUpdates();
 
+    // Fire-and-forget boot
     unawaited(_home.boot());
   }
 
@@ -53,7 +58,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _livePulse.dispose();
-
     _home.dispose();
     super.dispose();
   }
@@ -329,6 +333,7 @@ class _HeaderSection extends StatefulWidget {
 
 class _HeaderSectionState extends State<_HeaderSection> {
   bool _hideBalance = false;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -370,21 +375,23 @@ class _HeaderSectionState extends State<_HeaderSection> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  if (widget.loadingBalances)
-                    const SizedBox(
-                        height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                  else
-                    _LiveCountingBalance(
-                      hidden: _hideBalance,
-                      targetValue: widget.totalFiat,
-                      fmt: widget.currencyFmt,
-                      baseColor: widget.colors.textPrimary,
-                    ),
+
+                  // Always show the animated counter; no spinner.
+                  _LiveCountingBalance(
+                    hidden: _hideBalance,
+                    targetValue: widget.totalFiat.isFinite ? widget.totalFiat : 0.0,
+                    fmt: widget.currencyFmt,
+                    baseColor: widget.colors.textPrimary,
+                    loading: widget.loadingBalances,     // show pulsing dot when fetching
+                    pulse: widget.livePulse,
+                  ),
+
                   const SizedBox(height: 4),
                   _UpdatedAgoLabel(last: widget.lastBalancesAt, colors: widget.colors),
                 ],
               ),
-              // Right: swap
+
+              // Right: swap button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: widget.colors.primary,
@@ -404,7 +411,7 @@ class _HeaderSectionState extends State<_HeaderSection> {
             ],
           ),
         ),
-        const SizedBox(height: 30),
+
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -488,6 +495,8 @@ class _LiveCountingBalance extends StatefulWidget {
     this.upColor = const Color(0xFF22C55E),   // green-500
     this.downColor = const Color(0xFFEF4444), // red-500
     this.hidden = false,
+    this.loading = false,
+    this.pulse,
   });
 
   final double targetValue;
@@ -497,13 +506,17 @@ class _LiveCountingBalance extends StatefulWidget {
   final Color downColor;
   final bool hidden;
 
+  // New:
+  final bool loading;
+  final AnimationController? pulse;
+
   @override
   State<_LiveCountingBalance> createState() => _LiveCountingBalanceState();
 }
 
 class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
-  late double _display;     // animated number
-  int _dir = 0;             // -1 ↓, 0 =, +1 ↑
+  late double _display;   // animated number
+  int _dir = 0;           // -1 ↓, 0 =, +1 ↑
   Timer? _ticker;
 
   static const _tick = Duration(seconds: 1);
@@ -512,24 +525,36 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
   @override
   void initState() {
     super.initState();
-    _display = widget.targetValue;
+    _display = widget.targetValue.isFinite ? widget.targetValue : 0.0;
     _startTicker();
   }
 
   @override
   void didUpdateWidget(covariant _LiveCountingBalance oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // ticker reads widget.targetValue each tick; no restart needed
+    // Snap to neutral if target becomes invalid; ticker will hold value.
+    if (!widget.targetValue.isFinite && _display.isFinite) {
+      setState(() {
+        _dir = 0;
+      });
+    }
   }
 
   void _startTicker() {
     _ticker?.cancel();
     _ticker = Timer.periodic(_tick, (_) {
       if (!mounted) return;
+
+      // Guard against NaN/Inf targets; hold last display until valid
+      if (!widget.targetValue.isFinite) {
+        setState(() => _dir = 0);
+        return;
+      }
+
       final target = widget.targetValue;
       final delta = target - _display;
 
-      // close enough → snap & neutral color
+      // Close enough → snap & neutral color
       if (delta.abs() <= _minStep) {
         setState(() {
           _display = target;
@@ -563,6 +588,7 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
 
     return Row(
       children: [
+        // Direction icon (up/down/none)
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
           transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
@@ -576,17 +602,36 @@ class _LiveCountingBalanceState extends State<_LiveCountingBalance> {
           ),
         ),
         const SizedBox(width: 6),
+
+        // The amount itself, animates color on direction
         AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           style: TextStyle(
-            fontSize: 25,
+            fontSize: 22,
             fontWeight: FontWeight.bold,
             color: color,
           ),
-          child: Text(
-            widget.hidden ? '••••' : widget.fmt.format(_display),
-          ),
+          child: Text(widget.hidden ? '••••' : widget.fmt.format(_display)),
         ),
+
+        // Subtle pulsing dot when we’re currently fetching (replaces spinner)
+        if (widget.loading && widget.pulse != null) ...[
+          const SizedBox(width: 8),
+          ScaleTransition(
+            scale: Tween<double>(begin: 0.85, end: 1.15).animate(widget.pulse!),
+            child: FadeTransition(
+              opacity: Tween<double>(begin: 0.35, end: 1.0).animate(widget.pulse!),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.85),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
