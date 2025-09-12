@@ -1,9 +1,12 @@
 // lib/Screen/wallet_home_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Screen/price_chart_card.dart';
+import 'package:next_fi/Components/wallet_switch_result.dart';
+import 'package:next_fi/Screen/wallet_creation_screen.dart';
+import 'package:next_fi/Services/seed_storage.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Components/SnackBar.dart';
@@ -24,7 +27,6 @@ import 'package:next_fi/Screen/WalletHomeScreenWidgets/recipient_list_widget.dar
 import 'package:next_fi/Screen/receive_screen.dart';
 import 'package:next_fi/Screen/send_screen.dart';
 import 'package:next_fi/Screen/swap_screen.dart';
-import 'package:next_fi/Screen/wallet_screen_settings.dart';
 
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
@@ -274,17 +276,60 @@ class _TopBar extends StatelessWidget {
           ),
           GestureDetector(
             onTap: () async {
-              // Open settings, then refresh the displayed active wallet name
-              await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const WalletScreenSettings()),
+              // Get currently active id for highlighting in the sheet (optional)
+              final activeId = await SeedStorage.getActiveWalletId();
+
+              // Open the sheet
+              final res = await showWalletSwitchSheet(
+                context,
+                currentActiveId: activeId,
+                allowGenerate: true,
               );
-              await context.read<WalletHomeProvider>().reloadActiveWalletName();
+              if (res == null) return;
+
+              // User chose “Generate New Wallet”
+              if (res.createNew) {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WalletCreationScreen()),
+                );
+
+                // Refresh providers and reboot UI shell so everything picks up the new wallet
+                final home = context.read<WalletHomeProvider>();
+                await home.refresh(force: true);
+                if (!context.mounted) return;
+                Phoenix.rebirth(context);
+                return;
+              }
+
+              // User picked an existing wallet to switch to
+              final chosenId = res.chosenWalletId;
+              if (chosenId != null && chosenId != activeId) {
+                final ok = await SeedStorage.setActiveWallet(chosenId);
+                if (!context.mounted) return;
+
+                if (ok) {
+                  await context.read<WalletHomeProvider>().refresh(force: true);
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Switched active wallet.',
+                    type: SnackBarType.success,
+                  );
+                  Phoenix.rebirth(context);
+                } else {
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Failed to switch wallet.',
+                    type: SnackBarType.error,
+                  );
+                }
+              }
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  walletName ?? 'My Wallet',
+                  walletName ?? 'Default Wallet',
                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
                 ),
                 const SizedBox(width: 4),
