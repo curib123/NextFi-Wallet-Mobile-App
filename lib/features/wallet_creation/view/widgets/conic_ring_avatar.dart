@@ -1,0 +1,103 @@
+// lib/features/wallet_creation/view/widgets/conic_ring_avatar.dart
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+
+class ConicRingAvatar extends StatelessWidget {
+  const ConicRingAvatar({
+    super.key,
+    required this.size,
+    required this.ringWidth,
+    required this.asset,
+    required this.imageSize,
+    required this.baseColor,
+    this.rotationTurns = 0.0,
+  });
+
+  final double size;
+  final double ringWidth;
+  final String asset;
+  final double imageSize;
+  final Color baseColor;
+  final double rotationTurns;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(size),
+            painter: _ConicRingPainter(
+              color: baseColor,
+              strokeWidth: ringWidth,
+              rotationTurns: rotationTurns,
+            ),
+          ),
+          ClipOval(
+            child: Image.asset(
+              asset,
+              width: imageSize,
+              height: imageSize,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConicRingPainter extends CustomPainter {
+  _ConicRingPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.rotationTurns,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double rotationTurns;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = (size.shortestSide - strokeWidth) / 2;
+
+    final gradient = SweepGradient(
+      startAngle: 0,
+      endAngle: math.pi * 2,
+      colors: [
+        color.withOpacity(.95),
+        color.withOpacity(.25),
+        color.withOpacity(.95),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+      transform: GradientRotation(rotationTurns * math.pi * 2),
+    );
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..shader = gradient.createShader(rect);
+
+    canvas.drawCircle(center, radius, paint);
+
+    final inner = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = color.withOpacity(.15);
+
+    canvas.drawCircle(center, radius - strokeWidth / 2 - 1, inner);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConicRingPainter old) =>
+      old.color != color ||
+          old.strokeWidth != strokeWidth ||
+          old.rotationTurns != rotationTurns;
+}
