@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -20,8 +18,10 @@ class AssetGuideFooter extends StatefulWidget {
 
     // UX
     this.randomizeEvery = const Duration(minutes: 1),
-    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    this.padding, // if null, auto from `dense`
     this.borderRadius = 12,
+    this.dense = true, // NEW: slimmer by default
+    this.allowTwoLines = true, // NEW: will wrap to 2 lines if needed
 
     // Advanced
     this.lowXlmThreshold = 0.2,
@@ -39,8 +39,10 @@ class AssetGuideFooter extends StatefulWidget {
   final bool? isTestnet;
 
   final Duration randomizeEvery;
-  final EdgeInsets padding;
+  final EdgeInsets? padding;
   final double borderRadius;
+  final bool dense;
+  final bool allowTwoLines;
 
   final double lowXlmThreshold;
   final Set<String> includeTags;
@@ -123,12 +125,18 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     text: 'Stellar keeps a tiny reserve—don’t send your very last XLM.',
     tags: {'xlm', 'fees', 'info'},
   )),
+  TipBlueprint(GuideTip(
+    id: 'xlm_topup_before_busy_day',
+    icon: LucideIcons.calendarDays,
+    text: 'Big day tomorrow? Top up XLM today for seamless fees.',
+    tags: {'xlm', 'planning', 'tip'},
+  )),
 
   // ── Core USDC (what & when) ───────────────────────────────────────────────
   TipBlueprint(GuideTip(
     id: 'usdc_what',
     icon: LucideIcons.badgeDollarSign,
-    text: 'USDC aims to stay 1 usd — great for saving and getting paid.',
+    text: 'USDC aims to stay 1 USD — great for saving and getting paid.',
     tags: {'usdc', 'info'},
   )),
   TipBlueprint(GuideTip(
@@ -143,6 +151,12 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     text: 'First time with USDC? Enable it once to receive it.',
     tags: {'usdc', 'trustline', 'tip'},
   ), when: (ctx) => ctx.hasUsdcTrustline == false),
+  TipBlueprint(GuideTip(
+    id: 'usdc_min_deposit',
+    icon: LucideIcons.fileWarning,
+    text: 'Depositing to an exchange? Check USDC minimums first.',
+    tags: {'usdc', 'deposit', 'warning'},
+  )),
 
   // ── Swaps & payments ──────────────────────────────────────────────────────
   TipBlueprint(GuideTip(
@@ -150,6 +164,12 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     icon: LucideIcons.arrowLeftRight,
     text: 'Swapping? Keep a little XLM for the fees.',
     tags: {'swap', 'xlm', 'fees', 'tip'},
+  )),
+  TipBlueprint(GuideTip(
+    id: 'swap_slippage',
+    icon: LucideIcons.activity,
+    text: 'Large swaps may “slip.” Smaller steps can get better prices.',
+    tags: {'swap', 'price', 'tip'},
   )),
   TipBlueprint(GuideTip(
     id: 'payment_memo',
@@ -162,6 +182,18 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     icon: LucideIcons.send,
     text: 'New address? Try a small test send first.',
     tags: {'transfer', 'security', 'tip'},
+  )),
+  TipBlueprint(GuideTip(
+    id: 'qr_over_typing',
+    icon: LucideIcons.scanLine,
+    text: 'Use QR or copy-paste—avoid typing long addresses.',
+    tags: {'transfer', 'ux', 'tip'},
+  )),
+  TipBlueprint(GuideTip(
+    id: 'irreversible',
+    icon: LucideIcons.rocket,
+    text: 'Crypto transfers are final—review before you send.',
+    tags: {'transfer', 'warning'},
   )),
 
   // ── Safety & security ─────────────────────────────────────────────────────
@@ -183,6 +215,24 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     text: 'Ignore “airdrop” DMs—if it sounds too good, it is.',
     tags: {'security', 'warning'},
   )),
+  TipBlueprint(GuideTip(
+    id: 'sec_pin_bio',
+    icon: LucideIcons.fingerprint,
+    text: 'Protect your wallet with a strong PIN or biometrics.',
+    tags: {'security', 'tip'},
+  )),
+  TipBlueprint(GuideTip(
+    id: 'backup_phrase',
+    icon: LucideIcons.server,
+    text: 'Back up your secret phrase offline—paper beats screenshots.',
+    tags: {'security', 'tip'},
+  )),
+  TipBlueprint(GuideTip(
+    id: 'share_address_safely',
+    icon: LucideIcons.share,
+    text: 'It’s fine to share your public address—just never the secret.',
+    tags: {'security', 'info'},
+  )),
 
   // ── Practical nudges (conditional) ────────────────────────────────────────
   TipBlueprint(GuideTip(
@@ -191,16 +241,12 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     text: 'Low XLM — add a little so transactions keep working.',
     tags: {'xlm', 'fees', 'warning'},
   ), when: (ctx) => (ctx.xlmBalance ?? double.infinity) < ctx.lowXlmThreshold),
-
   TipBlueprint(GuideTip(
     id: 'use_usdc_for_value',
     icon: LucideIcons.circleDollarSign,
     text: 'Holding value? Park most in USDC; keep some XLM for fees.',
     tags: {'usdc', 'xlm', 'tip'},
-  ), when: (ctx) =>
-  (ctx.usdcBalance ?? 0) < (ctx.xlmBalance ?? 0) // nudge toward stability
-  ),
-
+  ), when: (ctx) => (ctx.usdcBalance ?? 0) < (ctx.xlmBalance ?? 0)),
   TipBlueprint(GuideTip(
     id: 'swap_tiny_for_fees',
     icon: LucideIcons.arrowUpDown,
@@ -217,13 +263,27 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     tags: {'env', 'info'},
   ), when: (ctx) => ctx.isTestnet == true),
 
-  // ── General money hygiene ─────────────────────────────────────────────────
+  // ── On/Off-ramp & P2P awareness (generic) ─────────────────────────────────
   TipBlueprint(GuideTip(
-    id: 'backup_phrase',
-    icon: LucideIcons.server,
-    text: 'Back up your secret phrase offline—paper beats screenshots.',
-    tags: {'security', 'tip'},
+    id: 'onramp_compare',
+    icon: LucideIcons.creditCard,
+    text: 'Buying crypto? Compare on-ramp fees before you pay.',
+    tags: {'ramp', 'fees', 'tip'},
   )),
+  TipBlueprint(GuideTip(
+    id: 'p2p_caution',
+    icon: LucideIcons.alertTriangle,
+    text: 'P2P deals? Use trusted channels and avoid sending first.',
+    tags: {'p2p', 'security', 'warning'},
+  )),
+  TipBlueprint(GuideTip(
+    id: 'cashout_fees_timing',
+    icon: LucideIcons.wallet,
+    text: 'Cash-out later? Watch fees and time your transfer.',
+    tags: {'ramp', 'fees', 'tip'},
+  )),
+
+  // ── General money hygiene ─────────────────────────────────────────────────
   TipBlueprint(GuideTip(
     id: 'fee_are_tiny',
     icon: LucideIcons.badgeInfo,
@@ -231,10 +291,10 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
     tags: {'xlm', 'fees', 'info'},
   )),
   TipBlueprint(GuideTip(
-    id: 'share_address_safely',
-    icon: LucideIcons.share,
-    text: 'It’s fine to share your public address—just never the secret.',
-    tags: {'security', 'info'},
+    id: 'keep_app_updated',
+    icon: LucideIcons.refreshCw,
+    text: 'Update the app for the latest fixes and safety features.',
+    tags: {'ux', 'security', 'tip'},
   )),
 ];
 
@@ -251,6 +311,7 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
 
   Timer? _timer;
   bool? _resolvedTrustline;
+  bool _paused = false; // NEW: pause on long-press
 
   @override
   void initState() {
@@ -266,9 +327,10 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   @override
   void didUpdateWidget(covariant AssetGuideFooter oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final trustlineChanged = oldWidget.hasUsdcTrustline != widget.hasUsdcTrustline;
-    final balancesChanged =
-        oldWidget.xlmBalance != widget.xlmBalance || oldWidget.usdcBalance != widget.usdcBalance;
+    final trustlineChanged =
+        oldWidget.hasUsdcTrustline != widget.hasUsdcTrustline;
+    final balancesChanged = oldWidget.xlmBalance != widget.xlmBalance ||
+        oldWidget.usdcBalance != widget.usdcBalance;
     final envChanged = oldWidget.isTestnet != widget.isTestnet;
     final filtersChanged = oldWidget.includeTags != widget.includeTags ||
         oldWidget.excludeTags != widget.excludeTags;
@@ -313,7 +375,7 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
 
   void _startTimer() {
     _timer ??= Timer.periodic(widget.randomizeEvery, (_) {
-      if (!mounted || _tips.isEmpty) return;
+      if (!mounted || _tips.isEmpty || _paused) return;
       _pickRandomNow();
     });
   }
@@ -342,12 +404,13 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
       xlmBalance: widget.xlmBalance,
       usdcBalance: widget.usdcBalance,
       hasUsdcTrustline: _resolvedTrustline ??
-          (widget.hasUsdcTrustline is bool ? widget.hasUsdcTrustline as bool : null),
+          (widget.hasUsdcTrustline is bool
+              ? widget.hasUsdcTrustline as bool
+              : null),
       isTestnet: widget.isTestnet,
       lowXlmThreshold: widget.lowXlmThreshold,
     );
 
-    // Build set from catalog
     final List<GuideTip> built = [];
     for (final bp in _TIP_CATALOG) {
       if (bp.when == null || bp.when!(ctx)) {
@@ -373,7 +436,11 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
     if (!mounted) return;
     setState(() {
       _tips = dedup;
-      if (_tips.isEmpty) _index = 0; else _index = _index.clamp(0, _tips.length - 1);
+      if (_tips.isEmpty) {
+        _index = 0;
+      } else {
+        _index = _index.clamp(0, _tips.length - 1);
+      }
     });
   }
 
@@ -396,66 +463,103 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   @override
   Widget build(BuildContext context) {
     if (_tips.isEmpty) return const SizedBox.shrink();
+
     final tip = _tips[_index];
     final base = _accentFor(tip);
     final c = widget.colors;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: _bg(base),
-        borderRadius: BorderRadius.circular(widget.borderRadius),
-        border: Border.all(color: c.border.withOpacity(0.5)),
-      ),
-      padding: widget.padding,
-      child: Row(
-        children: [
-          // Icon bubble
-          Container(
-            width: 26,
-            height: 26,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: base.withOpacity(0.14),
-              shape: BoxShape.circle,
+    final dense = widget.dense;
+    final pad = widget.padding ??
+        (dense
+            ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 8));
+    final iconBubble = dense ? 22.0 : 26.0;
+    final glyph = dense ? 13.0 : 16.0;
+    final gap = dense ? 8.0 : 10.0;
+
+    return GestureDetector(
+      onTap: _pickRandomNow, // quick rotate on tap
+      onLongPress: () => setState(() => _paused = !_paused), // pause/resume
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          gradient: _bg(base),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          border: Border.all(color: c.border.withOpacity(0.5)),
+        ),
+        padding: pad,
+        child: Row(
+          children: [
+            // Icon bubble
+            Container(
+              width: iconBubble,
+              height: iconBubble,
+              margin: EdgeInsets.only(right: gap),
+              decoration: BoxDecoration(
+                color: base.withOpacity(0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(tip.icon, size: glyph, color: base.withOpacity(0.95)),
             ),
-            child: Icon(tip.icon, size: 16, color: base.withOpacity(0.95)),
-          ),
-          // One-line text — auto-shrinks if long (FittedBox)
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (child, anim) =>
-                  FadeTransition(opacity: anim, child: child),
-              child: _AutoShrinkText(
-                key: ValueKey(tip.id),
-                text: tip.text,
-                color: c.textPrimary,
+            // Text (auto 1–2 lines)
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: _TipText(
+                  key: ValueKey(tip.id),
+                  text: tip.text,
+                  color: c.textPrimary,
+                  dense: dense,
+                  allowTwoLines: widget.allowTwoLines,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-// Auto-shrinks long one-liners cleanly.
-class _AutoShrinkText extends StatelessWidget {
-  const _AutoShrinkText({
+// Text that’s slim; uses single-line autoshrink OR wraps up to 2 lines.
+class _TipText extends StatelessWidget {
+  const _TipText({
     super.key,
     required this.text,
     required this.color,
-    this.baseSize = 13.5,
-    this.weight = FontWeight.w700,
+    required this.dense,
+    required this.allowTwoLines,
   });
 
   final String text;
   final Color color;
-  final double baseSize;
-  final FontWeight weight;
+  final bool dense;
+  final bool allowTwoLines;
 
   @override
   Widget build(BuildContext context) {
+    final baseSize = dense ? 13.0 : 13.5;
+    final weight = FontWeight.w700;
+
+    // If two lines allowed, let Text handle wrapping; else autoshrink.
+    if (allowTwoLines) {
+      return Text(
+        text,
+        maxLines: 2,
+        softWrap: true,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: baseSize,
+          fontWeight: weight,
+          color: color,
+          height: 1.1,
+          letterSpacing: 0.1,
+        ),
+      );
+    }
+
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
