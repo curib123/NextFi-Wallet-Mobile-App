@@ -1,27 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart' hide Page;
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
-
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/asset_vm.dart';
-
 import 'package:next_fi/common/components/AppAlert.dart';
 import 'package:next_fi/common/components/empty_state.dart';
-
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
-
-// Widgets
 import 'widgets/transaction_filter_chips.dart';
 import 'widgets/transaction_tile.dart';
 import 'widgets/tx_details_sheet.dart';
 import 'widgets/incoming_chip.dart';
-import 'widgets/tx_utils.dart';
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});

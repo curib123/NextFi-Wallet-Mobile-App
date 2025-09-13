@@ -1,10 +1,9 @@
 // lib/features/price_chart/view/price_chart_card.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
-
 import 'widgets/delta_pill.dart';
 import 'widgets/range_tabs.dart';
 import 'widgets/token_tabs.dart';
@@ -31,7 +30,7 @@ class PriceChartCard extends StatelessWidget {
     // local-scoped VM so multiple cards can live independently
     return ChangeNotifierProvider(
       create: (_) => PriceChartVM(
-        context.read<CurrencyProvider>(),
+        context.read<CurrencyVM>(),
         initialToken: PriceTokenX.parse(token),
       ),
       child: _PriceChartView(
@@ -69,8 +68,8 @@ class _PriceChartView extends StatelessWidget {
 
     // if ALL range has too few points, fallback (same behavior as before)
     final data = (vm.range == PriceChartRange.all && vm.series.length < 2)
-        ? (vm.token == PriceToken.usdc ? context.read<CurrencyProvider>().usdcHistory365
-        : context.read<CurrencyProvider>().xlmHistory365)
+        ? (vm.token == PriceToken.usdc ? context.read<CurrencyVM>().usdcHistory365
+        : context.read<CurrencyVM>().xlmHistory365)
         : vm.series;
 
     return Card(

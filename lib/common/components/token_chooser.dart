@@ -1,25 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/features/ViewModel/asset_vm.dart';
 import 'package:provider/provider.dart';
-
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/asset_vm.dart';
 import 'package:next_fi/Model/asset_model.dart';
 
-/// Token selector (Stellar) — XLM / USDC
-///
-/// Usage:
-/// showTokenSelector(
-///   context,
-///   address,
-///   xlmBalance,
-///   usdcBalance,
-///   screenBuilder: (address, token, balance) => SendScreen(
-///     address: address,
-///     token: token, // "XLM" | "USDC"
-///     balance: balance,
-///   ),
-/// );
+
 Future<void> showTokenSelector(
     BuildContext context,
     String address,
@@ -31,7 +17,7 @@ Future<void> showTokenSelector(
   final colors = AppColor.of(context);
 
   // Read once (no rebuilds needed here)
-  final assetProv = context.read<AssetProvider>();
+  final assetProv = context.read<AssetVM>();
   final List<AssetModel> assets = assetProv.assets;
   final Map<String, String> logos = assetProv.logos;
 

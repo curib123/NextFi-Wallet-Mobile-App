@@ -14,7 +14,7 @@ class SettingsVM extends ChangeNotifier {
   List<SettingSection> _sections = const [];
   List<SettingSection> get sections => _sections;
 
-  /// Call once (we also call this from Provider registration in main).
+  /// Call once (we also call this from ViewModel registration in main).
   void initDefaults() {
     _sections = [
       SettingSection(

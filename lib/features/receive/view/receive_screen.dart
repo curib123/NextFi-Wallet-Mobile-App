@@ -2,13 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:next_fi/features/price_chart/view/price_chart_card.dart';
 import 'package:next_fi/features/receive/model/receive_state.dart';
 import 'package:next_fi/features/receive/view_model/receive_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
 import 'widgets/token_switch.dart';
 import 'widgets/qr_preview_card.dart';
 import 'widgets/address_row.dart';
@@ -52,7 +52,7 @@ class ReceiveScreen extends StatelessWidget {
           centerTitle: true,
           title: Text('Receive', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
         ),
-        body: Consumer2<ReceiveVM, CurrencyProvider>(
+        body: Consumer2<ReceiveVM, CurrencyVM>(
           builder: (context, vm, currency, _) {
             final s = vm.state; // ReceiveState
             final token = s.token; // 'XLM' or 'USDC'

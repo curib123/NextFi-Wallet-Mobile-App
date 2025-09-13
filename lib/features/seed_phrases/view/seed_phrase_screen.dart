@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/features/ViewModel/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/confirm_tile.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/meta_header.dart';
@@ -11,11 +12,9 @@ import 'package:next_fi/features/seed_phrases/view/widgets/phrase_card.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/warning_box.dart' show WarningBox;
 import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
 import 'package:provider/provider.dart';
-
 import 'package:next_fi/common/components/CustomButton.dart';
 import 'package:next_fi/common/components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/tab_vm.dart';
 
 import '../model/seed_phrase_state.dart';
 
@@ -249,7 +248,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                 }
                 return;
               }
-              context.read<TabProvider>().setTab(1);
+              context.read<TabVM>().setTab(1);
               if (Navigator.of(context).canPop()) Navigator.of(context).pop();
               Phoenix.rebirth(context);
               restarted = true;

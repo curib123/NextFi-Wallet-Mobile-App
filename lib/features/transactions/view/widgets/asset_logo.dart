@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/features/ViewModel/asset_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Provider/asset_vm.dart';
 
 class AssetLogo extends StatelessWidget {
   const AssetLogo({super.key, required this.asset, required this.size});
@@ -15,7 +15,7 @@ class AssetLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     String url = _fallbackXlmLogo;
     try {
-      final ap = context.read<AssetProvider>();
+      final ap = context.read<AssetVM>();
       url = ap.logoFor(asset);
     } catch (_) {}
 

@@ -1,10 +1,9 @@
 // lib/common/components/fiat_picker_sheet.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
 
 /// Call this to open the modal. Returns the selected fiat code (e.g., "php") or null if cancelled.
 Future<String?> showFiatPickerBottomSheet(BuildContext context) {
@@ -33,7 +32,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet> {
   @override
   void initState() {
     super.initState();
-    final current = context.read<CurrencyProvider>().fiat.toLowerCase();
+    final current = context.read<CurrencyVM>().fiat.toLowerCase();
     _selected = _kFiats.any((f) => f.code == current) ? current : 'usd';
   }
 
@@ -130,7 +129,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    context.read<CurrencyProvider>().setFiat(_selected);
+                    context.read<CurrencyVM>().setFiat(_selected);
                     Navigator.pop(context, _selected);
                   },
                   style: ElevatedButton.styleFrom(

@@ -2,13 +2,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-
 import 'package:next_fi/Model/asset_model.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
 enum PriceWindow { h24, d7, d30, y1 }
@@ -57,7 +56,7 @@ class AssetWidget extends StatelessWidget {
   }
 
   double _fiatFor(BuildContext ctx, AssetModel a) {
-    final cur = ctx.read<CurrencyProvider>();
+    final cur = ctx.read<CurrencyVM>();
     switch (a.symbol.toUpperCase()) {
       case 'XLM':
         return cur.xlmToFiat(xlmBalance);
@@ -127,7 +126,7 @@ class AssetWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyCode = context.watch<CurrencyProvider>().fiat.toUpperCase();
+    final currencyCode = context.watch<CurrencyVM>().fiat.toUpperCase();
     final money = NumberFormat.simpleCurrency(name: currencyCode);
 
     if (loading) {

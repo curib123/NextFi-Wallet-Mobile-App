@@ -1,13 +1,13 @@
 // lib/features/price_chart/viewmodel/price_chart_vm.dart
 import 'package:flutter/foundation.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import '../../price_chart/model/price_chart_state.dart';
 
 class PriceChartVM extends ChangeNotifier {
   PriceChartVM(this._currency, {PriceToken initialToken = PriceToken.xlm})
       : _token = initialToken;
 
-  final CurrencyProvider _currency;
+  final CurrencyVM _currency;
 
   PriceToken _token;
   PriceToken get token => _token;
