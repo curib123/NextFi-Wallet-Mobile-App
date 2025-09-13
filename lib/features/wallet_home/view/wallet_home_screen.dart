@@ -31,14 +31,22 @@ class WalletHomeScreen extends StatefulWidget {
 }
 
 class _WalletHomeScreenState extends State<WalletHomeScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  late final AnimationController _livePulse =
-  AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    with
+        WidgetsBindingObserver,
+        SingleTickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin {
+  late final AnimationController _livePulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
 
-  final Map<String, AppAlertController> _hintAlertCtrls = <String, AppAlertController>{};
-  final Set<String> _knownHintIds = <String>{};
-  StreamSubscription<dynamic>? _txIncomingSub;
-  VoidCallback? _homeHintsListener;
+  // Controllers for per-hint and boot alerts
+  final Map<String, AppAlertController> _hintAlertCtrls =
+  <String, AppAlertController>{};
+  AppAlertController? _bootBalancesCtl;
+
+  // Subscriptions
+  StreamSubscription<WalletHomeUiEvent>? _uiSub;
 
   @override
   bool get wantKeepAlive => true;
@@ -48,26 +56,19 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final vm = context.read<WalletHomeVM>();
-      await vm.boot();
 
-      // seed known hints
-      _knownHintIds..clear()..addAll(vm.state.hints.map((h) => h.id));
+      // Subscribe to VM UI events
+      _uiSub = vm.uiEvents.listen(_onUiEvent);
 
-      // listen to NEW hints to show pending alerts
-      _homeHintsListener = () {
-        if (!mounted) return;
-        _handleNewHints();
-      };
-      vm.addListener(_homeHintsListener!);
+      // Pipe confirmed-transaction stream into VM, if you use TransactionsVM
+      final txVm = context.read<TransactionsVM>();
+      vm.attachConfirmedTxStream(txVm.incomingStream);
 
-      // incoming tx flips alert → success
-      _txIncomingSub = context.read<TransactionsVM>().incomingStream.listen((tx) {
-        if (!mounted) return;
-        _handleConfirmedTx(tx);
-      });
+      // Kick off boot (VM will emit UI events for the loader & success)
+      unawaited(vm.boot());
     });
   }
 
@@ -76,12 +77,17 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     _livePulse.dispose();
 
-    final vm = mounted ? context.read<WalletHomeVM>() : null;
-    if (_homeHintsListener != null && vm != null) vm.removeListener(_homeHintsListener!);
-    _txIncomingSub?.cancel();
+    _uiSub?.cancel();
+    _uiSub = null;
 
-    for (final ctl in _hintAlertCtrls.values) { ctl.close(); }
+    for (final ctl in _hintAlertCtrls.values) {
+      ctl.close();
+    }
     _hintAlertCtrls.clear();
+
+    _bootBalancesCtl?.close();
+    _bootBalancesCtl = null;
+
     super.dispose();
   }
 
@@ -90,7 +96,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final vm = context.read<WalletHomeVM>();
     if (state == AppLifecycleState.resumed) {
       vm.onResumed();
-    } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       vm.onPausedOrInactive();
     }
   }
@@ -107,10 +114,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final assets = context.watch<AssetVM>();
     final stellar = context.read<StellarWalletService>();
 
-    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final currencyFmt =
+    NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final fxXlm = currency.xlmToFiat(s.xlm);
     final fxUsdc = currency.usdcToFiat(s.usdc);
-    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+    final totalFiat =
+        (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
     return DefaultTabController(
       length: 2,
@@ -122,10 +131,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                SliverToBoxAdapter(
+                const SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: const TopBar(),
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: TopBar(),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -137,7 +146,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       loadingBalances: s.loadingBalances,
                       totalFiat: totalFiat,
                       lastBalancesAt: s.lastBalancesAt,
-                      onSwap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SwapScreen())),
+                      onSwap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const SwapScreen())),
                       onSend: _onSend,
                       onReceive: _onReceive,
                       livePulse: _livePulse,
@@ -145,13 +157,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           ? IncomingHintsStrip(
                         colors: colors,
                         stellarAddress: s.address!,
-                        incomingHints: s.hints.map((h) => {
+                        incomingHints: s.hints
+                            .map((h) => {
                           'hash': h.id,
                           'from': h.from,
                           'to': h.to,
                           'amount': h.amount.toStringAsFixed(6),
                           'assetCode': h.assetCode,
-                        }).toList(),
+                        })
+                            .toList(),
                         onAcknowledge: (tx) {
                           final String id = (tx['hash'] ?? '').toString();
                           context.read<WalletHomeVM>().ackHint(id);
@@ -182,11 +196,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           xlmBalance: s.xlm,
                           usdcBalance: s.usdc,
                           address: s.address ?? '',
-                          loading: assets.loading || currency.loading || s.loadingBalances,
+                          loading: assets.loading ||
+                              currency.loading ||
+                              s.loadingBalances,
                           onItemTap: (token) {
                             final addr = s.address;
                             if (addr == null) {
-                              showFloatingSnackBar(context, message: 'No address available', type: SnackBarType.error);
+                              showFloatingSnackBar(context,
+                                  message: 'No address available',
+                                  type: SnackBarType.error);
                               return;
                             }
                             Navigator.push(
@@ -201,12 +219,13 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                               ),
                             );
                           },
-                          hasUsdcTrustline: stellar.hasUsdcTrustline(s.address ?? ''),
+                          hasUsdcTrustline:
+                          stellar.hasUsdcTrustline(s.address ?? ''),
                         ),
                       ),
-                       TabKeepAlive(
+                      TabKeepAlive(
                         storageKey: 'recipientsTab',
-                        child: RecipientListWidget(colors: colors,),
+                        child: RecipientListWidget(colors: colors),
                       ),
                     ],
                   ),
@@ -224,13 +243,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final s = context.read<WalletHomeVM>().state;
     final addr = s.address;
     if (addr == null) {
-      showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
+      showFloatingSnackBar(context,
+          message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
     }
     showTokenSelector(
-      context, addr, s.xlm, s.usdc,
+      context,
+      addr,
+      s.xlm,
+      s.usdc,
       title: 'Send Token',
-      screenBuilder: (address, token, balance) => SendScreen(address: address, token: token, balance: balance),
+      screenBuilder: (address, token, balance) =>
+          SendScreen(address: address, token: token, balance: balance),
     ).then((_) => context.read<WalletHomeVM>().refresh(force: true));
   }
 
@@ -238,7 +262,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final s = context.read<WalletHomeVM>().state;
     final addr = s.address;
     if (addr == null) {
-      showFloatingSnackBar(context, message: 'Wallet not loaded yet', type: SnackBarType.warning);
+      showFloatingSnackBar(context,
+          message: 'Wallet not loaded yet', type: SnackBarType.warning);
       return;
     }
     Navigator.push(
@@ -254,13 +279,73 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
-  // ───────── alerts for incoming/confirmed ─────────
-  void _handleNewHints() {
-    final vm = context.read<WalletHomeVM>();
-    for (final h in vm.state.hints) {
-      if (_knownHintIds.contains(h.id)) continue;
-      _knownHintIds.add(h.id);
-      _showPendingAlertForHint(h);
+  // ───────── VM → View event handling ─────────
+  void _onUiEvent(WalletHomeUiEvent e) {
+    if (!mounted) return;
+
+    if (e is BootBalancesLoading) {
+      // Block UI until balances are fetched (first boot / wallet switch)
+      _bootBalancesCtl ??= showAppAlert(
+        context,
+        type: AppAlertType.loading,
+        title: 'Fetching balances',
+        subtitle: 'Calculating your total…',
+        barrierDismissible: false,
+      );
+      return;
+    }
+
+    if (e is BootBalancesReady) {
+      // Flip loader to success + auto-close (format here to avoid VM → CurrencyVM coupling)
+      final currency = context.read<CurrencyVM>();
+      final currencyFmt =
+      NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+      final fxXlm = currency.xlmToFiat(e.xlm);
+      final fxUsdc = currency.usdcToFiat(e.usdc);
+      final totalFiat =
+          (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+
+      _bootBalancesCtl?.update(
+        AppAlertType.success,
+        title: 'Balances ready',
+        subtitle: 'Total ${currencyFmt.format(totalFiat)}',
+      );
+
+      Future.delayed(const Duration(milliseconds: 900), () {
+        _bootBalancesCtl?.close();
+        _bootBalancesCtl = null;
+      });
+      return;
+    }
+
+    if (e is IncomingHintAddedEvent) {
+      _showPendingAlertForHint(e.hint);
+      return;
+    }
+
+    if (e is TransactionConfirmedEvent) {
+      final ctl = _hintAlertCtrls.remove(e.hash);
+      if (ctl != null) {
+        ctl.update(
+          AppAlertType.success,
+          title: 'Received ${e.amount.toStringAsFixed(6)} ${e.asset}',
+          subtitle: 'Confirmed on-chain.',
+          primaryText: 'Done',
+        );
+        // Mark as acknowledged in the VM so it disappears in strip/list too
+        context.read<WalletHomeVM>().ackHint(e.hash);
+
+        Timer(const Duration(seconds: 5), () {
+          if (mounted) ctl.close();
+        });
+      }
+      return;
+    }
+
+    if (e is HintAcknowledgedEvent) {
+      final ctl = _hintAlertCtrls.remove(e.id);
+      ctl?.close();
+      return;
     }
   }
 
@@ -276,27 +361,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       barrierDismissible: true,
     );
     _hintAlertCtrls[h.id] = ctl;
-  }
-
-  void _handleConfirmedTx(Map tx) {
-    final hash = (tx['hash'] ?? '').toString();
-    if (hash.isEmpty) return;
-
-    final ctl = _hintAlertCtrls.remove(hash);
-    if (ctl == null) return;
-
-    final asset = (tx['asset'] ?? 'XLM').toString();
-    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-
-    ctl.update(AppAlertType.success,
-      title: 'Received ${amount.toStringAsFixed(6)} $asset',
-      subtitle: 'Confirmed on-chain.',
-      primaryText: 'Done',
-    );
-
-    if (mounted) context.read<WalletHomeVM>().ackHint(hash);
-
-    Timer(const Duration(seconds: 5), () { if (mounted) ctl.close(); });
   }
 
   String _short(String addr) {

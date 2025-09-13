@@ -9,10 +9,10 @@ class AuthGateState {
   final bool obscurePin;
   final bool submitting;
   final bool unlockedVisual;
-  final String? firstPinEntry;       // null = first step not done yet
-  final Duration? lockoutRemaining;  // null = not locked
-  final bool autoBioTried;           // to avoid repeated prompts
-  final String? initWarning;         // optional: storage not ready, etc.
+  final String? firstPinEntry;
+  final Duration? lockoutRemaining;
+  final bool autoBioTried;
+  final String? initWarning;
 
   const AuthGateState({
     this.isNewUser = false,
@@ -34,10 +34,10 @@ class AuthGateState {
     bool? obscurePin,
     bool? submitting,
     bool? unlockedVisual,
-    String? firstPinEntry,            // pass explicit null to clear
-    Duration? lockoutRemaining,       // pass explicit null to clear
+    String? firstPinEntry,
+    Duration? lockoutRemaining,
     bool? autoBioTried,
-    String? initWarning,              // pass explicit null to clear
+    String? initWarning,
   }) {
     return AuthGateState(
       isNewUser: isNewUser ?? this.isNewUser,
@@ -60,5 +60,4 @@ class AuthGateState {
   }
 }
 
-// tiny sentinel helper to allow explicit null in copyWith (no import noise)
 bool _sentinel(Object? _) => true;

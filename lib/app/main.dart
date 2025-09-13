@@ -50,21 +50,11 @@ List<SingleChildWidget> _buildProviders() => [
     create: (_) => StellarWalletService(testnet: false),
   ),
 
-  // ── Base VMs (no cross-VM deps) ─────────────────────────────────────
-  ChangeNotifierProvider<SeedPhraseVM>(create: (_) => SeedPhraseVM()),
-  ChangeNotifierProvider<ImportWalletVM>(create: (_) => ImportWalletVM()),
-  ChangeNotifierProvider<RecipientAddressVM>(create: (_) => RecipientAddressVM()),
-  ChangeNotifierProvider<TabVM>(create: (_) => TabVM()),
-  ChangeNotifierProvider<WalletHomeVM>(create: (_) => WalletHomeVM()),
-  ChangeNotifierProvider<WalletSettingsVM>(create: (_) => WalletSettingsVM()),
-  ChangeNotifierProvider<WalletCreationVM>(create: (_) => WalletCreationVM()),
-  ChangeNotifierProvider<AuthGateVM>(create: (_) => AuthGateVM()),
-  ChangeNotifierProvider<SettingsVM>(create: (_) => SettingsVM()..initDefaults()),
-
   // ── Currency → Asset (Asset depends on Currency) ────────────────────
   ChangeNotifierProvider<CurrencyVM>(
     create: (ctx) => CurrencyVM(stellar: ctx.read<StellarWalletService>()),
   ),
+
   ChangeNotifierProxyProvider<CurrencyVM, AssetVM>(
     create: (ctx) => AssetVM(ctx.read<CurrencyVM>()),
     update: (ctx, currency, previous) => previous ?? AssetVM(currency),
@@ -76,6 +66,26 @@ List<SingleChildWidget> _buildProviders() => [
     update: (ctx, currency, previous) => previous ?? PriceChartVM(currency),
   ),
 
+  // ── Base VMs (no cross-VM deps) ─────────────────────────────────────
+  ChangeNotifierProvider<SeedPhraseVM>(create: (_) => SeedPhraseVM()),
+  ChangeNotifierProvider<ImportWalletVM>(create: (_) => ImportWalletVM()),
+  ChangeNotifierProvider<RecipientAddressVM>(create: (_) => RecipientAddressVM()),
+  ChangeNotifierProvider<TabVM>(create: (_) => TabVM()),
+  ChangeNotifierProvider<WalletHomeVM>(create: (_) => WalletHomeVM()),
+  ChangeNotifierProvider<WalletSettingsVM>(create: (_) => WalletSettingsVM()),
+  ChangeNotifierProvider<WalletCreationVM>(create: (_) => WalletCreationVM()),
+  ChangeNotifierProvider<AuthGateVM>(create: (_) => AuthGateVM()),
+  ChangeNotifierProvider<SettingsVM>(create: (_) => SettingsVM()..initDefaults()),
+
+
+  // ── Transactions / Send depend on Stellar service ───────────────────
+  ChangeNotifierProvider<TransactionsVM>(
+    create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletService>()),
+  ),
+  ChangeNotifierProvider<SendVM>(
+    create: (ctx) => SendVM(service: ctx.read<StellarWalletService>()),
+  ),
+
   // ── Swap depends on WalletHome (address) + Stellar service ─────────
   ChangeNotifierProxyProvider<WalletHomeVM, SwapVM>(
     create: (ctx) => SwapVM(svc: ctx.read<StellarWalletService>()),
@@ -84,14 +94,6 @@ List<SingleChildWidget> _buildProviders() => [
       vm.bindToAddress(walletVM.state.address);
       return vm;
     },
-  ),
-
-  // ── Transactions / Send depend on Stellar service ───────────────────
-  ChangeNotifierProvider<TransactionsVM>(
-    create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletService>()),
-  ),
-  ChangeNotifierProvider<SendVM>(
-    create: (ctx) => SendVM(service: ctx.read<StellarWalletService>()),
   ),
 ];
 

@@ -67,10 +67,8 @@ class ReceiveScreen extends StatelessWidget {
                   onSelectUSDC: vm.selectUSDC,
                 ),
                 const SizedBox(height: 12),
-
-                PriceChartCard(title: token, token: token),
+                PriceChartCard(title: token.toUpperCase(), token: token.toUpperCase()),
                 const SizedBox(height: 12),
-
                 QrPreviewCard(
                   address: s.address,
                   token: token,
