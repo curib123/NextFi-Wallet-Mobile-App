@@ -246,7 +246,6 @@ class _SwapScreenState extends State<SwapScreen> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
             SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              CardHeader(icon: LucideIcons.wallet, title: 'Balances', subtitle: s.accountId == null ? '—' : 'Account: ${s.accountId}'),
               const SizedBox(height: 8),
               BalanceRow(xlm: s.xlmBal, usdc: s.usdcBal),
             ])),

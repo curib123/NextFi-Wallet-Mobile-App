@@ -1,6 +1,5 @@
 // lib/features/wallet_home/view/widgets/header_section.dart
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -20,6 +19,7 @@ class HeaderSection extends StatefulWidget {
     required this.onReceive,
     required this.livePulse,
     required this.incomingStrip,
+    this.animateTotal = true, // ⬅️ NEW: disable on first boot
   });
 
   final AppColor colors;
@@ -33,6 +33,9 @@ class HeaderSection extends StatefulWidget {
   final AnimationController livePulse;
   final Widget incomingStrip;
 
+  /// If false, the total is shown immediately (no counting animation).
+  final bool animateTotal;
+
   @override
   State<HeaderSection> createState() => _HeaderSectionState();
 }
@@ -42,6 +45,8 @@ class _HeaderSectionState extends State<HeaderSection> {
 
   @override
   Widget build(BuildContext context) {
+    final total = widget.totalFiat.isFinite ? widget.totalFiat : 0.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -53,7 +58,10 @@ class _HeaderSectionState extends State<HeaderSection> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: const [
               BoxShadow(
-                  color: Colors.black12, blurRadius: 16, offset: Offset(0, 6))
+                color: Colors.black12,
+                blurRadius: 16,
+                offset: Offset(0, 6),
+              ),
             ],
           ),
           child: Row(
@@ -63,32 +71,45 @@ class _HeaderSectionState extends State<HeaderSection> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(children: [
-                    Text('Total Balance', style: TextStyle(fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: widget.colors.textSecondary)),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => setState(() => _hideBalance = !_hideBalance),
-                      child: Icon(
+                  Row(
+                    children: [
+                      Text(
+                        'Total Balance',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: widget.colors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => setState(() => _hideBalance = !_hideBalance),
+                        child: Icon(
                           _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
-                          color: widget.colors.textSecondary, size: 18),
-                    ),
-                  ]),
+                          color: widget.colors.textSecondary,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 6),
+
+                  // ⬇️ Animated or static, based on animateTotal
                   LiveCountingBalance(
+                    animate: widget.animateTotal,
                     hidden: _hideBalance,
-                    targetValue: widget.totalFiat.isFinite
-                        ? widget.totalFiat
-                        : 0.0,
+                    targetValue: total,
                     fmt: widget.currencyFmt,
                     baseColor: widget.colors.textPrimary,
                     loading: widget.loadingBalances,
                     pulse: widget.livePulse,
                   ),
+
                   const SizedBox(height: 4),
                   _UpdatedAgoLabel(
-                      last: widget.lastBalancesAt, colors: widget.colors),
+                    last: widget.lastBalancesAt,
+                    colors: widget.colors,
+                  ),
                 ],
               ),
 
@@ -97,9 +118,12 @@ class _HeaderSectionState extends State<HeaderSection> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: widget.colors.primary,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 15, vertical: 5),
+                    horizontal: 15,
+                    vertical: 5,
+                  ),
                   elevation: 3,
                 ),
                 onPressed: widget.onSwap,
@@ -107,8 +131,13 @@ class _HeaderSectionState extends State<HeaderSection> {
                   children: [
                     Icon(LucideIcons.shuffle, size: 22, color: Colors.white),
                     SizedBox(width: 6),
-                    Text('Swap', style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Swap',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -119,8 +148,8 @@ class _HeaderSectionState extends State<HeaderSection> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _actionButton(
-                widget.colors, Icons.send, 'Send', onTap: widget.onSend),
+            _actionButton(widget.colors, Icons.send, 'Send',
+                onTap: widget.onSend),
             _actionButton(widget.colors, Icons.call_received, 'Receive',
                 onTap: widget.onReceive),
             _actionButton(widget.colors, LucideIcons.wallet, 'Deposit',
@@ -135,17 +164,18 @@ class _HeaderSectionState extends State<HeaderSection> {
     );
   }
 
-  Widget _actionButton(AppColor colors,
+  Widget _actionButton(
+      AppColor colors,
       IconData icon,
       String label, {
         bool gradient = false,
-        required VoidCallback onTap, // <-- Added callback
+        required VoidCallback onTap,
       }) {
     return Column(
       children: [
         InkWell(
           borderRadius: BorderRadius.circular(50),
-          onTap: onTap, // <-- Handle tap
+          onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: Container(
@@ -159,11 +189,11 @@ class _HeaderSectionState extends State<HeaderSection> {
                     : null,
                 color: gradient ? null : colors.primary.withOpacity(0.9),
                 shape: BoxShape.circle,
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
                     color: Colors.black12,
                     blurRadius: 6,
-                    offset: const Offset(0, 5),
+                    offset: Offset(0, 5),
                   ),
                 ],
               ),
@@ -187,7 +217,7 @@ class _HeaderSectionState extends State<HeaderSection> {
   }
 }
 
-  class _UpdatedAgoLabel extends StatefulWidget {
+class _UpdatedAgoLabel extends StatefulWidget {
   const _UpdatedAgoLabel({required this.last, required this.colors});
   final DateTime? last;
   final AppColor colors;
@@ -197,16 +227,28 @@ class _HeaderSectionState extends State<HeaderSection> {
 
 class _UpdatedAgoLabelState extends State<_UpdatedAgoLabel> {
   Timer? _tick;
+
   @override
-  void initState() { super.initState(); _tick = Timer.periodic(const Duration(seconds: 1), (_) { if (mounted) setState(() {}); }); }
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
-  void dispose() { _tick?.cancel(); super.dispose(); }
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     if (widget.last == null) return const SizedBox.shrink();
     final s = DateTime.now().difference(widget.last!).inSeconds;
-    return Text(s <= 1 ? 'Updated just now' : 'Updated ${s}s ago',
-        style: TextStyle(fontSize: 11, color: widget.colors.textSecondary));
+    return Text(
+      s <= 1 ? 'Updated just now' : 'Updated ${s}s ago',
+      style: TextStyle(fontSize: 11, color: widget.colors.textSecondary),
+    );
   }
 }

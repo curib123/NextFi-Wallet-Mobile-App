@@ -1,21 +1,23 @@
 // lib/features/price_chart/view/price_chart_card.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
-import 'package:provider/provider.dart';
+
 import 'widgets/delta_pill.dart';
 import 'widgets/range_tabs.dart';
 import 'widgets/token_tabs.dart';
 import 'widgets/chart_area.dart';
 
-class PriceChartCard extends StatelessWidget {
+class PriceChartCard extends StatefulWidget {
   const PriceChartCard({
     super.key,
     this.title = 'XLM Price',
     this.compact = false,
     this.isForDashboard = false,
-    this.token = 'XLM',
+    this.token = 'XLM', // external control: "XLM" | "USDC"
     this.onTokenChanged,
   });
 
@@ -26,18 +28,47 @@ class PriceChartCard extends StatelessWidget {
   final ValueChanged<String>? onTokenChanged;
 
   @override
+  State<PriceChartCard> createState() => _PriceChartCardState();
+}
+
+class _PriceChartCardState extends State<PriceChartCard> {
+  late final PriceChartVM _vm;
+
+  @override
+  void initState() {
+    super.initState();
+    // Create a local-scoped VM so multiple cards can live independently.
+    final currency = context.read<CurrencyVM>();
+    _vm = PriceChartVM(
+      currency,
+      initialToken: PriceTokenX.parse(widget.token),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant PriceChartCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Keep VM token in sync with the external prop.
+    if (oldWidget.token.toUpperCase() != widget.token.toUpperCase()) {
+      _vm.setToken(PriceTokenX.parse(widget.token));
+    }
+  }
+
+  @override
+  void dispose() {
+    _vm.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // local-scoped VM so multiple cards can live independently
-    return ChangeNotifierProvider(
-      create: (_) => PriceChartVM(
-        context.read<CurrencyVM>(),
-        initialToken: PriceTokenX.parse(token),
-      ),
+    return ChangeNotifierProvider<PriceChartVM>.value(
+      value: _vm,
       child: _PriceChartView(
-        title: title,
-        compact: compact,
-        isForDashboard: isForDashboard,
-        onTokenChanged: onTokenChanged,
+        title: widget.title,
+        compact: widget.compact,
+        isForDashboard: widget.isForDashboard,
+        onTokenChanged: widget.onTokenChanged,
       ),
     );
   }
@@ -59,17 +90,17 @@ class _PriceChartView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<PriceChartVM>();
-    final c  = Theme.of(context).colorScheme;
+    final c = Theme.of(context).colorScheme;
     final pad = compact ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
 
-    // if title was default "XLM Price", auto follow token
+    // If title was default "XLM Price", auto follow token
     final displayTitle = title == 'XLM Price' ? '${vm.token.code} Price' : title;
     final shown = vm.hoveredPrice ?? vm.priceNow;
 
-    // if ALL range has too few points, fallback (same behavior as before)
+    // If ALL range has too few points, fallback (same behavior as before)
+    final currency = context.read<CurrencyVM>();
     final data = (vm.range == PriceChartRange.all && vm.series.length < 2)
-        ? (vm.token == PriceToken.usdc ? context.read<CurrencyVM>().usdcHistory365
-        : context.read<CurrencyVM>().xlmHistory365)
+        ? (vm.token == PriceToken.usdc ? currency.usdcHistory365 : currency.xlmHistory365)
         : vm.series;
 
     return Card(
@@ -81,7 +112,7 @@ class _PriceChartView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // header
+            // Header
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -132,7 +163,7 @@ class _PriceChartView extends StatelessWidget {
             ),
             SizedBox(height: compact ? 8 : 12),
 
-            // chart
+            // Chart
             AspectRatio(
               aspectRatio: compact ? 16 / 6 : 16 / 7,
               child: ChartArea(
@@ -144,7 +175,7 @@ class _PriceChartView extends StatelessWidget {
 
             SizedBox(height: compact ? 8 : 12),
 
-            // range
+            // Range
             RangeTabs(
               range: vm.range,
               onChanged: vm.setRange,
