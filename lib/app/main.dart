@@ -1,15 +1,9 @@
-// lib/main.dart
 // ────────────────── Flutter SDK ──────────────────
 import 'package:flutter/material.dart';
 
-// ───────────────── 3rd-party packages ────────────
+// ───────────────── 3rd-party pkgs ────────────────
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
-import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
-import 'package:next_fi/features/settings/view_model/settings_vm.dart';
-import 'package:next_fi/features/wallet_creation/view_model/wallet_creation_vm.dart';
-import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -20,12 +14,16 @@ import 'package:next_fi/Helper/AppColor.dart';
 // Services
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
-// Legacy/global providers
-import 'package:next_fi/Provider/asset_vm.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
-import 'package:next_fi/Provider/tab_vm.dart';
-
-// Feature VMs
+// View models
+import 'package:next_fi/features/ViewModel/asset_vm.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/features/ViewModel/tab_vm.dart';
+import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
+import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
+import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
+import 'package:next_fi/features/settings/view_model/settings_vm.dart';
+import 'package:next_fi/features/wallet_creation/view_model/wallet_creation_vm.dart';
+import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
 import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:next_fi/features/swap/view_model/swap_vm.dart';
@@ -47,36 +45,38 @@ Future<void> main() async {
 }
 
 List<SingleChildWidget> _buildProviders() => [
-  // ── Core services ──────────────────────────────────────────────────────
+  // ── Core service singletons ──────────────────────────────────────────
   Provider<StellarWalletService>(
     create: (_) => StellarWalletService(testnet: false),
   ),
 
-  // ── Standalone VMs (no cross-VM ) ─────────────────────────────────
+  // ── Base VMs (no cross-VM deps) ─────────────────────────────────────
   ChangeNotifierProvider<SeedPhraseVM>(create: (_) => SeedPhraseVM()),
   ChangeNotifierProvider<ImportWalletVM>(create: (_) => ImportWalletVM()),
   ChangeNotifierProvider<RecipientAddressVM>(create: (_) => RecipientAddressVM()),
-  ChangeNotifierProvider<TabProvider>(create: (_) => TabProvider()),
+  ChangeNotifierProvider<TabVM>(create: (_) => TabVM()),
   ChangeNotifierProvider<WalletHomeVM>(create: (_) => WalletHomeVM()),
   ChangeNotifierProvider<WalletSettingsVM>(create: (_) => WalletSettingsVM()),
   ChangeNotifierProvider<WalletCreationVM>(create: (_) => WalletCreationVM()),
   ChangeNotifierProvider<AuthGateVM>(create: (_) => AuthGateVM()),
-  ChangeNotifierProvider<SettingsVM>(create: (_) => SettingsVM()),
   ChangeNotifierProvider<SettingsVM>(create: (_) => SettingsVM()..initDefaults()),
 
-
-  // ── Currency -> Asset (proxy depends on Currency) ─────────────────────
-  ChangeNotifierProvider<CurrencyProvider>(
-    create: (ctx) =>
-        CurrencyProvider(stellar: ctx.read<StellarWalletService>()),
+  // ── Currency → Asset (Asset depends on Currency) ────────────────────
+  ChangeNotifierProvider<CurrencyVM>(
+    create: (ctx) => CurrencyVM(stellar: ctx.read<StellarWalletService>()),
   ),
-  ChangeNotifierProxyProvider<CurrencyProvider, AssetProvider>(
-    create: (ctx) => AssetProvider(ctx.read<CurrencyProvider>()),
-    update: (ctx, currency, previous) =>
-    previous ?? AssetProvider(currency),
+  ChangeNotifierProxyProvider<CurrencyVM, AssetVM>(
+    create: (ctx) => AssetVM(ctx.read<CurrencyVM>()),
+    update: (ctx, currency, previous) => previous ?? AssetVM(currency),
   ),
 
-  // ── SwapVM depends on WalletHomeVM (address) + Stellar service ────────
+  // ── PriceChart depends on Currency ──────────────────────────────────
+  ChangeNotifierProxyProvider<CurrencyVM, PriceChartVM>(
+    create: (ctx) => PriceChartVM(ctx.read<CurrencyVM>()),
+    update: (ctx, currency, previous) => previous ?? PriceChartVM(currency),
+  ),
+
+  // ── Swap depends on WalletHome (address) + Stellar service ─────────
   ChangeNotifierProxyProvider<WalletHomeVM, SwapVM>(
     create: (ctx) => SwapVM(svc: ctx.read<StellarWalletService>()),
     update: (ctx, walletVM, swapVM) {
@@ -86,9 +86,13 @@ List<SingleChildWidget> _buildProviders() => [
     },
   ),
 
-  // ── Transactions / Send (need Stellar service) ────────────────────────
-  ChangeNotifierProvider<TransactionsVM>(create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletService>()),),
-  ChangeNotifierProvider<SendVM>(create: (ctx) => SendVM(service: ctx.read<StellarWalletService>()),),
+  // ── Transactions / Send depend on Stellar service ───────────────────
+  ChangeNotifierProvider<TransactionsVM>(
+    create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletService>()),
+  ),
+  ChangeNotifierProvider<SendVM>(
+    create: (ctx) => SendVM(service: ctx.read<StellarWalletService>()),
+  ),
 ];
 
 class MyApp extends StatelessWidget {

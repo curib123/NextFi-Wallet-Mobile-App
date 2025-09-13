@@ -1,11 +1,11 @@
-// lib/Provider/asset_vm.dart (XLM / USDC on Stellar)
+// lib/ViewModel/asset_vm.dart (XLM / USDC on Stellar)
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/Model/asset_model.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 
-class AssetProvider with ChangeNotifier {
-  AssetProvider(this.currency)
+class AssetVM with ChangeNotifier {
+  AssetVM(this.currency)
       : _assets = [
     AssetModel(id: 'stellar',      name: 'Stellar Lumens',     symbol: 'XLM'),
     AssetModel(id: 'usdc_stellar', name: 'USD Coin (Stellar)', symbol: 'USDC'),
@@ -25,7 +25,7 @@ class AssetProvider with ChangeNotifier {
     _recompute();
   }
 
-  final CurrencyProvider currency;
+  final CurrencyVM currency;
 
   final List<AssetModel> _assets;
   late Map<String, String> _logos;

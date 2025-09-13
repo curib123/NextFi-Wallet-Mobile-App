@@ -1,6 +1,7 @@
 // lib/Screen/home.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
+import 'package:next_fi/features/ViewModel/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
 import 'package:provider/provider.dart';
@@ -8,7 +9,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/common/components/SnackBar.dart';
 import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Provider/tab_vm.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -96,14 +96,14 @@ class _HomeState extends State<Home> {
 
     // 5) Authenticated main app with tabs.
     return ChangeNotifierProvider(
-      create: (_) => TabProvider(),
-      child: Consumer<TabProvider>(
-        builder: (context, tabProvider, _) {
+      create: (_) => TabVM(),
+      child: Consumer<TabVM>(
+        builder: (context, tabVM, _) {
           return Scaffold(
-            body: tabProvider.screens[tabProvider.currentIndex],
+            body: tabVM.screens[tabVM.currentIndex],
             bottomNavigationBar: BottomNavigationBar(
-              currentIndex: tabProvider.currentIndex,
-              onTap: tabProvider.setTab,
+              currentIndex: tabVM.currentIndex,
+              onTap: tabVM.setTab,
               type: BottomNavigationBarType.fixed,
               selectedItemColor: colors.primary,
               unselectedItemColor: colors.textSecondary,

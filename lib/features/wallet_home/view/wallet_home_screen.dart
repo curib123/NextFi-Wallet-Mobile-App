@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/features/ViewModel/asset_vm.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
@@ -20,8 +22,6 @@ import 'package:next_fi/common/components/SnackBar.dart';
 import 'package:next_fi/common/components/token_chooser.dart';
 import 'package:next_fi/common/components/AppAlert.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/asset_vm.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
 class WalletHomeScreen extends StatefulWidget {
@@ -103,8 +103,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final vm = context.watch<WalletHomeVM>();
     final s = vm.state;
 
-    final currency = context.watch<CurrencyProvider>();
-    final assets = context.watch<AssetProvider>();
+    final currency = context.watch<CurrencyVM>();
+    final assets = context.watch<AssetVM>();
     final stellar = context.read<StellarWalletService>();
 
     final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());

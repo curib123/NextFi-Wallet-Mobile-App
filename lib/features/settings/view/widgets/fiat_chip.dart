@@ -1,8 +1,8 @@
 // lib/features/settings/view/widgets/fiat_chip.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Provider/currency_vm.dart';
 
 class FiatChip extends StatelessWidget {
   const FiatChip({super.key});
@@ -10,7 +10,7 @@ class FiatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final fiat = context.select<CurrencyProvider, String>((p) => p.fiat).toUpperCase();
+    final fiat = context.select<CurrencyVM, String>((p) => p.fiat).toUpperCase();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

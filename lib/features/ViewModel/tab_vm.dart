@@ -5,7 +5,7 @@ import 'package:next_fi/features/swap/view/swap_screen.dart';
 import 'package:next_fi/features/transactions/view/transaction_screen.dart';
 import 'package:next_fi/features/wallet_home/view/wallet_home_screen.dart';
 
-class TabProvider extends ChangeNotifier {
+class TabVM extends ChangeNotifier {
   int _currentIndex = 0;
   bool _isFirstTime = false;
 

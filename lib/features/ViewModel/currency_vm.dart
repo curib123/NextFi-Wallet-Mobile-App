@@ -1,4 +1,4 @@
-// lib/Provider/currency_vm.dart
+// lib/ViewModel/currency_vm.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,8 +8,8 @@ import 'package:http/io_client.dart';
 import 'package:next_fi/Services/currency_secure_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
-class CurrencyProvider extends ChangeNotifier {
-  CurrencyProvider({
+class CurrencyVM extends ChangeNotifier {
+  CurrencyVM({
     required StellarWalletService stellar,
     this.httpTimeout = const Duration(seconds: 10),
   }) : _stellar = stellar {
