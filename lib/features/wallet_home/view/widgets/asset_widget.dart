@@ -3,11 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
-import 'package:next_fi/features/receive/view/receive_screen.dart';
-import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+
+import 'package:next_fi/common/components/SnackBar.dart';
+import 'package:next_fi/common/components/token_chooser.dart';
+import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/features/receive/view/receive_screen.dart';
+import 'package:next_fi/features/send/view/send_screen.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
+import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/Model/asset_model.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
@@ -26,7 +31,7 @@ class AssetWidget extends StatelessWidget {
     this.loading = false,
     this.onRefresh,
     this.window = PriceWindow.h24,
-    this.onItemTap, // optional override
+    this.onItemTap, // optional override for LIST TILE taps only
   });
 
   final AppColor colors;
@@ -40,8 +45,9 @@ class AssetWidget extends StatelessWidget {
   final PriceWindow window;
   final Object? hasUsdcTrustline;
 
-  /// Optional override if you want to handle navigation yourself.
+  /// Optional override if you want to handle **list item taps** yourself.
   /// Receives the token string ('XLM' or 'USDC') that was tapped.
+  /// NOTE: The FAB ignores this and always goes to **Send**.
   final void Function(String token)? onItemTap;
 
   double _balanceFor(AssetModel a) {
@@ -109,6 +115,7 @@ class AssetWidget extends StatelessWidget {
     return s;
   }
 
+  // List-tile tap → Receive (unless overridden)
   void _openReceive(BuildContext context, AssetModel a) {
     final t = a.symbol.toUpperCase();
     final token = (t == 'USDC') ? 'USDC' : 'XLM'; // default to XLM if unknown
@@ -126,6 +133,32 @@ class AssetWidget extends StatelessWidget {
         initialToken: token, // initial tab based on tapped tile
       ),
     ));
+  }
+
+  // FAB tap → Send (always). Intentionally ignores onItemTap.
+  Future<void> _openSendSelector(BuildContext context, AssetModel a) async {
+    final t = a.symbol.toUpperCase();
+    final initialToken = (t == 'USDC') ? 'USDC' : 'XLM'; // default to XLM
+
+    final addr = address.trim();
+    if (addr.isEmpty) {
+      showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.warning);
+      return;
+    }
+
+    await showTokenSelector(
+      context,
+      addr,
+      xlmBalance,
+      usdcBalance,
+      title: 'Select Coin',
+      screenBuilder: (address, token, balance) => SendScreen(
+        address: address,
+        token: token,
+        balance: balance,
+        autoOpenScanner: true,
+      ),
+    ).then((_) => context.read<WalletHomeVM>().refresh(force: true));
   }
 
   @override
@@ -240,19 +273,27 @@ class AssetWidget extends StatelessWidget {
           bottom: 16 + bottomInset,
           child: FloatingActionButton(
             heroTag: 'assets_scan_fab',
-            tooltip: 'Scan to send/receive',
-            shape: const CircleBorder(), // explicitly circular
-            onPressed: () {
-              // TODO: Hook up to your scanner route / sheet here.
-              // e.g., Navigator.push(... ScanScreen());
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('TODO: open scanner')),
+            tooltip: 'Scan to send',
+            shape: const CircleBorder(),
+            onPressed: () async {
+              if (assets.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No assets available')),
+                );
+                return;
+              }
+
+              // Prefer XLM; fallback to the first asset
+              final a = assets.firstWhere(
+                    (x) => x.symbol.toUpperCase() == 'XLM',
+                orElse: () => assets.first,
               );
+
+              await _openSendSelector(context, a);
             },
-            // If 'scanLine' doesn't exist in your lucide version, use LucideIcons.scan.
-            child: const Icon(LucideIcons.scanLine),
+            child: const Icon(LucideIcons.scanLine), // or LucideIcons.scan
           ),
-        ),
+        )
       ],
     );
   }
@@ -292,13 +333,13 @@ class AssetWidget extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: colors.border.withOpacity(0.18),
+        color: colors.border.withOpacity(.18),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
         Icons.image_not_supported,
         size: size * 0.6,
-        color: colors.textSecondary.withOpacity(0.6),
+        color: colors.textSecondary.withOpacity(.6),
       ),
     );
   }
@@ -329,8 +370,8 @@ class AssetWidget extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       child: Shimmer.fromColors(
-        baseColor: colors.border.withOpacity(0.30),
-        highlightColor: colors.border.withOpacity(0.12),
+        baseColor: colors.border.withOpacity(.30),
+        highlightColor: colors.border.withOpacity(.12),
         child: Row(
           children: [
             Container(
