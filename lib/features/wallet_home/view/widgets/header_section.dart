@@ -19,7 +19,7 @@ class HeaderSection extends StatefulWidget {
     required this.onReceive,
     required this.livePulse,
     required this.incomingStrip,
-    this.animateTotal = true, // ⬅️ NEW: disable on first boot
+    this.animateTotal = true,
   });
 
   final AppColor colors;
