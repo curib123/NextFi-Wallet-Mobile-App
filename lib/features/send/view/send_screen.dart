@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/recipient_upsert_sheet.dart';
+import 'package:next_fi/features/send/model/send_token.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:provider/provider.dart';
 
@@ -14,8 +15,8 @@ import 'package:next_fi/common/components/SnackBar.dart';
 import 'package:next_fi/common/components/AppAlert.dart';
 import 'package:next_fi/features/transactions/view/widgets/asset_logo.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
+import 'package:next_fi/features/scanner/view/scanner_screen.dart';
 
-import '../model/send_token.dart';
 import 'widgets/page_loader.dart';
 import 'widgets/error_card.dart';
 import 'widgets/balance_line.dart';
@@ -57,6 +58,7 @@ class _SendScreenState extends State<SendScreen> {
   final _numFmt = NumberFormat('#,##0.######');
 
   bool _booted = false;
+  bool _scannerOpenedOnce = false; // guard to avoid double auto-open
 
   @override
   void didChangeDependencies() {
@@ -79,17 +81,33 @@ class _SendScreenState extends State<SendScreen> {
       setState(() {});
     });
     _toCtl.addListener(() {
-      vm.setRecipient(_toCtl.text);
+      vm.setRecipient(_toCtl.text.trim());
       setState(() {});
     });
+
+    // Auto-open scanner if requested and there is no prefilled address (only once)
+    if (widget.autoOpenScanner && !_scannerOpenedOnce) {
+      final hasPrefill = (widget.prefillAddress ?? '').trim().isNotEmpty || _toCtl.text.trim().isNotEmpty;
+      if (!hasPrefill) {
+        _scannerOpenedOnce = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _openScanner());
+      }
+    }
 
     _booted = true;
   }
 
   @override
-  void dispose() { _toCtl.dispose(); _amtCtl.dispose(); super.dispose(); }
+  void dispose() {
+    _toCtl.dispose();
+    _amtCtl.dispose();
+    super.dispose();
+  }
 
-  // helpers
+  // ────────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────────────────────
+
   Future<void> _refresh() async {
     final vm = context.read<SendVM>();
     await vm.refreshFees();
@@ -146,7 +164,10 @@ class _SendScreenState extends State<SendScreen> {
               ? '${_numFmt.format(vm.typedAmount)} XLM'
               : '${(vm.needsXlmForFeesIfUsdcSend).toStringAsFixed(7)} XLM',
           onCancel: () => Navigator.pop(context),
-          onConfirm: () async { Navigator.pop(context); await _doSend(vm); },
+          onConfirm: () async {
+            Navigator.pop(context);
+            await _doSend(vm);
+          },
         ),
       ),
     );
@@ -155,21 +176,81 @@ class _SendScreenState extends State<SendScreen> {
   Future<void> _doSend(SendVM vm) async {
     late final AppAlertController ctl;
     ctl = showAppAlert(
-      context, type: AppAlertType.loading,
-      title: 'Submitting…', subtitle: 'Broadcasting your transaction to the network.',
+      context,
+      type: AppAlertType.loading,
+      title: 'Submitting…',
+      subtitle: 'Broadcasting your transaction to the network.',
       primaryText: 'Hide',
     );
     try {
       final txid = await vm.submit();
-      ctl.update(AppAlertType.success, title: 'Submitted', subtitle: txid, primaryText: 'Copy TxID', onPrimary: () async {
-        await Clipboard.setData(ClipboardData(text: txid));
-        ctl.close();
-      });
+      ctl.update(
+        AppAlertType.success,
+        title: 'Submitted',
+        subtitle: txid,
+        primaryText: 'Copy TxID',
+        onPrimary: () async {
+          await Clipboard.setData(ClipboardData(text: txid));
+          ctl.close();
+        },
+      );
       _amtCtl.clear();
     } catch (e) {
       ctl.update(AppAlertType.error, title: 'Send failed', subtitle: '$e', primaryText: 'Close');
     }
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Scanner integration
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _openScanner() async {
+    HapticFeedback.selectionClick();
+    FocusScope.of(context).unfocus(); // hide keyboard
+    await Future.delayed(const Duration(milliseconds: 60)); // let UI settle
+
+    final raw = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (!mounted || raw is! String) return;
+
+    final parsed = _parseStellarAddress(raw);
+    if (parsed == null) {
+      showFloatingSnackBar(
+        context,
+        message: 'No valid Stellar address found',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+
+    _toCtl.text = parsed;
+    _toCtl.selection = TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
+    context.read<SendVM>().setRecipient(parsed);
+  }
+
+  /// Accepts raw G... public keys or `stellar:G...` URIs (optional query like ?memo=).
+  String? _parseStellarAddress(String input) {
+    final s = input.trim();
+
+    // Handle stellar: URI
+    final uriIdx = s.toLowerCase().indexOf('stellar:');
+    if (uriIdx != -1) {
+      final after = s.substring(uriIdx + 'stellar:'.length);
+      final cut = after.split(RegExp(r'[\?\#/]')).first;
+      if (_looksLikeStellarPk(cut)) return cut;
+    }
+
+    // Fallback: find first G... base32 public key length 56
+    final reg = RegExp(r'\bG[A-Z2-7]{55}\b');
+    final m = reg.firstMatch(s);
+    if (m != null) return m.group(0);
+
+    return null;
+  }
+
+  bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +276,9 @@ class _SendScreenState extends State<SendScreen> {
           const SizedBox(height: 8),
         ] else if (typedAddr.isNotEmpty && saved != null) ...[
           RecipientBadge(
-            name: saved.name, colorValue: saved.color, address: saved.address,
+            name: saved.name,
+            colorValue: saved.color,
+            address: saved.address,
             onEdit: () async {
               final ok = await showRecipientUpsertSheet(context, initial: saved);
               if (ok == true && mounted) setState(() {});
@@ -215,35 +298,49 @@ class _SendScreenState extends State<SendScreen> {
 
         Form(
           key: _form,
-          child: Column(children: [
-            TextFormField(
-              controller: _toCtl,
-              decoration: modernInput(
-                context,
-                placeholder: 'Recipient Address',
-                prefix: Icon(LucideIcons.contact, color: AppColor.of(context).primary),
+          child: Column(
+            children: [
+              // ───────── Recipient with Scanner suffix ─────────
+              TextFormField(
+                controller: _toCtl,
+                decoration: modernInput(
+                  context,
+                  placeholder: 'Recipient Address',
+                  prefix: Icon(LucideIcons.contact, color: AppColor.of(context).primary),
+                ).copyWith(
+                  suffixIcon: IconButton(
+                    tooltip: 'Scan QR',
+                    onPressed: _openScanner,
+                    icon: const Icon(LucideIcons.scanLine), // fallback to LucideIcons.scan if needed
+                  ),
+                ),
+                validator: (_) => vm.blockingReason == null || !vm.blockingReason!.contains('Stellar')
+                    ? null
+                    : 'Enter a valid Stellar address',
               ),
-              validator: (_) => vm.blockingReason == null || !vm.blockingReason!.contains('Stellar')
-                  ? null
-                  : 'Enter a valid Stellar address',
-            ),
-            const SizedBox(height: 6),
-            const TrustlineHint(),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _amtCtl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
-              decoration: modernInput(
-                context,
-                placeholder: vm.isXlm ? 'Amount (XLM)' : 'Amount (USDC)',
-                prefix: Padding(padding: const EdgeInsets.all(8), child: AssetLogo(asset: tokenStr, size: 18)),
+              const SizedBox(height: 6),
+              const TrustlineHint(),
+              const SizedBox(height: 10),
+
+              // ───────── Amount ─────────
+              TextFormField(
+                controller: _amtCtl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
+                decoration: modernInput(
+                  context,
+                  placeholder: vm.isXlm ? 'Amount (XLM)' : 'Amount (USDC)',
+                  prefix: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: AssetLogo(asset: tokenStr, size: 18),
+                  ),
+                ),
+                validator: (_) => vm.blockingReason,
               ),
-              validator: (_) => vm.blockingReason,
-            ),
-            const SizedBox(height: 10),
-            PercentChipsRow(onPick: (pct) => _applyPercent(vm, pct)),
-          ]),
+              const SizedBox(height: 10),
+              PercentChipsRow(onPick: (pct) => _applyPercent(vm, pct)),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -265,18 +362,20 @@ class _SendScreenState extends State<SendScreen> {
         backgroundColor: c.surface,
         elevation: 0,
         centerTitle: true,
-        title: Row(mainAxisSize: MainAxisSize.min, children: [
-          AssetLogo(asset: tokenStr, size: 18),
-          const SizedBox(width: 8),
-          Text('Send $tokenStr', style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
-        ]),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AssetLogo(asset: tokenStr, size: 18),
+            const SizedBox(width: 8),
+            Text('Send $tokenStr', style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
+          ],
+        ),
       ),
       body: vm.loading
           ? const PageLoader()
           : vm.error != null
           ? ErrorCard(message: vm.error!)
           : RefreshIndicator(onRefresh: _refresh, color: c.primary, displacement: 24, child: list),
-
       bottomNavigationBar: (vm.loading || vm.error != null)
           ? null
           : AnimatedPadding(

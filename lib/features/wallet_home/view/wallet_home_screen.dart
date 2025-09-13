@@ -252,7 +252,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       addr,
       s.xlm,
       s.usdc,
-      title: 'Send Token',
+      title: 'Send Coin',
       screenBuilder: (address, token, balance) =>
           SendScreen(address: address, token: token, balance: balance),
     ).then((_) => context.read<WalletHomeVM>().refresh(force: true));
