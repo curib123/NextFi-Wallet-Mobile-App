@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/ViewModel/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
@@ -37,12 +38,11 @@ class AssetWidget extends StatelessWidget {
   final bool loading;
   final Future<void> Function()? onRefresh;
   final PriceWindow window;
-  final  hasUsdcTrustline;
+  final Object? hasUsdcTrustline;
 
   /// Optional override if you want to handle navigation yourself.
   /// Receives the token string ('XLM' or 'USDC') that was tapped.
   final void Function(String token)? onItemTap;
-
 
   double _balanceFor(AssetModel a) {
     switch (a.symbol.toUpperCase()) {
@@ -84,8 +84,12 @@ class AssetWidget extends StatelessWidget {
   // Formatting helpers
   // ────────────────────────────────────────────────────────────────────────────
 
-  String formatTokenAmount(double v,
-      {int bigMaxDecimals = 4, int smallMaxDecimals = 7, double tinyCutoff = 1e-7}) {
+  String formatTokenAmount(
+      double v, {
+        int bigMaxDecimals = 4,
+        int smallMaxDecimals = 7,
+        double tinyCutoff = 1e-7,
+      }) {
     if (v == 0 || v.isNaN) return '0';
     if (v.abs() < tinyCutoff) return '< 0.0000001';
 
@@ -140,6 +144,7 @@ class AssetWidget extends StatelessWidget {
 
     final listView = ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: 96), // space for FAB
       itemCount: assets.length + 1, // +1 for the footer
       separatorBuilder: (_, __) => const SizedBox(height: 0),
       itemBuilder: (context, index) {
@@ -151,7 +156,7 @@ class AssetWidget extends StatelessWidget {
           final logoUrl = logos[a.id];
 
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16,vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
             child: Material(
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(12),
@@ -168,10 +173,13 @@ class AssetWidget extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(a.name,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: colors.textPrimary)),
+                            Text(
+                              a.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: colors.textPrimary,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               "${formatTokenAmount(bal)} ${a.symbol}",
@@ -183,10 +191,13 @@ class AssetWidget extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(money.format(fiat),
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: colors.textPrimary)),
+                          Text(
+                            money.format(fiat),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: colors.textPrimary,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           _pctBadge(pct),
                         ],
@@ -198,24 +209,52 @@ class AssetWidget extends StatelessWidget {
             ),
           );
         } else {
-          // ---- Rate limit footer (single, after all tiles) ----
+          // ---- Guide footer (single, after all tiles) ----
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: AssetGuideFooter(
               colors: AppColor.of(context),
-              xlmBalance: xlmBalance,           // optional
-              usdcBalance: usdcBalance,         // optional
-              // cycleDuration: Duration(seconds: 10),
-              // showNextPrev: false,
+              xlmBalance: xlmBalance,
+              usdcBalance: usdcBalance,
             ),
           );
         }
       },
     );
 
-    return onRefresh != null
-        ? RefreshIndicator(onRefresh: onRefresh!, color: colors.primary, child: listView)
+    final Widget scrollable = onRefresh != null
+        ? RefreshIndicator(
+      onRefresh: onRefresh!,
+      color: colors.primary,
+      child: listView,
+    )
         : listView;
+
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
+    return Stack(
+      children: [
+        Positioned.fill(child: scrollable),
+        Positioned(
+          right: 16,
+          bottom: 16 + bottomInset,
+          child: FloatingActionButton(
+            heroTag: 'assets_scan_fab',
+            tooltip: 'Scan to send/receive',
+            shape: const CircleBorder(), // explicitly circular
+            onPressed: () {
+              // TODO: Hook up to your scanner route / sheet here.
+              // e.g., Navigator.push(... ScanScreen());
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('TODO: open scanner')),
+              );
+            },
+            // If 'scanLine' doesn't exist in your lucide version, use LucideIcons.scan.
+            child: const Icon(LucideIcons.scanLine),
+          ),
+        ),
+      ],
+    );
   }
 
   // --- small UI helpers ---
@@ -256,8 +295,11 @@ class AssetWidget extends StatelessWidget {
         color: colors.border.withOpacity(0.18),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(Icons.image_not_supported,
-          size: size * 0.6, color: colors.textSecondary.withOpacity(0.6)),
+      child: Icon(
+        Icons.image_not_supported,
+        size: size * 0.6,
+        color: colors.textSecondary.withOpacity(0.6),
+      ),
     );
   }
 
@@ -318,5 +360,3 @@ class AssetWidget extends StatelessWidget {
     );
   }
 }
-
-

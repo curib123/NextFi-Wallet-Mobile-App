@@ -37,26 +37,26 @@ class RecipientListWidget extends StatelessWidget {
         if (prov.loading) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (prov.items.isEmpty) return _EmptyRecipients(colors: colors);
 
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        // Main body (list or empty state). Note the bigger bottom padding for the FAB.
+        final Widget body = prov.items.isEmpty
+            ? _EmptyRecipients(colors: colors)
+            : ListView.separated(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 96), // extra for FAB
           itemCount: prov.items.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, i) {
-            final r = prov.items[i]; // ✅ ensure type
+            final r = prov.items[i];
 
             return RecipientTile(
               colors: colors,
               recipient: r,
               onTap: () async {
-                // If parent wants the raw object, let them handle it.
                 if (onSelect != null) {
-                  onSelect!(r); // ✅ no cast
+                  onSelect!(r);
                   return;
                 }
 
-                // Otherwise, open token selector -> SendScreen
                 final addr = (fromAddress ?? '').trim();
                 if (addr.isEmpty) {
                   showFloatingSnackBar(
@@ -73,7 +73,6 @@ class RecipientListWidget extends StatelessWidget {
                   (xlmBalance ?? 0),
                   (usdcBalance ?? 0),
                   screenBuilder: (address, token, balance) {
-                    // Auto-populate recipient in SendScreen
                     return SendScreen(
                       address: address,
                       token: token, // 'TRX' or 'USDT'
@@ -85,12 +84,10 @@ class RecipientListWidget extends StatelessWidget {
                   title: 'Select Token',
                 );
               },
-
-              // EDIT: open the upsert sheet; show a small toast on success
               onEdit: () async {
                 final saved = await showRecipientUpsertSheet(
                   context,
-                  initial: r, // ✅ no cast
+                  initial: r,
                 );
                 if (saved == true && context.mounted) {
                   showFloatingSnackBar(
@@ -100,8 +97,6 @@ class RecipientListWidget extends StatelessWidget {
                   );
                 }
               },
-
-              // DELETE: confirm first, then remove
               onDelete: () async {
                 final ok = await _confirmDelete(context, r.name);
                 if (ok != true) return;
@@ -117,9 +112,39 @@ class RecipientListWidget extends StatelessWidget {
             );
           },
         );
+
+        // Overlay the floating circular add button
+        final bottomInset = MediaQuery.of(context).padding.bottom;
+
+        return Stack(
+          children: [
+            Positioned.fill(child: body),
+        Positioned(
+        right: 16,
+        bottom: 16 + bottomInset,
+        child: FloatingActionButton(
+        heroTag: 'recipient_add_fab',
+        tooltip: 'Add recipient',
+        shape: const CircleBorder(), // <- makes it explicitly circular
+        onPressed: () async {
+        final saved = await showRecipientUpsertSheet(context);
+        if (saved == true && context.mounted) {
+        showFloatingSnackBar(
+        context,
+        message: 'Recipient saved',
+        type: SnackBarType.info,
+        );
+        }
+        },
+        child: const Icon(LucideIcons.userPlus),
+        ),
+        )
+        ],
+        );
       },
     );
   }
+
 }
 
 /// Modern, compact tile for a recipient entry
