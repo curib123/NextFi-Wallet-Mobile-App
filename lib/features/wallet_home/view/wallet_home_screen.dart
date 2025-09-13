@@ -11,7 +11,7 @@ import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/build_tab_bar.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/header_section.dart';
-import 'package:next_fi/features/wallet_home/view/widgets/home_fab_and_hints.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/incoming_hints_strip.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/tab_keep_alive.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/top_bar.dart';
@@ -47,9 +47,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
   // Subscriptions
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
-
-  // NEW: disable total animation on first boot; enable after balances land
-  bool _animateTotals = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -150,16 +147,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       totalFiat: totalFiat,
                       lastBalancesAt: s.lastBalancesAt,
                       onSwap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SwapScreen(),
-                        ),
-                      ),
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const SwapScreen())),
                       onSend: _onSend,
                       onReceive: _onReceive,
                       livePulse: _livePulse,
-                      // 👇 Ensure first boot is static, no counting animation
-                      animateTotal: _animateTotals,
                       incomingStrip: s.hasWallet
                           ? IncomingHintsStrip(
                         colors: colors,
@@ -174,8 +167,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                         })
                             .toList(),
                         onAcknowledge: (tx) {
-                          final String id =
-                          (tx['hash'] ?? '').toString();
+                          final String id = (tx['hash'] ?? '').toString();
                           context.read<WalletHomeVM>().ackHint(id);
                           final ctl = _hintAlertCtrls.remove(id);
                           ctl?.close();
@@ -210,11 +202,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           onItemTap: (token) {
                             final addr = s.address;
                             if (addr == null) {
-                              showFloatingSnackBar(
-                                context,
-                                message: 'No address available',
-                                type: SnackBarType.error,
-                              );
+                              showFloatingSnackBar(context,
+                                  message: 'No address available',
+                                  type: SnackBarType.error);
                               return;
                             }
                             Navigator.push(
@@ -294,12 +284,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (!mounted) return;
 
     if (e is BootBalancesLoading) {
-      // First boot (or wallet switch) — ensure static first total
-      if (_animateTotals) {
-        setState(() => _animateTotals = false);
-      }
-
-      // Block UI until balances are fetched
+      // Block UI until balances are fetched (first boot / wallet switch)
       _bootBalancesCtl ??= showAppAlert(
         context,
         type: AppAlertType.loading,
@@ -325,13 +310,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         title: 'Balances ready',
         subtitle: 'Total ${currencyFmt.format(totalFiat)}',
       );
-
-      // After first totals are shown instantly, enable animations for future updates.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_animateTotals) {
-          setState(() => _animateTotals = true);
-        }
-      });
 
       Future.delayed(const Duration(milliseconds: 900), () {
         _bootBalancesCtl?.close();
