@@ -5,6 +5,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
+import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
 import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
 import 'package:provider/provider.dart';
@@ -181,23 +182,48 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings> with Widget
     );
     if (res == null) return;
 
-    if (res.createNew) {
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletCreationScreen()));
+    // NEW: Import flow
+    if (res.importRequested) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ImportWalletScreen()),
+      );
       await vm.refresh();
       if (!mounted) return;
       Phoenix.rebirth(context);
       return;
     }
 
+    // Existing: Create New flow
+    if (res.createNew) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SeedPhraseScreen()),
+      );
+      await vm.refresh();
+      if (!mounted) return;
+      Phoenix.rebirth(context);
+      return;
+    }
+
+    // Existing: Switch to an existing wallet
     final chosenId = res.chosenWalletId;
     if (chosenId != null && chosenId != vm.state.activeWalletId) {
       final ok = await vm.switchActive(chosenId);
       if (!mounted) return;
       if (ok) {
-        showFloatingSnackBar(context, message: "Switched active wallet.", type: SnackBarType.success);
+        showFloatingSnackBar(
+          context,
+          message: "Switched active wallet.",
+          type: SnackBarType.success,
+        );
         Phoenix.rebirth(context);
       } else {
-        showFloatingSnackBar(context, message: "Failed to switch wallet.", type: SnackBarType.error);
+        showFloatingSnackBar(
+          context,
+          message: "Failed to switch wallet.",
+          type: SnackBarType.error,
+        );
       }
     }
   }

@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/ViewModel/tab_vm.dart';
+import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
+import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:provider/provider.dart';
@@ -38,18 +40,39 @@ class TopBar extends StatelessWidget {
             );
             if (res == null) return;
 
+            // 👉 NEW: Import flow
+            if (res.importRequested) {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ImportWalletScreen()),
+              );
+              if (!context.mounted) return;
+              await context.read<WalletHomeVM>().boot(); // refresh after import
+              showFloatingSnackBar(context,
+                message: 'Wallets updated.',
+                type: SnackBarType.success,
+              );
+              return;
+            }
+
+            // Existing: Create New flow
             if (res.createNew) {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletCreationScreen()));
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SeedPhraseScreen()),
+              );
               if (!context.mounted) return;
               await context.read<WalletHomeVM>().boot();
               return;
             }
 
+            // Existing: Switch to an existing wallet
             final chosenId = res.chosenWalletId;
             if (chosenId != null && chosenId != activeId) {
               final ok = await context.read<WalletHomeVM>().switchTo(chosenId);
               if (!context.mounted) return;
-              showFloatingSnackBar(context,
+              showFloatingSnackBar(
+                context,
                 message: ok ? 'Switched active wallet.' : 'Failed to switch wallet.',
                 type: ok ? SnackBarType.success : SnackBarType.error,
               );
