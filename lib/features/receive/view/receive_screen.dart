@@ -53,8 +53,8 @@ class ReceiveScreen extends StatelessWidget {
           title: Text('Receive', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
         ),
         body: Consumer2<ReceiveVM, CurrencyVM>(
-          builder: (context, vm, currency, _) {
-            final s = vm.state; // ReceiveState
+          builder: (context, receiveVM, currencyVM, _) {
+            final s = receiveVM.state; // ReceiveState
             final token = s.token; // 'XLM' or 'USDC'
             // fiat (currency.fiat) is available here if you want to show it alongside chart/balances
 
@@ -63,8 +63,8 @@ class ReceiveScreen extends StatelessWidget {
               children: [
                 TokenSwitch(
                   xlmSelected: s.xlmSelected,
-                  onSelectXLM: vm.selectXLM,
-                  onSelectUSDC: vm.selectUSDC,
+                  onSelectXLM: receiveVM.selectXLM,
+                  onSelectUSDC: receiveVM.selectUSDC,
                 ),
                 const SizedBox(height: 12),
                 PriceChartCard(title: token.toUpperCase(), token: token.toUpperCase()),
@@ -79,7 +79,7 @@ class ReceiveScreen extends StatelessWidget {
                 AddressRow(address: s.address),
                 const SizedBox(height: 16),
 
-                SafetyNote(text: vm.safetyNote),
+                SafetyNote(text: receiveVM.safetyNote),
               ],
             );
           },
