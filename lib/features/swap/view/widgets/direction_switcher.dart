@@ -11,7 +11,6 @@ class DirectionSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     return Container(
-      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: c.primary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
