@@ -32,119 +32,120 @@ class RecipientListWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<RecipientAddressVM>(
-      builder: (context, prov, _) {
-        if (prov.loading) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final canPop = Navigator.canPop(context);
 
-        // Main body (list or empty state). Note the bigger bottom padding for the FAB.
-        final Widget body = prov.items.isEmpty
-            ? _EmptyRecipients(colors: colors)
-            : ListView.separated(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 96), // extra for FAB
-          itemCount: prov.items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, i) {
-            final r = prov.items[i];
-
-            return RecipientTile(
-              colors: colors,
-              recipient: r,
-              onTap: () async {
-                if (onSelect != null) {
-                  onSelect!(r);
-                  return;
-                }
-
-                final addr = (fromAddress ?? '').trim();
-                if (addr.isEmpty) {
-                  showFloatingSnackBar(
-                    context,
-                    message: 'Wallet not ready',
-                    type: SnackBarType.warning,
-                  );
-                  return;
-                }
-
-                await showTokenSelector(
-                  context,
-                  addr,
-                  (xlmBalance ?? 0),
-                  (usdcBalance ?? 0),
-                  screenBuilder: (address, token, balance) {
-                    return SendScreen(
-                      address: address,
-                      token: token, // 'TRX' or 'USDT'
-                      balance: balance,
-                      prefillAddress: r.address,
-                      prefillName: r.name,
-                    );
-                  },
-                  title: 'Select Token',
-                );
-              },
-              onEdit: () async {
-                final saved = await showRecipientUpsertSheet(
-                  context,
-                  initial: r,
-                );
-                if (saved == true && context.mounted) {
-                  showFloatingSnackBar(
-                    context,
-                    message: 'Recipient updated',
-                    type: SnackBarType.info,
-                  );
-                }
-              },
-              onDelete: () async {
-                final ok = await _confirmDelete(context, r.name);
-                if (ok != true) return;
-                await context.read<RecipientAddressVM>().remove(r.id);
-                if (context.mounted) {
-                  showFloatingSnackBar(
-                    context,
-                    message: 'Recipient removed',
-                    type: SnackBarType.warning,
-                  );
-                }
-              },
-            );
-          },
-        );
-
-        // Overlay the floating circular add button
-        final bottomInset = MediaQuery.of(context).padding.bottom;
-
-        return Stack(
-          children: [
-            Positioned.fill(child: body),
-        Positioned(
-        right: 16,
-        bottom: 16 + bottomInset,
-        child: FloatingActionButton(
-        heroTag: 'recipient_add_fab',
-        tooltip: 'Add recipient',
-        shape: const CircleBorder(), // <- makes it explicitly circular
-        onPressed: () async {
+    // Reusable FAB
+    final fab = FloatingActionButton(
+      heroTag: 'recipient_add_fab',
+      tooltip: 'Add recipient',
+      shape: const CircleBorder(),
+      onPressed: () async {
         final saved = await showRecipientUpsertSheet(context);
         if (saved == true && context.mounted) {
-        showFloatingSnackBar(
-        context,
-        message: 'Recipient saved',
-        type: SnackBarType.info,
-        );
+          showFloatingSnackBar(
+            context,
+            message: 'Recipient saved',
+            type: SnackBarType.info,
+          );
         }
-        },
-        child: const Icon(LucideIcons.userPlus),
-        ),
-        )
-        ],
-        );
       },
+      child: const Icon(LucideIcons.userPlus),
+    );
+
+    return Scaffold(
+      appBar: canPop
+          ? AppBar(
+        title: const Text('Recipients'),
+        scrolledUnderElevation: 0,
+      )
+          : null,
+      floatingActionButton: fab,
+      body: Consumer<RecipientAddressVM>(
+        builder: (context, prov, _) {
+          if (prov.loading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Main body (list or empty state). Pad bottom for FAB.
+          final Widget body = prov.items.isEmpty
+              ? _EmptyRecipients(colors: colors)
+              : ListView.separated(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+            itemCount: prov.items.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, i) {
+              final r = prov.items[i];
+
+              return RecipientTile(
+                colors: colors,
+                recipient: r,
+                onTap: () async {
+                  if (onSelect != null) {
+                    onSelect!(r);
+                    return;
+                  }
+
+                  final addr = (r.address ?? '').trim();
+                  if (addr.isEmpty) {
+                    showFloatingSnackBar(
+                      context,
+                      message: 'Wallet not ready',
+                      type: SnackBarType.warning,
+                    );
+                    return;
+                  }
+
+                  await showTokenSelector(
+                    context,
+                    addr,
+                    (xlmBalance ?? 0),
+                    (usdcBalance ?? 0),
+                    screenBuilder: (address, token, balance) {
+                      return SendScreen(
+                        address: address,
+                        token: token, // 'TRX' or 'USDT'
+                        balance: balance,
+                        prefillAddress: r.address,
+                        prefillName: r.name,
+                      );
+                    },
+                    title: 'Select Token',
+                  );
+                },
+                onEdit: () async {
+                  final saved = await showRecipientUpsertSheet(
+                    context,
+                    initial: r,
+                  );
+                  if (saved == true && context.mounted) {
+                    showFloatingSnackBar(
+                      context,
+                      message: 'Recipient updated',
+                      type: SnackBarType.info,
+                    );
+                  }
+                },
+                onDelete: () async {
+                  final ok = await _confirmDelete(context, r.name);
+                  if (ok != true) return;
+                  await context.read<RecipientAddressVM>().remove(r.id);
+                  if (context.mounted) {
+                    showFloatingSnackBar(
+                      context,
+                      message: 'Recipient removed',
+                      type: SnackBarType.warning,
+                    );
+                  }
+                },
+              );
+            },
+          );
+
+          return body;
+        },
+      ),
     );
   }
-
 }
 
 /// Modern, compact tile for a recipient entry
@@ -152,7 +153,7 @@ class RecipientTile extends StatelessWidget {
   final AppColor colors;
   final RecipientAddressModel recipient;
   final VoidCallback? onTap;
-  final VoidCallback? onEdit;   // <- keep simple; callers can be async inside
+  final VoidCallback? onEdit; // <- keep simple; callers can be async inside
   final VoidCallback? onDelete; // <- keep simple; callers can be async inside
 
   const RecipientTile({

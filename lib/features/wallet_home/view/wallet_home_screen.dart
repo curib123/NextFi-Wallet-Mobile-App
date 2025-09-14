@@ -225,7 +225,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       ),
                       TabKeepAlive(
                         storageKey: 'recipientsTab',
-                        child: RecipientListWidget(colors: colors),
+                        child: RecipientListWidget(colors: colors,xlmBalance: s.xlm,usdcBalance: s.usdc,),
                       ),
                     ],
                   ),
