@@ -1,4 +1,3 @@
-// lib/features/auth_gate/model/auth_gate_state.dart
 import 'package:flutter/material.dart';
 
 @immutable
@@ -27,6 +26,10 @@ class AuthGateState {
     this.initWarning,
   });
 
+  static const Object _unset = Object();
+
+  /// For nullable fields, use [Object?] with a private sentinel so we can
+  /// distinguish "not provided" from "explicitly set to null".
   AuthGateState copyWith({
     bool? isNewUser,
     bool? deviceSupportsBiometrics,
@@ -34,30 +37,29 @@ class AuthGateState {
     bool? obscurePin,
     bool? submitting,
     bool? unlockedVisual,
-    String? firstPinEntry,
-    Duration? lockoutRemaining,
+    Object? firstPinEntry = _unset,     // String?
+    Object? lockoutRemaining = _unset,  // Duration?
     bool? autoBioTried,
-    String? initWarning,
+    Object? initWarning = _unset,       // String?
   }) {
     return AuthGateState(
       isNewUser: isNewUser ?? this.isNewUser,
-      deviceSupportsBiometrics: deviceSupportsBiometrics ?? this.deviceSupportsBiometrics,
+      deviceSupportsBiometrics:
+      deviceSupportsBiometrics ?? this.deviceSupportsBiometrics,
       biometricsEnabled: biometricsEnabled ?? this.biometricsEnabled,
       obscurePin: obscurePin ?? this.obscurePin,
       submitting: submitting ?? this.submitting,
       unlockedVisual: unlockedVisual ?? this.unlockedVisual,
-      firstPinEntry: firstPinEntry == null && !(_sentinel(firstPinEntry))
+      firstPinEntry: identical(firstPinEntry, _unset)
           ? this.firstPinEntry
-          : firstPinEntry,
-      lockoutRemaining: lockoutRemaining == null && !(_sentinel(lockoutRemaining))
+          : firstPinEntry as String?,
+      lockoutRemaining: identical(lockoutRemaining, _unset)
           ? this.lockoutRemaining
-          : lockoutRemaining,
+          : lockoutRemaining as Duration?,
       autoBioTried: autoBioTried ?? this.autoBioTried,
-      initWarning: initWarning == null && !(_sentinel(initWarning))
+      initWarning: identical(initWarning, _unset)
           ? this.initWarning
-          : initWarning,
+          : initWarning as String?,
     );
   }
 }
-
-bool _sentinel(Object? _) => true;
