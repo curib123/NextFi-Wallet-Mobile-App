@@ -1,4 +1,3 @@
-// lib/features/auth_gate/view/auth_gate_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +12,6 @@ import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/common/components/SnackBar.dart';
-
 
 class AuthGateScreen extends StatefulWidget {
   final VoidCallback? goNext;
@@ -77,15 +75,14 @@ class _AuthGateScreenState extends State<AuthGateScreen>
 
   void _onSuccessNavigate() {
     _smallVisualDelay?.cancel();
-    _smallVisualDelay =
-        Timer(const Duration(milliseconds: 200), () {
-          final goNext = widget.goNext;
-          if (goNext != null) {
-            goNext();
-          } else {
-            Navigator.pushReplacementNamed(context, "/home");
-          }
-        });
+    _smallVisualDelay = Timer(const Duration(milliseconds: 200), () {
+      final goNext = widget.goNext;
+      if (goNext != null) {
+        goNext();
+      } else {
+        Navigator.pushReplacementNamed(context, "/home");
+      }
+    });
   }
 
   @override
@@ -95,8 +92,8 @@ class _AuthGateScreenState extends State<AuthGateScreen>
     final s = vm.state;
 
     final isLockedOut = vm.isLockedOut;
-    final headline =
-    s.isNewUser ? (s.firstPinEntry == null ? "Set Your PIN" : "Confirm PIN")
+    final headline = s.isNewUser
+        ? (s.firstPinEntry == null ? "Set Your PIN" : "Confirm PIN")
         : "Enter PIN";
     final subhead = s.isNewUser
         ? (s.firstPinEntry == null

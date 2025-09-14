@@ -1,4 +1,3 @@
-// lib/features/auth_gate/viewmodel/auth_gate_vm.dart
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -44,7 +43,6 @@ class AuthGateVM extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    // Storage ready?
     final ready = await SecurityStorage.ensureReady();
     if (!ready) {
       _set(_state.copyWith(
@@ -89,7 +87,8 @@ class AuthGateVM extends ChangeNotifier {
     _lockoutTimer?.cancel();
   }
 
-  void toggleObscurePin() => _set(_state.copyWith(obscurePin: !_state.obscurePin));
+  void toggleObscurePin() =>
+      _set(_state.copyWith(obscurePin: !_state.obscurePin));
 
   Future<void> refreshLockout() async {
     final rem = await SecurityStorage.lockoutRemaining();
@@ -112,7 +111,8 @@ class AuthGateVM extends ChangeNotifier {
   }
 
   bool get isLockedOut =>
-      _state.lockoutRemaining != null && _state.lockoutRemaining! > Duration.zero;
+      _state.lockoutRemaining != null &&
+          _state.lockoutRemaining! > Duration.zero;
 
   Future<BioResult> authenticateWithBiometrics() async {
     try {
@@ -143,12 +143,14 @@ class AuthGateVM extends ChangeNotifier {
     }
   }
 
-  /// Returns a [PinResult] describing what happened.
   Future<PinResult> submitPin(String raw) async {
     if (isLockedOut) {
       final rem = _state.lockoutRemaining!;
-      return PinResult(PinStatus.lockedOut, remaining: rem,
-          message: "Too many attempts. Try again in ${_fmt(rem)}.");
+      return PinResult(
+        PinStatus.lockedOut,
+        remaining: rem,
+        message: "Too many attempts. Try again in ${_fmt(rem)}.",
+      );
     }
 
     final pin = raw.replaceAll(RegExp(r'\D'), '');
@@ -163,21 +165,29 @@ class AuthGateVM extends ChangeNotifier {
         // step 1: collect first entry
         if (_state.firstPinEntry == null) {
           _set(_state.copyWith(firstPinEntry: pin, submitting: false));
-          return const PinResult(PinStatus.needFirstConfirm, message: "Re-enter your PIN to confirm");
+          return const PinResult(
+            PinStatus.needFirstConfirm,
+            message: "Re-enter your PIN to confirm",
+          );
         }
 
         // step 2: confirm
         if (pin != _state.firstPinEntry) {
           _set(_state.copyWith(firstPinEntry: null, submitting: false));
-          return const PinResult(PinStatus.mismatch, message: "PINs do not match. Please try again.");
+          return const PinResult(
+            PinStatus.mismatch,
+            message: "PINs do not match. Please try again.",
+          );
         }
 
         await SecurityStorage.setPin(pin);
         final saved = await SecurityStorage.hasPin();
         if (!saved) {
           _set(_state.copyWith(submitting: false));
-          return const PinResult(PinStatus.storageError,
-              message: "Couldn’t persist PIN. Try again (or disable private mode).");
+          return const PinResult(
+            PinStatus.storageError,
+            message: "Couldn’t persist PIN. Try again (or disable private mode).",
+          );
         }
 
         _set(_state.copyWith(
@@ -201,8 +211,11 @@ class AuthGateVM extends ChangeNotifier {
       _set(_state.copyWith(lockoutRemaining: rem, submitting: false));
       if (rem != null && rem > Duration.zero) {
         _startOrStopLockoutTimer(rem);
-        return PinResult(PinStatus.lockedOut, remaining: rem,
-            message: "Too many attempts. Try again in ${_fmt(rem)}.");
+        return PinResult(
+          PinStatus.lockedOut,
+          remaining: rem,
+          message: "Too many attempts. Try again in ${_fmt(rem)}.",
+        );
       }
       return const PinResult(PinStatus.invalid, message: "Invalid PIN");
     } catch (e) {
@@ -211,10 +224,12 @@ class AuthGateVM extends ChangeNotifier {
     }
   }
 
-  /// Call once after init (e.g., on first frame or resume).
   Future<BioResult?> maybeAutoBiometric() async {
     if (_state.autoBioTried) return null;
-    if (!_state.isNewUser && _state.deviceSupportsBiometrics && _state.biometricsEnabled && !isLockedOut) {
+    if (!_state.isNewUser &&
+        _state.deviceSupportsBiometrics &&
+        _state.biometricsEnabled &&
+        !isLockedOut) {
       _set(_state.copyWith(autoBioTried: true));
       return authenticateWithBiometrics();
     }
