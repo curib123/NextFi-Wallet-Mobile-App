@@ -6,19 +6,15 @@ import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/ViewModel/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
+import 'package:next_fi/features/import_wallet/model/import_wallet_state.dart';
 import 'package:next_fi/features/import_wallet/view/widgets/warning_box.dart';
+import 'package:next_fi/features/import_wallet/view/widgets/word_badge.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/confirm_tile.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/CustomButton.dart';
 import 'package:next_fi/common/components/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-
-// VM + State
-import '../model/import_wallet_state.dart';
-
-// Widgets
-import 'widgets/word_badge.dart';
 
 class ImportWalletScreen extends StatefulWidget {
   const ImportWalletScreen({super.key});
