@@ -245,10 +245,8 @@ class _SwapScreenState extends State<SwapScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
-            SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const SizedBox(height: 8),
-              BalanceRow(xlm: s.xlmBal, usdc: s.usdcBal),
-            ])),
+            const SizedBox(height: 8),
+            BalanceRow(xlm: s.xlmBal, usdc: s.usdcBal),
             const SizedBox(height: 10),
             SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               CardHeader(
