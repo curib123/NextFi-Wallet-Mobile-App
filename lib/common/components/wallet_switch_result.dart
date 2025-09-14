@@ -9,18 +9,27 @@ import 'package:next_fi/Services/seed_storage.dart';
 class WalletSwitchResult {
   final String? chosenWalletId;
   final bool createNew;
+  final bool importRequested; // NEW: distinguish import flow
 
-  const WalletSwitchResult({this.chosenWalletId, this.createNew = false});
+  const WalletSwitchResult({
+    this.chosenWalletId,
+    this.createNew = false,
+    this.importRequested = false,
+  });
 }
 
 /// Open a modern bottom sheet to switch the active wallet.
 ///
-/// Returns [WalletSwitchResult] with either `chosenWalletId` or `createNew=true`.
+/// Returns [WalletSwitchResult] with either:
+/// - `chosenWalletId` (user picked existing),
+/// - `createNew = true` (tapped "New Wallet"),
+/// - `importRequested = true` (tapped "Import Wallet").
 Future<WalletSwitchResult?> showWalletSwitchSheet(
     BuildContext context, {
       String? currentActiveId,
-      bool allowGenerate = true,
-      String generateLabel = 'Generate New Wallet',
+      bool allowGenerate = true, // kept for backwards-compat; controls showing actions
+      String generateLabel = 'New Wallet', // repurposed: label for top-right action
+      String importLabel = 'Import Wallet', // NEW: footer action label
     }) async {
   final colors = AppColor.of(context);
   final wallets = await SeedStorage.listWallets();
@@ -39,7 +48,8 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
           wallets: wallets,
           activeId: currentActiveId,
           allowGenerate: allowGenerate,
-          generateLabel: generateLabel,
+          newWalletLabel: generateLabel, // renamed intent
+          importLabel: importLabel,
         ),
       );
     },
@@ -52,14 +62,16 @@ class _WalletSwitchBody extends StatelessWidget {
     required this.wallets,
     required this.activeId,
     required this.allowGenerate,
-    required this.generateLabel,
+    required this.newWalletLabel,
+    required this.importLabel,
   });
 
   final AppColor colors;
   final List<dynamic> wallets; // List<WalletMetaModel>
   final String? activeId;
   final bool allowGenerate;
-  final String generateLabel;
+  final String newWalletLabel; // "New Wallet" (top-right)
+  final String importLabel;    // "Import Wallet" (footer)
 
   static const double _pad = 16;
   static const double _radius = 14;
@@ -78,10 +90,22 @@ class _WalletSwitchBody extends StatelessWidget {
               "Switch Wallet",
               style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
             ),
-            subtitle: Text(
-              'Pick an existing wallet or create a new one',
-              style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-            ),
+            // NEW: top-right "New Wallet" action
+            trailing: allowGenerate
+                ? TextButton.icon(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  const WalletSwitchResult(createNew: true),
+                );
+              },
+              icon: const Icon(LucideIcons.plusCircle),
+              label: Text(newWalletLabel),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.primary,
+              ),
+            )
+                : null,
           ),
           const Divider(height: 1),
 
@@ -116,8 +140,7 @@ class _WalletSwitchBody extends StatelessWidget {
                       : null,
                   trailing: isActive
                       ? Container(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: colors.success.withOpacity(.12),
                       borderRadius: BorderRadius.circular(999),
@@ -160,11 +183,15 @@ class _WalletSwitchBody extends StatelessWidget {
                 if (allowGenerate) const SizedBox(width: 10),
                 if (allowGenerate)
                   Expanded(
+                    // REPLACED: previous "Generate New Wallet" -> now "Import Wallet"
                     child: CustomButton(
-                      text: generateLabel,
-                      icon: LucideIcons.sparkles,
+                      text: importLabel,
+                      icon: LucideIcons.download,
                       onPressed: () {
-                        Navigator.pop(context, const WalletSwitchResult(createNew: true));
+                        Navigator.pop(
+                          context,
+                          const WalletSwitchResult(importRequested: true),
+                        );
                       },
                     ),
                   ),
@@ -201,7 +228,7 @@ class _WalletSwitchBody extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Create your first wallet to get started.',
+              'Create a new wallet (top-right) or import one to get started.',
               style: TextStyle(color: colors.textSecondary, height: 1.45),
               textAlign: TextAlign.center,
             ),
