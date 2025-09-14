@@ -158,7 +158,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                 onTap: () => debugPrint('Withdraw')),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
         widget.incomingStrip,
       ],
     );

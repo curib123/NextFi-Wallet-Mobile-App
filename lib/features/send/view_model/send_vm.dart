@@ -240,6 +240,31 @@ class SendVM extends ChangeNotifier {
     }
   }
 
+  void pickRecipient(String address, {String? displayName}) {
+    final addr = (address).trim();
+    if (addr.isEmpty) return;
+
+    // Save a friendly name for UI (optional)
+    final name = displayName?.trim();
+    if (name != null && name.isNotEmpty) {
+      _prefillName = name;
+    }
+
+    // Update recipient and re-run downstream checks
+    _to = addr;
+    notifyListeners();          // refresh badges, templates, etc.
+    _debounceCheckTrustline();  // re-check USDC trustline if needed
+  }
+
+  /// Optional: clear any prefilled name (if the user edits the address manually)
+  void clearPrefillName() {
+    _prefillName = null;
+    notifyListeners();
+  }
+
+  /// Optional: expose current friendly label to the UI
+  String? get recipientLabel => _prefillName;
+
   // Submit
   Future<String> submit({String? memo}) async {
     final reason = blockingReason;
@@ -278,6 +303,7 @@ class SendVM extends ChangeNotifier {
     }
   }
 }
+
 
 // Small helper to silence unawaited futures.
 void unawaited(Future<void> f) {}
