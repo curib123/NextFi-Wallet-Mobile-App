@@ -1,7 +1,7 @@
 // lib/features/wallet_home/view/widgets/top_bar.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/features/ViewModel/tab_vm.dart';
+import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';

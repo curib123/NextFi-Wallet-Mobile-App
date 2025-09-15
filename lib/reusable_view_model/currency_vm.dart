@@ -1,4 +1,4 @@
-// lib/ViewModel/currency_vm.dart
+// lib/reusable_view_model/currency_vm.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

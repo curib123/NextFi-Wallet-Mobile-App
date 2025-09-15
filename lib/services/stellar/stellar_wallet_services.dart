@@ -6,7 +6,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 // Keep this import as in your codebase (shim or direct):
 import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 
-// ========== Helper models ==========
+// ========== helper models ==========
 
 class AccountState {
   final double xlm;

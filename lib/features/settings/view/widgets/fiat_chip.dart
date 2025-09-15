@@ -1,6 +1,6 @@
 // lib/features/settings/view/widgets/fiat_chip.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 

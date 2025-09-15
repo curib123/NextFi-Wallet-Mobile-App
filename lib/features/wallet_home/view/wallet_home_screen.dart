@@ -2,8 +2,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:next_fi/features/ViewModel/asset_vm.dart';
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/reusable_view_model/asset_vm.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';

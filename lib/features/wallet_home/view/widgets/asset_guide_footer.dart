@@ -58,7 +58,7 @@ class AssetGuideFooter extends StatefulWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Model & catalog
+// reusable_model & catalog
 // ─────────────────────────────────────────────────────────────────────────────
 
 class GuideTip {

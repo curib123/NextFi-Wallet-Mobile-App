@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 
-/// Recipient addresses ViewModel (ChangeNotifier-based)
+/// Recipient addresses reusable_view_model (ChangeNotifier-based)
 /// - Persists to FlutterSecureStorage
 /// - Case-insensitive de-dup by address
 /// - Awaitable init via [ready] to avoid races
