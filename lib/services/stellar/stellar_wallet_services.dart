@@ -6,7 +6,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 // Keep this import as in your codebase (shim or direct):
 import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
 
-// ========== helper models ==========
+// ================= helper models (unchanged) =================
 
 class AccountState {
   final double xlm;
@@ -48,9 +48,8 @@ class PairPrice {
 }
 
 // ========== Minimal Soroban JSON-RPC client (fallback only) ==========
-// SOROBAN
 class _SorobanRpc {
-   String base = 'https://rpc.ankr.com/stellar_soroban';
+  String base = 'https://rpc.ankr.com/stellar_soroban';
   final Map<String, String>? headers;
   _SorobanRpc(this.base, [this.headers]);
 
@@ -84,7 +83,6 @@ class _SorobanRpc {
 
   Future<String?> sendTransaction(String envelopeB64) async {
     final r = await _rpc('sendTransaction', params: {'transaction': envelopeB64});
-    // result: { hash, status, latestLedger, latestLedgerCloseTime, ... }
     return (r?['hash'] as String?);
   }
 
@@ -97,9 +95,13 @@ class _SorobanRpc {
   }
 }
 
-// ========== StellarWalletService ==========
+// ================= StellarWalletService =================
 
 class StellarWalletService {
+  /// IMPORTANT: issuer is injected from the ViewModel.
+  /// Wire like: `StellarWalletService(usdcIssuer: assetVM.usdcIssuer, testnet: ...)`
+  final String usdcIssuer;
+
   // Primary SDK (SDF Horizon)
   final StellarSDK sdk;
 
@@ -109,7 +111,7 @@ class StellarWalletService {
   final Map<String, String>? quickNodeDefaultHeaders;
   final StellarSDK? _sdkQuickNode;
 
-  // Soroban JSON-RPC fallback (optional) — used for sendTransaction + ledger hints
+  // Soroban JSON-RPC fallback (optional)
   final String? sorobanUrlMainnet;
   final String? sorobanUrlTestnet;
   final Map<String, String>? sorobanDefaultHeaders;
@@ -117,18 +119,9 @@ class StellarWalletService {
 
   final TransactionFeeVaultSecureStorage configVault;
 
-  static const String _DEFAULT_USDC_ISSUER_MAINNET =
-      'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
-  static const String _DEFAULT_USDC_ISSUER_TESTNET =
-      'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
-
-  final String? usdcIssuerOverrideMainnet;
-  final String? usdcIssuerOverrideTestnet;
-
   StellarWalletService({
+    required this.usdcIssuer,
     bool testnet = false,
-    this.usdcIssuerOverrideMainnet,
-    this.usdcIssuerOverrideTestnet,
     TransactionFeeVaultSecureStorage? configVault,
 
     // QuickNode Horizon
@@ -155,12 +148,7 @@ class StellarWalletService {
   Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
   Asset get _xlm => Asset.NATIVE;
-
-  String get _usdcIssuer => _isTestnet
-      ? (usdcIssuerOverrideTestnet ?? _DEFAULT_USDC_ISSUER_TESTNET)
-      : (usdcIssuerOverrideMainnet ?? _DEFAULT_USDC_ISSUER_MAINNET);
-
-  Asset get _usdc => AssetTypeCreditAlphaNum4('USDC', _usdcIssuer);
+  Asset get _usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
   static String _fmt7(num v) => v.toStringAsFixed(7);
 
@@ -175,26 +163,23 @@ class StellarWalletService {
   // QuickNode base (fallback), if configured
   String? get _qnBase => _isTestnet ? quickNodeUrlTestnet : quickNodeUrlMainnet;
 
-  // ===== HTTP helper with SDF ➜ QuickNode fallback (Soroban can’t serve Horizon REST) =====
+  // ===== HTTP helper with SDF ➜ QuickNode fallback =====
   Future<http.Response> _getWithFallback(
       String path, {
         Map<String, String>? query,
         Duration timeout = const Duration(seconds: 20),
       }) async {
-    // 1) Try SDF Horizon
     final primary = Uri.parse('$horizonBase$path').replace(queryParameters: query);
     try {
       final r = await http.get(primary).timeout(timeout);
       if (r.statusCode == 200) return r;
 
-      // If outage/429/5xx —> QuickNode Horizon
       if (r.statusCode == 429 || (r.statusCode >= 500 && r.statusCode <= 599)) {
         final fr = await _tryQuickNode(path, query: query, timeout: timeout);
         if (fr != null) return fr;
       }
       return r;
     } catch (_) {
-      // network/timeout —> QuickNode
       final fr = await _tryQuickNode(path, query: query, timeout: timeout);
       if (fr != null) return fr;
       rethrow;
@@ -222,57 +207,42 @@ class StellarWalletService {
   static Future<Wallet> walletFromMnemonic(String mnemonic) => Wallet.from(mnemonic);
   static Future<KeyPair> getKeyPair(Wallet wallet, {int index = 0}) => wallet.getKeyPair(index: index);
 
-  Future<AccountResponse> _loadAccount(String accountId) =>
-      sdk.accounts.account(accountId);
+  Future<AccountResponse> _loadAccount(String accountId) => sdk.accounts.account(accountId);
 
   bool get isTestnet => _isTestnet;
-  String get usdcIssuer => _usdcIssuer;
 
-  Future<String> getTransactionFeeAddress() async =>
-      (await configVault.readOrInit()).address;
+  Future<String> getTransactionFeeAddress() async => (await configVault.readOrInit()).address;
 
-  // === Dynamic tx-fee: always target 0.01 USDC paid in XLM (robust fallbacks) ===
+  // === Dynamic tx-fee: 0.01 USDC paid in XLM (unchanged behavior) ===
   static const double _kTxFeeUsdc = 0.01;
 
-  /// Compute XLM required to equal _kTxFeeUsdc USDC at current paths/price.
-  /// Order of attempts:
-  ///  1) Horizon strict-send quote (USDC -> XLM)
-  ///  2) Fallback: quote XLM->USDC for 1 XLM, invert
-  ///  3) Fallback: use vault's stored fixed XLM fee
   Future<double> _computeDynamicFeeXlm() async {
-    // 1) Try direct USDC -> XLM quote
     try {
       final x1 = await quoteUsdcToXlm(_kTxFeeUsdc);
       if (x1 != null && x1 > 0) return x1;
-    } catch (_) {/* ignore and fall through */}
-
-    // 2) Try inverse via XLM -> USDC (1 XLM) then invert
+    } catch (_) {}
     try {
       final usdcFor1Xlm = await quoteXlmToUsdc(1.0);
       if (usdcFor1Xlm != null && usdcFor1Xlm > 0) {
-        final x2 = _kTxFeeUsdc / usdcFor1Xlm; // XLM per 0.01 USDC
+        final x2 = _kTxFeeUsdc / usdcFor1Xlm;
         if (x2 > 0) return x2;
       }
-    } catch (_) {/* ignore and fall through */}
-
-    // 3) Last resort: stored fixed XLM fee from the vault
+    } catch (_) {}
     try {
       return await configVault.getFeeXlm();
     } catch (_) {
-      // Ultra-safe final fallback (keeps old default behavior)
-      return 0.05; // 0.05 XLM as a hard fallback if everything fails
+      return 0.05;
     }
   }
 
-  // === Public getters: flow preserved (same method names), now dynamic ===
   Future<int> getCurrentFeeStroops() async {
     final xlm = await _computeDynamicFeeXlm();
-    final stroops = (xlm * 1e7).ceil(); // round up so we never collect < $0.01 USDC worth
+    final stroops = (xlm * 1e7).ceil();
     return stroops;
   }
 
   Future<double> getCurrentFeeXlm() async {
-    final stroops = await getCurrentFeeStroops(); // keep same rounding basis
+    final stroops = await getCurrentFeeStroops();
     return _fromStroops(stroops);
   }
 
@@ -308,7 +278,7 @@ class StellarWalletService {
     try {
       final acc = await _loadAccount(accountId);
       for (final b in acc.balances) {
-        if (b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer) {
+        if (b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer) {
           return double.parse(b.balance);
         }
       }
@@ -322,7 +292,7 @@ class StellarWalletService {
 
   Future<bool> hasUsdcTrustline(String accountId) async {
     final acc = await _loadAccount(accountId);
-    return acc.balances.any((b) => b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer);
+    return acc.balances.any((b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer);
   }
 
   Future<String> createUsdcTrustline({
@@ -339,19 +309,16 @@ class StellarWalletService {
           .build();
       tx.sign(kp, _network);
 
-      // Submit: SDF ➜ Soroban ➜ QuickNode
       try {
         final res = await sdk.submitTransaction(tx);
         if (!res.success) _fail('ChangeTrust(USDC) failed: ${res.resultXdr}');
         return res.hash!;
       } catch (_) {
-        // SOROBAN fallback
         final hash = await _trySorobanSend(tx);
         if (hash != null) return hash;
 
-        // QuickNode fallback
         if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode!.submitTransaction(tx);
+          final res = await _sdkQuickNode.submitTransaction(tx);
           if (!res.success) _fail('ChangeTrust(USDC) failed on QuickNode: ${res.resultXdr}');
           return res.hash!;
         }
@@ -362,12 +329,11 @@ class StellarWalletService {
     }
   }
 
-  // SOROBAN: best-effort broadcast using JSON-RPC sendTransaction
   Future<String?> _trySorobanSend(Transaction tx) async {
     if (_soroban == null) return null;
     try {
-      final envelopeB64 = tx.toEnvelopeXdrBase64(); // common in stellar_flutter_sdk
-      final hash = await _soroban!.sendTransaction(envelopeB64);
+      final envelopeB64 = tx.toEnvelopeXdrBase64();
+      final hash = await _soroban.sendTransaction(envelopeB64);
       return hash;
     } catch (_) {
       return null;
@@ -434,13 +400,11 @@ class StellarWalletService {
       if (!res.success) _fail('XLM payment failed: ${res.resultXdr}');
       return [res.hash!];
     } catch (_) {
-      // Soroban
       final hash = await _trySorobanSend(tx);
       if (hash != null) return [hash];
 
-      // QuickNode
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode!.submitTransaction(tx);
+        final res = await _sdkQuickNode.submitTransaction(tx);
         if (!res.success) _fail('XLM payment failed on QuickNode: ${res.resultXdr}');
         return [res.hash!];
       }
@@ -507,7 +471,7 @@ class StellarWalletService {
       if (hash != null) return [hash];
 
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode!.submitTransaction(tx);
+        final res = await _sdkQuickNode.submitTransaction(tx);
         if (!res.success) _fail('USDC payment failed on QuickNode: ${res.resultXdr}');
         return [res.hash!];
       }
@@ -583,7 +547,7 @@ class StellarWalletService {
         if (hash != null) return hash;
 
         if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode!.submitTransaction(tx);
+          final res = await _sdkQuickNode.submitTransaction(tx);
           if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed on QuickNode: ${res.resultXdr}');
           return res.hash!;
         }
@@ -678,7 +642,7 @@ class StellarWalletService {
         if (hash != null) return hash;
 
         if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode!.submitTransaction(tx);
+          final res = await _sdkQuickNode.submitTransaction(tx);
           if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed on QuickNode: ${res.resultXdr}');
           return res.hash!;
         }
@@ -771,11 +735,10 @@ class StellarWalletService {
   }
 
   // ===== Federation =====
-
   Future<FederationResponse> resolveFederationAddress(String stellarAddress) =>
       Federation.resolveStellarAddress(stellarAddress);
 
-  // ===== Streaming (SDF SSE ➜ QN SSE; Soroban polling as last resort for ledgers) =====
+  // ===== Streaming (SSE) & helpers (unchanged logic, but using usdcIssuer) =====
 
   Stream<T> _sseWithFallback<T>(Stream<T> Function(StellarSDK s) build) {
     final controller = StreamController<T>();
@@ -786,13 +749,12 @@ class StellarWalletService {
       sub = build(s).listen(
         controller.add,
         onError: (e, st) async {
-          // If public fails, try once on QN
           if (!usingQuickNode && _sdkQuickNode != null) {
             usingQuickNode = true;
             try {
               await sub?.cancel();
             } catch (_) {}
-            await _start(_sdkQuickNode!);
+            await _start(_sdkQuickNode);
           } else {
             controller.addError(e, st);
             await controller.close();
@@ -820,7 +782,6 @@ class StellarWalletService {
           .where((resp) => resp is PaymentOperationResponse && resp.transactionSuccessful)
           .cast<PaymentOperationResponse>();
     }
-    // Soroban can’t supply PaymentOperationResponse, so we do SDF ➜ QN only.
     return _sseWithFallback<PaymentOperationResponse>(_build);
   }
 
@@ -837,7 +798,7 @@ class StellarWalletService {
         bool tl = false;
         for (final b in acc.balances) {
           if (b.assetType == Asset.TYPE_NATIVE) xlm = double.parse(b.balance);
-          if (b.assetCode == 'USDC' && b.assetIssuer == _usdcIssuer) {
+          if (b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer) {
             usdc = double.parse(b.balance);
             tl = true;
           }
@@ -855,7 +816,6 @@ class StellarWalletService {
 
     emitSnapshot();
 
-    // SSE (SDF ➜ QN)
     Stream<void> _payStream(StellarSDK s) =>
         s.payments.forAccount(accountId).cursor("now").stream().map((_) => null);
     Stream<void> _effStream(StellarSDK s) =>
@@ -882,7 +842,7 @@ class StellarWalletService {
 
   Stream<FeeEstimate> feeEstimateStream({int opCount = 1, int percentile = 90}) {
     final controller = StreamController<FeeEstimate>();
-    int? lastSorobanLedger; // SOROBAN polling hint
+    int? lastSorobanLedger;
 
     Future<void> push(DateTime at) async {
       try {
@@ -915,28 +875,23 @@ class StellarWalletService {
 
     push(DateTime.now());
 
-    // SSE ledgers (SDF ➜ QN)
-    Stream<void> _ledgerStream(StellarSDK s) =>
-        s.ledgers.cursor("now").stream().map((_) => null);
+    Stream<void> _ledgerStream(StellarSDK s) => s.ledgers.cursor("now").stream().map((_) => null);
 
     final ledSub = _sseWithFallback<void>(_ledgerStream).listen((_) {
       push(DateTime.now());
     }, onError: controller.addError, onDone: controller.close);
 
-    // SOROBAN: polling fallback (if SSE is flaky anywhere)
     Timer? sorobanTicker;
     if (_soroban != null) {
       sorobanTicker = Timer.periodic(const Duration(seconds: 8), (_) async {
         try {
-          final seq = await _soroban!.getLatestLedgerSequence();
+          final seq = await _soroban.getLatestLedgerSequence();
           if (seq == null) return;
           if (lastSorobanLedger == null || seq > lastSorobanLedger!) {
             lastSorobanLedger = seq;
             await push(DateTime.now());
           }
-        } catch (_) {
-          // ignore single poll errors
-        }
+        } catch (_) {}
       });
     }
 
@@ -947,7 +902,6 @@ class StellarWalletService {
     return controller.stream;
   }
 
-  // IMPORTANT: Build trades requests on a specific SDK (for SSE fallback)
   TradesRequestBuilder _tradesForPairOn(StellarSDK s, Asset base, Asset counter) {
     String typeOf(Asset a) {
       if (a is AssetTypeNative) return 'native';
@@ -989,7 +943,6 @@ class StellarWalletService {
         throw StateError('Invalid trade price');
       });
     }
-    // Soroban has no trades SSE; use SDF ➜ QN chain only.
     return _sseWithFallback<PairPrice>(_build);
   }
 

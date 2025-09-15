@@ -1,4 +1,7 @@
+// lib/common/components/SnackBar.dart
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
 enum SnackBarType { success, error, warning, info }
@@ -18,11 +21,18 @@ void showFloatingSnackBar(
       bool dismissible = true,
       IconData? icon,          // optional: override icon
       Color? backgroundColor,  // optional: override background
+
+      // --- New polish (all optional, safe defaults) ---
+      bool useBlur = false,            // frosted glass look (subtle)
+      bool showClose = true,           // top-right ✕ button
+      bool showProgress = true,        // life-bar at the bottom
+      double maxWidth = 720,           // responsive cap
     }) {
   final colors = AppColor.of(context);
+  final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
 
   Color bgColor;
-  Color fgColor = colors.surface; // text & icon color
   IconData iconData;
 
   switch (type) {
@@ -39,7 +49,6 @@ void showFloatingSnackBar(
       iconData = Icons.error_rounded;
       break;
     case SnackBarType.info:
-    // Use brand color for informational notices
       bgColor = colors.primary;
       iconData = Icons.info_rounded;
       break;
@@ -47,6 +56,9 @@ void showFloatingSnackBar(
 
   if (backgroundColor != null) bgColor = backgroundColor;
   if (icon != null) iconData = icon;
+
+  // Choose a readable foreground automatically
+  final fgColor = _autoOnColor(bgColor, isDark: isDark);
 
   // Remove any existing snackbar first
   _currentSnackBarEntry?.remove();
@@ -67,11 +79,25 @@ void showFloatingSnackBar(
         _currentSnackBarEntry?.remove();
         _currentSnackBarEntry = null;
       },
+      // new
+      useBlur: useBlur,
+      showClose: showClose,
+      showProgress: showProgress,
+      maxWidth: maxWidth,
     ),
   );
 
   Overlay.of(context, rootOverlay: true).insert(entry);
   _currentSnackBarEntry = entry;
+
+  // tiny haptic for feedback
+  HapticFeedback.lightImpact();
+}
+
+Color _autoOnColor(Color bg, {required bool isDark}) {
+  final lum = bg.computeLuminance(); // 0=dark, 1=light
+  // Prefer white on darker backgrounds, dark grey on bright ones
+  return lum < 0.45 ? Colors.white : Colors.black87;
 }
 
 class _FloatingSnackBarWidget extends StatefulWidget {
@@ -86,6 +112,11 @@ class _FloatingSnackBarWidget extends StatefulWidget {
     required this.onClosed,
     this.actionLabel,
     this.onAction,
+    // new
+    this.useBlur = false,
+    this.showClose = true,
+    this.showProgress = true,
+    this.maxWidth = 720,
   });
 
   final String message;
@@ -99,66 +130,80 @@ class _FloatingSnackBarWidget extends StatefulWidget {
   final VoidCallback? onAction;
   final VoidCallback onClosed;
 
+  // new
+  final bool useBlur;
+  final bool showClose;
+  final bool showProgress;
+  final double maxWidth;
+
   @override
   State<_FloatingSnackBarWidget> createState() => _FloatingSnackBarWidgetState();
 }
 
 class _FloatingSnackBarWidgetState extends State<_FloatingSnackBarWidget>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+    with TickerProviderStateMixin {
+  late final AnimationController _inOutCtrl;
   late final Animation<Offset> _offset;
   late final Animation<double> _fade;
+  late final AnimationController _lifeCtrl; // for progress bar
 
   @override
   void initState() {
     super.initState();
 
-    _controller = AnimationController(
+    _inOutCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 240),
       reverseDuration: const Duration(milliseconds: 180),
     );
 
     final from = widget.position == SnackBarPosition.top
-        ? const Offset(0, -0.2)
-        : const Offset(0, 0.2);
+        ? const Offset(0, -0.18)
+        : const Offset(0, 0.18);
 
     _offset = Tween<Offset>(begin: from, end: Offset.zero)
         .chain(CurveTween(curve: Curves.easeOutCubic))
-        .animate(_controller);
+        .animate(_inOutCtrl);
 
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _fade = CurvedAnimation(parent: _inOutCtrl, curve: Curves.easeOut);
 
-    _controller.forward();
+    _lifeCtrl = AnimationController(vsync: this, duration: widget.duration)
+      ..forward();
+
+    _inOutCtrl.forward();
 
     // Auto dismiss: animate out, then remove
     Future.delayed(widget.duration, () async {
       if (!mounted) return;
-      await _controller.reverse();
+      await _inOutCtrl.reverse();
       if (mounted) widget.onClosed();
     });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _lifeCtrl.dispose();
+    _inOutCtrl.dispose();
     super.dispose();
   }
 
   EdgeInsets get _edgeInsets {
     final media = MediaQuery.of(context);
-    final hor = 20.0;
+    final horizontal = 16.0;
     final topPad = media.viewPadding.top + 12.0;
-    final botPad = media.viewPadding.bottom + 12.0;
+    // If keyboard is up, respect viewInsets at the bottom
+    final botSystem = media.viewPadding.bottom;
+    final botInsets = media.viewInsets.bottom;
+    final bottomPad = (botInsets > 0 ? botInsets : botSystem) + 12.0;
 
     return widget.position == SnackBarPosition.top
-        ? EdgeInsets.fromLTRB(hor, topPad, hor, 0)
-        : EdgeInsets.fromLTRB(hor, 0, hor, botPad);
+        ? EdgeInsets.fromLTRB(horizontal, topPad, horizontal, 0)
+        : EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottomPad);
   }
 
   @override
   Widget build(BuildContext context) {
-    final content = Material(
+    final body = Material(
       color: Colors.transparent,
       child: SafeArea(
         top: widget.position == SnackBarPosition.top,
@@ -169,7 +214,7 @@ class _FloatingSnackBarWidgetState extends State<_FloatingSnackBarWidget>
             position: _offset,
             child: FadeTransition(
               opacity: _fade,
-              child: _buildBody(context),
+              child: _contentCard(context),
             ),
           ),
         ),
@@ -183,76 +228,204 @@ class _FloatingSnackBarWidgetState extends State<_FloatingSnackBarWidget>
           alignment: widget.position == SnackBarPosition.top
               ? Alignment.topCenter
               : Alignment.bottomCenter,
-          child: content,
+          child: body,
         ),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context) {
-    return Dismissible(
-      key: const ValueKey('floating_snackbar'),
-      direction: widget.dismissible
-          ? (widget.position == SnackBarPosition.top
-          ? DismissDirection.up
-          : DismissDirection.down)
-          : DismissDirection.none,
-      onDismissed: (_) => widget.onClosed(),
-      child: GestureDetector(
-        onTap: () {
-          if (widget.onAction != null) {
-            widget.onAction!.call();
-          } else if (widget.dismissible) {
-            widget.onClosed();
-          }
-        },
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 720),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: widget.bgColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
+  Widget _contentCard(BuildContext context) {
+    final bg = widget.bgColor;
+    final fg = widget.fgColor;
+
+    final card = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: widget.maxWidth),
+      child: Semantics(
+        liveRegion: true,
+        label: 'Notification',
+        child: Dismissible(
+          key: const ValueKey('floating_snackbar'),
+          direction: widget.dismissible
+              ? (widget.position == SnackBarPosition.top
+              ? DismissDirection.up
+              : DismissDirection.down)
+              : DismissDirection.none,
+          onDismissed: (_) => widget.onClosed(),
+          child: _Surface(
+            blur: widget.useBlur ? 14 : 0,
+            radius: 18,
+            clip: true,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                // Subtle gradient for depth
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    _tint(bg, 0.0),
+                    _tint(bg, 0.06),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-            ],
+              child: _buildRow(context, fg),
+            ),
           ),
+        ),
+      ),
+    );
+
+    return card;
+  }
+
+  Widget _buildRow(BuildContext context, Color fg) {
+    final theme = Theme.of(context);
+
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.iconData, color: widget.fgColor, size: 22),
+              // Leading icon in a soft container
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: fg.withOpacity(0.14),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(widget.iconData, color: fg, size: 20),
+              ),
               const SizedBox(width: 10),
-              Expanded(
+              // Text
+              Flexible(
                 child: Text(
                   widget.message,
-                  style: TextStyle(
-                    color: widget.fgColor,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: fg,
                     fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    height: 1.3,
+                    height: 1.25,
                   ),
                 ),
               ),
+
+              // Action button (if any)
               if (widget.actionLabel != null) ...[
                 const SizedBox(width: 8),
-                TextButton(
-                  onPressed: widget.onAction,
-                  style: TextButton.styleFrom(
-                    foregroundColor: widget.fgColor,
+                OutlinedButton(
+                  onPressed: () {
+                    widget.onAction?.call();
+                    widget.onClosed();
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: fg,
+                    side: BorderSide(color: fg.withOpacity(0.5), width: 1),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: Text(
-                    widget.actionLabel!,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
+                  child: Text(widget.actionLabel!),
+                ),
+              ],
+
+              // Close (optional)
+              if (widget.showClose) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  splashRadius: 18,
+                  color: fg,
+                  onPressed: widget.onClosed,
+                  icon: const Icon(Icons.close_rounded),
                 ),
               ],
             ],
           ),
         ),
-      ),
+
+        // Life-bar (optional)
+        if (widget.showProgress)
+          AnimatedBuilder(
+            animation: _lifeCtrl,
+            builder: (context, _) {
+              final t = 1 - _lifeCtrl.value; // 1→0 over time
+              return Align(
+                alignment: Alignment.bottomLeft,
+                child: FractionallySizedBox(
+                  widthFactor: t.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: widget.fgColor.withOpacity(0.85),
+                      borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  // Slightly tinted variants for gradient
+  Color _tint(Color c, double deltaLightness) {
+    final hsl = HSLColor.fromColor(c);
+    final l = (hsl.lightness + deltaLightness).clamp(0.0, 1.0);
+    return hsl.withLightness(l).toColor().withOpacity(0.98);
+  }
+}
+
+/// A rounded surface with optional backdrop blur.
+class _Surface extends StatelessWidget {
+  const _Surface({
+    required this.child,
+    this.blur = 0,
+    this.radius = 16,
+    this.clip = false,
+  });
+
+  final Widget child;
+  final double blur;
+  final double radius;
+  final bool clip;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = Radius.circular(radius);
+
+    final wrapped = ClipRRect(
+      borderRadius: BorderRadius.all(r),
+      child: blur > 0
+          ? BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: child,
+      )
+          : child,
+    );
+
+    if (clip) return wrapped;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.all(r)),
+      child: wrapped,
     );
   }
 }

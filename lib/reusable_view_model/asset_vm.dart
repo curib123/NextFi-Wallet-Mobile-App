@@ -1,73 +1,125 @@
-// lib/reusable_view_model/asset_vm.dart (XLM / USDC on Stellar)
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/reusable_model/asset_model.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
 class AssetVM with ChangeNotifier {
-  AssetVM(this.currency)
-      : _assets = [
-    AssetModel(id: 'stellar',      name: 'Stellar Lumens',     symbol: 'XLM'),
-    AssetModel(id: 'usdc_stellar', name: 'USD Coin (Stellar)', symbol: 'USDC'),
-  ] {
-    _logos = const {
+  /// If you're running a testnet build, set this to true when constructing the VM.
+  AssetVM(this.currency, {this.isTestnet = false})
+      : _assets = [] {
+    // Defaults (you can override after construction if you need a custom issuer)
+    usdcIssuerMainnet = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
+    usdcIssuerTestnet = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
-      'stellar': 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
-      'xlm':     'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
-      'XLM':     'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
-
-      'usdc_stellar': 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
-      'usdc':         'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
-      'USDC':         'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
-    };
+    // Build asset list with the correct issuer baked in.
+    _assets.addAll([
+      AssetModel(
+        id: 'stellar',
+        name: 'Stellar Lumens',
+        symbol: 'XLM',
+        chain: 'stellar',
+        network: isTestnet ? 'testnet' : 'mainnet',
+        kind: AssetKind.native,
+        isNative: true,
+        assetCode: 'XLM',
+        decimals: 7,
+        aliases: const ['xlm', 'stellar', 'lumens'],
+        tags: const ['layer1', 'official', 'featured'],
+        explorer: {
+          'account': isTestnet
+              ? 'https://stellar.expert/explorer/testnet/account/{account}'
+              : 'https://stellar.expert/explorer/public/account/{account}',
+          'tx': isTestnet
+              ? 'https://stellar.expert/explorer/testnet/tx/{hash}'
+              : 'https://stellar.expert/explorer/public/tx/{hash}',
+        },
+        logoUris: const [
+          'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
+        ],
+        sortOrder: 0,
+      ),
+      AssetModel(
+        id: 'usdc_stellar',
+        name: 'USD Coin (Stellar)',
+        symbol: 'USDC',
+        chain: 'stellar',
+        network: isTestnet ? 'testnet' : 'mainnet',
+        kind: AssetKind.token,
+        isNative: false,
+        assetCode: 'USDC',
+        issuer: isTestnet ? usdcIssuerTestnet : usdcIssuerMainnet,
+        decimals: 7,
+        aliases: const ['usdc', 'usd coin'],
+        tags: const ['stablecoin', 'featured'],
+        explorer: {
+          'asset': isTestnet
+              ? 'https://stellar.expert/explorer/testnet/asset/USDC-{issuer}'
+              : 'https://stellar.expert/explorer/public/asset/USDC-{issuer}',
+        },
+        logoUris: const [
+          'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
+          'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/usdc.svg',
+        ],
+        sortOrder: 1,
+      ),
+    ]);
 
     startRealtimeUpdates(); // idempotent
     _recompute();
   }
 
+  // ---- configuration --------------------------------------------------------
   final CurrencyVM currency;
+  final bool isTestnet;
 
+  /// You can override these after construction if needed (e.g., remote config).
+  late String usdcIssuerMainnet;
+  late String usdcIssuerTestnet;
+
+  /// Current active issuer based on network.
+  String get usdcIssuer => isTestnet ? usdcIssuerTestnet : usdcIssuerMainnet;
+
+  /// Convenience when wiring to services outside of Flutter tree.
+  String? issuerForSymbol(String symbol) {
+    final s = symbol.trim().toUpperCase();
+    final a = _assets.firstWhere(
+          (x) => x.symbol.toUpperCase() == s || x.matchesKey(s),
+      orElse: () => _assets.first,
+    );
+    return a.issuer;
+  }
+
+  // ---- state ----------------------------------------------------------------
   final List<AssetModel> _assets;
-  late Map<String, String> _logos;
 
   bool _disposed = false;
   bool _started = false;
 
   StreamSubscription<double>? _xlmSub, _usdcSub;
-  VoidCallback? _currencyListener; // listens to CurrencyProvider.notifyListeners
+  VoidCallback? _currencyListener;
 
-  // Keep last non-zero pct values to avoid flicker to 0 when data blips
   double _xlm24h = 0, _xlm7d = 0, _xlm30d = 0, _xlm1y = 0;
   double _usdc24h = 0, _usdc7d = 0, _usdc30d = 0, _usdc1y = 0;
 
-  // Optional: public fallback candidates for logos
-  static const List<String> usdcLogoFallbacks = [
-    'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
-    'https://cdn.jsdelivr.net/gh/Cryptofonts/cryptoicons@master/128/usdc.png',
-    'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/usdc.svg',
-  ];
-
-  // Public getters
-  List<AssetModel> get assets => _assets;
-  Map<String, String> get logos => _logos;
+  List<AssetModel> get assets =>
+      _assets.where((a) => a.enabled).toList()
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   String get vsCurrency => currency.fiat;
   bool get loading => currency.loading;
 
-  /// Returns the best-known logo URL for a given asset key.
+  /// Best-known logo for an arbitrary key (id/symbol/alias/contract/etc).
   String logoFor(String key) {
-    final k = key.trim();
-    final aliases = <String>[
-      k,
-      k.toLowerCase(),
-      k.toUpperCase(),
-      if (k.toLowerCase().contains('xlm') || k.toLowerCase().contains('stellar')) 'stellar',
-      if (k.toLowerCase().contains('usdc') || k.toLowerCase().contains('usd coin')) 'usdc_stellar',
-    ];
-    for (final a in aliases) {
-      final url = _logos[a];
-      if (url != null && url.isNotEmpty) return url;
+    for (final a in _assets) {
+      if (a.matchesKey(key)) {
+        return a.primaryLogo.isNotEmpty ? a.primaryLogo : _fallbackLogo();
+      }
     }
-    return _logos['stellar']!;
+    return _fallbackLogo();
+  }
+
+  String _fallbackLogo() {
+    final stellar = _assets.firstWhere((a) => a.id == 'stellar', orElse: () => _assets.first);
+    return stellar.primaryLogo;
   }
 
   // ---- lifecycle -----------------------------------------------------------
@@ -75,11 +127,9 @@ class AssetVM with ChangeNotifier {
     if (_started) return;
     _started = true;
 
-    // Stream-based updates (prices)
-    _xlmSub  = currency.xlmPriceStream.listen((_) { _recompute(); _safeNotify(); });
+    _xlmSub = currency.xlmPriceStream.listen((_) { _recompute(); _safeNotify(); });
     _usdcSub = currency.usdcPriceStream.listen((_) { _recompute(); _safeNotify(); });
 
-    // ChangeNotifier updates (history / fiat / loading flips)
     _currencyListener = () { _recompute(); _safeNotify(); };
     currency.addListener(_currencyListener!);
   }
@@ -102,17 +152,15 @@ class AssetVM with ChangeNotifier {
     super.dispose();
   }
 
-  /// Switch fiat via centralized CurrencyProvider (no await; returns void)
   void setVsCurrency(String vs) {
     currency.setFiat(vs);
-    _recompute();   // immediate best-effort
-    _safeNotify();  // UI updates now; will update again when streams/listener fire
+    _recompute();
+    _safeNotify();
   }
 
   // ---- core ----------------------------------------------------------------
-  // % change helpers
   double _pctFromFirstLast(List<double> s) {
-    if (s.isEmpty) return double.nan;
+    if (s.length < 2) return double.nan;
     final first = s.first;
     final last  = s.last;
     if (first <= 0 || last <= 0) return double.nan;
@@ -120,13 +168,11 @@ class AssetVM with ChangeNotifier {
   }
 
   double _coalescePct(double maybe, double lastGood) {
-    // If NaN or crazy due to short/empty series, stick to last good value
     if (maybe.isNaN || maybe.isInfinite) return lastGood;
     return maybe;
   }
 
   void _recompute() {
-    // Use the explicit histories exposed by CurrencyProvider
     final x24 = _pctFromFirstLast(currency.xlmHistory24h);
     final x7  = _pctFromFirstLast(currency.xlmHistory7);
     final x30 = _pctFromFirstLast(currency.xlmHistory30);
@@ -137,7 +183,6 @@ class AssetVM with ChangeNotifier {
     final u30 = _pctFromFirstLast(currency.usdcHistory30);
     final u1y = _pctFromFirstLast(currency.usdcHistory365);
 
-    // Stabilize to avoid flicker to 0 on transient network/host failures
     _xlm24h = _coalescePct(x24, _xlm24h);
     _xlm7d  = _coalescePct(x7,  _xlm7d);
     _xlm30d = _coalescePct(x30, _xlm30d);
@@ -148,20 +193,25 @@ class AssetVM with ChangeNotifier {
     _usdc30d = _coalescePct(u30, _usdc30d);
     _usdc1y  = _coalescePct(u1y, _usdc1y);
 
-    // Apply to asset models
-    for (final a in _assets) {
+    for (int i = 0; i < _assets.length; i++) {
+      final a = _assets[i];
       if (a.symbol.toUpperCase() == 'XLM') {
-        a
-          ..priceChangePercent24h = _xlm24h
-          ..priceChangePercent7d  = _xlm7d
-          ..priceChangePercent30d = _xlm30d
-          ..priceChangePercent1y  = _xlm1y;
+        _assets[i] = a.copyWith(
+          priceChangePercent24h: _xlm24h,
+          priceChangePercent7d:  _xlm7d,
+          priceChangePercent30d: _xlm30d,
+          priceChangePercent1y:  _xlm1y,
+        );
       } else if (a.symbol.toUpperCase() == 'USDC') {
-        a
-          ..priceChangePercent24h = _usdc24h
-          ..priceChangePercent7d  = _usdc7d
-          ..priceChangePercent30d = _usdc30d
-          ..priceChangePercent1y  = _usdc1y;
+        // ensure issuer stays in sync if you change network/overrides at runtime
+        final correctIssuer = isTestnet ? usdcIssuerTestnet : usdcIssuerMainnet;
+        _assets[i] = a.copyWith(
+          issuer: correctIssuer,
+          priceChangePercent24h: _usdc24h,
+          priceChangePercent7d:  _usdc7d,
+          priceChangePercent30d: _usdc30d,
+          priceChangePercent1y:  _usdc1y,
+        );
       }
     }
   }
