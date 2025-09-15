@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
 

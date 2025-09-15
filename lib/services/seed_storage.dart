@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:next_fi/Model/wallet_meta_model.dart';
+import 'package:next_fi/reusable_model/wallet_meta_model.dart';
 
 /// Multi-wallet secure storage for seed phrases (backward-compatible API).
 /// - FIRST wallet created/imported becomes **ACTIVE** (same as before).

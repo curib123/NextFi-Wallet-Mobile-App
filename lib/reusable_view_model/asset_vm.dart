@@ -1,8 +1,8 @@
-// lib/ViewModel/asset_vm.dart (XLM / USDC on Stellar)
+// lib/reusable_view_model/asset_vm.dart (XLM / USDC on Stellar)
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:next_fi/Model/asset_model.dart';
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/reusable_model/asset_model.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
 class AssetVM with ChangeNotifier {
   AssetVM(this.currency)
@@ -11,11 +11,11 @@ class AssetVM with ChangeNotifier {
     AssetModel(id: 'usdc_stellar', name: 'USD Coin (Stellar)', symbol: 'USDC'),
   ] {
     _logos = const {
-      // XLM (Stellar)
+
       'stellar': 'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
       'xlm':     'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
       'XLM':     'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
-      // USDC (generic)
+
       'usdc_stellar': 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
       'usdc':         'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
       'USDC':         'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',

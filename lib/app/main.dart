@@ -15,9 +15,9 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 
 // View models
-import 'package:next_fi/features/ViewModel/asset_vm.dart';
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
-import 'package:next_fi/features/ViewModel/tab_vm.dart';
+import 'package:next_fi/reusable_view_model/asset_vm.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
+import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';

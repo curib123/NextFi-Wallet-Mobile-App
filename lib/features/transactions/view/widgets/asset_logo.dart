@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/features/ViewModel/asset_vm.dart';
+import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:provider/provider.dart';
 
 class AssetLogo extends StatelessWidget {

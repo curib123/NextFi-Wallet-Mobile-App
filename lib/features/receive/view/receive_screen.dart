@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/features/ViewModel/currency_vm.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/price_chart/view/price_chart_card.dart';
 import 'package:next_fi/features/receive/model/receive_state.dart';
 import 'package:next_fi/features/receive/view_model/receive_vm.dart';

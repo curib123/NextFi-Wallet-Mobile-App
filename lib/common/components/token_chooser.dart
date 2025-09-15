@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/features/ViewModel/asset_vm.dart';
+import 'package:next_fi/reusable_model/asset_model.dart';
+import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Model/asset_model.dart';
 
 
 Future<void> showTokenSelector(

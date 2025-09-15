@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/features/ViewModel/tab_vm.dart';
+import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/import_wallet/model/import_wallet_state.dart';
 import 'package:next_fi/features/import_wallet/view/widgets/warning_box.dart';
