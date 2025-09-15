@@ -5,7 +5,6 @@ import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
-
 Future<void> showTokenSelector(
     BuildContext context,
     String address,
@@ -15,95 +14,101 @@ Future<void> showTokenSelector(
       String title = 'Select Asset',
     }) async {
   final colors = AppColor.of(context);
+  final assetVM = context.read<AssetVM>();
 
-  // Read once (no rebuilds needed here)
-  final assetProv = context.read<AssetVM>();
-  final List<AssetModel> assets = assetProv.assets;
-  final Map<String, String> logos = assetProv.logos;
+  final List<AssetModel> assets = assetVM.assets;
 
-  String? logoForSymbol(String symbol) {
-    final sym = symbol.toUpperCase();
-    final asset = assets.firstWhere(
-          (a) => a.symbol.toUpperCase() == sym,
-      orElse: () => AssetModel(id: '', name: '', symbol: ''),
-    );
-    if (asset.id.isEmpty) return null;
-    return logos[asset.id];
+  double balanceFor(AssetModel a) {
+    switch (a.symbol.toUpperCase()) {
+      case 'XLM':
+        return xlmBalance;
+      case 'USDC':
+        return usdcBalance;
+      default:
+        return 0.0;
+    }
   }
 
-  showModalBottomSheet(
+  String subtitleFor(AssetModel a) {
+    if (a.isNative) return '${a.name} (native • ${a.chain}/${a.network})';
+    final chainNet = '${a.chain}/${a.network}';
+    if ((a.assetCode ?? '').isNotEmpty && (a.issuer ?? '').isNotEmpty) {
+      return '${a.assetCode} on $chainNet';
+    }
+    if ((a.contract ?? '').isNotEmpty) {
+      return '${a.symbol} (contract) on $chainNet';
+    }
+    return '${a.name} on $chainNet';
+  }
+
+  String? logoFor(AssetModel a) {
+    if (a.primaryLogo.isNotEmpty) return a.primaryLogo;
+    return assetVM.logoFor(a.symbol);
+  }
+
+  void open(AssetModel a) {
+    final bal = balanceFor(a);
+    Navigator.of(context).pop();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => screenBuilder(address, a.symbol, bal)),
+    );
+  }
+
+  await showModalBottomSheet(
     context: context,
     backgroundColor: colors.surface,
+    isScrollControlled: true,
+    useSafeArea: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colors.textSecondary.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
+            Container(
+              width: 40, height: 4, margin: const EdgeInsets.only(top: 6, bottom: 16),
+              decoration: BoxDecoration(
+                color: colors.textSecondary.withOpacity(0.30),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700, color: colors.textPrimary,
+                    ),
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: assets.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (_, i) {
+                  final a = assets[i];
+                  final bal = balanceFor(a);
+                  return _buildTokenTile(
+                    context,
+                    colors,
+                    logoUrl: logoFor(a),
+                    token: a.symbol,
+                    subtitle: subtitleFor(a),
+                    balance: bal,
+                    icon: a.isNative ? LucideIcons.star : LucideIcons.banknote,
+                    onTap: () => open(a),
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: colors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ===== XLM (native) =====
-            _buildTokenTile(
-              context,
-              colors,
-              logoUrl: logoForSymbol('XLM'),
-              token: 'XLM',
-              subtitle: 'Stellar Lumens (native)',
-              balance: xlmBalance,
-              icon: LucideIcons.star,
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => screenBuilder(address, 'XLM', xlmBalance),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-
-            // ===== USDC (credit) =====
-            _buildTokenTile(
-              context,
-              colors,
-              logoUrl: logoForSymbol('USDC'),
-              token: 'USDC',
-              subtitle: 'USDC (Stellar asset)',
-              balance: usdcBalance,
-              icon: LucideIcons.banknote,
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => screenBuilder(address, 'USDC', usdcBalance),
-                  ),
-                );
-              },
             ),
           ],
         ),
@@ -160,10 +165,7 @@ Widget _buildTokenTile(
                 const SizedBox(height: 2),
                 Text(
                   'Balance: ${_num(balance)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary),
                 ),
               ],
             ),
@@ -178,8 +180,7 @@ Widget _buildTokenTile(
 Widget _logoView(String? url, AppColor colors, {double size = 32, IconData? icon}) {
   if (url == null || url.isEmpty) {
     return Container(
-      width: size,
-      height: size,
+      width: size, height: size,
       decoration: BoxDecoration(
         color: colors.border.withOpacity(0.18),
         borderRadius: BorderRadius.circular(size / 2),
@@ -195,13 +196,11 @@ Widget _logoView(String? url, AppColor colors, {double size = 32, IconData? icon
     borderRadius: BorderRadius.circular(size / 2),
     child: Image.network(
       url,
-      width: size,
-      height: size,
+      width: size, height: size,
       fit: BoxFit.contain,
       gaplessPlayback: true,
       errorBuilder: (_, __, ___) => Container(
-        width: size,
-        height: size,
+        width: size, height: size,
         decoration: BoxDecoration(
           color: colors.border.withOpacity(0.18),
           borderRadius: BorderRadius.circular(size / 2),
@@ -215,14 +214,9 @@ Widget _logoView(String? url, AppColor colors, {double size = 32, IconData? icon
       loadingBuilder: (ctx, child, progress) {
         if (progress == null) return child;
         return SizedBox(
-          width: size,
-          height: size,
+          width: size, height: size,
           child: const Center(
-            child: SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
           ),
         );
       },

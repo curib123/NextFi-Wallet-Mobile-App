@@ -1,7 +1,8 @@
-// lib/features/wallet_home/view/wallet_home_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
@@ -16,7 +17,6 @@ import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.
 import 'package:next_fi/features/wallet_home/view/widgets/tab_keep_alive.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/top_bar.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
-import 'package:provider/provider.dart';
 
 import 'package:next_fi/common/components/SnackBar.dart';
 import 'package:next_fi/common/components/token_chooser.dart';
@@ -40,12 +40,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     duration: const Duration(milliseconds: 900),
   )..repeat(reverse: true);
 
-  // Controllers for per-hint and boot alerts
-  final Map<String, AppAlertController> _hintAlertCtrls =
-  <String, AppAlertController>{};
+  final Map<String, AppAlertController> _hintAlertCtrls = <String, AppAlertController>{};
   AppAlertController? _bootBalancesCtl;
-
-  // Subscriptions
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
 
   @override
@@ -60,14 +56,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       if (!mounted) return;
       final vm = context.read<WalletHomeVM>();
 
-      // Subscribe to VM UI events
       _uiSub = vm.uiEvents.listen(_onUiEvent);
 
-      // Pipe confirmed-transaction stream into VM, if you use TransactionsVM
       final txVm = context.read<TransactionsVM>();
       vm.attachConfirmedTxStream(txVm.incomingStream);
 
-      // Kick off boot (VM will emit UI events for the loader & success)
       unawaited(vm.boot());
     });
   }
@@ -96,8 +89,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final vm = context.read<WalletHomeVM>();
     if (state == AppLifecycleState.resumed) {
       vm.onResumed();
-    } else if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
+    } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
       vm.onPausedOrInactive();
     }
   }
@@ -111,15 +103,19 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final s = vm.state;
 
     final currency = context.watch<CurrencyVM>();
-    final assets = context.watch<AssetVM>();
+    final assetsVM = context.watch<AssetVM>();
     final stellar = context.read<StellarWalletService>();
 
-    final currencyFmt =
-    NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final fxXlm = currency.xlmToFiat(s.xlm);
     final fxUsdc = currency.usdcToFiat(s.usdc);
-    final totalFiat =
-        (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+
+    final assetList = assetsVM.assets;
+    final logosById = {
+      for (final a in assetList)
+        a.id: (a.primaryLogo.isNotEmpty ? a.primaryLogo : assetsVM.logoFor(a.symbol)),
+    };
 
     return DefaultTabController(
       length: 2,
@@ -147,9 +143,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                       totalFiat: totalFiat,
                       lastBalancesAt: s.lastBalancesAt,
                       onSwap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SwapScreen())),
+                        context,
+                        MaterialPageRoute(builder: (_) => const SwapScreen()),
+                      ),
                       onSend: _onSend,
                       onReceive: _onReceive,
                       livePulse: _livePulse,
@@ -191,20 +187,17 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                         storageKey: 'assetsTab',
                         child: AssetWidget(
                           colors: colors,
-                          assets: assets.assets,
-                          logos: assets.logos,
+                          assets: assetList,
+                          logos: logosById,
                           xlmBalance: s.xlm,
                           usdcBalance: s.usdc,
                           address: s.address ?? '',
-                          loading: assets.loading ||
-                              currency.loading ||
-                              s.loadingBalances,
+                          loading: assetsVM.loading || currency.loading || s.loadingBalances,
                           onItemTap: (token) {
                             final addr = s.address;
                             if (addr == null) {
                               showFloatingSnackBar(context,
-                                  message: 'No address available',
-                                  type: SnackBarType.error);
+                                  message: 'No address available', type: SnackBarType.error);
                               return;
                             }
                             Navigator.push(
@@ -219,13 +212,16 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                               ),
                             );
                           },
-                          hasUsdcTrustline:
-                          stellar.hasUsdcTrustline(s.address ?? ''),
+                          hasUsdcTrustline: stellar.hasUsdcTrustline(s.address ?? ''),
                         ),
                       ),
                       TabKeepAlive(
                         storageKey: 'recipientsTab',
-                        child: RecipientListWidget(colors: colors,xlmBalance: s.xlm,usdcBalance: s.usdc,),
+                        child: RecipientListWidget(
+                          colors: colors,
+                          xlmBalance: s.xlm,
+                          usdcBalance: s.usdc,
+                        ),
                       ),
                     ],
                   ),
@@ -238,7 +234,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
-  // ───────── actions ─────────
   void _onSend() {
     final s = context.read<WalletHomeVM>().state;
     final addr = s.address;
@@ -279,12 +274,10 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
-  // ───────── VM → View event handling ─────────
   void _onUiEvent(WalletHomeUiEvent e) {
     if (!mounted) return;
 
     if (e is BootBalancesLoading) {
-      // Block UI until balances are fetched (first boot / wallet switch)
       _bootBalancesCtl ??= showAppAlert(
         context,
         type: AppAlertType.loading,
@@ -296,14 +289,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     }
 
     if (e is BootBalancesReady) {
-      // Flip loader to success + auto-close (format here to avoid VM → CurrencyVM coupling)
       final currency = context.read<CurrencyVM>();
-      final currencyFmt =
-      NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+      final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
       final fxXlm = currency.xlmToFiat(e.xlm);
       final fxUsdc = currency.usdcToFiat(e.usdc);
-      final totalFiat =
-          (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+      final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
       _bootBalancesCtl?.update(
         AppAlertType.success,
@@ -332,9 +322,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
           subtitle: 'Confirmed on-chain.',
           primaryText: 'Done',
         );
-        // Mark as acknowledged in the VM so it disappears in strip/list too
         context.read<WalletHomeVM>().ackHint(e.hash);
-
         Timer(const Duration(seconds: 5), () {
           if (mounted) ctl.close();
         });
