@@ -56,7 +56,7 @@ List<SingleChildWidget> _buildProviders() {
     // ── 1) Boot a temporary Stellar service (will be replaced below) ─────────
     Provider<StellarWalletService>(
       create: (_) => StellarWalletService(
-        usdcIssuer: kIsTestnet ? _DEFAULT_USDC_TESTNET : _DEFAULT_USDC_MAINNET,
+     //   usdcIssuer: kIsTestnet ? _DEFAULT_USDC_TESTNET : _DEFAULT_USDC_MAINNET,
         testnet: kIsTestnet,
       ),
     ),
@@ -83,7 +83,7 @@ List<SingleChildWidget> _buildProviders() {
         // Recreate service if issuer/network differs from the current one
         if (old == null || old.usdcIssuer != issuer || old.isTestnet != kIsTestnet) {
           return StellarWalletService(
-            usdcIssuer: issuer,
+          //  usdcIssuer: issuer,
             testnet: kIsTestnet,
           );
         }
