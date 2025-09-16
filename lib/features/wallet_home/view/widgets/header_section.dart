@@ -1,5 +1,3 @@
-// lib/features/wallet_home/view/widgets/header_section.dart
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -111,6 +109,12 @@ class _HeaderSectionState extends State<HeaderSection> {
     return _deltaFiat! >= 0 ? _upColor : _downColor;
   }
 
+  Color _swapButtonColor() {
+    // Safe fallback color on first load (no delta yet) or when not colorizing
+    if (_shouldColorize()) return _deltaFiat! >= 0 ? _upColor : _downColor;
+    return widget.colors.primary;
+  }
+
   // Slight background tint based on delta (only when active/counting)
   List<Color> _cardGradient() {
     final base = widget.colors.surface;
@@ -209,9 +213,9 @@ class _HeaderSectionState extends State<HeaderSection> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
 
-                    // Meta row: delta pill (no words) + updated label
+                    // Meta row: delta pill (no words) + (optional) updated label
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 8,
@@ -256,7 +260,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                 height: 40,
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor:  _deltaFiat! >= 0 ? _upColor : _downColor,
+                    backgroundColor: _swapButtonColor(), // safe fallback on first load
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -395,23 +399,21 @@ class _DeltaChipFiat extends StatelessWidget {
     final icon = up ? LucideIcons.trendingUp : LucideIcons.trendingDown;
     final sign = up ? '+' : '−'; // true minus
 
-    return Container(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '$sign${fmt.format(amount.abs())}',
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.2,
-            ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Text(
+          '$sign${fmt.format(amount.abs())}',
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

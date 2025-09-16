@@ -7,7 +7,7 @@ void showFloatingSnackBar(
     BuildContext context, {
       required String message,
       SnackBarType type = SnackBarType.info,
-      SnackBarPosition position = SnackBarPosition.bottom,
+      SnackBarPosition position = SnackBarPosition.top,
       Duration duration = const Duration(milliseconds: 2200),
     }) {
   final messenger = ScaffoldMessenger.maybeOf(context);

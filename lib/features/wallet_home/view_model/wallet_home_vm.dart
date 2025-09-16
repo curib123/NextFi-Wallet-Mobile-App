@@ -26,11 +26,6 @@ class BootBalancesReady extends WalletHomeUiEvent {
   const BootBalancesReady({required this.xlm, required this.usdc});
 }
 
-/// Emitted ~900ms after [BootBalancesReady] so the View can auto-close overlay.
-class BootBalancesAutoClose extends WalletHomeUiEvent {
-  const BootBalancesAutoClose();
-}
-
 class IncomingHintAddedEvent extends WalletHomeUiEvent {
   final IncomingHint hint;
   const IncomingHintAddedEvent(this.hint);
@@ -112,10 +107,8 @@ class WalletHomeVM extends ChangeNotifier {
   // realtime + timers
   static const Duration _minBalancesGap = Duration(minutes: 1);
   bool _balancesInFlight = false;
-  DateTime? _lastFetch;
   Timer? _balancesTimer;
   Timer? _debounceBalanceKick;
-  Timer? _bootOverlayTimer;
 
   StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
   StreamSubscription<Map>? _externalTxSub;
@@ -124,6 +117,7 @@ class WalletHomeVM extends ChangeNotifier {
 
   bool _disposed = false;
   bool _bootEventsArmed = true; // emit boot alerts once
+  DateTime? _lastFetch;
 
   // ───────────────────── public API ─────────────────────
 
@@ -150,7 +144,6 @@ class WalletHomeVM extends ChangeNotifier {
         ));
         if (_bootEventsArmed) {
           _emit(const BootBalancesReady(xlm: 0, usdc: 0));
-          _emit(const BootBalancesAutoClose());
           _bootEventsArmed = false;
         }
         return;
@@ -168,11 +161,6 @@ class WalletHomeVM extends ChangeNotifier {
       // On first boot, tell the View balances are ready with amounts
       if (_bootEventsArmed) {
         _emit(BootBalancesReady(xlm: _state.xlm, usdc: _state.usdc));
-        // schedule an auto-close, but keep it UI-agnostic
-        _bootOverlayTimer?.cancel();
-        _bootOverlayTimer = Timer(const Duration(milliseconds: 900), () {
-          if (!_disposed) _emit(const BootBalancesAutoClose());
-        });
         _bootEventsArmed = false;
       }
     } finally {
@@ -343,8 +331,6 @@ class WalletHomeVM extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     stopRealtime();
-    _bootOverlayTimer?.cancel();
-    _bootOverlayTimer = null;
     _ui.close();
     super.dispose();
   }

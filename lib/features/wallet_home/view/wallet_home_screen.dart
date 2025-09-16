@@ -41,7 +41,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   AppAlertController? _bootBalancesCtl;
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
 
-  // First open: no counting animation; enabled after boot overlay closes
+  // First open: no counting animation; enabled once BootBalancesReady arrives.
   bool _animateTotal = false;
 
   @override
@@ -224,7 +224,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         case UiSeverity.error:
           return SnackBarType.error;
         case UiSeverity.info:
-        default:
           return SnackBarType.info;
       }
     }
@@ -256,17 +255,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       final fxUsdc = currency.usdcToFiat(e.usdc);
       final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
+      // Update, then immediately close (no timer) and enable counting animation.
       _bootBalancesCtl?.update(
         AppAlertType.success,
         title: 'Balances ready',
         subtitle: 'Total ${currencyFmt.format(totalFiat)}',
       );
-      return;
-    }
-
-    if (e is BootBalancesAutoClose) {
       _bootBalancesCtl?.close();
       _bootBalancesCtl = null;
+
       if (mounted) setState(() => _animateTotal = true);
       return;
     }
