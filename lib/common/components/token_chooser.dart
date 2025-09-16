@@ -30,7 +30,7 @@ Future<void> showTokenSelector(
   }
 
   String subtitleFor(AssetModel a) {
-    if (a.isNative) return '${a.name} (native • ${a.chain}/${a.network})';
+    if (a.isNative) return '${a.name} (${a.chain})';
     final chainNet = '${a.chain}/${a.network}';
     if ((a.assetCode ?? '').isNotEmpty && (a.issuer ?? '').isNotEmpty) {
       return '${a.assetCode} on $chainNet';
