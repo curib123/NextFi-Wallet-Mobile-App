@@ -1,29 +1,24 @@
 // lib/features/swap/view/swap_screen.dart
-import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/AppAlert.dart';
 import 'package:next_fi/common/components/SnackBar.dart';
+import 'package:next_fi/features/send/view/widgets/error_card.dart';
+import 'package:next_fi/features/send/view/widgets/page_loader.dart';
+import 'package:next_fi/features/send/view/widgets/percent_chips_row.dart';
+import 'package:next_fi/features/swap/view/widgets/amount_field.dart';
+import 'package:next_fi/features/swap/view/widgets/balance_row.dart' show BalanceRow;
+import 'package:next_fi/features/swap/view/widgets/card_header.dart';
+import 'package:next_fi/features/swap/view/widgets/direction_switcher.dart';
+import 'package:next_fi/features/swap/view/widgets/hint_box.dart';
+import 'package:next_fi/features/swap/view/widgets/info_row.dart';
+import 'package:next_fi/features/swap/view/widgets/section_card.dart';
+import 'package:next_fi/features/swap/view/widgets/tiny_info_row.dart';
 import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import '../model/swap_dir.dart';
-import 'widgets/page_loader.dart';
-import 'widgets/error_card.dart';
-import 'widgets/section_card.dart';
-import 'widgets/card_header.dart';
-import 'widgets/balance_row.dart';
-import 'widgets/direction_switcher.dart';
-import 'widgets/amount_field.dart';
-import 'widgets/percent_chips_row.dart';
-import 'widgets/tiny_info_row.dart';
-import 'widgets/info_row.dart';
-import 'widgets/hint_box.dart';
 
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
@@ -34,17 +29,15 @@ class SwapScreen extends StatefulWidget {
 class _SwapScreenState extends State<SwapScreen> {
   final _amountCtl = TextEditingController();
   final _fmt = NumberFormat('#,##0.######');
-  static const double _slippage = 0.01; // 1%
   bool _started = false;
 
   @override
   void initState() {
     super.initState();
+    // Let the VM own the logic; UI forwards raw input.
     _amountCtl.addListener(() {
       final vm = context.read<SwapVM>();
-      final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
-      vm.updateQuote(amt);
-      setState(() {}); // toggle CTA state immediately
+      vm.onAmountChanged(_amountCtl.text);
     });
   }
 
@@ -60,46 +53,58 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 
   @override
-  void dispose() { _amountCtl.dispose(); super.dispose(); }
-
-  // ─── helpers ───────────────────────────────────────────────────────────────
-  double _floorTo(double v, int dec) {
-    final scale = math.pow(10, dec);
-    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
+  void dispose() {
+    _amountCtl.dispose();
+    super.dispose();
   }
-  String _fmtAmount(double v, {int decimals = 7}) {
+
+  // ─── small UI helpers ──────────────────────────────────────────────────────
+  String _fmtAmountTight(double v, {int decimals = 7}) {
     final s = v.toStringAsFixed(decimals);
     return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
   }
-  void _applyPercent(SwapVM vm, double percent) {
-    final base = vm.availableFrom;
-    final v = _floorTo(base * percent, 7);
-    HapticFeedback.selectionClick();
-    _amountCtl.text = v <= 0 ? '' : _fmtAmount(v);
-    _amountCtl.selection = TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
+
+  String _fmtPct(double frac) {
+    final p = frac * 100;
+    return (p % 1 == 0) ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
   }
-  Future<void> _flipDir(SwapVM vm) async {
+
+  Future<void> _onApplyPercent(SwapVM vm, double percent) async {
+    HapticFeedback.selectionClick();
+    final newAmt = await vm.applyPercent(percent);
+    _amountCtl.text = newAmt <= 0 ? '' : _fmtAmountTight(newAmt);
+    _amountCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _amountCtl.text.length),
+    );
+  }
+
+  Future<void> _onFlip(SwapVM vm) async {
     HapticFeedback.lightImpact();
-    await vm.setDir(vm.state.isXlmToUsdc ? SwapDir.usdcToXlm : SwapDir.xlmToUsdc);
-    final amt = double.tryParse(_amountCtl.text.trim());
-    if (amt != null) {
-      final cap = vm.availableFrom;
-      if (amt > cap && cap > 0) _amountCtl.text = cap.toStringAsFixed(6);
-      await vm.updateQuote(double.tryParse(_amountCtl.text.trim()) ?? 0);
-    }
+    final adjusted = await vm.flipDirectionAndRequote();
+    _amountCtl.text = adjusted <= 0 ? '' : _fmtAmountTight(adjusted);
+    _amountCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _amountCtl.text.length),
+    );
   }
 
   Future<void> _confirmAndSwap(SwapVM vm) async {
-    final amount = double.tryParse(_amountCtl.text.trim()) ?? 0;
-    if (amount <= 0) { showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.error); return; }
-    if (!vm.hasEnough(amount)) { showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error); return; }
+    if (!vm.canSwap) {
+      if ((_amountCtl.text.trim()).isEmpty) {
+        showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.error);
+      } else {
+        showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error);
+      }
+      return;
+    }
 
-    double? est = vm.state.estReceive ?? await vm.updateQuote(amount);
+    // Ensure we have a fresh quote for the current amount.
+    final s = vm.state;
+    final est = s.estReceive ?? await vm.updateQuote(vm.amount);
     if (est == null) {
       showFloatingSnackBar(context, message: 'No price quote available. Try a different amount.', type: SnackBarType.error);
       return;
     }
-    final minOut = est * (1 - _slippage);
+    final minOut = vm.currentMinOut ?? (est * (1 - vm.slippagePct)); // safety fallback
 
     final colors = AppColor.of(context);
     await showModalBottomSheet(
@@ -109,15 +114,18 @@ class _SwapScreenState extends State<SwapScreen> {
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999))),
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(color: colors.primary.withOpacity(0.25), borderRadius: BorderRadius.circular(999)),
+          ),
           const SizedBox(height: 10),
           Text('Confirm Swap', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary)),
           const SizedBox(height: 12),
-          InfoRow('From', '${_fmt.format(amount)} ${vm.state.isXlmToUsdc ? 'XLM' : 'USDC'}'),
-          InfoRow('To (est.)', '${_fmt.format(est)} ${vm.state.isXlmToUsdc ? 'USDC' : 'XLM'}'),
-          InfoRow('Slippage', '1%'),
-          InfoRow('Min receive', '${_fmt.format(minOut)} ${vm.state.isXlmToUsdc ? 'USDC' : 'XLM'}'),
-          InfoRow('Network fee', vm.state.feeXlm == null ? '—' : '≈ ${_fmt.format(vm.state.feeXlm!)} XLM${vm.state.needsTrustline ? ' (incl. trustline)' : ''}'),
+          InfoRow('From', '${_fmt.format(vm.amount)} ${s.isXlmToUsdc ? 'XLM' : 'USDC'}'),
+          InfoRow('To (est.)', '${_fmt.format(est)} ${s.isXlmToUsdc ? 'USDC' : 'XLM'}'),
+          InfoRow('Slippage', '${_fmtPct(vm.slippagePct)}%'),
+          InfoRow('Min receive', '${_fmt.format(minOut)} ${s.isXlmToUsdc ? 'USDC' : 'XLM'}'),
+          InfoRow('Network fee', s.feeXlm == null ? '—' : '≈ ${_fmt.format(s.feeXlm!)} XLM${s.needsTrustline ? ' (incl. trustline)' : ''}'),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: OutlinedButton(
@@ -131,7 +139,7 @@ class _SwapScreenState extends State<SwapScreen> {
             )),
             const SizedBox(width: 8),
             Expanded(child: ElevatedButton.icon(
-              onPressed: () async { Navigator.pop(context); await _doSwap(vm, amount, minOut); },
+              onPressed: () async { Navigator.pop(context); await _doSwap(vm, vm.amount, minOut); },
               icon: const Icon(LucideIcons.check, size: 18, color: Colors.white),
               label: const Text('Swap now'),
               style: ElevatedButton.styleFrom(
@@ -148,57 +156,49 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 
   Future<void> _doSwap(SwapVM vm, double amount, double minOut) async {
-    late final AppAlertController submittingCtl;
-    submittingCtl = showAppAlert(
+    // One alert that starts in "loading" state, then updates to success/error.
+    final ctl = showAppAlert(
       context,
-      type: AppAlertType.info,
+      type: AppAlertType.loading,
       title: 'Submitting swap…',
       subtitle: vm.state.isXlmToUsdc
           ? 'Swapping ${_fmt.format(amount)} XLM → at least ${_fmt.format(minOut)} USDC'
           : 'Swapping ${_fmt.format(amount)} USDC → at least ${_fmt.format(minOut)} XLM',
       primaryText: 'Hide',
       barrierDismissible: true,
-      onPrimary: () => submittingCtl.close(),
     );
 
     try {
       final txid = await vm.executeSwap(
         amount: amount,
         minOut: minOut,
-        secretSupplier: () async {
-          final mnemonic = await SeedStorage.getActiveSeed() ?? await SeedStorage.getSeed();
-          if (mnemonic == null || mnemonic.isEmpty) return null;
-          final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
-          final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-          return kp.secretSeed;
-        },
       );
       if (!mounted) return;
-      submittingCtl.close();
       HapticFeedback.mediumImpact();
 
-      late final AppAlertController okCtl;
-      okCtl = showAppAlert(
-        context,
-        type: AppAlertType.success,
+      ctl.update(
+        AppAlertType.success,
         title: 'Swap submitted',
         subtitle: txid,
         primaryText: 'Copy TxID',
-        onPrimary: () async { await Clipboard.setData(ClipboardData(text: txid)); okCtl.close(); },
+        onPrimary: () async {
+          await Clipboard.setData(ClipboardData(text: txid));
+          ctl.close();
+        },
       );
+
+      // Reset amount both in VM and TextField
+      await vm.setAmount(0.0);
       _amountCtl.clear();
     } catch (e) {
       if (!mounted) return;
-      submittingCtl.close();
       final msg = e.toString();
-      showAppAlert(
-        context,
-        type: AppAlertType.error,
+      ctl.update(
+        AppAlertType.error,
         title: 'Swap failed',
         subtitle: msg.length > 220 ? '${msg.substring(0, 220)}…' : msg,
         primaryText: 'OK',
-        onPrimary: () {},
-        barrierDismissible: true,
+        onPrimary: () => ctl.close(),
       );
     }
   }
@@ -209,17 +209,7 @@ class _SwapScreenState extends State<SwapScreen> {
     final vm = context.watch<SwapVM>();
     final s = vm.state;
 
-    String quoteLine() {
-      if (s.estReceive == null) return 'Getting live quote…';
-      final recv = _fmt.format(s.estReceive!);
-      final fee = s.feeXlm == null ? '' : ' · Fee≈ ${_fmt.format(s.feeXlm!)} XLM${s.needsTrustline ? ' (incl. trustline)' : ''}';
-      return 'Est. receive: $recv ${s.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: 1%$fee';
-    }
-
-    final canSwap = () {
-      final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
-      return amt > 0 && vm.hasEnough(amt) && !s.loading;
-    }();
+    final canSwap = vm.canSwap;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -227,7 +217,11 @@ class _SwapScreenState extends State<SwapScreen> {
         title: const Text('Swap'),
         centerTitle: false,
         actions: [
-          IconButton(tooltip: 'Refresh', icon: const Icon(LucideIcons.refreshCcw), onPressed: vm.refreshBalances),
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(LucideIcons.refreshCcw),
+            onPressed: vm.refreshBalances,
+          ),
         ],
       ),
       body: (s.loading && s.accountId == null)
@@ -237,8 +231,7 @@ class _SwapScreenState extends State<SwapScreen> {
           : RefreshIndicator(
         onRefresh: () async {
           await vm.refreshBalances();
-          final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
-          if (amt > 0) await vm.updateQuote(amt);
+          if (vm.amount > 0) await vm.updateQuote(vm.amount);
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
@@ -248,38 +241,85 @@ class _SwapScreenState extends State<SwapScreen> {
             const SizedBox(height: 8),
             BalanceRow(xlm: s.xlmBal, usdc: s.usdcBal),
             const SizedBox(height: 10),
-            SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              CardHeader(
-                icon: LucideIcons.arrowLeftRight,
-                title: 'Swap Direction',
-                trailing: IconButton(
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _flipDir(vm),
-                  icon: Icon(LucideIcons.repeat2, color: colors.primary),
-                  tooltip: 'Flip',
-                ),
+
+            // Direction
+            SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CardHeader(
+                    icon: LucideIcons.arrowLeftRight,
+                    title: 'Swap Direction',
+                    trailing: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _onFlip(vm),
+                      icon: Icon(LucideIcons.repeat2, color: colors.primary),
+                      tooltip: 'Flip',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DirectionSwitcher(
+                    isXlmToUsdc: s.isXlmToUsdc,
+                    onFlip: () => _onFlip(vm),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              DirectionSwitcher(isXlmToUsdc: s.isXlmToUsdc, onFlip: () => _flipDir(vm)),
-            ])),
+            ),
             const SizedBox(height: 10),
-            SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              CardHeader(icon: LucideIcons.badgeDollarSign, title: 'You send (${s.isXlmToUsdc ? 'XLM' : 'USDC'})'),
-              const SizedBox(height: 8),
-              AmountField(label: 'Amount', controller: _amountCtl),
-              const SizedBox(height: 10),
-              PercentChipsRow(onPick: (pct) => _applyPercent(vm, pct)),
-              if (s.isXlmToUsdc) ...[
-                const SizedBox(height: 8),
-                const HintBox(text: 'We keep ~1 XLM for fees & account reserve. Use quick chips to prefill a safe percentage.'),
-              ],
-            ])),
+
+            // Amount + chips + slippage slider
+            SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CardHeader(icon: LucideIcons.badgeDollarSign, title: 'You send (${s.isXlmToUsdc ? 'XLM' : 'USDC'})'),
+                  const SizedBox(height: 8),
+                  AmountField(label: 'Amount', controller: _amountCtl),
+                  const SizedBox(height: 10),
+                  PercentChipsRow(onPick: (pct) => _onApplyPercent(vm, pct)),
+
+                  const SizedBox(height: 10),
+                  Slider(
+                    value: vm.slippagePct,
+                    min: SwapVM.slippageMin,
+                    max: SwapVM.slippageMax,
+                    divisions: 45, // 0.1% steps
+                    label: '${_fmtPct(vm.slippagePct)}%',
+                    onChanged: (v) => vm.setSlippagePct(v),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Slippage tolerance', style: TextStyle(fontWeight: FontWeight.w300, color: colors.textPrimary)),
+                      Text('${_fmtPct(vm.slippagePct)}%', style: TextStyle(fontWeight: FontWeight.w800, color: colors.primary)),
+                    ],
+                  ),
+                  SizedBox(height: 5,),
+                  if (s.isXlmToUsdc) ...[
+                    const SizedBox(height: 8),
+                    const HintBox(text: 'We keep ~1 XLM for fees & account reserve. Use quick chips to prefill a safe percentage.'),
+                  ],
+                ],
+              ),
+            ),
+
             const SizedBox(height: 10),
-            SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const CardHeader(icon: LucideIcons.activity, title: 'Quote', subtitle: 'Live path find result'),
-              const SizedBox(height: 8),
-              TinyInfoRow(icon: LucideIcons.info, text: quoteLine()),
-            ])),
+
+            // Quote
+            SectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const CardHeader(icon: LucideIcons.activity, title: 'Quote', subtitle: 'Live path find result'),
+                  const SizedBox(height: 8),
+                  TinyInfoRow(
+                    icon: LucideIcons.info,
+                    text: vm.buildQuoteLine((num x) => _fmt.format(x)),
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 96),
           ],
         ),
@@ -293,7 +333,9 @@ class _SwapScreenState extends State<SwapScreen> {
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: canSwap ? () => _confirmAndSwap(vm) : () {
+              onPressed: canSwap
+                  ? () => _confirmAndSwap(vm)
+                  : () {
                 HapticFeedback.selectionClick();
                 if ((_amountCtl.text.trim()).isEmpty) {
                   showFloatingSnackBar(context, message: 'Enter amount', type: SnackBarType.warning);
@@ -309,8 +351,10 @@ class _SwapScreenState extends State<SwapScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: const Icon(LucideIcons.arrowRightLeft, size: 18),
-              label: Text(s.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM',
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
+              label: Text(
+                s.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ),

@@ -19,7 +19,7 @@ class HeaderSection extends StatefulWidget {
     required this.onReceive,
     required this.livePulse,
     required this.incomingStrip,
-    this.animateTotal = true,
+    this.animateTotal = false,
   });
 
   final AppColor colors;
@@ -43,212 +43,375 @@ class HeaderSection extends StatefulWidget {
 class _HeaderSectionState extends State<HeaderSection> {
   bool _hideBalance = false;
 
-  @override
-  Widget build(BuildContext context) {
-    final total = widget.totalFiat.isFinite ? widget.totalFiat : 0.0;
+  // Track last total & fiat delta
+  double? _lastTotal;
+  double? _deltaFiat;
+  static const double _epsilon = 0.0001;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          margin: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: widget.colors.surface,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 16,
-                offset: Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // left: balance
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'Total Balance',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: widget.colors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => setState(() => _hideBalance = !_hideBalance),
-                        child: Icon(
-                          _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
-                          color: widget.colors.textSecondary,
-                          size: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
+  // Up/Down palette
+  static const Color _upColor = Color(0xFF1E8E3E);
+  static const Color _downColor = Color(0xFFCF3C3C);
 
-                  // ⬇️ Animated or static, based on animateTotal
-                  LiveCountingBalance(
-                    animate: widget.animateTotal,
-                    hidden: _hideBalance,
-                    targetValue: total,
-                    fmt: widget.currencyFmt,
-                    baseColor: widget.colors.textPrimary,
-                    loading: widget.loadingBalances,
-                    pulse: widget.livePulse,
-                  ),
-
-                  const SizedBox(height: 4),
-                  _UpdatedAgoLabel(
-                    last: widget.lastBalancesAt,
-                    colors: widget.colors,
-                  ),
-                ],
-              ),
-
-              // right: swap
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.colors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 15,
-                    vertical: 5,
-                  ),
-                  elevation: 3,
-                ),
-                onPressed: widget.onSwap,
-                child: const Row(
-                  children: [
-                    Icon(LucideIcons.shuffle, size: 22, color: Colors.white),
-                    SizedBox(width: 6),
-                    Text(
-                      'Swap',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _actionButton(widget.colors, Icons.send, 'Send',
-                onTap: widget.onSend),
-            _actionButton(widget.colors, Icons.call_received, 'Receive',
-                onTap: widget.onReceive),
-            _actionButton(widget.colors, LucideIcons.wallet, 'Deposit',
-                onTap: () => debugPrint('Deposit')),
-            _actionButton(widget.colors, Icons.arrow_upward, 'Withdraw',
-                onTap: () => debugPrint('Withdraw')),
-          ],
-        ),
-        const SizedBox(height: 10),
-        widget.incomingStrip,
-      ],
-    );
+  void _onPulseStatus(AnimationStatus status) {
+    if (mounted) setState(() {}); // refresh when counting starts/stops
   }
-
-  Widget _actionButton(
-      AppColor colors,
-      IconData icon,
-      String label, {
-        bool gradient = false,
-        required VoidCallback onTap,
-      }) {
-    return Column(
-      children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(50),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: gradient
-                    ? LinearGradient(
-                  colors: [colors.primary, colors.primary.withOpacity(0.8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-                    : null,
-                color: gradient ? null : colors.primary.withOpacity(0.9),
-                shape: BoxShape.circle,
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 6,
-                    offset: Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16), // Circle size
-                child: Icon(icon, color: Colors.white, size: 28),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: TextStyle(
-            color: colors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _UpdatedAgoLabel extends StatefulWidget {
-  const _UpdatedAgoLabel({required this.last, required this.colors});
-  final DateTime? last;
-  final AppColor colors;
-  @override
-  State<_UpdatedAgoLabel> createState() => _UpdatedAgoLabelState();
-}
-
-class _UpdatedAgoLabelState extends State<_UpdatedAgoLabel> {
-  Timer? _tick;
 
   @override
   void initState() {
     super.initState();
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    _lastTotal = _safe(widget.totalFiat);
+    _deltaFiat = null; // first draw: no pill
+    widget.livePulse.addStatusListener(_onPulseStatus);
+  }
+
+  @override
+  void didUpdateWidget(covariant HeaderSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Rewire pulse listener if controller instance changed
+    if (oldWidget.livePulse != widget.livePulse) {
+      oldWidget.livePulse.removeStatusListener(_onPulseStatus);
+      widget.livePulse.addStatusListener(_onPulseStatus);
+    }
+
+    final current = _safe(widget.totalFiat);
+    if (_lastTotal == null) {
+      _lastTotal = current;
+      _deltaFiat = null;
+      return;
+    }
+    final d = current - _lastTotal!;
+    if (d.abs() > _epsilon) {
+      _deltaFiat = d;
+      _lastTotal = current;
+    }
   }
 
   @override
   void dispose() {
-    _tick?.cancel();
+    widget.livePulse.removeStatusListener(_onPulseStatus);
     super.dispose();
+  }
+
+  double _safe(double v) => v.isFinite ? v : 0.0;
+
+  bool _isActiveOrCounting() {
+    // "active" ≈ animateTotal flag; "counting" ≈ livePulse.isAnimating.
+    return widget.animateTotal || widget.livePulse.isAnimating;
+  }
+
+  bool _shouldColorize() {
+    if (_hideBalance) return false;
+    if (_deltaFiat == null || _deltaFiat!.abs() <= _epsilon) return false;
+    return _isActiveOrCounting();
+  }
+
+  Color _balanceColor() {
+    if (!_shouldColorize()) return widget.colors.textPrimary;
+    return _deltaFiat! >= 0 ? _upColor : _downColor;
+  }
+
+  // Slight background tint based on delta (only when active/counting)
+  List<Color> _cardGradient() {
+    final base = widget.colors.surface;
+    if (!_shouldColorize()) return [base, base];
+    final tone = _deltaFiat! >= 0 ? _upColor : _downColor;
+    return [base, tone.withOpacity(0.06)];
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.last == null) return const SizedBox.shrink();
-    final s = DateTime.now().difference(widget.last!).inSeconds;
-    return Text(
-      s <= 1 ? 'Updated just now' : 'Updated ${s}s ago',
-      style: TextStyle(fontSize: 11, color: widget.colors.textSecondary),
+    final total = _safe(widget.totalFiat);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Modern card (animated tint & elevation)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(18),
+          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: _cardGradient(),
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.colors.primary.withOpacity(0.08),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Left: Balance & meta
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Label + eye
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Total Balance',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: widget.colors.textSecondary,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkResponse(
+                          onTap: () => setState(() => _hideBalance = !_hideBalance),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Icon(
+                            _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
+                            color: widget.colors.textSecondary,
+                            size: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Animated balance (color reflects up/down only if active/counting)
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      tween: Tween(begin: 1.0, end: (_deltaFiat == null) ? 1.0 : 1.02),
+                      builder: (context, scale, child) {
+                        return Transform.scale(
+                          scale: scale,
+                          alignment: Alignment.centerLeft,
+                          child: child,
+                        );
+                      },
+                      child: LiveCountingBalance(
+                        animate: widget.animateTotal,
+                        hidden: _hideBalance,
+                        targetValue: total,
+                        fmt: widget.currencyFmt,
+                        baseColor: _balanceColor(),
+                        loading: widget.loadingBalances,
+                        pulse: widget.livePulse,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Meta row: delta pill (no words) + updated label
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0.12, 0.0),
+                                end: Offset.zero,
+                              ).animate(anim),
+                              child: child,
+                            ),
+                          ),
+                          child: (_deltaFiat != null && !_hideBalance)
+                              ? _DeltaChipFiat(
+                            key: ValueKey('${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}'),
+                            amount: _deltaFiat!,
+                            fmt: widget.currencyFmt,
+                            upColor: _upColor,
+                            downColor: _downColor,
+                            active: _shouldColorize(), // gate colors here
+                            neutralColor: widget.colors.textSecondary,
+                          )
+                              : const SizedBox.shrink(key: ValueKey('empty')),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              // Right: primary action (Material 3 tonal button)
+              SizedBox(
+                height: 40,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor:  _deltaFiat! >= 0 ? _upColor : _downColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 1,
+                  ),
+                  onPressed: widget.onSwap,
+                  icon: const Icon(LucideIcons.shuffle, size: 20),
+                  label: const Text(
+                    'Swap',
+                    style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Quick actions (compact, modern)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ActionTile(
+                colors: widget.colors,
+                icon: LucideIcons.send,
+                label: 'Send',
+                onTap: widget.onSend,
+              ),
+              _ActionTile(
+                colors: widget.colors,
+                icon: LucideIcons.download,
+                label: 'Receive',
+                onTap: widget.onReceive,
+              ),
+              _ActionTile(
+                colors: widget.colors,
+                icon: LucideIcons.wallet,
+                label: 'Deposit',
+                onTap: () => debugPrint('Deposit'),
+              ),
+              _ActionTile(
+                colors: widget.colors,
+                icon: LucideIcons.upload,
+                label: 'Withdraw',
+                onTap: () => debugPrint('Withdraw'),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+        widget.incomingStrip,
+      ],
+    );
+  }
+}
+
+// ────────────────── Quick Action Tile ──────────────────
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final AppColor colors;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = colors.primary.withOpacity(0.10);
+    final border = colors.primary.withOpacity(0.14);
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(color: border),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            child: Icon(icon, color: colors.primary, size: 30),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+            letterSpacing: 0.15,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ────────────────── Delta pill (no words; symbols only) ──────────────────
+class _DeltaChipFiat extends StatelessWidget {
+  const _DeltaChipFiat({
+    super.key,
+    required this.amount,
+    required this.fmt,
+    required this.upColor,
+    required this.downColor,
+    required this.active,
+    required this.neutralColor,
+  });
+
+  final double amount;
+  final NumberFormat fmt;
+  final Color upColor;
+  final Color downColor;
+
+  /// If false, show neutral colors (no up/down tint).
+  final bool active;
+
+  /// Neutral color to use when not active.
+  final Color neutralColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final up = amount >= 0;
+    final color = active ? (up ? upColor : downColor) : neutralColor;
+    final icon = up ? LucideIcons.trendingUp : LucideIcons.trendingDown;
+    final sign = up ? '+' : '−'; // true minus
+
+    return Container(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '$sign${fmt.format(amount.abs())}',
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

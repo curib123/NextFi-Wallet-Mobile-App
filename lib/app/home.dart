@@ -114,16 +114,12 @@ class _HomeState extends State<Home> {
                   label: 'Wallet',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.package),
-                  label: 'Transaction',
-                ),
-                BottomNavigationBarItem(
                   icon: Icon(LucideIcons.shuffle),
                   label: 'Swap',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.settings),
-                  label: 'Settings',
+                  icon: Icon(LucideIcons.package),
+                  label: 'Transaction',
                 ),
               ],
             ),

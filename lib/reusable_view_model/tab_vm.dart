@@ -16,9 +16,8 @@ class TabVM extends ChangeNotifier {
 
   final List<Widget> screens = const [
     WalletHomeScreen(),
-    TransactionScreen(),
     SwapScreen(),
-    SettingsScreen(),
+    TransactionScreen(),
   ];
 
   TabProvider() {

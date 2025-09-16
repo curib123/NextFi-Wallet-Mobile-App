@@ -1,13 +1,15 @@
-// lib/features/wallet_home/view_model/wallet_home_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
-as stellar show PaymentOperationResponse, Asset;
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar
+    show PaymentOperationResponse, Asset;
 
 import 'package:next_fi/Services/seed_storage.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+
+/// UI-neutral severity for toasts/snackbars
+enum UiSeverity { info, success, warning, error }
 
 /// ─────────────────── UI events (view-agnostic) ───────────────────
 abstract class WalletHomeUiEvent {
@@ -22,6 +24,11 @@ class BootBalancesReady extends WalletHomeUiEvent {
   final double xlm;
   final double usdc;
   const BootBalancesReady({required this.xlm, required this.usdc});
+}
+
+/// Emitted ~900ms after [BootBalancesReady] so the View can auto-close overlay.
+class BootBalancesAutoClose extends WalletHomeUiEvent {
+  const BootBalancesAutoClose();
 }
 
 class IncomingHintAddedEvent extends WalletHomeUiEvent {
@@ -45,9 +52,45 @@ class TransactionConfirmedEvent extends WalletHomeUiEvent {
   });
 }
 
+/// Ask the View to show a short message
+class ShowToastEvent extends WalletHomeUiEvent {
+  final String message;
+  final UiSeverity severity;
+  const ShowToastEvent(this.message, this.severity);
+}
+
+/// Navigation / flow intents (View decides the actual UI)
+class StartSendFlow extends WalletHomeUiEvent {
+  final String address;
+  final double xlm;
+  final double usdc;
+  const StartSendFlow({
+    required this.address,
+    required this.xlm,
+    required this.usdc,
+  });
+}
+
+class StartReceiveFlow extends WalletHomeUiEvent {
+  final String address;
+  final double xlm;
+  final double usdc;
+  final String? initialToken; // e.g. "XLM" | "USDC"
+  const StartReceiveFlow({
+    required this.address,
+    required this.xlm,
+    required this.usdc,
+    this.initialToken,
+  });
+}
+
+class NavigateToSwap extends WalletHomeUiEvent {
+  const NavigateToSwap();
+}
+
+/// ───────────────────────── ViewModel ─────────────────────────
 class WalletHomeVM extends ChangeNotifier {
-  WalletHomeVM({required StellarWalletService stellar})
-      : _stellar = stellar;
+  WalletHomeVM({required StellarWalletService stellar}) : _stellar = stellar;
 
   final StellarWalletService _stellar;
 
@@ -55,7 +98,7 @@ class WalletHomeVM extends ChangeNotifier {
   WalletHomeState get state => _state;
   void _set(WalletHomeState s) {
     _state = s;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   // ─────────────── UI events stream (for the View) ───────────────
@@ -72,6 +115,8 @@ class WalletHomeVM extends ChangeNotifier {
   DateTime? _lastFetch;
   Timer? _balancesTimer;
   Timer? _debounceBalanceKick;
+  Timer? _bootOverlayTimer;
+
   StreamSubscription<stellar.PaymentOperationResponse>? _incomingSub;
   StreamSubscription<Map>? _externalTxSub;
   final Set<String> _seen = <String>{};
@@ -103,9 +148,9 @@ class WalletHomeVM extends ChangeNotifier {
           loadingWallet: false,
           loadingBalances: false,
         ));
-        // Even without a wallet, consider boot sequence done.
         if (_bootEventsArmed) {
           _emit(const BootBalancesReady(xlm: 0, usdc: 0));
+          _emit(const BootBalancesAutoClose());
           _bootEventsArmed = false;
         }
         return;
@@ -123,6 +168,11 @@ class WalletHomeVM extends ChangeNotifier {
       // On first boot, tell the View balances are ready with amounts
       if (_bootEventsArmed) {
         _emit(BootBalancesReady(xlm: _state.xlm, usdc: _state.usdc));
+        // schedule an auto-close, but keep it UI-agnostic
+        _bootOverlayTimer?.cancel();
+        _bootOverlayTimer = Timer(const Duration(milliseconds: 900), () {
+          if (!_disposed) _emit(const BootBalancesAutoClose());
+        });
         _bootEventsArmed = false;
       }
     } finally {
@@ -134,7 +184,6 @@ class WalletHomeVM extends ChangeNotifier {
   Future<bool> switchTo(String walletId) async {
     final ok = await SeedStorage.setActiveWallet(walletId);
     if (!ok) return false;
-    // Re-arm boot events for a fresh wallet switch experience.
     _bootEventsArmed = true;
     await boot();
     return true;
@@ -186,9 +235,8 @@ class WalletHomeVM extends ChangeNotifier {
         id: id,
         from: op.from ?? '',
         to: op.to ?? '',
-        assetCode: op.assetType == stellar.Asset.TYPE_NATIVE
-            ? 'XLM'
-            : (op.assetCode ?? 'ASSET'),
+        assetCode:
+        op.assetType == stellar.Asset.TYPE_NATIVE ? 'XLM' : (op.assetCode ?? 'ASSET'),
         amount: double.tryParse(op.amount) ?? 0.0,
         at: DateTime.now(),
       );
@@ -215,8 +263,7 @@ class WalletHomeVM extends ChangeNotifier {
       if (hash.isEmpty) return;
       final asset = (tx['asset'] ?? 'XLM').toString();
       final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-      _emit(TransactionConfirmedEvent(
-          hash: hash, asset: asset, amount: amount));
+      _emit(TransactionConfirmedEvent(hash: hash, asset: asset, amount: amount));
     }, onError: (_) {});
   }
 
@@ -251,6 +298,37 @@ class WalletHomeVM extends ChangeNotifier {
     return ok;
   }
 
+  // ─────────────── UI-intent API (called by View) ───────────────
+
+  void onSwapPressed() {
+    if (!_state.hasWallet) {
+      _emit(const ShowToastEvent('Wallet not loaded yet', UiSeverity.warning));
+      return;
+    }
+    _emit(const NavigateToSwap());
+  }
+
+  void onSendPressed() {
+    if (!_state.hasWallet || _state.address == null) {
+      _emit(const ShowToastEvent('Wallet not loaded yet', UiSeverity.warning));
+      return;
+    }
+    _emit(StartSendFlow(address: _state.address!, xlm: _state.xlm, usdc: _state.usdc));
+  }
+
+  void onReceivePressed({String? initialToken}) {
+    if (!_state.hasWallet || _state.address == null) {
+      _emit(const ShowToastEvent('Wallet not loaded yet', UiSeverity.warning));
+      return;
+    }
+    _emit(StartReceiveFlow(
+      address: _state.address!,
+      xlm: _state.xlm,
+      usdc: _state.usdc,
+      initialToken: initialToken,
+    ));
+  }
+
   // app lifecycle hooks
   void onResumed() {
     startRealtime();
@@ -265,6 +343,8 @@ class WalletHomeVM extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     stopRealtime();
+    _bootOverlayTimer?.cancel();
+    _bootOverlayTimer = null;
     _ui.close();
     super.dispose();
   }
