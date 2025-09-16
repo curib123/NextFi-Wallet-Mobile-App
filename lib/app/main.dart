@@ -56,7 +56,7 @@ List<SingleChildWidget> _buildProviders() {
     // ── 1) Boot a temporary Stellar service (will be replaced below) ─────────
     Provider<StellarWalletService>(
       create: (_) => StellarWalletService(
-     //   usdcIssuer: kIsTestnet ? _DEFAULT_USDC_TESTNET : _DEFAULT_USDC_MAINNET,
+       usdcIssuer: kIsTestnet ? _DEFAULT_USDC_TESTNET : _DEFAULT_USDC_MAINNET,
         testnet: kIsTestnet,
       ),
     ),
@@ -83,7 +83,7 @@ List<SingleChildWidget> _buildProviders() {
         // Recreate service if issuer/network differs from the current one
         if (old == null || old.usdcIssuer != issuer || old.isTestnet != kIsTestnet) {
           return StellarWalletService(
-          //  usdcIssuer: issuer,
+            usdcIssuer: issuer,
             testnet: kIsTestnet,
           );
         }
@@ -103,13 +103,14 @@ List<SingleChildWidget> _buildProviders() {
     ChangeNotifierProvider<ImportWalletVM>(create: (_) => ImportWalletVM()),
     ChangeNotifierProvider<RecipientAddressVM>(create: (_) => RecipientAddressVM()),
     ChangeNotifierProvider<TabVM>(create: (_) => TabVM()),
-    ChangeNotifierProvider<WalletHomeVM>(create: (_) => WalletHomeVM()),
     ChangeNotifierProvider<WalletSettingsVM>(create: (_) => WalletSettingsVM()),
     ChangeNotifierProvider<WalletCreationVM>(create: (_) => WalletCreationVM()),
     ChangeNotifierProvider<AuthGateVM>(create: (_) => AuthGateVM()),
     ChangeNotifierProvider<SettingsVM>(create: (_) => SettingsVM()..initDefaults()),
 
     // ── Transactions / Send depend on Stellar service ───────────────────────
+
+    ChangeNotifierProvider<WalletHomeVM>(create: (ctx) => WalletHomeVM(stellar: ctx.read<StellarWalletService>())),
     ChangeNotifierProxyProvider<StellarWalletService, TransactionsVM>(
       create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletService>()),
       update: (ctx, stellar, prev) =>

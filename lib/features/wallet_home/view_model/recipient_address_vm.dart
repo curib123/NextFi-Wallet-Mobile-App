@@ -1,26 +1,15 @@
 // lib/features/wallet_home/vm/recipient_address_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
+import 'package:next_fi/services/recipient_address_storage.dart';
 
 /// Recipient addresses reusable_view_model (ChangeNotifier-based)
-/// - Persists to FlutterSecureStorage
+/// - Persists via RecipientAddressStorage (no direct secure-storage refs here)
 /// - Case-insensitive de-dup by address
 /// - Awaitable init via [ready] to avoid races
 class RecipientAddressVM with ChangeNotifier {
-  static const _storageKey = 'recipient_addresses_v1';
-
-  // Stronger, explicit platform options (same as elsewhere)
-  static const AndroidOptions _android = AndroidOptions(
-    encryptedSharedPreferences: true,
-    resetOnError: true,
-  );
-  static const IOSOptions _ios = IOSOptions(
-    accessibility: KeychainAccessibility.first_unlock,
-  );
-
-  final FlutterSecureStorage _storage;
+  final RecipientAddressStorage _storage;
 
   // Make init awaitable to avoid races
   late final Future<void> _ready;
@@ -29,8 +18,8 @@ class RecipientAddressVM with ChangeNotifier {
   bool _loading = true;
   Object? _lastError;
 
-  RecipientAddressVM([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage() {
+  RecipientAddressVM([RecipientAddressStorage? storage])
+      : _storage = storage ?? const RecipientAddressStorage() {
     _ready = _init();
   }
 
@@ -62,13 +51,7 @@ class RecipientAddressVM with ChangeNotifier {
 
   Future<void> _init() async {
     try {
-      final s = await _storage.read(
-        key: _storageKey,
-        aOptions: _android,
-        iOptions: _ios,
-      );
-      // decodeList MUST handle null safely and return []
-      _items = RecipientAddressModel.decodeList(s);
+      _items = await _storage.readAll();
     } catch (e, st) {
       _lastError = e;
       _items = [];
@@ -82,13 +65,7 @@ class RecipientAddressVM with ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    final payload = RecipientAddressModel.encodeList(_items);
-    await _storage.write(
-      key: _storageKey,
-      value: payload,
-      aOptions: _android,
-      iOptions: _ios,
-    );
+    await _storage.writeAll(_items);
   }
 
   /// Create (de-dup by address, **case-insensitive**, trimmed).
@@ -152,7 +129,6 @@ class RecipientAddressVM with ChangeNotifier {
       );
       if (otherIdx >= 0) {
         // Merge into the existing record instead of creating a dup.
-        // Here we choose to update that existing record with the new fields.
         final now = DateTime.now();
         final merged = _items[otherIdx].copyWith(
           name: name?.trim(),
@@ -161,7 +137,6 @@ class RecipientAddressVM with ChangeNotifier {
           updatedAt: now,
         );
         _items.removeAt(idx);
-        // Update the other record
         _items[otherIdx] = merged;
         await _persist();
         notifyListeners();
@@ -194,12 +169,7 @@ class RecipientAddressVM with ChangeNotifier {
   Future<void> clear() async {
     await _ready; // prevent init race
     _items.clear();
-    // Delete the key to be explicit
-    await _storage.delete(
-      key: _storageKey,
-      aOptions: _android,
-      iOptions: _ios,
-    );
+    await _storage.deleteAll();
     notifyListeners();
   }
 }

@@ -46,8 +46,8 @@ class TransactionConfirmedEvent extends WalletHomeUiEvent {
 }
 
 class WalletHomeVM extends ChangeNotifier {
-  WalletHomeVM({StellarWalletService? stellar})
-      : _stellar = stellar ?? StellarWalletService();
+  WalletHomeVM({required StellarWalletService stellar})
+      : _stellar = stellar;
 
   final StellarWalletService _stellar;
 
