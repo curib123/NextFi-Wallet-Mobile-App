@@ -137,9 +137,6 @@ class AssetWidget extends StatelessWidget {
 
   // FAB tap → Send (always). Intentionally ignores onItemTap.
   Future<void> _openSendSelector(BuildContext context, AssetModel a) async {
-    final t = a.symbol.toUpperCase();
-    final initialToken = (t == 'USDC') ? 'USDC' : 'XLM'; // default to XLM
-
     final addr = address.trim();
     if (addr.isEmpty) {
       showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.warning);
