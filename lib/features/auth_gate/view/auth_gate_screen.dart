@@ -29,21 +29,28 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   final FocusNode _pinFocus = FocusNode();
   Timer? _smallVisualDelay;
 
+  // Cache VM to avoid using context in dispose()
+  late AuthGateVM _vm;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Safe: runs after first frame; we'll use the cached _vm and mounted guards.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final vm = context.read<AuthGateVM>();
-      await vm.init();
+      // Ensure _vm has been set by didChangeDependencies (it will, before first frame)
+      await _vm.init();
+      if (!mounted) return;
 
-      final warn = vm.state.initWarning;
+      final warn = _vm.state.initWarning;
       if (warn != null) {
         showFloatingSnackBar(context, message: warn, type: SnackBarType.error);
+        if (!mounted) return;
       }
 
-      final auto = await vm.maybeAutoBiometric();
+      final auto = await _vm.maybeAutoBiometric();
+      if (!mounted) return;
       if (auto?.message != null) {
         showFloatingSnackBar(
           context,
@@ -55,9 +62,17 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache provider reference while the widget is alive
+    _vm = context.read<AuthGateVM>();
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    context.read<AuthGateVM>().disposeTimers();
+    // No context usage here
+    _vm.disposeTimers();
     _pinController.dispose();
     _pinFocus.dispose();
     _smallVisualDelay?.cancel();
@@ -67,15 +82,16 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      final vm = context.read<AuthGateVM>();
-      vm.refreshLockout();
-      vm.maybeAutoBiometric();
+      // Use cached VM; no context here
+      _vm.refreshLockout();
+      _vm.maybeAutoBiometric();
     }
   }
 
   void _onSuccessNavigate() {
     _smallVisualDelay?.cancel();
     _smallVisualDelay = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
       final goNext = widget.goNext;
       if (goNext != null) {
         goNext();
@@ -105,7 +121,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
       onWillPop: () async => Navigator.canPop(context),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => FocusScope.of(context).unfocus(),
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: Scaffold(
           backgroundColor: colors.background,
           appBar: TopBar(colors: colors),
@@ -167,7 +183,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                         maxWidth: _kFormWidth,
                         colors: colors,
                         onPressed: () async {
-                          final res = await vm.authenticateWithBiometrics();
+                          final res = await _vm.authenticateWithBiometrics();
                           if (!mounted) return;
                           if (res.message != null) {
                             showFloatingSnackBar(
@@ -231,7 +247,8 @@ class _AuthGateScreenState extends State<AuthGateScreen>
       case PinStatus.saved:
       case PinStatus.verified:
         _pinController.clear();
-        FocusScope.of(context).unfocus();
+        // Avoid context lookup; this works even if focus tree changed
+        FocusManager.instance.primaryFocus?.unfocus();
         _onSuccessNavigate();
         break;
     }
