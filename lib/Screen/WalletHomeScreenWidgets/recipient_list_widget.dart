@@ -1,0 +1,372 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+
+import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Components/SnackBar.dart';
+import 'package:next_fi/Components/recipient_upsert_sheet.dart';
+import 'package:next_fi/Components/token_chooser.dart'; // selector
+import 'package:next_fi/Provider/RecipientAddressProvider.dart';
+import 'package:next_fi/model/recipient_address.dart';
+import 'package:next_fi/Screen/send_screen.dart';
+
+/// Recipient list widget (provider-powered)
+class RecipientListWidget extends StatelessWidget {
+  final AppColor colors;
+  final void Function(RecipientAddress)? onSelect;
+
+  /// Needed so we can launch SendScreen directly after the selector.
+  final String? fromAddress; // your wallet
+  final double? xlmBalance;
+  final double? usdcBalance;
+
+  const RecipientListWidget({
+    super.key,
+    required this.colors,
+    this.onSelect,
+    this.fromAddress,
+    this.xlmBalance,
+    this.usdcBalance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<RecipientAddressProvider>(
+      builder: (context, prov, _) {
+        if (prov.loading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (prov.items.isEmpty) return _EmptyRecipients(colors: colors);
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+          itemCount: prov.items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (context, i) {
+            final r = prov.items[i];
+            return RecipientTile(
+              colors: colors,
+              recipient: r,
+              onTap: () async {
+                // If parent wants the raw object, let them handle it.
+                if (onSelect != null) {
+                  onSelect!(r);
+                  return;
+                }
+
+                // Otherwise, open token selector -> SendScreen
+                final addr = (fromAddress ?? '').trim();
+                if (addr.isEmpty) {
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Wallet not ready',
+                    type: SnackBarType.warning,
+                  );
+                  return;
+                }
+
+                await showTokenSelector(
+                  context,
+                  addr,
+                  (xlmBalance ?? 0),
+                  (usdcBalance ?? 0),
+                  screenBuilder: (address, token, balance) {
+                    // Auto-populate recipient in SendScreen
+                    return SendScreen(
+                      address: address,
+                      token: token, // 'TRX' or 'USDT'
+                      balance: balance,
+                      prefillAddress: r.address,
+                      prefillName: r.name,
+                    );
+                  },
+                  title: 'Select Token',
+                );
+              },
+
+              // EDIT: open the upsert sheet; show a small toast on success
+              onEdit: () async {
+                final saved = await showRecipientUpsertSheet(context, initial: r);
+                if (saved == true && context.mounted) {
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Recipient updated',
+                    type: SnackBarType.info,
+                  );
+                }
+              },
+
+              // DELETE: confirm first, then remove
+              onDelete: () async {
+                final ok = await _confirmDelete(context, r.name);
+                if (ok != true) return;
+                await context.read<RecipientAddressProvider>().remove(r.id);
+                if (context.mounted) {
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Recipient removed',
+                    type: SnackBarType.warning,
+                  );
+                }
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Modern, compact tile for a recipient entry
+class RecipientTile extends StatelessWidget {
+  final AppColor colors;
+  final RecipientAddress recipient;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;   // <- keep simple; callers can be async inside
+  final VoidCallback? onDelete; // <- keep simple; callers can be async inside
+
+  const RecipientTile({
+    super.key,
+    required this.colors,
+    required this.recipient,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  String _short(String a) {
+    final s = a.trim();
+    if (s.length <= 20) return s;
+    final left = s.substring(0, 10);
+    final right = s.substring(s.length - 8);
+    return '$left…$right';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    final bg = c.surfaceContainerHighest.withOpacity(.35);
+    final accent = Color(recipient.color);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: c.outlineVariant.withOpacity(.6)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                _Avatar(color: accent, initial: recipient.name.isNotEmpty ? recipient.name[0].toUpperCase() : '•'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _TitleSubtitle(
+                    title: recipient.name,
+                    subtitle: _short(recipient.address),
+                    colors: colors,
+                  ),
+                ),
+                _OverflowMenu(
+                  colors: colors,
+                  recipient: recipient,
+                  onEdit: onEdit,
+                  onDelete: onDelete,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.color, required this.initial});
+  final Color color;
+  final String initial;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: color.withOpacity(.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: Icon(LucideIcons.user, color: color),
+    );
+  }
+}
+
+class _TitleSubtitle extends StatelessWidget {
+  const _TitleSubtitle({
+    required this.title,
+    required this.subtitle,
+    required this.colors,
+  });
+  final String title;
+  final String subtitle;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title.isEmpty ? 'Unnamed' : title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: t.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: colors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: t.bodySmall?.copyWith(color: colors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+class _OverflowMenu extends StatelessWidget {
+  const _OverflowMenu({
+    required this.colors,
+    required this.recipient,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  final AppColor colors;
+  final RecipientAddress recipient;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      icon: Icon(LucideIcons.moreVertical, color: colors.textSecondary),
+      onSelected: (v) async {
+        if (v == 'copy') {
+          await Clipboard.setData(ClipboardData(text: recipient.address));
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Address copied')),
+            );
+          }
+        } else if (v == 'edit') {
+          onEdit?.call(); // ✅ invoke
+        } else if (v == 'delete') {
+          onDelete?.call(); // ✅ invoke
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'copy', child: Text('Copy address')),
+        PopupMenuItem(value: 'edit', child: Text('Edit')),
+        PopupMenuItem(value: 'delete', child: Text('Delete')),
+      ],
+    );
+  }
+}
+
+class _EmptyRecipients extends StatelessWidget {
+  const _EmptyRecipients({required this.colors});
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: c.surfaceContainerHighest.withOpacity(.35),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: c.outlineVariant.withOpacity(.6)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.users, size: 48, color: colors.textSecondary),
+              const SizedBox(height: 12),
+              Text(
+                'No recipients yet',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Save frequently used XLM/USDC addresses for faster sends.',
+                style: TextStyle(color: colors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () async {
+                  final saved = await showRecipientUpsertSheet(context);
+                  if (saved == true && context.mounted) {
+                    showFloatingSnackBar(
+                      context,
+                      message: 'Recipient saved',
+                      type: SnackBarType.info,
+                    );
+                  }
+                },
+                icon: const Icon(LucideIcons.userPlus),
+                label: const Text('Add recipient'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<bool?> _confirmDelete(BuildContext context, String name) {
+  final t = Theme.of(context).textTheme;
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Remove recipient?'),
+      content: Text(
+        name.isEmpty
+            ? 'This recipient will be removed.'
+            : '“$name” will be removed.',
+        style: t.bodyMedium,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.tonal(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Remove'),
+        ),
+      ],
+    ),
+  );
+}
