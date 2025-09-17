@@ -67,7 +67,9 @@ class AssetWidget extends StatelessWidget {
         }
       } catch (_) {}
     }
-    return symbolUpper == 'XLM' ? xlmBalance : (symbolUpper == 'USDC' ? usdcBalance : 0.0);
+    return symbolUpper == 'XLM'
+        ? xlmBalance
+        : (symbolUpper == 'USDC' ? usdcBalance : 0.0);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -109,15 +111,18 @@ class AssetWidget extends StatelessWidget {
     }
   }
 
-  /// Fiat delta based on **coin price**:
-  /// delta = holdings_value_change = balance × coinPriceNow × (pct / 100)
-  double _holdingsFiatDeltaPriceBase({
-    required double balance,
+  /// Absolute **price** change PER COIN (in fiat) for the selected window.
+  /// Uses current price and % change to infer the previous price:
+  /// prev = now / (1 + pct/100), delta = now - prev
+  double _priceDeltaPerCoin({
     required double coinPriceNow,
     required double pct,
   }) {
-    if (!pct.isFinite || !coinPriceNow.isFinite || !balance.isFinite) return 0.0;
-    return balance * coinPriceNow * (pct / 100.0); // signed by pct
+    if (!pct.isFinite || !coinPriceNow.isFinite) return 0.0;
+    final denom = 1 + (pct / 100.0); // guard -100%
+    if (denom <= 0) return 0.0;
+    final prev = coinPriceNow / denom;
+    return coinPriceNow - prev; // signed
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -184,7 +189,8 @@ class AssetWidget extends StatelessWidget {
   Future<void> _openSendSelector(BuildContext context, AssetModel a) async {
     final addr = address.trim();
     if (addr.isEmpty) {
-      showFloatingSnackBar(context, message: 'Wallet not ready', type: SnackBarType.warning);
+      showFloatingSnackBar(context,
+          message: 'Wallet not ready', type: SnackBarType.warning);
       return;
     }
 
@@ -232,18 +238,17 @@ class AssetWidget extends StatelessWidget {
           // BALANCE real-time: pull live balances from WalletHomeVM if available
           final bal = _liveBalance(context, sym);
 
-          // Compute fiat & deltas using **current** price and balance
+          // Compute fiat & per-coin price delta using **current** price and % change
           final pct = _pctFor(a);
           final coinPriceNow = _coinPriceFor(cur, sym);
           final fiatNow = _fiatFor(cur, sym, bal);
 
-          // Price-based holdings delta
-          final delta = _holdingsFiatDeltaPriceBase(
-            balance: bal,
+          // Price delta per coin (NOT multiplied by holdings)
+          final priceDelta = _priceDeltaPerCoin(
             coinPriceNow: coinPriceNow,
             pct: pct,
           );
-          final isUp = delta >= 0;
+          final isUp = priceDelta >= 0;
           final logoUrl = logos[a.id];
 
           return Padding(
@@ -255,7 +260,8 @@ class AssetWidget extends StatelessWidget {
                 onTap: () => _openReceive(context, a),
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   child: Row(
                     children: [
                       _logo(logoUrl),
@@ -274,14 +280,16 @@ class AssetWidget extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               "${formatTokenAmount(bal)} ${a.symbol}",
-                              style: TextStyle(color: colors.textSecondary),
+                              style:
+                              TextStyle(color: colors.textSecondary),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               "${money.format(coinPriceNow)} / ${a.symbol}",
                               style: TextStyle(
                                 fontSize: 12,
-                                color: colors.textSecondary.withOpacity(.9),
+                                color:
+                                colors.textSecondary.withOpacity(.9),
                               ),
                             ),
                           ],
@@ -300,9 +308,9 @@ class AssetWidget extends StatelessWidget {
                           const SizedBox(height: 2),
                           _pctBadge(pct),
                           const SizedBox(height: 2),
-                          // Real-time fiat delta (based on coin price × holdings)
+                          // Real-time **price delta per coin** (NOT multiplied by holdings)
                           Text(
-                            _formatSignedMoney(money, delta),
+                            _formatSignedMoney(money, priceDelta),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -331,7 +339,8 @@ class AssetWidget extends StatelessWidget {
       },
     );
 
-    final Widget scrollable = onRefresh != null
+    final Widget scrollable =
+    onRefresh != null
         ? RefreshIndicator(
       onRefresh: onRefresh!,
       color: colors.primary,
@@ -467,7 +476,11 @@ class AssetWidget extends StatelessWidget {
                   const SizedBox(height: 6),
                   Container(width: 90, height: 12, color: Colors.white),
                   const SizedBox(height: 6),
-                  Container(width: 110, height: 10, color: Colors.white), // coin price line
+                  Container(
+                    width: 110,
+                    height: 10,
+                    color: Colors.white,
+                  ), // coin price line
                 ],
               ),
             ),
@@ -477,9 +490,15 @@ class AssetWidget extends StatelessWidget {
               children: [
                 Container(width: 72, height: 14, color: Colors.white),
                 const SizedBox(height: 6),
-                Container(width: 54, height: 12, color: Colors.white), // % badge stub
+                Container(
+                    width: 54,
+                    height: 12,
+                    color: Colors.white), // % badge stub
                 const SizedBox(height: 6),
-                Container(width: 64, height: 10, color: Colors.white), // fiat delta stub
+                Container(
+                    width: 64,
+                    height: 10,
+                    color: Colors.white), // price delta stub
               ],
             ),
           ],

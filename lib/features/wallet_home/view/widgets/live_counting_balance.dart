@@ -1,4 +1,3 @@
-// lib/features/wallet_home/view/widgets/live_counting_balance.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -15,7 +14,9 @@ class LiveCountingBalance extends StatefulWidget {
     this.hidden = false,
     this.loading = false,
     this.pulse,
-    this.animate = true, // ⬅️ NEW: disable to render instantly
+    this.animate = true,
+    this.showTrendIcon = true, // allow parent to hide the built-in icon
+    this.forceBaseColor = false, // lock text color to baseColor (ignore _dir)
   });
 
   final double targetValue;
@@ -30,6 +31,12 @@ class LiveCountingBalance extends StatefulWidget {
 
   /// When false, no counting/trending animation; value is shown directly.
   final bool animate;
+
+  /// Show/hide the internal ↑/↓ icon that follows the ticker direction.
+  final bool showTrendIcon;
+
+  /// If true, always use baseColor for text (don’t recolor by _dir).
+  final bool forceBaseColor;
 
   @override
   State<LiveCountingBalance> createState() => _LiveCountingBalanceState();
@@ -57,19 +64,16 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
     // Handle animate flag transitions
     if (old.animate != widget.animate) {
       if (widget.animate) {
-        // switching ON: start ticker from current display towards target
         _startTicker();
       } else {
-        // switching OFF: stop ticker and snap to target
         _ticker?.cancel();
         _dir = 0;
         _display = widget.targetValue.isFinite ? widget.targetValue : 0.0;
-        setState(() {}); // reflect immediately
+        setState(() {});
       }
       return;
     }
 
-    // If not animating, always mirror the target instantly.
     if (!widget.animate) {
       final next = widget.targetValue.isFinite ? widget.targetValue : 0.0;
       if (next != _display) {
@@ -80,7 +84,6 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
       return;
     }
 
-    // If animating and the target changed a lot, nudge sooner by restarting.
     if (old.targetValue != widget.targetValue && widget.animate) {
       _restartTicker();
     }
@@ -135,24 +138,28 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
 
   @override
   Widget build(BuildContext context) {
-    final color = _dir == 0 ? widget.baseColor : (_dir > 0 ? widget.upColor : widget.downColor);
+    final color = widget.forceBaseColor
+        ? widget.baseColor
+        : (_dir == 0 ? widget.baseColor : (_dir > 0 ? widget.upColor : widget.downColor));
 
     return Row(
       children: [
-        // Trending icon hidden when not animating or when steady
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-          child: (!widget.animate || _dir == 0)
-              ? const SizedBox(width: 0, key: ValueKey('eq'))
-              : Icon(
-            _dir > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
-            key: ValueKey(_dir > 0 ? 'up' : 'down'),
-            size: 18,
-            color: color,
+        // Trending icon hidden when not allowed or when steady
+        if (widget.showTrendIcon)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+            child: (!widget.animate || _dir == 0)
+                ? const SizedBox(width: 0, key: ValueKey('eq'))
+                : Icon(
+              _dir > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+              key: ValueKey(_dir > 0 ? 'up' : 'down'),
+              size: 18,
+              color: color,
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
+        if (widget.showTrendIcon) const SizedBox(width: 6),
+
         AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           style: TextStyle(
@@ -162,6 +169,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
           ),
           child: Text(widget.hidden ? '••••' : widget.fmt.format(_display)),
         ),
+
         if (widget.loading && widget.pulse != null) ...[
           const SizedBox(width: 8),
           ScaleTransition(

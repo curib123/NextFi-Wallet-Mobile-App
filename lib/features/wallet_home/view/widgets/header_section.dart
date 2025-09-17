@@ -46,9 +46,9 @@ class _HeaderSectionState extends State<HeaderSection> {
   double? _deltaFiat;
   static const double _epsilon = 0.0001;
 
-  // Up/Down palette
-  static const Color _upColor = Color(0xFF1E8E3E);
-  static const Color _downColor = Color(0xFFCF3C3C);
+  // Use your theme colors (as requested)
+  Color get _upColor => widget.colors.success;
+  Color get _downColor => widget.colors.error;
 
   void _onPulseStatus(AnimationStatus status) {
     if (mounted) setState(() {}); // refresh when counting starts/stops
@@ -93,15 +93,11 @@ class _HeaderSectionState extends State<HeaderSection> {
 
   double _safe(double v) => v.isFinite ? v : 0.0;
 
-  bool _isActiveOrCounting() {
-    // "active" ≈ animateTotal flag; "counting" ≈ livePulse.isAnimating.
-    return widget.animateTotal || widget.livePulse.isAnimating;
-  }
-
+  // Colorize whenever there's a real delta (and not hidden).
   bool _shouldColorize() {
     if (_hideBalance) return false;
     if (_deltaFiat == null || _deltaFiat!.abs() <= _epsilon) return false;
-    return _isActiveOrCounting();
+    return true;
   }
 
   Color _balanceColor() {
@@ -110,17 +106,27 @@ class _HeaderSectionState extends State<HeaderSection> {
   }
 
   Color _swapButtonColor() {
-    // Safe fallback color on first load (no delta yet) or when not colorizing
     if (_shouldColorize()) return _deltaFiat! >= 0 ? _upColor : _downColor;
     return widget.colors.primary;
   }
 
-  // Slight background tint based on delta (only when active/counting)
+  // Slight background tint based on delta
   List<Color> _cardGradient() {
     final base = widget.colors.surface;
     if (!_shouldColorize()) return [base, base];
     final tone = _deltaFiat! >= 0 ? _upColor : _downColor;
     return [base, tone.withOpacity(0.06)];
+  }
+
+  // Up/Down icon beside the balance text
+  Widget _trendIconForDelta() {
+    if (!_shouldColorize()) return const SizedBox.shrink();
+    final up = _deltaFiat! >= 0;
+    return Icon(
+      up ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+      size: 18,
+      color: up ? _upColor : _downColor,
+    );
   }
 
   @override
@@ -130,26 +136,22 @@ class _HeaderSectionState extends State<HeaderSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Modern card (animated tint & elevation)
+        // Card
         AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.all(18),
           margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: _cardGradient(),
-            ),
+            color: widget.colors.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: widget.colors.primary.withOpacity(0.08),
+              color: widget.colors.primary.withOpacity(0.10),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
+                color: Colors.black.withOpacity(0.16),
                 blurRadius: 18,
                 offset: const Offset(0, 10),
               ),
@@ -190,7 +192,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Animated balance (color reflects up/down only if active/counting)
+                    // Balance row: our own ↑/↓ icon + the number
                     TweenAnimationBuilder<double>(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOut,
@@ -202,20 +204,32 @@ class _HeaderSectionState extends State<HeaderSection> {
                           child: child,
                         );
                       },
-                      child: LiveCountingBalance(
-                        animate: widget.animateTotal,
-                        hidden: _hideBalance,
-                        targetValue: total,
-                        fmt: widget.currencyFmt,
-                        baseColor: _balanceColor(),
-                        loading: widget.loadingBalances,
-                        pulse: widget.livePulse,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _trendIconForDelta(),
+                          if (_shouldColorize()) const SizedBox(width: 6),
+                          // LiveCountingBalance with forced baseColor & no internal icon
+                          LiveCountingBalance(
+                            animate: widget.animateTotal,
+                            hidden: _hideBalance,
+                            targetValue: total,
+                            fmt: widget.currencyFmt,
+                            baseColor: _balanceColor(), // ← driven by our delta
+                            upColor: _upColor,
+                            downColor: _downColor,
+                            loading: widget.loadingBalances,
+                            pulse: widget.livePulse,
+                            showTrendIcon: false,     // ← we show our own icon
+                            forceBaseColor: true,     // ← lock color to baseColor
+                          ),
+                        ],
                       ),
                     ),
 
                     const SizedBox(height: 10),
 
-                    // Meta row: delta pill (no words) + (optional) updated label
+                    // Meta row: delta pill
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 8,
@@ -242,7 +256,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                             fmt: widget.currencyFmt,
                             upColor: _upColor,
                             downColor: _downColor,
-                            active: _shouldColorize(), // gate colors here
+                            active: true, // always colorize when we show it
                             neutralColor: widget.colors.textSecondary,
                           )
                               : const SizedBox.shrink(key: ValueKey('empty')),
@@ -255,12 +269,12 @@ class _HeaderSectionState extends State<HeaderSection> {
 
               const SizedBox(width: 10),
 
-              // Right: primary action (Material 3 tonal button)
+              // Right: primary action
               SizedBox(
                 height: 40,
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: _swapButtonColor(), // safe fallback on first load
+                    backgroundColor: _swapButtonColor(),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -278,7 +292,7 @@ class _HeaderSectionState extends State<HeaderSection> {
           ),
         ),
 
-        // Quick actions (compact, modern)
+        // Quick actions
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(

@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
-import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/build_tab_bar.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/header_section.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/incoming_hints_strip.dart';
@@ -41,8 +41,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   AppAlertController? _bootBalancesCtl;
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
 
-  // First open: no counting animation; enabled once BootBalancesReady arrives.
+  // First open: no counting animation; enabled only after the FIRST ready has passed.
   bool _animateTotal = false;
+  bool _shownInitialTotal = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -157,9 +158,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           'assetCode': h.assetCode,
                         })
                             .toList(),
-                        onAcknowledge: (tx) => context.read<WalletHomeVM>().ackHint(
-                          (tx['hash'] ?? '').toString(),
-                        ),
+                        onAcknowledge: (tx) =>
+                            context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
                       )
                           : const SizedBox.shrink(),
                       animateTotal: _animateTotal,
@@ -236,7 +236,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     }
 
     if (e is BootBalancesLoading) {
-      if (mounted) setState(() => _animateTotal = false);
+      if (mounted) setState(() => _animateTotal = false); // never animate while loading
       _bootBalancesCtl ??= showAppAlert(
         context,
         type: AppAlertType.loading,
@@ -255,7 +255,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       final fxUsdc = currency.usdcToFiat(e.usdc);
       final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
-      // Update, then immediately close (no timer) and enable counting animation.
+      // Update, then immediately close and decide whether to enable animation.
       _bootBalancesCtl?.update(
         AppAlertType.success,
         title: 'Balances ready',
@@ -264,7 +264,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       _bootBalancesCtl?.close();
       _bootBalancesCtl = null;
 
-      if (mounted) setState(() => _animateTotal = true);
+      if (!_shownInitialTotal) {
+        // First boot: keep static.
+        if (mounted) {
+          setState(() {
+            _animateTotal = false;
+            _shownInitialTotal = true;
+          });
+        }
+      } else {
+        // Subsequent refreshes/updates: allow counting animation.
+        if (mounted) setState(() => _animateTotal = true);
+      }
       return;
     }
 
