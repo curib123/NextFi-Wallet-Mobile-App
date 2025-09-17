@@ -1,10 +1,11 @@
 // lib/features/wallet_home/view/widgets/top_bar.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/features/settings/view/settings_screen.dart';
+import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
-import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/SnackBar.dart';
@@ -12,24 +13,69 @@ import 'package:next_fi/common/components/wallet_switch_result.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
-
 class TopBar extends StatelessWidget {
   const TopBar({super.key});
+
+  String _initials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'WW';
+    final parts = trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 2) {
+      final first = parts.first[0];
+      final last = parts.last[0];
+      return (first + last).toUpperCase();
+    } else {
+      final w = parts.first;
+      return (w.length >= 2 ? w.substring(0, 2) : (w + 'W')).toUpperCase();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final vm = context.watch<WalletHomeVM>();
     final walletName = vm.state.walletName ?? 'Default Wallet';
+    final initials = _initials(walletName);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        IconButton(
-          icon: Icon(LucideIcons.package, color: colors.textPrimary, size: 26),
-          onPressed: () => context.read<TabVM>().setTab(1),
-          tooltip: 'Activity',
+        // Left: Wallet "transparent" profile circle → Activity
+        Tooltip(
+          message: 'Activity',
+          child: InkWell(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WalletScreenSettings()),
+              );
+            },
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colors.primary.withOpacity(0.12), // translucent fill
+                border: Border.all(
+                  color: colors.primary.withOpacity(0.28), // subtle ring
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                initials,
+                style: TextStyle(
+                  color: colors.primary,         // use primary for text
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
         ),
+
+        // Center: Wallet name + switcher
         GestureDetector(
           onTap: () async {
             final activeId = await SeedStorage.getActiveWalletId();
@@ -40,22 +86,17 @@ class TopBar extends StatelessWidget {
             );
             if (res == null) return;
 
-            // 👉 NEW: Import flow
             if (res.importRequested) {
               await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ImportWalletScreen()),
               );
               if (!context.mounted) return;
-              await context.read<WalletHomeVM>().boot(); // refresh after import
-              showFloatingSnackBar(context,
-                message: 'Wallets updated.',
-                type: SnackBarType.success,
-              );
+              await context.read<WalletHomeVM>().boot();
+              showFloatingSnackBar(context, message: 'Wallets updated.', type: SnackBarType.success);
               return;
             }
 
-            // Existing: Create New flow
             if (res.createNew) {
               await Navigator.push(
                 context,
@@ -66,7 +107,6 @@ class TopBar extends StatelessWidget {
               return;
             }
 
-            // Existing: Switch to an existing wallet
             final chosenId = res.chosenWalletId;
             if (chosenId != null && chosenId != activeId) {
               final ok = await context.read<WalletHomeVM>().switchTo(chosenId);
@@ -81,15 +121,26 @@ class TopBar extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(walletName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+              Text(
+                walletName,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+              ),
               const SizedBox(width: 4),
               Icon(LucideIcons.chevronDown, size: 18, color: colors.textPrimary),
             ],
           ),
         ),
+
+        // Right: Settings
         IconButton(
           icon: Icon(LucideIcons.settings, color: colors.textPrimary, size: 26),
-          onPressed: () => context.read<TabVM>().setTab(3),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          },
           tooltip: 'Settings',
         ),
       ],

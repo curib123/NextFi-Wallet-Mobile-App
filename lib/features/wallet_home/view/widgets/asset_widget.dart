@@ -50,24 +50,47 @@ class AssetWidget extends StatelessWidget {
   /// NOTE: The FAB ignores this and always goes to **Send**.
   final void Function(String token)? onItemTap;
 
-  double _balanceFor(AssetModel a) {
-    switch (a.symbol.toUpperCase()) {
+  // ────────────────────────────────────────────────────────────────────────────
+  // Live balance taps (safe, dynamic; falls back to props if VM not in tree)
+  // ────────────────────────────────────────────────────────────────────────────
+  double _liveBalance(BuildContext ctx, String symbolUpper) {
+    final vm = Provider.of<WalletHomeVM?>(ctx, listen: true);
+    if (vm != null) {
+      try {
+        final dynamic dvm = vm;
+        if (symbolUpper == 'XLM') {
+          final bx = (dvm?.state?.xlmBalance ?? dvm?.xlmBalance) as double?;
+          if (bx != null) return bx;
+        } else if (symbolUpper == 'USDC') {
+          final bu = (dvm?.state?.usdcBalance ?? dvm?.usdcBalance) as double?;
+          if (bu != null) return bu;
+        }
+      } catch (_) {}
+    }
+    return symbolUpper == 'XLM' ? xlmBalance : (symbolUpper == 'USDC' ? usdcBalance : 0.0);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Price & percent helpers
+  // ────────────────────────────────────────────────────────────────────────────
+  double _fiatFor(CurrencyVM cur, String symbolUpper, double balance) {
+    switch (symbolUpper) {
       case 'XLM':
-        return xlmBalance;
+        return cur.xlmToFiat(balance);
       case 'USDC':
-        return usdcBalance;
+        return cur.usdcToFiat(balance);
       default:
         return 0.0;
     }
   }
 
-  double _fiatFor(BuildContext ctx, AssetModel a) {
-    final cur = ctx.read<CurrencyVM>();
-    switch (a.symbol.toUpperCase()) {
+  // Price per coin in selected fiat
+  double _coinPriceFor(CurrencyVM cur, String symbolUpper) {
+    switch (symbolUpper) {
       case 'XLM':
-        return cur.xlmToFiat(xlmBalance);
+        return cur.xlmToFiat(1.0);
       case 'USDC':
-        return cur.usdcToFiat(usdcBalance);
+        return cur.usdcToFiat(1.0);
       default:
         return 0.0;
     }
@@ -86,10 +109,20 @@ class AssetWidget extends StatelessWidget {
     }
   }
 
+  /// Fiat delta based on **coin price**:
+  /// delta = holdings_value_change = balance × coinPriceNow × (pct / 100)
+  double _holdingsFiatDeltaPriceBase({
+    required double balance,
+    required double coinPriceNow,
+    required double pct,
+  }) {
+    if (!pct.isFinite || !coinPriceNow.isFinite || !balance.isFinite) return 0.0;
+    return balance * coinPriceNow * (pct / 100.0); // signed by pct
+  }
+
   // ────────────────────────────────────────────────────────────────────────────
   // Formatting helpers
   // ────────────────────────────────────────────────────────────────────────────
-
   String formatTokenAmount(
       double v, {
         int bigMaxDecimals = 4,
@@ -115,24 +148,36 @@ class AssetWidget extends StatelessWidget {
     return s;
   }
 
+  String _formatSignedMoney(NumberFormat money, double v) {
+    final s = money.format(v.abs());
+    return v >= 0 ? '+$s' : '-$s';
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Navigation
+  // ────────────────────────────────────────────────────────────────────────────
+
   // List-tile tap → Receive (unless overridden)
   void _openReceive(BuildContext context, AssetModel a) {
     final t = a.symbol.toUpperCase();
-    final token = (t == 'USDC') ? 'USDC' : 'XLM'; // default to XLM if unknown
+    final token = (t == 'USDC') ? 'USDC' : 'XLM';
 
     if (onItemTap != null) {
       onItemTap!(token);
       return;
     }
 
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => ReceiveScreen(
-        address: address,
-        xlmBalance: xlmBalance,
-        usdcBalance: usdcBalance,
-        initialToken: token, // initial tab based on tapped tile
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReceiveScreen(
+          address: address,
+          xlmBalance: _liveBalance(context, 'XLM'),
+          usdcBalance: _liveBalance(context, 'USDC'),
+          initialToken: token,
+        ),
       ),
-    ));
+    );
   }
 
   // FAB tap → Send (always). Intentionally ignores onItemTap.
@@ -146,8 +191,8 @@ class AssetWidget extends StatelessWidget {
     await showTokenSelector(
       context,
       addr,
-      xlmBalance,
-      usdcBalance,
+      _liveBalance(context, 'XLM'),
+      _liveBalance(context, 'USDC'),
       title: 'Select Coin',
       screenBuilder: (address, token, balance) => SendScreen(
         address: address,
@@ -160,7 +205,9 @@ class AssetWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyCode = context.watch<CurrencyVM>().fiat.toUpperCase();
+    // PRICE real-time: watch CurrencyVM (notifies on price/fiat changes)
+    final cur = context.watch<CurrencyVM>();
+    final currencyCode = cur.fiat.toUpperCase();
     final money = NumberFormat.simpleCurrency(name: currencyCode);
 
     if (loading) {
@@ -174,15 +221,29 @@ class AssetWidget extends StatelessWidget {
 
     final listView = ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 96), // space for FAB
-      itemCount: assets.length + 1, // +1 for the footer
+      padding: const EdgeInsets.only(bottom: 96),
+      itemCount: assets.length + 1,
       separatorBuilder: (_, __) => const SizedBox(height: 0),
       itemBuilder: (context, index) {
         if (index < assets.length) {
           final a = assets[index];
-          final bal = _balanceFor(a);
-          final fiat = _fiatFor(context, a);
+          final sym = a.symbol.toUpperCase();
+
+          // BALANCE real-time: pull live balances from WalletHomeVM if available
+          final bal = _liveBalance(context, sym);
+
+          // Compute fiat & deltas using **current** price and balance
           final pct = _pctFor(a);
+          final coinPriceNow = _coinPriceFor(cur, sym);
+          final fiatNow = _fiatFor(cur, sym, bal);
+
+          // Price-based holdings delta
+          final delta = _holdingsFiatDeltaPriceBase(
+            balance: bal,
+            coinPriceNow: coinPriceNow,
+            pct: pct,
+          );
+          final isUp = delta >= 0;
           final logoUrl = logos[a.id];
 
           return Padding(
@@ -215,6 +276,14 @@ class AssetWidget extends StatelessWidget {
                               "${formatTokenAmount(bal)} ${a.symbol}",
                               style: TextStyle(color: colors.textSecondary),
                             ),
+                            const SizedBox(height: 2),
+                            Text(
+                              "${money.format(coinPriceNow)} / ${a.symbol}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colors.textSecondary.withOpacity(.9),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -222,7 +291,7 @@ class AssetWidget extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            money.format(fiat),
+                            money.format(fiatNow),
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: colors.textPrimary,
@@ -230,6 +299,16 @@ class AssetWidget extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           _pctBadge(pct),
+                          const SizedBox(height: 2),
+                          // Real-time fiat delta (based on coin price × holdings)
+                          Text(
+                            _formatSignedMoney(money, delta),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isUp ? Colors.green : Colors.red,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -244,8 +323,8 @@ class AssetWidget extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: AssetGuideFooter(
               colors: AppColor.of(context),
-              xlmBalance: xlmBalance,
-              usdcBalance: usdcBalance,
+              xlmBalance: _liveBalance(context, 'XLM'),
+              usdcBalance: _liveBalance(context, 'USDC'),
             ),
           );
         }
@@ -288,7 +367,7 @@ class AssetWidget extends StatelessWidget {
 
               await _openSendSelector(context, a);
             },
-            child: const Icon(LucideIcons.scanLine), // or LucideIcons.scan
+            child: const Icon(LucideIcons.scanLine),
           ),
         )
       ],
@@ -387,11 +466,22 @@ class AssetWidget extends StatelessWidget {
                   Container(width: 140, height: 14, color: Colors.white),
                   const SizedBox(height: 6),
                   Container(width: 90, height: 12, color: Colors.white),
+                  const SizedBox(height: 6),
+                  Container(width: 110, height: 10, color: Colors.white), // coin price line
                 ],
               ),
             ),
             const SizedBox(width: 12),
-            Container(width: 72, height: 14, color: Colors.white),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(width: 72, height: 14, color: Colors.white),
+                const SizedBox(height: 6),
+                Container(width: 54, height: 12, color: Colors.white), // % badge stub
+                const SizedBox(height: 6),
+                Container(width: 64, height: 10, color: Colors.white), // fiat delta stub
+              ],
+            ),
           ],
         ),
       ),
