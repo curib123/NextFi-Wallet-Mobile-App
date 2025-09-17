@@ -7,8 +7,8 @@ class SlimPreviewCard extends StatelessWidget {
   final bool isXLM;
   final String token;
   final double recipientGets;
-  final double estNetworkFeeXlm;
-  final double txFeeXlm;
+  final double estNetworkFeeXlm; // kept for input, but combined in UI
+  final double txFeeXlm;         // kept for input, but combined in UI
   final double? totalBudgetXlm;
   final double? needsXlmForFeesIfUsdc;
 
@@ -26,6 +26,8 @@ class SlimPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final double estTxFeeCombined = (txFeeXlm) + (estNetworkFeeXlm);
+
     Widget tiny(String k, String v) => Row(children: [
       Expanded(child: Text(k, style: TextStyle(color: c.textSecondary, fontSize: 12))),
       const SizedBox(width: 6),
@@ -34,7 +36,11 @@ class SlimPreviewCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: c.primary.withOpacity(0.10))),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.primary.withOpacity(0.10)),
+      ),
       child: Column(children: [
         Row(children: [
           Icon(LucideIcons.info, size: 14, color: c.textSecondary),
@@ -50,8 +56,8 @@ class SlimPreviewCard extends StatelessWidget {
         const SizedBox(height: 8),
         tiny('Recipient receives', '${recipientGets.toStringAsFixed(6)} $token'),
         const SizedBox(height: 4),
-        tiny('Transaction fee', '${txFeeXlm.toStringAsFixed(7)} XLM'),
-        tiny('Network fee (est.)', '${estNetworkFeeXlm.toStringAsFixed(7)} XLM'),
+        // 🔁 Combined line replaces the two separate fee rows:
+        tiny('Est. transaction fee', '${estTxFeeCombined.toStringAsFixed(7)} XLM'),
         if (isXLM && (totalBudgetXlm ?? 0) > 0) ...[
           const SizedBox(height: 4),
           tiny('Total budget (deducted)', '${(totalBudgetXlm!).toStringAsFixed(6)} XLM'),
