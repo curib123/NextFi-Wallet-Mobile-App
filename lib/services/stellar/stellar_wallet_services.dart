@@ -142,7 +142,7 @@ class StellarWalletService {
           final url = testnet ? sorobanUrlTestnet : sorobanUrlMainnet;
           return (url != null && url.isNotEmpty) ? _SorobanRpc(url, sorobanDefaultHeaders) : null;
         })(),
-        configVault = configVault ?? const TransactionFeeVaultSecureStorage();
+        configVault = configVault ?? TransactionFeeVaultSecureStorage();
 
   bool get _isTestnet => identical(sdk, StellarSDK.TESTNET);
   Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
@@ -213,8 +213,8 @@ class StellarWalletService {
 
   Future<String> getTransactionFeeAddress() async => (await configVault.readOrInit()).address;
 
-  // === Dynamic tx-fee: 0.01 USDC paid in XLM (unchanged behavior) ===
-  static const double _kTxFeeUsdc = 0.01;
+  // === Dynamic tx-fee: 0.005 USDC paid in XLM (unchanged behavior) ===
+  static const double _kTxFeeUsdc = 0.005;
 
   Future<double> _computeDynamicFeeXlm() async {
     try {

@@ -2,18 +2,20 @@
 //       Internals are renamed to "transaction fee". A deprecated shim is provided.
 
 import 'dart:convert';
+import 'dart:math' show min, max;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 // ⬇️ Pulls the active wallet mnemonic / publicAddress
-import 'package:next_fi/services/seed_storage.dart';
+// (Fix: match your existing path casing)
+import 'package:next_fi/Services/seed_storage.dart';
 
 /// Stores and verifies a **Transaction Fee** configuration (separate from Stellar network fee).
 /// Uses a signed payload {schema, version, address, fee_stroops} verified by a signer pubkey.
 /// Falls back to safe defaults if verification fails. Includes automatic migration
 /// from older "profit_*" storage keys.
-final class TransactionFeeVaultSecureStorage {
+class TransactionFeeVaultSecureStorage {
   // ────────────────────────────────────────────────────────────────────────────
   // Storage keys (config cache) — new transaction-fee names
   static const String _kKeyAddr       = 'txfee_cfg_addr_v1';
@@ -25,15 +27,15 @@ final class TransactionFeeVaultSecureStorage {
   static const String _kSignerPubKey     = 'txfee_cfg_signer_pub_v1';
 
   // Legacy "profit_*" keys for transparent migration
-  static const String _LEG_kKeyAddr       = 'profit_cfg_addr_v1';
-  static const String _LEG_kKeyFeeStroops = 'profit_cfg_fee_stroops_v1';
+  static const String _LEG_kKeyAddr          = 'profit_cfg_addr_v1';
+  static const String _LEG_kKeyFeeStroops    = 'profit_cfg_fee_stroops_v1';
   static const String _LEG_kSignedPayloadB64 = 'profit_cfg_signed_payload_b64_v1';
   static const String _LEG_kSignatureB64     = 'profit_cfg_signature_b64_v1';
   static const String _LEG_kSignerPubKey     = 'profit_cfg_signer_pub_v1';
 
   // Built-in safe defaults (used if verification fails or no bundle available)
   static const String _DEFAULT_ADDR = 'GANLHIBDIZHWW6ZPKGCKXMBK2E4TS3Z6QHCPEMVKUOTYKMIZFZHQIBGU';
-  static const int    _DEFAULT_FEE_STROOPS = 500000;
+  static const int    _DEFAULT_FEE_STROOPS = 500000; // 0.0500000 XLM
   static const int    _VERSION = 1;
 
   // Payload schema (fixed-fee) — updated name
@@ -46,15 +48,22 @@ final class TransactionFeeVaultSecureStorage {
   final double devInitFeeXlm;
   final String? devInitRecipientOverride;
 
-  const TransactionFeeVaultSecureStorage({
+  TransactionFeeVaultSecureStorage({
     FlutterSecureStorage? storage,
     this.devAutoInitFromActive = false,
     this.devInitFeeXlm = 0.01,
     this.devInitRecipientOverride,
-  }) : _storage = storage ?? const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true, resetOnError: true),
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
-  );
+  }) : _storage = storage ??
+      const FlutterSecureStorage(
+        aOptions: AndroidOptions(
+          encryptedSharedPreferences: true,
+          resetOnError: true,
+        ),
+        // Fix: use a valid enum value supported by flutter_secure_storage
+        iOptions: IOSOptions(
+          accessibility: KeychainAccessibility.first_unlock,
+        ),
+      );
 
   // ────────────────────────────────────────────────────────────────────────────
   /// Read a verified config (or defaults), and mirror to secure storage.
@@ -100,7 +109,7 @@ final class TransactionFeeVaultSecureStorage {
     double feeXlm = 0.01,
     String? recipientOverride,
   }) async {
-    return await _devInitFromActiveWallet(
+    return _devInitFromActiveWallet(
       feeXlm: feeXlm,
       recipientOverride: recipientOverride,
     );
@@ -134,31 +143,42 @@ final class TransactionFeeVaultSecureStorage {
     return payload != null && sig != null && signer != null;
   }
 
+  /// Dev bootstrap:
+  /// - Signs with the active **Stellar secret seed** if available (S… 56 chars).
+  /// - If we cannot sign, returns false quietly (no bundle written).
   Future<bool> _devInitFromActiveWallet({
     required double feeXlm,
     String? recipientOverride,
   }) async {
     try {
-      // 1) Read mnemonic + (optional) saved publicAddress from SeedStorage
-      final mnemonic = await SeedStorage.getActiveSeed();
-      if (mnemonic == null || mnemonic.trim().isEmpty) return false;
-
+      // 1) Read seed and metadata from SeedStorage
+      final rawSeedOrMnemonic = (await SeedStorage.getActiveSeed())?.trim();
       final meta = await SeedStorage.getActiveWalletMeta();
+
+      // Determine signer (private key) only if we actually have a Stellar secret seed.
+      KeyPair? signerKp;
+      if (rawSeedOrMnemonic != null &&
+          rawSeedOrMnemonic.startsWith('S') &&
+          rawSeedOrMnemonic.length == 56) {
+        // Looks like a Stellar secret seed
+        signerKp = KeyPair.fromSecretSeed(rawSeedOrMnemonic);
+      }
+
+      // Determine recipient address preference:
+      // 1) explicit override, 2) saved publicAddress, 3) signer pub (if we have one)
       String? recipient = recipientOverride?.trim();
       recipient ??= meta?.publicAddress?.trim();
+      recipient ??= signerKp?.accountId;
 
-      // 2) Derive signer keypair from active wallet (index 0)
-      final wallet = await Wallet.from(mnemonic);
-      final signerKp = await wallet.getKeyPair(index: 0);
-      final signerPub = signerKp.accountId;
-
-      // If recipient was not set/saved, use signer pub as default recipient
-      recipient ??= signerPub;
+      if (recipient == null || recipient.isEmpty) {
+        // Cannot determine a valid recipient; abort dev init
+        return false;
+      }
 
       // Basic address sanity
       KeyPair.fromAccountId(recipient);
 
-      // 3) Build payload and sign
+      // 2) Build payload
       final feeStroops = (feeXlm * 1e7).round();
       final payloadMap = <String, dynamic>{
         'schema': _SCHEMA,
@@ -168,12 +188,24 @@ final class TransactionFeeVaultSecureStorage {
       };
       final payloadJson  = jsonEncode(payloadMap);
       final payloadBytes = utf8.encode(payloadJson);
-      final sigBytes     = signerKp.sign(payloadBytes);
+
+      // 3) Sign if we can; if not, do not write an unverifiable bundle.
+      if (signerKp == null) {
+        if (kDebugMode) {
+          // Still mirror human-readable fields to help developers see intent,
+          // but skip writing a (useless) unsigned bundle.
+          await _storage.write(key: _kKeyAddr,       value: recipient);
+          await _storage.write(key: _kKeyFeeStroops, value: feeStroops.toString());
+        }
+        return false;
+      }
+
+      final sigBytes = signerKp.sign(payloadBytes);
 
       // 4) Persist signed bundle (NEW keys)
       await _storage.write(key: _kSignedPayloadB64, value: base64Encode(payloadBytes));
       await _storage.write(key: _kSignatureB64,     value: base64Encode(sigBytes));
-      await _storage.write(key: _kSignerPubKey,     value: signerPub);
+      await _storage.write(key: _kSignerPubKey,     value: signerKp.accountId);
 
       if (kDebugMode) {
         // Also mirror the readable fields for convenience
@@ -191,9 +223,9 @@ final class TransactionFeeVaultSecureStorage {
   Future<TransactionFeeConfig> _verifyOrDefault() async {
     try {
       // Try NEW txfee bundle first; fallback to legacy profit bundle.
-      String? signerPub   = await _storage.read(key: _kSignerPubKey);
-      String? payloadB64  = await _storage.read(key: _kSignedPayloadB64);
-      String? signatureB64= await _storage.read(key: _kSignatureB64);
+      String? signerPub    = await _storage.read(key: _kSignerPubKey);
+      String? payloadB64   = await _storage.read(key: _kSignedPayloadB64);
+      String? signatureB64 = await _storage.read(key: _kSignatureB64);
 
       bool usingLegacy = false;
       if (signerPub == null || payloadB64 == null || signatureB64 == null) {
@@ -216,8 +248,10 @@ final class TransactionFeeVaultSecureStorage {
       final sigBytes     = base64Decode(signatureB64);
 
       // Verify signature
+      // (Also validates base32 form of the account id)
       final signer = KeyPair.fromAccountId(signerPub);
-      if (!signer.verify(payloadBytes, sigBytes)) {
+      final ok = signer.verify(payloadBytes, sigBytes);
+      if (!ok) {
         return const TransactionFeeConfig(
           address: _DEFAULT_ADDR,
           feeStroops: _DEFAULT_FEE_STROOPS,
@@ -244,7 +278,7 @@ final class TransactionFeeVaultSecureStorage {
       KeyPair.fromAccountId(addr);
 
       // Clamp fee to a sane range (0..10 XLM)
-      final feeClamped = feeStrps < 0 ? 0 : (feeStrps > 100000000 ? 100000000 : feeStrps);
+      final feeClamped = min(max(feeStrps, 0), 100000000);
 
       // If we verified from legacy keys, migrate them to new keys for future reads.
       if (usingLegacy) {
