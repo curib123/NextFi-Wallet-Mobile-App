@@ -12,11 +12,29 @@ class ChartArea extends StatefulWidget {
     required this.series,
     required this.positive,
     required this.onHoverIndex,
+
+    /// Format a numeric value into display text (e.g., with fiat symbol).
+    this.formatPrice,
+
+    /// Sticky "now" price to tag at the last point (already in display fiat).
+    this.currentPrice,
+
+    /// Optional time labels (same length as series). If provided,
+    /// they render as a small subtitle under the price in the bubble.
+    this.timeLabels,
+
+    this.showYAxisLabels = true,
+    this.gridRows = 3,
   });
 
   final List<double> series;
   final bool positive;
   final ValueChanged<int?> onHoverIndex;
+  final String Function(double v)? formatPrice;
+  final double? currentPrice;
+  final List<String>? timeLabels;
+  final bool showYAxisLabels;
+  final int gridRows;
 
   @override
   State<ChartArea> createState() => _ChartAreaState();
@@ -29,31 +47,34 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
   late final AnimationController _anim;
   late Animation<double> _t;
 
-  // For animating between series
   List<double>? _prevSeriesSnapshot;
 
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 450),
-    );
+    _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 450));
     _t = CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic);
-
-    // Initial reveal
     _anim.forward(from: 0);
   }
 
   @override
   void didUpdateWidget(covariant ChartArea oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If series changed, snapshot previous and animate to new
+
     if (!_sameSeries(oldWidget.series, widget.series)) {
+      // Snapshot for transition
       _prevSeriesSnapshot = List<double>.from(oldWidget.series);
+
+      // Reset internal hover (no setState; next frame/animation will rebuild)
       _locked = false;
       _hoverIndex = null;
-      widget.onHoverIndex(null);
+
+      // Defer notifying VM about cleared hover to AFTER this build frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onHoverIndex(null);
+      });
+
       _anim.forward(from: 0);
     }
   }
@@ -67,62 +88,84 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final series = widget.series;
 
-    if (series.length < 2 || !_isFiniteList(series)) {
+    // Fast guard
+    if (widget.series.length < 2 || !_isFiniteList(widget.series)) {
       return const EmptyChart();
     }
 
-    // Background subtle gradient to add depth
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
           stops: const [0.0, 0.4, 1.0],
-          colors: [
-            c.surface,
-            c.surface.withOpacity(0.98),
-            c.surface.withOpacity(0.94),
-          ],
+          colors: [c.surface, c.surface.withOpacity(0.98), c.surface.withOpacity(0.94)],
         ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: LayoutBuilder(
         builder: (ctx, box) {
           return MouseRegion(
-            onHover: (ev) => _updateHover(ev.localPosition.dx, box.maxWidth, series.length),
-            onExit: (_) {
-              if (!_locked) _clearHover();
-            },
+            onHover: (ev) => _updateHover(ev.localPosition.dx, box.maxWidth, widget.series.length),
+            onExit: (_) { if (!_locked) _clearHover(); },
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onPanStart: (d) => _updateHover(d.localPosition.dx, box.maxWidth, series.length),
-              onPanUpdate: (d) => _updateHover(d.localPosition.dx, box.maxWidth, series.length),
-              onPanEnd: (_) {
+              onPanStart: (d) => _updateHover(d.localPosition.dx, box.maxWidth, widget.series.length),
+              onPanUpdate: (d) => _updateHover(d.localPosition.dx, box.maxWidth, widget.series.length),
+              onPanEnd: (_) { if (!_locked) _clearHover(); },
+
+              // Clear hover after tap so header/sticky revert to "Now"
+              onTapUp: (d) {
+                _updateHover(d.localPosition.dx, box.maxWidth, widget.series.length);
                 if (!_locked) _clearHover();
               },
-              onTapUp: (d) => _updateHover(d.localPosition.dx, box.maxWidth, series.length),
               onTapCancel: _clearHover,
+
               onLongPress: () => setState(() => _locked = !_locked),
               child: AnimatedBuilder(
                 animation: _t,
                 builder: (_, __) {
-                  // Build points (with animation between previous & current series)
+                  // Inner guard (handles mid-frame empties)
+                  final series = widget.series;
+                  final hasData = series.length >= 2 && _isFiniteList(series) && box.maxWidth > 0 && box.maxHeight > 0;
+                  if (!hasData) {
+                    return const SizedBox.expand(child: EmptyChart());
+                  }
+
                   final current = _buildPoints(series, box.maxWidth, box.maxHeight);
                   final prev = _prevSeriesSnapshot != null
                       ? _buildPoints(_prevSeriesSnapshot!, box.maxWidth, box.maxHeight)
                       : null;
                   final points = _lerpPoints(prev, current, _t.value);
 
-                  final hover = _hoverIndex != null
-                      ? _hoverIndex!.clamp(0, points.length - 1)
-                      : null;
+                  if (points.length < 2) {
+                    return const SizedBox.expand(child: EmptyChart());
+                  }
+
+                  final hover = _hoverIndex != null ? _hoverIndex!.clamp(0, points.length - 1) : null;
+
+                  // Safe min/max for Y labels
+                  final (minV, maxV) = _safeMinMax(series);
+
+                  final rows = widget.gridRows.clamp(1, 6);
+                  final labels = widget.showYAxisLabels
+                      ? _buildYAxisLabelsLeft(
+                    height: box.maxHeight,
+                    minV: minV,
+                    maxV: maxV,
+                    rows: rows,
+                    textColor: c.onSurface.withOpacity(0.6),
+                    bg: c.surface.withOpacity(0.65),
+                    border: c.outlineVariant.withOpacity(0.20),
+                  )
+                      : const <Widget>[];
+
+                  final showStickyNow = hover == null;
+                  final nowValue = widget.currentPrice ?? series.last;
 
                   return Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      // Line + grid
                       CustomPaint(
                         painter: LineChartPainter(
                           points: points,
@@ -133,7 +176,10 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                         size: Size.infinite,
                       ),
 
-                      // Crosshair + dot overlay
+                      // Left-side Y labels
+                      ...labels,
+
+                      // Hover crosshair + dot
                       if (hover != null)
                         CustomPaint(
                           painter: _HoverOverlayPainter(
@@ -145,7 +191,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           size: Size.infinite,
                         ),
 
-                      // Value bubble
+                      // Hover bubble (price + time label)
                       if (hover != null)
                         _ValueBubble(
                           x: points[hover].dx,
@@ -156,7 +202,31 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           background: c.surface.withOpacity(0.98),
                           textColor: c.onSurface,
                           value: series[hover],
+                          formatter: widget.formatPrice,
+                          subText: (widget.timeLabels != null && widget.timeLabels!.length == series.length)
+                              ? widget.timeLabels![hover]
+                              : null,
                         ),
+
+                      // Sticky “current” bubble at last point (when not hovering)
+                      if (showStickyNow) ...[
+                        CustomPaint(
+                          painter: _DotOnlyPainter(point: points.last, color: widget.positive ? c.primary : c.error),
+                          size: Size.infinite,
+                        ),
+                        _ValueBubble(
+                          x: points.last.dx,
+                          y: points.last.dy,
+                          width: box.maxWidth,
+                          height: box.maxHeight,
+                          color: widget.positive ? c.primary : c.error,
+                          background: c.surface.withOpacity(0.98),
+                          textColor: c.onSurface,
+                          value: nowValue,
+                          formatter: widget.formatPrice,
+                          subText: 'Now',
+                        ),
+                      ],
                     ],
                   );
                 },
@@ -169,10 +239,11 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
   }
 
   void _updateHover(double dx, double width, int len) {
-    final idx = ((dx / width) * (len - 1)).round().clamp(0, len - 1);
+    if (len <= 0 || width <= 0) return;
+    final idx = ((dx / width) * (len - 1)).round().clamp(0, math.max(0, len - 1));
     if (_hoverIndex != idx) {
-      setState(() => _hoverIndex = idx);
-      widget.onHoverIndex(idx);
+      setState(() => _hoverIndex = idx.toInt());
+      widget.onHoverIndex(idx.toInt());
     }
   }
 
@@ -186,16 +257,29 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
   static bool _sameSeries(List<double> a, List<double> b) {
     if (identical(a, b)) return true;
     if (a.length != b.length) return false;
-    // Exact compare is ok for our case (data points are computed, not user-typed)
     return listEquals(a, b);
   }
 
-  static bool _isFiniteList(List<double> xs) => xs.every((v) => !v.isNaN && !v.isInfinite);
+  static bool _isFiniteList(List<double> xs) => xs.isNotEmpty && xs.every((v) => !v.isNaN && !v.isInfinite);
+
+  static (double, double) _safeMinMax(List<double> series) {
+    if (series.isEmpty) return (0.0, 1.0);
+    double minV = series.first, maxV = series.first;
+    for (final v in series) {
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    if ((maxV - minV).abs() < 1e-12) {
+      maxV = minV + 1e-12; // avoid zero range
+    }
+    return (minV, maxV);
+  }
 
   static List<Offset> _buildPoints(List<double> series, double w, double h) {
-    final minV = series.reduce(math.min);
-    final maxV = series.reduce(math.max);
-    final range = (maxV - minV).abs() < 1e-12 ? 1e-12 : (maxV - minV);
+    if (series.isEmpty || w <= 0 || h <= 0) return const <Offset>[];
+
+    final (minV, maxV) = _safeMinMax(series);
+    final range = (maxV - minV);
 
     final n = series.length;
     final dx = n > 1 ? w / (n - 1) : w;
@@ -205,7 +289,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
 
     return List<Offset>.generate(n, (i) {
       final x = dx * i;
-      final t = (series[i] - minV) / range; // 0..1
+      final t = range == 0 ? 0.5 : (series[i] - minV) / range; // 0..1
       final y = padTop + (1.0 - t) * usableH;
       return Offset(x, y);
     });
@@ -220,10 +304,57 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
   }
 
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  List<Widget> _buildYAxisLabelsLeft({
+    required double height,
+    required double minV,
+    required double maxV,
+    required int rows,
+    required Color textColor,
+    required Color bg,
+    required Color border,
+  }) {
+    if (height <= 0) return const <Widget>[];
+    final ticks = <Widget>[];
+    for (int i = 0; i <= rows; i++) {
+      final t = i / rows;
+      final value = _lerpDouble(maxV, minV, t); // top→bottom
+      final y = height * t;
+
+      ticks.add(Positioned(
+        left: 6,
+        top: (y - 9).clamp(0.0, math.max(0.0, height - 18)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: border),
+          ),
+          child: Text(
+            widget.formatPrice != null ? widget.formatPrice!(value) : _fmt(value),
+            style: TextStyle(fontSize: 10.5, height: 1.0, color: textColor, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ));
+    }
+    return ticks;
+  }
+
+  static String _fmt(double v) {
+    final abs = v.abs();
+    if (abs >= 1000) return v.toStringAsFixed(0);
+    if (abs >= 100) return v.toStringAsFixed(1);
+    if (abs >= 1) return v.toStringAsFixed(3);
+    if (abs >= 0.1) return v.toStringAsFixed(4);
+    return v.toStringAsFixed(6);
+  }
+
+  static double _lerpDouble(double a, double b, double t) => a + (b - a) * t;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hover overlay painter (vertical line + dot with subtle glow)
+// Painters
 // ─────────────────────────────────────────────────────────────────────────────
 class _HoverOverlayPainter extends CustomPainter {
   _HoverOverlayPainter({
@@ -240,9 +371,8 @@ class _HoverOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
     final p = points[index];
-
-    // Vertical line
     final vPaint = Paint()
       ..color = lineColor
       ..style = PaintingStyle.stroke
@@ -250,24 +380,16 @@ class _HoverOverlayPainter extends CustomPainter {
       ..isAntiAlias = true;
     canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height), vPaint);
 
-    // Outer glow
     final glow = Paint()
       ..color = color.withOpacity(0.25)
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawCircle(p, 8, glow);
 
-    // Dot
-    final dot = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
+    final dot = Paint()..color = color..style = PaintingStyle.fill..isAntiAlias = true;
     canvas.drawCircle(p, 4.5, dot);
 
-    // Inner core
-    final core = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
+    final core = Paint()..color = Colors.white..style = PaintingStyle.fill;
     canvas.drawCircle(p, 1.6, core);
   }
 
@@ -280,12 +402,32 @@ class _HoverOverlayPainter extends CustomPainter {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Value bubble widget (kept in a widget so we can easily position/clip)
-//
-// It smartly keeps within chart bounds and adds a little elevation
-// for a crisp, modern look.
-// ─────────────────────────────────────────────────────────────────────────────
+class _DotOnlyPainter extends CustomPainter {
+  _DotOnlyPainter({required this.point, required this.color});
+  final Offset point;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final glow = Paint()
+      ..color = color.withOpacity(0.20)
+      ..style = PaintingStyle.fill
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    canvas.drawCircle(point, 7, glow);
+
+    final dot = Paint()..color = color..style = PaintingStyle.fill..isAntiAlias = true;
+    canvas.drawCircle(point, 4.0, dot);
+
+    final core = Paint()..color = Colors.white;
+    canvas.drawCircle(point, 1.4, core);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DotOnlyPainter oldDelegate) {
+    return oldDelegate.point != point || oldDelegate.color != color;
+  }
+}
+
 class _ValueBubble extends StatelessWidget {
   const _ValueBubble({
     required this.x,
@@ -296,6 +438,8 @@ class _ValueBubble extends StatelessWidget {
     required this.background,
     required this.textColor,
     required this.value,
+    this.formatter,
+    this.subText,
   });
 
   final double x, y;
@@ -304,16 +448,16 @@ class _ValueBubble extends StatelessWidget {
   final Color background;
   final Color textColor;
   final double value;
+  final String Function(double v)? formatter;
+  final String? subText;
 
   @override
   Widget build(BuildContext context) {
-    // Bubble size
-    const bubbleW = 96.0;
-    const bubbleH = 34.0;
+    const bubbleW = 116.0;
+    const bubbleH = 44.0; // a bit taller for 2 lines
     const radius = 10.0;
     const arrowH = 6.0;
 
-    // Keep bubble inside chart bounds
     final left = (x - bubbleW / 2).clamp(0.0, math.max(0.0, width - bubbleW));
     final top = (y - bubbleH - 12).clamp(0.0, math.max(0.0, height - bubbleH - 12));
 
@@ -327,7 +471,6 @@ class _ValueBubble extends StatelessWidget {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            // Bubble body
             Container(
               width: bubbleW,
               height: bubbleH,
@@ -335,33 +478,36 @@ class _ValueBubble extends StatelessWidget {
                 color: background,
                 borderRadius: BorderRadius.circular(radius),
                 border: Border.all(color: color.withOpacity(0.25)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
               ),
               alignment: Alignment.center,
-              child: Text(
-                _fmt(value),
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: textColor,
-                  fontSize: 13.5,
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    formatter != null ? formatter!(value) : _fmt(value),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w800, color: textColor, fontSize: 13.5, height: 1.0),
+                  ),
+                  if (subText != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subText!,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10.5, color: textColor.withOpacity(0.75), height: 1.0),
+                    ),
+                  ],
+                ],
               ),
             ),
-            // Arrow
             Positioned(
               left: bubbleW / 2 - 6,
               top: bubbleH - 1,
               child: Transform.rotate(
                 angle: math.pi / 4,
                 child: Container(
-                  width: 12,
-                  height: 12,
+                  width: 12, height: 12,
                   decoration: BoxDecoration(
                     color: background,
                     border: Border(

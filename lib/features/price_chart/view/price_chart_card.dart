@@ -17,7 +17,7 @@ class PriceChartCard extends StatefulWidget {
     this.title = 'XLM Price',
     this.compact = false,
     this.isForDashboard = false,
-    this.token = 'XLM', // external control: "XLM" | "USDC"
+    this.token = 'XLM',
     this.onTokenChanged,
   });
 
@@ -37,7 +37,6 @@ class _PriceChartCardState extends State<PriceChartCard> {
   @override
   void initState() {
     super.initState();
-    // Create a local-scoped VM so multiple cards can live independently.
     final currency = context.read<CurrencyVM>();
     _vm = PriceChartVM(
       currency,
@@ -48,7 +47,6 @@ class _PriceChartCardState extends State<PriceChartCard> {
   @override
   void didUpdateWidget(covariant PriceChartCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Keep VM token in sync with the external prop.
     if (oldWidget.token.toUpperCase() != widget.token.toUpperCase()) {
       _vm.setToken(PriceTokenX.parse(widget.token));
     }
@@ -93,15 +91,16 @@ class _PriceChartView extends StatelessWidget {
     final c = Theme.of(context).colorScheme;
     final pad = compact ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
 
-    // If title was default "XLM Price", auto follow token
     final displayTitle = title == 'XLM Price' ? '${vm.token.code} Price' : title;
+
+    // Single source of truth for values on the chart (already FIAT)
+    final displaySeries = vm.displaySeries;
+    final timeLabels = vm.timeLabels;
+
+    // Header value: hovered (fiat) else live-now (fiat)
     final shown = vm.hoveredPrice ?? vm.priceNow;
 
-    // If ALL range has too few points, fallback (same behavior as before)
-    final currency = context.read<CurrencyVM>();
-    final data = (vm.range == PriceChartRange.all && vm.series.length < 2)
-        ? (vm.token == PriceToken.usdc ? currency.usdcHistory365 : currency.xlmHistory365)
-        : vm.series;
+    String fmtPrice(double v) => fmtFiat(vm.fiatSym, v);
 
     return Card(
       elevation: 0,
@@ -146,7 +145,7 @@ class _PriceChartView extends StatelessWidget {
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 250),
                         child: Text(
-                          '${fmtFiat(vm.fiatSym, shown)} ${vm.fiatCode}',
+                          '${fmtPrice(shown)} ${vm.fiatCode}',
                           key: ValueKey('${vm.token.code}_${shown}_${vm.fiatCode}'),
                           style: TextStyle(
                             fontSize: compact ? 20 : 24,
@@ -167,9 +166,24 @@ class _PriceChartView extends StatelessWidget {
             AspectRatio(
               aspectRatio: compact ? 16 / 6 : 16 / 7,
               child: ChartArea(
-                series: data,
+                series: displaySeries,
                 positive: vm.isUp,
+
+                // VM computes hoveredPrice from its own displaySeries
                 onHoverIndex: vm.setHoverIndex,
+
+                // Axis/bubble formatter (no extra conversion here)
+                formatPrice: fmtPrice,
+
+                // Sticky "current" (fiat) — VM already does live-first fallback
+                currentPrice: vm.priceNow,
+
+                // Time labels (hour/day/month per range)
+                timeLabels: timeLabels,
+
+                // Left-side labels
+                showYAxisLabels: true,
+                gridRows: 3,
               ),
             ),
 
