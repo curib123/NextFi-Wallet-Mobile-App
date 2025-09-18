@@ -1,6 +1,8 @@
 // lib/Screen/home.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
+import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
@@ -30,11 +32,11 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> _boot() async {
-
+    // initialize your signed fee config using the active wallet
     await TransactionFeeVaultSecureStorage().initSignedConfigFromActiveWallet();
 
     // Show splash for at least this long while we check storage.
-    final minSplash = Future.delayed(const Duration(seconds: 5 ));
+    final minSplash = Future.delayed(const Duration(seconds: 5));
     final check = _checkMnemonic();
     await Future.wait([minSplash, check]);
     if (!mounted) return;
@@ -73,18 +75,28 @@ class _HomeState extends State<Home> {
 
     // 1) Always show the splash first.
     if (_showSplash) {
-      return const WalletCreationScreen(isSplash: true,);
+      return const WalletCreationScreen(isSplash: true);
     }
 
-    // 2) While still loading state (edge), show a simple loader.
+    // 2) While still loading state (edge), show the 2×2 Rubik's outline loader.
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RubiksCubeLoader(
+                size: 30,
+                speed: const Duration(milliseconds: 1200),
+                color: colors.textSecondary,
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     // 3) If no wallet yet, go to your onboarding/creation screen.
-    //    Replace WalletCreationScreen with your preferred onboarding if needed.
     if (!_hasMnemonic) {
       return const WalletCreationScreen();
     }

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/asset/asset_logo.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/features/send/model/send_token.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
@@ -19,8 +20,6 @@ import 'package:next_fi/features/scanner/view/scanner_screen.dart';
 
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
-
-import 'widgets/page_loader.dart';
 import 'widgets/error_card.dart';
 import 'widgets/balance_line.dart';
 import 'widgets/recipient_loading_line.dart';
@@ -522,14 +521,18 @@ class _SendScreenState extends State<SendScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AssetLogo(size: 18, keyOrSymbol: tokenStr,),
+            AssetLogo(size: 18, keyOrSymbol: tokenStr),
             const SizedBox(width: 8),
             Text('Send $tokenStr', style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
           ],
         ),
       ),
       body: vm.loading
-          ? const PageLoader()
+          ? const PageLoader(
+        size: 36, // tweak as needed
+        // speed: Duration(milliseconds: 1400), // optional
+        // color: null, // optional; defaults to AppColor.textSecondary
+      )
           : vm.error != null
           ? ErrorCard(message: vm.error!)
           : RefreshIndicator(onRefresh: _refresh, color: c.primary, displacement: 24, child: list),

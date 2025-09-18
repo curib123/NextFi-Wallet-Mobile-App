@@ -1,7 +1,10 @@
+// lib/common/components/alert/app_alert.dart
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 
 /// Types supported by the alert.
 enum AppAlertType { loading, success, error, warning, info }
@@ -70,11 +73,10 @@ AppAlertController showAppAlert(
     context: context,
     barrierLabel: 'Alert',
     barrierDismissible: barrierDismissible,
-    // Make the built-in barrier transparent so our full-screen blur shows through.
+    // Transparent barrier; we draw our own blur+dimmer.
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (_, __, ___) => _BlurredBackdrop(
-      // our full-screen blur + dim layer behind the dialog
       child: _AppAlertDialog(notifier: notifier),
     ),
     transitionBuilder: (_, anim, __, child) {
@@ -142,15 +144,12 @@ class _BlurredBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Let taps go to the route's modal barrier (for barrierDismissible).
         Positioned.fill(
           child: IgnorePointer(
             ignoring: true,
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-              child: Container(
-                color: Colors.black.withOpacity(tintOpacity), // dim overlay
-              ),
+              child: Container(color: Colors.black.withOpacity(tintOpacity)),
             ),
           ),
         ),
@@ -172,7 +171,6 @@ class _AppAlertDialog extends StatelessWidget {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
-          // Prevent any inherited text styles (like underlines) from leaking in.
           child: DefaultTextStyle.merge(
             style: const TextStyle(decoration: TextDecoration.none),
             child: AnimatedBuilder(
@@ -187,10 +185,10 @@ class _AppAlertDialog extends StatelessWidget {
                   children: [
                     // Card
                     ClipRRect(
-                      clipBehavior: Clip.antiAlias, // smooth edges + prevent blur seam
+                      clipBehavior: Clip.antiAlias,
                       borderRadius: BorderRadius.circular(16),
                       child: Material(
-                        type: MaterialType.transparency, // ensure a Material ancestor
+                        type: MaterialType.transparency,
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                           child: AnimatedContainer(
@@ -220,7 +218,7 @@ class _AppAlertDialog extends StatelessWidget {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const SizedBox(height: 28), // for floating icon
+                                  const SizedBox(height: 32), // space for bubble
                                   AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 180),
                                     switchInCurve: Curves.easeOutCubic,
@@ -311,15 +309,15 @@ class _AppAlertDialog extends StatelessWidget {
 
                     // Floating icon bubble (top center)
                     Positioned(
-                      top: -26,
+                      top: -28,
                       left: 0,
                       right: 0,
                       child: Center(
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeOutCubic,
-                          width: 56,
-                          height: 56,
+                          width: 60,
+                          height: 60,
                           decoration: BoxDecoration(
                             color: v.color,
                             shape: BoxShape.circle,
@@ -331,7 +329,7 @@ class _AppAlertDialog extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: _buildIcon(v),
+                          child: _buildIcon(v, colors),
                         ),
                       ),
                     ),
@@ -345,13 +343,17 @@ class _AppAlertDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon(_Visual v) {
+  Widget _buildIcon(_Visual v, AppColor colors) {
     if (v.type == AppAlertType.loading) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: CircularProgressIndicator(
-          strokeWidth: 3,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+      // Outline Rubik's cube loader inside the colored bubble
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: RubiksCubeLoader(
+            size: 25,
+            speed: const Duration(milliseconds: 1200),
+            color: Colors.white, // outline on colored circle
+          ),
         ),
       );
     }
@@ -361,7 +363,7 @@ class _AppAlertDialog extends StatelessWidget {
   _Visual _visualFor(BuildContext context, AppAlertType type, AppColor c) {
     switch (type) {
       case AppAlertType.loading:
-        return _Visual(type, c.info, LucideIcons.loader2); // spinner used instead
+        return _Visual(type, c.info, LucideIcons.loader2); // icon unused
       case AppAlertType.success:
         return _Visual(type, c.success, LucideIcons.checkCircle2);
       case AppAlertType.error:
@@ -395,3 +397,4 @@ String _defaultTitle(AppAlertType t) {
       return 'Information';
   }
 }
+
