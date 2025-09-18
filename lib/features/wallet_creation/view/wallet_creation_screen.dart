@@ -6,7 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
-import 'package:next_fi/common/components/CustomButton.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
 import 'widgets/glass_card.dart';

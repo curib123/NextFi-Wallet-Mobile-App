@@ -9,8 +9,8 @@ class SwapState {
   final double xlmBal;
   final double usdcBal;
 
-  final double? estReceive;   // latest quote
-  final double? feeXlm;       // live network fee estimate (in XLM)
+  final double? estReceive;
+  final double? feeXlm;
   final bool needsTrustline;
 
   final SwapDir dir;
@@ -31,12 +31,12 @@ class SwapState {
 
   SwapState copyWith({
     bool? loading,
-    String? error, // set '' to clear
+    String? error,
     String? accountId,
     double? xlmBal,
     double? usdcBal,
-    double? estReceive, // set null to clear
-    double? feeXlm,     // set null to clear
+    double? estReceive,
+    double? feeXlm,
     bool? needsTrustline,
     SwapDir? dir,
   }) {

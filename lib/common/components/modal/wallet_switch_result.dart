@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/common/components/CustomButton.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
 /// Result returned by the switch-wallet sheet.

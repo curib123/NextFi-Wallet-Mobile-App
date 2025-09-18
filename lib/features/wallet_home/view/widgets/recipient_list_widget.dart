@@ -7,9 +7,9 @@ import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dar
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/common/components/SnackBar.dart';
-import 'package:next_fi/common/components/recipient_upsert_sheet.dart';
-import 'package:next_fi/common/components/token_chooser.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
+import 'package:next_fi/common/components/modal/token_chooser.dart';
 
 /// Recipient list widget (provider-powered)
 class RecipientListWidget extends StatelessWidget {

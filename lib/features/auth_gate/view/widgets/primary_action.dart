@@ -1,7 +1,7 @@
 // lib/features/auth_gate/view/widgets/primary_action.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/common/components/CustomButton.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
 
 class PrimaryAction extends StatelessWidget {
   const PrimaryAction({

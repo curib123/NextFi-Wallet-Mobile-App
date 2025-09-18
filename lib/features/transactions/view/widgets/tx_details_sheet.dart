@@ -8,7 +8,7 @@ import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
-import 'package:next_fi/common/components/recipient_upsert_sheet.dart';
+import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 
 import 'asset_logo.dart';
 import 'key_value_row.dart';

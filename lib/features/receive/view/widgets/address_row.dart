@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/common/components/SnackBar.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
 class AddressRow extends StatelessWidget {

@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/common/components/showFiatPickerBottomSheet.dart';
-import 'package:next_fi/common/components/showPinChangeBottomSheet.dart';
+import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
+import 'package:next_fi/common/components/modal/showPinChangeBottomSheet.dart';
 import 'package:next_fi/features/settings/model/settings_model.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
 

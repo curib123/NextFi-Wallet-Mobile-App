@@ -7,8 +7,8 @@ import 'package:next_fi/reusable_model/asset_model.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'package:next_fi/common/components/SnackBar.dart';
-import 'package:next_fi/common/components/token_chooser.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
@@ -51,10 +51,20 @@ class AssetWidget extends StatelessWidget {
   final void Function(String token)? onItemTap;
 
   // ────────────────────────────────────────────────────────────────────────────
-  // Live balance taps (safe, dynamic; falls back to props if VM not in tree)
+  // Live balance taps (reactive for UI; non-reactive for event handlers)
   // ────────────────────────────────────────────────────────────────────────────
-  double _liveBalance(BuildContext ctx, String symbolUpper) {
-    final vm = Provider.of<WalletHomeVM?>(ctx, listen: true);
+  double _liveBalance(
+      BuildContext ctx,
+      String symbolUpper, {
+        bool reactive = false,
+      }) {
+    WalletHomeVM? vm;
+    try {
+      vm = Provider.of<WalletHomeVM?>(ctx, listen: reactive);
+    } catch (_) {
+      vm = null; // Provider may not be in tree; use props fallback
+    }
+
     if (vm != null) {
       try {
         final dynamic dvm = vm;
@@ -177,8 +187,8 @@ class AssetWidget extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: address,
-          xlmBalance: _liveBalance(context, 'XLM'),
-          usdcBalance: _liveBalance(context, 'USDC'),
+          xlmBalance: _liveBalance(context, 'XLM'), // non-reactive
+          usdcBalance: _liveBalance(context, 'USDC'), // non-reactive
           initialToken: token,
         ),
       ),
@@ -189,24 +199,61 @@ class AssetWidget extends StatelessWidget {
   Future<void> _openSendSelector(BuildContext context, AssetModel a) async {
     final addr = address.trim();
     if (addr.isEmpty) {
-      showFloatingSnackBar(context,
-          message: 'Wallet not ready', type: SnackBarType.warning);
+      showFloatingSnackBar(
+        context,
+        message: 'Wallet not ready',
+        type: SnackBarType.warning,
+      );
       return;
     }
 
-    await showTokenSelector(
-      context,
-      addr,
-      _liveBalance(context, 'XLM'),
-      _liveBalance(context, 'USDC'),
-      title: 'Select Coin',
-      screenBuilder: (address, token, balance) => SendScreen(
-        address: address,
-        token: token,
-        balance: balance,
-        autoOpenScanner: true,
-      ),
-    ).then((_) => context.read<WalletHomeVM>().refresh(force: true));
+    // Capture provider (nullable) BEFORE opening any sheets.
+    WalletHomeVM? homeVm;
+    try {
+      homeVm = context.read<WalletHomeVM?>();
+    } catch (_) {
+      homeVm = null;
+    }
+
+    // Defaults / balances (non-reactive reads)
+    final sym = a.symbol.toUpperCase();
+    final defaultToken = (sym == 'USDC') ? 'USDC' : 'XLM';
+    final xlmBal = _liveBalance(context, 'XLM');
+    final usdcBal = _liveBalance(context, 'USDC');
+
+    try {
+      // Try the token chooser first
+      await showTokenSelector(
+        context,
+        addr,
+        xlmBal,
+        usdcBal,
+        title: 'Select Coin',
+        screenBuilder: (address, token, balance) => SendScreen(
+          address: address,
+          token: token,
+          balance: balance,
+          autoOpenScanner: true,
+        ),
+      );
+    } catch (e) {
+      // Fallback: push SendScreen directly via root navigator so it always shows
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          builder: (_) => SendScreen(
+            address: addr,
+            token: defaultToken,
+            balance: defaultToken == 'USDC' ? usdcBal : xlmBal,
+            autoOpenScanner: true,
+          ),
+        ),
+      );
+    } finally {
+      // Refresh if the VM exists; don’t assume it’s provided.
+      try {
+        await homeVm?.refresh(force: true);
+      } catch (_) {/* ignore */}
+    }
   }
 
   @override
@@ -235,8 +282,8 @@ class AssetWidget extends StatelessWidget {
           final a = assets[index];
           final sym = a.symbol.toUpperCase();
 
-          // BALANCE real-time: pull live balances from WalletHomeVM if available
-          final bal = _liveBalance(context, sym);
+          // BALANCE real-time: listen for rebuilds in UI
+          final bal = _liveBalance(context, sym, reactive: true);
 
           // Compute fiat & per-coin price delta using **current** price and % change
           final pct = _pctFor(a);
@@ -260,8 +307,7 @@ class AssetWidget extends StatelessWidget {
                 onTap: () => _openReceive(context, a),
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   child: Row(
                     children: [
                       _logo(logoUrl),
@@ -280,16 +326,14 @@ class AssetWidget extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               "${formatTokenAmount(bal)} ${a.symbol}",
-                              style:
-                              TextStyle(color: colors.textSecondary),
+                              style: TextStyle(color: colors.textSecondary),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               "${money.format(coinPriceNow)} / ${a.symbol}",
                               style: TextStyle(
                                 fontSize: 12,
-                                color:
-                                colors.textSecondary.withOpacity(.9),
+                                color: colors.textSecondary.withOpacity(.9),
                               ),
                             ),
                           ],
@@ -331,16 +375,15 @@ class AssetWidget extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: AssetGuideFooter(
               colors: AppColor.of(context),
-              xlmBalance: _liveBalance(context, 'XLM'),
-              usdcBalance: _liveBalance(context, 'USDC'),
+              xlmBalance: _liveBalance(context, 'XLM', reactive: true),
+              usdcBalance: _liveBalance(context, 'USDC', reactive: true),
             ),
           );
         }
       },
     );
 
-    final Widget scrollable =
-    onRefresh != null
+    final Widget scrollable = onRefresh != null
         ? RefreshIndicator(
       onRefresh: onRefresh!,
       color: colors.primary,
@@ -374,7 +417,7 @@ class AssetWidget extends StatelessWidget {
                 orElse: () => assets.first,
               );
 
-              await _openSendSelector(context, a);
+              await _openSendSelector(context, a); // non-reactive use
             },
             child: const Icon(LucideIcons.scanLine),
           ),

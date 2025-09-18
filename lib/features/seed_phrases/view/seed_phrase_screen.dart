@@ -12,8 +12,8 @@ import 'package:next_fi/features/seed_phrases/view/widgets/phrase_card.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/warning_box.dart' show WarningBox;
 import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/common/components/CustomButton.dart';
-import 'package:next_fi/common/components/SnackBar.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 
 import '../model/seed_phrase_state.dart';

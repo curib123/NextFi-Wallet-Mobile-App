@@ -7,7 +7,7 @@ import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dar
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/common/components/SnackBar.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
 class Home extends StatefulWidget {

@@ -8,8 +8,8 @@ import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/common/components/SnackBar.dart';
-import 'package:next_fi/common/components/wallet_switch_result.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/common/components/modal/wallet_switch_result.dart';
 import 'package:next_fi/Helper/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 

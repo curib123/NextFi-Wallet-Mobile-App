@@ -11,7 +11,14 @@ import '../model/swap_state.dart';
 import '../model/swap_dir.dart';
 
 class SwapVM extends ChangeNotifier {
-  SwapVM({required StellarWalletService svc}) : _svc = svc;
+  SwapVM({required StellarWalletService svc}) : _svc = svc {
+    // Warm fee stream even if accountId is not yet bound; it will be re-wired later.
+    scheduleMicrotask(() async {
+      if (_feeSub == null) {
+        await _wireFeeStream();
+      }
+    });
+  }
 
   // ── constants ──────────────────────────────────────────────────────────────
   static const double dustXlm = 1.0; // keep 1 XLM for reserve/fees
@@ -27,13 +34,15 @@ class SwapVM extends ChangeNotifier {
   StreamSubscription? _feeSub;
 
   // ── view-facing ephemeral values (not in SwapState) ───────────────────────
-  // Current input amount (fractional units of "from" asset)
-  double _amount = 0.0;
+  double _amount = 0.0;                // user input (from-asset units)
   double get amount => _amount;
 
-  // User-selected slippage tolerance in fraction (e.g., 0.01 = 1%)
-  double _slippagePct = 0.01;
+  double _slippagePct = 0.01;          // fractional (e.g. 0.01 = 1%)
   double get slippagePct => _slippagePct;
+
+  // Tx/profit fee in XLM (separate from network fee, which is in state.feeXlm)
+  double? _txFeeXlm;                   // may be null until fetched
+  double get txFeeXlm => _txFeeXlm ?? 0.0;
 
   // ── state (immutable data class) ──────────────────────────────────────────
   SwapState _state = const SwapState();
@@ -47,24 +56,39 @@ class SwapVM extends ChangeNotifier {
   // Amount & Slippage API (UI calls these; VM does the work)
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Called by UI when text field changes. Parses and requotes.
+  /// Called by UI when text field changes. Parses, clamps to available, wires fees if needed, and requotes.
   Future<void> onAmountChanged(String raw) async {
     final v = double.tryParse(raw.trim()) ?? 0.0;
     if ((v - _amount).abs() < _EPS) return;
-    _amount = v;
-    notifyListeners(); // so `canSwap` & labels update immediately
+
+    final cap = availableFrom;
+    final clamped = v > cap && cap > 0 ? cap : (v <= 0 ? 0.0 : v);
+
+    _amount = _floorTo(clamped, 7);
+    notifyListeners(); // canSwap/labels update immediately
+
     await updateQuote(_amount);
+
+    // Ensure fee stream is alive once the user interacts.
+    if (_feeSub == null) {
+      await _wireFeeStream();
+    }
   }
 
-  /// Programmatic set (e.g., after percent chips). Requotes.
+  /// Programmatic set (e.g., after percent chips). Also clamps and wires fees if needed. Requotes.
   Future<void> setAmount(double value) async {
-    _amount = value <= 0 ? 0.0 : _floorTo(value, 7);
+    final cap = availableFrom;
+    final clamped = value > cap && cap > 0 ? cap : (value <= 0 ? 0.0 : value);
+    _amount = _floorTo(clamped, 7);
     notifyListeners();
     await updateQuote(_amount);
+    if (_feeSub == null) {
+      await _wireFeeStream();
+    }
   }
 
   /// Apply a percent of the available "from" balance (e.g., 0.25 = 25%).
-  /// Returns the new amount for UI convenience (to reflect in a TextField).
+  /// Returns the new amount for UI convenience.
   Future<double> applyPercent(double percent) async {
     final base = availableFrom;
     final v = _floorTo(base * percent, 7);
@@ -77,7 +101,7 @@ class SwapVM extends ChangeNotifier {
     final clamped = value.clamp(slippageMin, slippageMax).toDouble();
     if ((clamped - _slippagePct).abs() < _EPS) return;
     _slippagePct = _roundFrac(clamped, 3); // 0.1% steps
-    notifyListeners(); // quote line + confirm sheet recalc
+    notifyListeners(); // quote lines + confirm sheet recompute
   }
 
   /// Ensures the current amount does not exceed spendable "from" balance.
@@ -90,26 +114,52 @@ class SwapVM extends ChangeNotifier {
     return _amount;
   }
 
-  /// Convenience: compute minOut for the current quote using current slippage.
-  double? get currentMinOut {
+  // ── UI helpers so the view can "just listen" ──────────────────────────────
+  bool get hasAmount => _amount > 0;
+  bool get canSwap => _amount > 0 && hasEnough(_amount) && !_state.loading;
+
+  /// Network fee estimated by Horizon (XLM).
+  double get estNetworkFeeXlm => _state.feeXlm ?? 0.0;
+
+  /// Combined fee (network + transaction/profit), all in XLM.
+  double get estCombinedFeeXlm => estNetworkFeeXlm + txFeeXlm;
+
+  /// For nicer UI copy (e.g., show "Calculating…" instead of "—").
+  bool get hasFeeEstimates => estNetworkFeeXlm > 0 || txFeeXlm > 0;
+
+  /// Current estimated min receive (pre-fee), using current slippage.
+  double? get currentMinOutPreFee {
     final est = _state.estReceive;
     if (est == null) return null;
     return est * (1 - _slippagePct);
   }
 
-  /// UI enablement helper: can show "Swap" button active?
-  bool get canSwap => _amount > 0 && hasEnough(_amount) && !_state.loading;
+  /// Current estimated min receive (after fees):
+  /// - XLM→USDC: tx fee is paid in XLM, USDC out unaffected → same as pre-fee.
+  /// - USDC→XLM to self: actual wallet delta is reduced by txFeeXlm.
+  double? get currentMinOutAfterFees {
+    final pre = currentMinOutPreFee;
+    if (pre == null) return null;
+    if (_state.isXlmToUsdc) return pre;
+    final after = (pre - txFeeXlm);
+    return after <= 0 ? 0.0 : after;
+  }
 
   /// One-liner used by UI for the "Quote" section (pass a simple formatter).
+  /// Shows est. receive + slippage + Est. transaction fee (combined).
   String buildQuoteLine(String Function(num) fmt) {
     if (_state.estReceive == null) return 'Getting live quote…';
     final recv = fmt(_state.estReceive!);
-    final fee = _state.feeXlm == null
-        ? ''
-        : ' · Fee≈ ${fmt(_state.feeXlm!)} XLM${_state.needsTrustline ? ' (incl. trustline)' : ''}';
     final sl = (_slippagePct * 100);
     final slStr = sl % 1 == 0 ? sl.toStringAsFixed(0) : sl.toStringAsFixed(1);
-    return 'Est. receive: $recv ${_state.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: $slStr%$fee';
+
+    final feeCombined = estCombinedFeeXlm;
+    final feeStr = feeCombined <= 0
+        ? ''
+        : ' · Est. transaction fee≈ ${fmt(feeCombined)} XLM'
+        '${_state.needsTrustline ? ' (incl. trustline)' : ''}';
+
+    return 'Est. receive: $recv ${_state.isXlmToUsdc ? 'USDC' : 'XLM'} · Slippage: $slStr%$feeStr';
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -121,6 +171,7 @@ class SwapVM extends ChangeNotifier {
     final addr = (newAddr ?? '').trim();
     if (addr.isEmpty) {
       _teardownStreams();
+      _txFeeXlm = null;
       _set(_state.copyWith(
         accountId: null,
         xlmBal: 0, usdcBal: 0,
@@ -134,6 +185,7 @@ class SwapVM extends ChangeNotifier {
     if (_state.accountId == addr) return;
 
     _teardownStreams();
+    _txFeeXlm = null;
     _set(_state.copyWith(
       accountId: addr,
       xlmBal: 0, usdcBal: 0,
@@ -160,16 +212,15 @@ class SwapVM extends ChangeNotifier {
   Future<double> flipDirectionAndRequote() async {
     final newDir = _state.isXlmToUsdc ? SwapDir.usdcToXlm : SwapDir.xlmToUsdc;
     await setDir(newDir);
-    // ensure amount is within the new "from" spendable balance
     return await capAmountToAvailableAndRequote();
   }
 
   Future<void> setDir(SwapDir value) async {
     if (_state.dir == value) return;
-    // when direction changes, trustline requirement may change
     final needs = value == SwapDir.xlmToUsdc ? _state.needsTrustline : false;
     _set(_state.copyWith(dir: value, needsTrustline: needs));
-    await _wireFeeStream();
+    await _wireFeeStream(); // recompute ops & refetch fees
+    await capAmountToAvailableAndRequote(); // auto-fix overshoot
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -184,8 +235,8 @@ class SwapVM extends ChangeNotifier {
         _svc.getXlmBalance(aid),
         _svc.getUsdcBalance(aid),
       ]);
-      var xlm = res[0];
-      var usdc = res[1];
+      final xlm = res[0];
+      final usdc = res[1];
 
       bool needs = _state.needsTrustline;
       try {
@@ -198,7 +249,10 @@ class SwapVM extends ChangeNotifier {
         usdcBal: usdc,
         needsTrustline: needs,
       ));
+
       await _wireFeeStream();
+
+      if (_amount > 0) { await updateQuote(_amount); }
     } catch (_) {/* keep last */}
   }
 
@@ -233,7 +287,7 @@ class SwapVM extends ChangeNotifier {
   // ──────────────────────────────────────────────────────────────────────────
 
   /// Execute swap. Provide a [secretSupplier] to fetch S… securely at submit time.
-  /// If not provided, it will (optionally) fallback to deriving from the active mnemonic.
+  /// If not provided, it will fallback to deriving from the active mnemonic.
   Future<String> executeSwap({
     required double amount,
     required double minOut,
@@ -278,9 +332,8 @@ class SwapVM extends ChangeNotifier {
     try {
       await refreshBalances();
       await _wireAccountStream();
-      await _wireFeeStream();
+      await _wireFeeStream(); // also fetch tx-fee
       _set(_state.copyWith(loading: false, error: ''));
-      // Keep quote in sync with current amount after prime
       if (_amount > 0) { await updateQuote(_amount); }
     } catch (e) {
       _set(_state.copyWith(loading: false, error: 'Failed to initialize swap: $e'));
@@ -289,7 +342,7 @@ class SwapVM extends ChangeNotifier {
 
   void _teardownStreams() {
     _acctSub?.cancel(); _acctSub = null;
-    _feeSub?.cancel(); _feeSub = null;
+    _feeSub?.cancel();  _feeSub  = null;
   }
 
   Future<void> _wireAccountStream() async {
@@ -305,22 +358,39 @@ class SwapVM extends ChangeNotifier {
         needsTrustline: _state.isXlmToUsdc ? !s.hasUsdcTrustline : false,
       ));
       if (prevNeeds != _state.needsTrustline) { await _wireFeeStream(); }
-      // Keep quote consistent if amount is non-zero
-      if (_amount > 0) { await updateQuote(_amount); }
+      // Auto-cap if user typed too much and balance changed under us
+      if (_amount > 0) {
+        await capAmountToAvailableAndRequote();
+      }
     }, onError: (_) {/* keep last */});
   }
 
   Future<void> _wireFeeStream() async {
     _feeSub?.cancel();
 
+    // 1) Refresh *transaction/profit fee* (in XLM) so UI can show combined fee
+    try {
+      final x = await _svc.getCurrentFeeXlm();
+      if ((x - ( _txFeeXlm ?? 0.0 )).abs() > _EPS) {
+        _txFeeXlm = x;
+        notifyListeners(); // estCombinedFeeXlm/currentMinOutAfterFees change
+      }
+    } catch (_) {
+      // keep last known tx-fee
+    }
+
+    // 2) Recompute op-count for *network fee* estimation stream
     int ops = 1; // swap op
     int feeStroops = 0;
     try { feeStroops = await _svc.getCurrentFeeStroops(); } catch (_) {}
-    if (feeStroops > 0) ops += 1;
-    if (_state.isXlmToUsdc && _state.needsTrustline) ops += 1;
+    if (feeStroops > 0) ops += 1;                     // extra op: pay tx-fee in XLM
+    if (_state.isXlmToUsdc && _state.needsTrustline) ops += 1; // if trustline needed
 
+    // 3) Stream network fee estimate and update state.feeXlm continuously
     _feeSub = _svc.feeEstimateStream(opCount: ops, percentile: 95).listen((f) {
-      _set(_state.copyWith(feeXlm: f.totalXlm));
+      if ((_state.feeXlm ?? 0.0) != f.totalXlm) {
+        _set(_state.copyWith(feeXlm: f.totalXlm));
+      }
     }, onError: (_) {/* keep last */});
   }
 

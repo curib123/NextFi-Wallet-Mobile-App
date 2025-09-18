@@ -8,7 +8,7 @@ class SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     return Container(
-      padding: const EdgeInsets.all(5),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(14),
