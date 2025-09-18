@@ -5,6 +5,10 @@ import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dar
 import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+// Reusables
+import 'package:next_fi/common/components/Input/modern_input.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
+
 /// Call this to open the sheet.
 /// Returns true if something was saved.
 Future<bool?> showRecipientUpsertSheet(
@@ -86,8 +90,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     final text = data?.text?.trim();
     if (text != null && text.isNotEmpty) {
       _addr.text = text.toUpperCase().replaceAll(RegExp(r'\s+'), '');
-      _addr.selection =
-          TextSelection.collapsed(offset: _addr.text.length);
+      _addr.selection = TextSelection.collapsed(offset: _addr.text.length);
       setState(() => _addrTouched = true);
       HapticFeedback.selectionClick();
     }
@@ -167,35 +170,6 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     );
   }
 
-  InputDecoration _decoration({
-    required String label,
-    required String hint,
-    IconData? prefix,
-    Widget? suffix,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: prefix == null ? null : Icon(prefix),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: cs.surfaceContainerHighest.withOpacity(.4),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: cs.primary, width: 1.6),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-    );
-  }
-
   Widget _addressStatus() {
     final cs = Theme.of(context).colorScheme;
     final valid = _addrValid;
@@ -239,8 +213,8 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
         Text('Color Tag', style: t.labelLarge),
         const SizedBox(height: 10),
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 5,
+          runSpacing: 5,
           children: _palette.map((c) {
             final selected = _color == c;
             return InkWell(
@@ -326,37 +300,39 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Name
                       TextFormField(
                         controller: _name,
                         autofocus: widget.initial == null,
                         textCapitalization: TextCapitalization.words,
                         textInputAction: TextInputAction.next,
-                        decoration: _decoration(
-                          label: 'Name',
-                          hint: 'e.g. Alice (USDC payouts)',
-                          prefix: Icons.badge_outlined,
+                        decoration: modernInput(
+                          context,
+                          placeholder: 'Name (e.g., Alice — USDC payouts)',
+                          prefix: const Icon(Icons.badge_outlined),
                         ),
                         validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
                       ),
                       const SizedBox(height: 12),
+
+                      // Address
                       TextFormField(
                         controller: _addr,
                         onTap: () => setState(() => _addrTouched = true),
                         textCapitalization: TextCapitalization.characters,
                         textInputAction: TextInputAction.done,
-                        decoration: _decoration(
-                          label: 'Wallet Address (Stellar / XLM)',
-                          hint: 'G… (56 chars) — classic account',
-                          prefix: Icons.account_balance_wallet_outlined,
+                        decoration: modernInput(
+                          context,
+                          placeholder: 'Wallet Address (G… 56 chars)',
+                          prefix: const Icon(Icons.account_balance_wallet_outlined),
                           suffix: addressSuffix,
                         ),
                         inputFormatters: [
                           // Force uppercase (Stellar base32 uses A–Z and 2–7)
                           TextInputFormatter.withFunction(
-                                (oldValue, newValue) => newValue.copyWith(
-                              text: newValue.text.toUpperCase(),
-                            ),
+                                (oldValue, newValue) =>
+                                newValue.copyWith(text: newValue.text.toUpperCase()),
                           ),
                           FilteringTextInputFormatter.deny(RegExp(r'\s')), // no spaces
                         ],
@@ -369,13 +345,15 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                       ),
                       _addressStatus(),
                       const SizedBox(height: 16),
+
                       _colorPicker(),
                       const SizedBox(height: 24),
                     ],
                   ),
                 ),
               ),
-              // Sticky action bar
+
+              // Sticky action bar (CustomButton)
               Container(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 decoration: BoxDecoration(
@@ -394,31 +372,22 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: _saving
-                            ? null
-                            : () => Navigator.pop(context, false),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text('Cancel'),
+                      child: CustomButton(
+                        text: 'Cancel',
+                        type: _saving ? ButtonType.disabled : ButtonType.outlined,
+                        onPressed: _saving ? () {} : () => Navigator.pop(context, false),
+                        fullWidth: true,
+                        icon: Icons.close_rounded,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _canSave ? _save : null,
-                        icon: _saving
-                            ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                            : const Icon(Icons.save_outlined),
-                        label: Text(isEdit ? 'Save' : 'Add'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
+                      child: CustomButton(
+                        text: isEdit ? 'Save' : 'Add',
+                        type: _canSave ? ButtonType.filled : ButtonType.disabled,
+                        onPressed: _canSave ? _save : () {},
+                        fullWidth: true,
+                        icon: _saving ? Icons.hourglass_bottom_rounded : Icons.save_outlined,
                       ),
                     ),
                   ],
