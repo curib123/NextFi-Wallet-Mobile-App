@@ -28,7 +28,7 @@ void showFloatingSnackBar(
 
   final EdgeInsets margin = isTop
       ? EdgeInsets.fromLTRB(16, topSafe + 16, 16, 0)
-      : EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomSafe);
+      : EdgeInsets.fromLTRB(16, 0, 16, 20 + bottomSafe);
 
   final Color bg = switch (type) {
     SnackBarType.success => _blend(theme.colorScheme.secondaryContainer, theme.colorScheme.onSecondaryContainer, .06),
