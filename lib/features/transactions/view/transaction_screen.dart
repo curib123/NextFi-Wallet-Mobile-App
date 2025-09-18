@@ -1,14 +1,15 @@
+// lib/features/transactions/view/transaction_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/emptywidgets/empty_state.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
@@ -30,27 +31,28 @@ class _TransactionScreenState extends State<TransactionScreen> {
   final ScrollController _scrollController = ScrollController();
   StreamSubscription<Tx>? _incomingUiSub;
 
-  // bind to wallet address changes
+  // Store refs so we NEVER call context.* in dispose()
+  WalletHomeVM? _walletVm;
   VoidCallback? _walletListener;
   String? _lastBoundAddr;
 
   static final DateFormat _listFmt = DateFormat('MMM d, h:mm a');
-
   final List<IncomingChipData> _incomingChips = [];
 
   @override
   void initState() {
     super.initState();
 
-    // infinite scroll → load more
+    // Infinite scroll → load more
     _scrollController.addListener(() {
       final pos = _scrollController.position;
       if (!mounted || !pos.hasPixels) return;
-      final vm = context.read<TransactionsVM>();
+
+      final txvm = context.read<TransactionsVM>(); // safe in handlers
       if (pos.pixels >= pos.maxScrollExtent - 200 &&
-          !vm.state.loadingMore &&
-          vm.state.hasMore) {
-        vm.fetch(loadMore: true);
+          !txvm.state.loadingMore &&
+          txvm.state.hasMore) {
+        txvm.fetch(loadMore: true);
       }
     });
   }
@@ -59,26 +61,36 @@ class _TransactionScreenState extends State<TransactionScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    // Defer to next frame so build/layout is stable
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final wallet = context.read<WalletHomeVM>();
-      final txvm = context.read<TransactionsVM>();
+      final walletNow = context.read<WalletHomeVM>();     // safe here
+      final txvm = context.read<TransactionsVM>();        // safe here
 
-      _walletListener ??= () {
-        final addr = wallet.state.address;
-        if (addr != _lastBoundAddr) {
-          _lastBoundAddr = addr;
-          txvm.bindToAddress(addr);
+      // If WalletHomeVM instance changed, move listener
+      if (!identical(walletNow, _walletVm)) {
+        if (_walletVm != null && _walletListener != null) {
+          _walletVm!.removeListener(_walletListener!);
         }
-      };
+        _walletVm = walletNow;
 
-      wallet.removeListener(_walletListener!);
-      wallet.addListener(_walletListener!);
-      _walletListener!(); // initial bind
+        _walletListener ??= () {
+          final addr = _walletVm!.state.address;
+          if (addr != _lastBoundAddr) {
+            _lastBoundAddr = addr;
+            txvm.bindToAddress(addr);
+          }
+        };
 
-      // subscribe once for incoming UI chips/toasts
+        _walletVm!.addListener(_walletListener!);
+        _walletListener!(); // initial bind
+      }
+
+      // Subscribe once for incoming UI chips/toasts
       _incomingUiSub ??= txvm.incomingStream.listen((tx) {
+        if (!mounted) return;
+
         final colors = AppColor.of(context);
         final asset = (tx['asset'] ?? 'XLM').toString();
         final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
@@ -108,6 +120,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
             );
           },
         );
+
+        // Auto-close after 5s if still mounted
         Timer(const Duration(seconds: 5), () {
           if (mounted) ctl.close();
         });
@@ -117,12 +131,15 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   @override
   void dispose() {
+    // No context.* calls here
     _incomingUiSub?.cancel();
+    _incomingUiSub = null;
 
-    final wallet = mounted ? context.read<WalletHomeVM>() : null;
-    if (wallet != null && _walletListener != null) {
-      wallet.removeListener(_walletListener!);
+    if (_walletVm != null && _walletListener != null) {
+      _walletVm!.removeListener(_walletListener!);
     }
+    _walletVm = null;
+    _walletListener = null;
 
     _scrollController.dispose();
     super.dispose();
@@ -175,12 +192,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     Widget content;
     if (vm.state.loading && vm.state.txs.isEmpty) {
-      // FULL-PAGE LOADER (Rubik’s cube)
-      content = const PageLoader(
-        label: 'Loading transactions…',
-      );
+      content = const PageLoader(label: 'Loading transactions…');
     } else if (vm.state.errorMsg != null) {
-      // Use CustomButton for actions (no hardcoded ElevatedButton)
       content = Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -190,7 +203,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
               EmptyState.error(
                 title: 'Couldn’t load transactions',
                 message: vm.state.errorMsg!,
-                // We won’t use the built-in action to demonstrate CustomButton below
                 primaryActionLabel: null,
                 onPrimaryAction: null,
                 context: context,
@@ -267,18 +279,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
           itemCount: visibleTxs.length + (showLoaderRow ? 1 : 0),
           itemBuilder: (context, index) {
             if (showLoaderRow && index >= visibleTxs.length) {
-              // COMPACT ROW LOADER (Rubik’s cube, no label)
-              return  Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: RubiksCubeLoader(color:colors.textPrimary)),
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: RubiksCubeLoader(color: colors.textPrimary),
+                ),
               );
             }
             final tx = visibleTxs[index];
-
-            // For explorer link per-asset (example if you need it later):
-            // final assetKey = (tx['asset'] ?? 'XLM').toString();
-            // final txHash = (tx['hash'] ?? '').toString();
-            // final explorer = assetVm.explorerUrl(assetKey, 'tx', {'hash': txHash});
 
             return TransactionTile(
               colors: colors,
@@ -311,8 +319,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: colors.surface,
-        title: const Text('Transactions',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Transactions',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: TransactionFilterChips(colors: colors, vm: vm),
@@ -334,19 +344,21 @@ class _TransactionScreenState extends State<TransactionScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: _incomingChips
-                    .map((c) => AnimatedSlide(
-                  key: ValueKey(c.id),
-                  duration: const Duration(milliseconds: 250),
-                  offset: const Offset(0, 0),
-                  child: AnimatedOpacity(
+                    .map(
+                      (c) => AnimatedSlide(
+                    key: ValueKey(c.id),
                     duration: const Duration(milliseconds: 250),
-                    opacity: 1.0,
-                    child: IncomingChipBadge(
-                      chip: c,
-                      surface: colors.surface,
+                    offset: const Offset(0, 0),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 250),
+                      opacity: 1.0,
+                      child: IncomingChipBadge(
+                        chip: c,
+                        surface: colors.surface,
+                      ),
                     ),
                   ),
-                ))
+                )
                     .toList(),
               ),
             ),
