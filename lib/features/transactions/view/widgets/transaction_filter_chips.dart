@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 

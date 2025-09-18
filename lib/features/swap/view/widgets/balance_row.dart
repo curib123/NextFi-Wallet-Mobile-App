@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/asset/asset_logo.dart';
 
 class BalanceRow extends StatelessWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'live_counting_balance.dart';
 
 class HeaderSection extends StatefulWidget {

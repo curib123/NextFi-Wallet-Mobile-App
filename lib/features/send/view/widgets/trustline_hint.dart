@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:provider/provider.dart';
 

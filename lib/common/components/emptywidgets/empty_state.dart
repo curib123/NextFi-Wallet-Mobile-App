@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;

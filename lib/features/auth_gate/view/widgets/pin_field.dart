@@ -1,7 +1,7 @@
 // lib/features/auth_gate/view/widgets/pin_field.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class PinField extends StatelessWidget {
   const PinField({

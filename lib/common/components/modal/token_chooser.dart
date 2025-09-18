@@ -3,7 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/reusable_model/asset_model.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 Future<void> showTokenSelector(
     BuildContext context,

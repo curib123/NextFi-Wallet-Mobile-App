@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/helper/link_opener/link_opener.dart';
 import 'package:provider/provider.dart';
-
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
-
-import 'asset_logo.dart';
 import 'key_value_row.dart';
 import 'tx_utils.dart';
 
@@ -34,6 +34,7 @@ Future<void> showTxDetailsBottomSheet({
   final hash = (tx['hash'] ?? '').toString();
 
   final isTestnet = context.read<TransactionsVM>().isTestnet;
+  // You can still compute raw URLs if you need them elsewhere
   final explorerUrl = explorerUrlFor(hash, isTestnet);
 
   final recipProv = context.read<RecipientAddressVM>();
@@ -63,6 +64,7 @@ Future<void> showTxDetailsBottomSheet({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // drag handle
                 Center(
                   child: Container(
                     width: 42,
@@ -74,6 +76,8 @@ Future<void> showTxDetailsBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 14),
+
+                // Header
                 Row(
                   children: [
                     Icon(
@@ -94,15 +98,12 @@ Future<void> showTxDetailsBottomSheet({
                     ),
                     const Spacer(),
                     Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: (isIncoming ? colors.success : colors.error)
-                            .withOpacity(0.12),
+                        color: (isIncoming ? colors.success : colors.error).withOpacity(0.12),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: (isIncoming ? colors.success : colors.error)
-                              .withOpacity(0.3),
+                          color: (isIncoming ? colors.success : colors.error).withOpacity(0.3),
                         ),
                       ),
                       child: Text(
@@ -117,10 +118,12 @@ Future<void> showTxDetailsBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 12),
+
+                // Amount + asset
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AssetLogo(asset: asset, size: 24),
+                    AssetLogo(keyOrSymbol: asset), // uses AssetVM via Provider
                     const SizedBox(width: 8),
                     Text(
                       '${amount.toStringAsFixed(6)} $asset',
@@ -134,12 +137,13 @@ Future<void> showTxDetailsBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 8),
+
+                // Contact badge + Save/Edit
                 Row(
                   children: [
                     if (existing != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: Color(existing.color).withOpacity(0.14),
                           borderRadius: BorderRadius.circular(999),
@@ -157,6 +161,8 @@ Future<void> showTxDetailsBottomSheet({
                         ),
                       ),
                     if (existing != null) const SizedBox(width: 8),
+
+                    // Tertiary action
                     TextButton.icon(
                       onPressed: () async {
                         final saved = await showRecipientUpsertSheet(
@@ -164,17 +170,13 @@ Future<void> showTxDetailsBottomSheet({
                           initial: existing,
                         );
                         if (saved == true) {
-                          final updated = context
-                              .read<RecipientAddressVM>()
-                              .byAddress(peerAddr);
+                          final updated = context.read<RecipientAddressVM>().byAddress(peerAddr);
                           tx['recName'] = updated?.name;
                           tx['recColor'] = updated?.color;
                         }
                       },
                       icon: Icon(
-                        existing != null
-                            ? LucideIcons.userCog
-                            : LucideIcons.userPlus,
+                        existing != null ? LucideIcons.userCog : LucideIcons.userPlus,
                         size: 16,
                         color: colors.primary,
                       ),
@@ -192,10 +194,11 @@ Future<void> showTxDetailsBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 8),
+
+                // Date/time
                 Row(
                   children: [
-                    Icon(LucideIcons.calendarClock,
-                        size: 16, color: colors.textSecondary),
+                    Icon(LucideIcons.calendarClock, size: 16, color: colors.textSecondary),
                     const SizedBox(width: 8),
                     Text(
                       dt != null ? _detailFmt.format(dt) : 'Unknown date',
@@ -204,96 +207,65 @@ Future<void> showTxDetailsBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 14),
+
                 const Divider(height: 1),
                 const SizedBox(height: 12),
-                KeyValueRow(
-                  label: 'From',
-                  value: from,
-                  copyable: true,
-                ),
+
+                // Key/Value details
+                KeyValueRow(label: 'From', value: from, copyable: true),
                 const SizedBox(height: 8),
-                KeyValueRow(
-                  label: 'To',
-                  value: to,
-                  copyable: true,
-                ),
+                KeyValueRow(label: 'To', value: to, copyable: true),
                 const SizedBox(height: 8),
-                KeyValueRow(
-                  label: 'Tx Hash',
-                  value: hash,
-                  mono: true,
-                  copyable: true,
-                ),
+                KeyValueRow(label: 'Tx Hash', value: hash, mono: true, copyable: true),
                 const SizedBox(height: 16),
+
+                // Actions (CustomButton)
                 Row(
                   children: [
+                    // Copy Hash (outlined / disabled)
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: hash.isEmpty
-                            ? null
-                            : () async {
+                      child: CustomButton(
+                        text: 'Copy Hash',
+                        icon: LucideIcons.copy,
+                        type: (hash.isEmpty) ? ButtonType.disabled : ButtonType.outlined,
+                        onPressed: () async {
+                          if (hash.isEmpty) return;
                           await Clipboard.setData(ClipboardData(text: hash));
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Hash copied')),
                           );
                         },
-                        icon: Icon(LucideIcons.copy,
-                            size: 18, color: colors.primary),
-                        label: Text(
-                          'Copy Hash',
-                          style: TextStyle(
-                              color: colors.primary, fontWeight: FontWeight.w700),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: colors.primary.withOpacity(0.35)),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
+
+                    // Explorer (filled / disabled) — uses LinkOpener
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed:
-                        (explorerUrl == null || explorerUrl.isEmpty)
-                            ? null
-                            : () async {
-                          await Clipboard.setData(
-                              ClipboardData(text: explorerUrl));
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Explorer link copied')),
+                      child: CustomButton(
+                        text: 'Explorer',
+                        icon: LucideIcons.externalLink,
+                        type: (hash.isEmpty) ? ButtonType.disabled : ButtonType.filled,
+                        onPressed: () async {
+                          if (hash.isEmpty) return;
+                          await LinkOpener.openStellarTx(
+                            context,
+                            hash: hash,
+                            isTestnet: isTestnet,
                           );
                         },
-                        icon: const Icon(LucideIcons.externalLink,
-                            size: 18, color: Colors.white),
-                        label: const Text('Explorer'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colors.primary,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          elevation: 0,
-                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(LucideIcons.check, size: 18),
-                    label: const Text('Done'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: colors.textPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
+
+                // Done (outlined, full width)
+                CustomButton(
+                  text: 'Done',
+                  icon: LucideIcons.check,
+                  type: ButtonType.outlined,
+                  onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),

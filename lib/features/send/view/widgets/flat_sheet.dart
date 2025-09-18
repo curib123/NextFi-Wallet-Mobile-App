@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class FlatSheet extends StatelessWidget {
   const FlatSheet({super.key, required this.child, this.maxHeightFactor = 0.92});

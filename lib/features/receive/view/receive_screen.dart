@@ -8,7 +8,7 @@ import 'package:next_fi/features/receive/model/receive_state.dart';
 import 'package:next_fi/features/receive/view_model/receive_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'widgets/token_switch.dart';
 import 'widgets/qr_preview_card.dart';
 import 'widgets/address_row.dart';

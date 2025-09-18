@@ -7,7 +7,7 @@ import 'package:next_fi/features/settings/view/widgets/settings_app_bar.dart';
 import 'package:next_fi/features/settings/view/widgets/settings_card.dart';
 import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'widgets/widgets.dart';
 
 class SettingsScreen extends StatelessWidget {

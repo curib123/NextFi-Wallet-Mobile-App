@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 

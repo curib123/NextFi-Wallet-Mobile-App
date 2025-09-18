@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class FiatChip extends StatelessWidget {
   const FiatChip({super.key});

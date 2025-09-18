@@ -6,7 +6,7 @@ import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart'
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:provider/provider.dart';
 
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/common/components/modal/token_chooser.dart';

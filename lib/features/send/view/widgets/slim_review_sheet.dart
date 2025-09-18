@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/features/transactions/view/widgets/asset_logo.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
 
 class SlimReviewSheet extends StatelessWidget {
   const SlimReviewSheet({
@@ -80,7 +80,7 @@ class SlimReviewSheet extends StatelessWidget {
               border: Border.all(color: c.primary.withOpacity(0.14)),
             ),
             child: Row(children: [
-              AssetLogo(asset: tokenStr, size: 14),
+              AssetLogo(keyOrSymbol: tokenStr, size: 14),
               const SizedBox(width: 6),
               Text(tokenStr, style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w700, fontSize: 12)),
             ]),

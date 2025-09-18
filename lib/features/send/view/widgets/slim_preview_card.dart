@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
-import 'package:next_fi/features/transactions/view/widgets/asset_logo.dart';
-
+import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
 class SlimPreviewCard extends StatelessWidget {
   final bool isXLM;
   final String token;
   final double recipientGets;
-  final double estNetworkFeeXlm; // kept for input, but combined in UI
-  final double txFeeXlm;         // kept for input, but combined in UI
+  final double estNetworkFeeXlm;
+  final double txFeeXlm;
   final double? totalBudgetXlm;
   final double? needsXlmForFeesIfUsdc;
 
@@ -48,7 +47,7 @@ class SlimPreviewCard extends StatelessWidget {
           Text('Preview', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
           const Spacer(),
           Row(children: [
-            AssetLogo(asset: token, size: 14),
+            AssetLogo(keyOrSymbol: token, size: 14),
             const SizedBox(width: 6),
             Text(token, style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w700, fontSize: 11.5)),
           ]),

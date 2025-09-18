@@ -1,6 +1,6 @@
 // lib/features/settings/view/widgets/settings_card.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/features/settings/model/settings_model.dart';
 import 'setting_tile.dart';
 

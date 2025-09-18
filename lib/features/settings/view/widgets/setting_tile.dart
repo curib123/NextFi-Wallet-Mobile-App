@@ -1,7 +1,7 @@
 // lib/features/settings/view/widgets/setting_tile.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/features/settings/model/settings_model.dart';
 
 class SettingTile extends StatelessWidget {

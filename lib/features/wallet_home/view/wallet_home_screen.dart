@@ -19,7 +19,7 @@ import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';

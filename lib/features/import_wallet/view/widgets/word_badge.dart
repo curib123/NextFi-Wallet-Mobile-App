@@ -1,6 +1,6 @@
 // lib/features/import_wallet/view/widgets/word_badge.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class WordBadge extends StatelessWidget {
   const WordBadge({super.key, required this.count});

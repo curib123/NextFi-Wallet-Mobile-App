@@ -1,6 +1,6 @@
 // lib/features/auth_gate/view/widgets/top_bar.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class TopBar extends StatelessWidget implements PreferredSizeWidget {
   const TopBar({super.key, required this.colors});

@@ -1,7 +1,7 @@
 // lib/features/wallet_creation/view/widgets/fintech_background.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class FintechBackground extends StatelessWidget {
   const FintechBackground({

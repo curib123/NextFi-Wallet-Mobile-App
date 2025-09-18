@@ -10,7 +10,7 @@ import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/wallet_switch_result.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/Services/seed_storage.dart';
 
 class TopBar extends StatelessWidget {

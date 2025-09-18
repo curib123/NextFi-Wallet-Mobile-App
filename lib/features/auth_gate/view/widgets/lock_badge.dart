@@ -1,6 +1,6 @@
 // lib/features/auth_gate/view/widgets/lock_badge.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class LockBadge extends StatelessWidget {
   const LockBadge({super.key, required this.unlocked, required this.colors});

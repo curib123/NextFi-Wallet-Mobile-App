@@ -1,7 +1,7 @@
 // lib/features/wallet_settings/view/widgets/phrase_card_hold_reveal.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class PhraseCardHoldReveal extends StatelessWidget {
   const PhraseCardHoldReveal({

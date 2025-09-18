@@ -1,6 +1,6 @@
 // lib/features/receive/view/widgets/qr_preview_card.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class QrPreviewCard extends StatelessWidget {

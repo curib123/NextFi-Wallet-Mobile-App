@@ -7,7 +7,7 @@ import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/features/swap/view/widgets/balance_row.dart';
 import 'package:provider/provider.dart';
 
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 

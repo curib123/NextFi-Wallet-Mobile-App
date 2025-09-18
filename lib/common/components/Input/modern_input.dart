@@ -1,6 +1,6 @@
 // Replace your existing _modernInput with this version
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 InputDecoration modernInput(
     BuildContext context, {

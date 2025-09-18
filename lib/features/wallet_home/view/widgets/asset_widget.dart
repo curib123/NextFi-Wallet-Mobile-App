@@ -14,7 +14,7 @@ import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 enum PriceWindow { h24, d7, d30, y1 }
 

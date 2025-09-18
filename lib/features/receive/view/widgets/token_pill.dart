@@ -1,6 +1,6 @@
 // lib/features/receive/view/widgets/token_pill.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class TokenPill extends StatelessWidget {
   const TokenPill({super.key, required this.token});

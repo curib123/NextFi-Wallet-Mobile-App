@@ -2,18 +2,23 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/emptywidgets/empty_state.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
+
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
+
 import 'widgets/transaction_filter_chips.dart';
-import 'widgets/transaction_tile.dart';
 import 'widgets/tx_details_sheet.dart';
 import 'widgets/incoming_chip.dart';
+import 'widgets/transaction_tile.dart';
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
@@ -170,15 +175,35 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     Widget content;
     if (vm.state.loading && vm.state.txs.isEmpty) {
-      content = const Center(child: CircularProgressIndicator());
+      // FULL-PAGE LOADER (Rubik’s cube)
+      content = const PageLoader(
+        label: 'Loading transactions…',
+      );
     } else if (vm.state.errorMsg != null) {
+      // Use CustomButton for actions (no hardcoded ElevatedButton)
       content = Center(
-        child: EmptyState.error(
-          title: 'Couldn’t load transactions',
-          message: vm.state.errorMsg!,
-          primaryActionLabel: 'Retry',
-          onPrimaryAction: vm.resetAndFetch,
-          context: context,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EmptyState.error(
+                title: 'Couldn’t load transactions',
+                message: vm.state.errorMsg!,
+                // We won’t use the built-in action to demonstrate CustomButton below
+                primaryActionLabel: null,
+                onPrimaryAction: null,
+                context: context,
+              ),
+              const SizedBox(height: 12),
+              CustomButton(
+                text: 'Retry',
+                icon: LucideIcons.refreshCw,
+                onPressed: vm.resetAndFetch,
+                type: ButtonType.filled,
+              ),
+            ],
+          ),
         ),
       );
     } else if (vm.state.txs.isEmpty) {
@@ -186,22 +211,52 @@ class _TransactionScreenState extends State<TransactionScreen> {
           ? 'This wallet is new or not yet funded on-chain. Once you receive your first XLM or USDC, your transactions will appear here.'
           : 'When you send or receive XLM or USDC, they’ll appear here.';
       content = Center(
-        child: EmptyState.noData(
-          title: 'No transactions yet',
-          message: msg,
-          primaryActionLabel: 'Refresh',
-          onPrimaryAction: vm.resetAndFetch,
-          context: context,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EmptyState.noData(
+                title: 'No transactions yet',
+                message: msg,
+                primaryActionLabel: null,
+                onPrimaryAction: null,
+                context: context,
+              ),
+              const SizedBox(height: 12),
+              CustomButton(
+                text: 'Refresh',
+                icon: LucideIcons.refreshCw,
+                onPressed: vm.resetAndFetch,
+                type: ButtonType.outlined,
+              ),
+            ],
+          ),
         ),
       );
     } else if (vm.state.txs.isNotEmpty && visibleTxs.isEmpty) {
       content = Center(
-        child: EmptyState.noData(
-          title: 'No matching transactions',
-          message: 'Try switching filters to All, Receive, or Send.',
-          primaryActionLabel: 'Clear Filter',
-          onPrimaryAction: () => vm.setFilter(TxFilter.all),
-          context: context,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              EmptyState.noData(
+                title: 'No matching transactions',
+                message: 'Try switching filters to All, Receive, or Send.',
+                primaryActionLabel: null,
+                onPrimaryAction: null,
+                context: context,
+              ),
+              const SizedBox(height: 12),
+              CustomButton(
+                text: 'Clear Filter',
+                icon: LucideIcons.filterX,
+                onPressed: () => vm.setFilter(TxFilter.all),
+                type: ButtonType.outlined,
+              ),
+            ],
+          ),
         ),
       );
     } else {
@@ -212,12 +267,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
           itemCount: visibleTxs.length + (showLoaderRow ? 1 : 0),
           itemBuilder: (context, index) {
             if (showLoaderRow && index >= visibleTxs.length) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+              // COMPACT ROW LOADER (Rubik’s cube, no label)
+              return  Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: RubiksCubeLoader(color:colors.textPrimary)),
               );
             }
             final tx = visibleTxs[index];
+
+            // For explorer link per-asset (example if you need it later):
+            // final assetKey = (tx['asset'] ?? 'XLM').toString();
+            // final txHash = (tx['hash'] ?? '').toString();
+            // final explorer = assetVm.explorerUrl(assetKey, 'tx', {'hash': txHash});
+
             return TransactionTile(
               colors: colors,
               tx: tx,

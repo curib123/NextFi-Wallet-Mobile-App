@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
-import 'package:provider/provider.dart';
-
-import 'asset_logo.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
 
 class AvatarWithAssetLogo extends StatelessWidget {
   const AvatarWithAssetLogo({
@@ -66,7 +64,7 @@ class AvatarWithAssetLogo extends StatelessWidget {
                 border: Border.all(color: colors.primary.withOpacity(0.12)),
               ),
               padding: const EdgeInsets.all(1.5),
-              child: AssetLogo(asset: asset, size: logoSize),
+              child: AssetLogo(keyOrSymbol: asset),
             ),
           ),
         ],

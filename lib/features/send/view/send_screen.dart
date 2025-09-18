@@ -4,19 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/features/send/model/send_token.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:provider/provider.dart';
 
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
-import 'package:next_fi/features/transactions/view/widgets/asset_logo.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
-// Address book picker
+
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 
@@ -458,7 +458,7 @@ class _SendScreenState extends State<SendScreen> {
                   placeholder: vm.isXlm ? 'Amount (XLM)' : 'Amount (USDC)',
                   prefix: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: AssetLogo(asset: tokenStr, size: 18),
+                    child: AssetLogo(keyOrSymbol: tokenStr, size: 18),
                   ),
                 ),
                 validator: (_) => vm.blockingReason,
@@ -522,7 +522,7 @@ class _SendScreenState extends State<SendScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AssetLogo(asset: tokenStr, size: 18),
+            AssetLogo(size: 18, keyOrSymbol: tokenStr,),
             const SizedBox(width: 8),
             Text('Send $tokenStr', style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
           ],

@@ -1,7 +1,7 @@
 // lib/features/wallet_settings/view/widgets/meta_header_settings.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class MetaHeaderSettings extends StatelessWidget {
   const MetaHeaderSettings({super.key, required this.wordCount});

@@ -1,6 +1,6 @@
 // lib/features/auth_gate/view/widgets/headings.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class Headings extends StatelessWidget {
   const Headings({

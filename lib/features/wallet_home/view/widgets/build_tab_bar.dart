@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 Widget buildTabBar(AppColor colors) {
   return Container(

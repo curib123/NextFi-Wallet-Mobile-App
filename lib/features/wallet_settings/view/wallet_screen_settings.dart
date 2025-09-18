@@ -12,7 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/wallet_switch_result.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'widgets/header_card.dart';
 import 'widgets/warning_box_settings.dart';

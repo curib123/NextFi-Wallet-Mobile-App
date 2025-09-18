@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/incoming_payment_hint.dart';
 
 /// Shows up to 2 latest incoming hint cards.

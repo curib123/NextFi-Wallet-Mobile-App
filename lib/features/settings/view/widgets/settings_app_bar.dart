@@ -1,6 +1,6 @@
 // lib/features/settings/view/widgets/settings_app_bar.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
   const SettingsAppBar({super.key, required this.colors});

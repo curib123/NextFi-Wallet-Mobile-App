@@ -1,6 +1,6 @@
 // lib/features/receive/view/widgets/safety_note.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class SafetyNote extends StatelessWidget {
   const SafetyNote({super.key, required this.text});

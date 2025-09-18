@@ -9,7 +9,7 @@ import 'package:provider/single_child_widget.dart';
 
 // ─────────────────── App modules ─────────────────
 import 'package:next_fi/app/home.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 // Services
 import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';

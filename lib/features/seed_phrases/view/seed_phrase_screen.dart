@@ -14,7 +14,7 @@ import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 import '../model/seed_phrase_state.dart';
 

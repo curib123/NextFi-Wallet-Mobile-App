@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class InfoRow extends StatelessWidget {
   final String label, value;

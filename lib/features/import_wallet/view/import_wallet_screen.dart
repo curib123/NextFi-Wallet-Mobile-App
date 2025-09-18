@@ -14,7 +14,7 @@ import 'package:next_fi/features/seed_phrases/view/widgets/confirm_tile.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class ImportWalletScreen extends StatefulWidget {
   const ImportWalletScreen({super.key});

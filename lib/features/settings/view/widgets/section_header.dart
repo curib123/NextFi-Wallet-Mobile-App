@@ -1,6 +1,6 @@
 // lib/features/settings/view/widgets/section_header.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class SectionHeader extends StatelessWidget {
   const SectionHeader({super.key, required this.text, required this.colors});

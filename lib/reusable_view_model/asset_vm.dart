@@ -261,10 +261,10 @@ extension AssetVMFinders on AssetVM {
     final tmpl = asset?.explorer[kind];
     if (tmpl == null) return null;
     var out = tmpl;
-    vars.forEach((k, v) => out = out!.replaceAll('{${k}}', v));
+    vars.forEach((k, v) => out = out.replaceAll('{${k}}', v));
     // Also try replacing {issuer} from the current asset if not provided.
     if (!vars.containsKey('issuer') && (asset?.issuer ?? '').isNotEmpty) {
-      out = out!.replaceAll('{issuer}', asset!.issuer!);
+      out = out.replaceAll('{issuer}', asset!.issuer!);
     }
     return out;
   }

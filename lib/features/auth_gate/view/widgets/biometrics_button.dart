@@ -1,6 +1,6 @@
 // lib/features/auth_gate/view/widgets/biometrics_button.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class BiometricsButton extends StatelessWidget {
   const BiometricsButton({

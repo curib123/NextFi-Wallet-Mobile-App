@@ -10,7 +10,7 @@ import 'package:next_fi/features/auth_gate/view/widgets/primary_action.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/tob_bar.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 
 class AuthGateScreen extends StatefulWidget {

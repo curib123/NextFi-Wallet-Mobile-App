@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
 import 'package:next_fi/features/transactions/model/tx.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
-
-import 'avatar_with_asset_logo.dart';
 import 'tx_utils.dart';
 
 class TransactionTile extends StatelessWidget {
@@ -45,6 +44,7 @@ class TransactionTile extends StatelessWidget {
     int? recColor = (tx['recColor'] as int?);
     RecipientAddressModel? rec;
 
+    // hydrate recipient cache if missing on tx
     if (recName == null || recColor == null) {
       rec = recipProv.byAddress(peerAddr);
       if (rec != null) {
@@ -63,14 +63,35 @@ class TransactionTile extends StatelessWidget {
     final subtitlePeer =
     recName != null ? '$recName (${shortAddr(peerAddr)})' : shortAddr(peerAddr);
 
+    // Leading: your AssetLogo + tiny direction badge
+    Widget leading = Stack(
+      clipBehavior: Clip.none,
+      children: [
+       AssetLogo(keyOrSymbol: asset),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: isIncoming ? colors.success : colors.error,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: colors.surface, width: 2),
+            ),
+            child: Icon(
+              isIncoming ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight,
+              size: 10,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+
     return ListTile(
       key: ValueKey(txId.isEmpty ? 'idx:${tx.hashCode}' : txId),
-      leading: AvatarWithAssetLogo(
-        isIncoming: isIncoming,
-        recName: recName,
-        recColor: recColor,
-        asset: asset,
-      ),
+      leading: leading,
       title: Text(
         titleText,
         style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary),

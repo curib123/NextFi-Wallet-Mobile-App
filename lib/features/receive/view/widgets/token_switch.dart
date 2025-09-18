@@ -1,6 +1,6 @@
 // lib/features/receive/view/widgets/token_switch.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class TokenSwitch extends StatelessWidget {
   const TokenSwitch({
