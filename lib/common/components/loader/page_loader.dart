@@ -7,7 +7,7 @@ class PageLoader extends StatelessWidget {
   const PageLoader({
     super.key,
     this.label,
-    this.size = 48, // smaller by default
+    this.size = 30, // smaller by default
     this.grid = 3,
     this.speed = const Duration(milliseconds: 1400),
     this.color, // single color; defaults to AppColor.textSecondary
