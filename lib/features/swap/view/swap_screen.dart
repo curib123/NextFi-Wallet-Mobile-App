@@ -20,7 +20,6 @@ import 'package:next_fi/features/swap/view/widgets/direction_switcher.dart';
 import 'package:next_fi/features/swap/view/widgets/hint_box.dart';
 import 'package:next_fi/features/swap/view/widgets/info_row.dart';
 import 'package:next_fi/features/swap/view/widgets/section_card.dart';
-import 'package:next_fi/features/swap/view/widgets/tiny_info_row.dart';
 
 import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 
@@ -38,17 +37,57 @@ class _SwapScreenState extends State<SwapScreen> {
   // Prevent loops when syncing TextField ⇄ VM after VM clamps amount.
   bool _syncingText = false;
 
+  // Track last raw text to distinguish deletion & transient states.
+  String _lastRaw = '';
+
   @override
   void initState() {
     super.initState();
+    _lastRaw = _amountCtl.text;
+
     _amountCtl.addListener(() async {
       if (_syncingText) return;
+
       final vm = context.read<SwapVM>();
       final raw = _amountCtl.text;
-      await vm.onAmountChanged(raw);
+      final trimmed = raw.trim();
 
-      // After VM may clamp, mirror back to field if needed
-      final parsed = double.tryParse(raw.replaceAll(',', '').trim()) ?? 0.0;
+      // 1) If empty: allow full clear. Set VM to 0 and don't mirror back.
+      if (trimmed.isEmpty) {
+        _lastRaw = raw;
+        await vm.setAmount(0.0);
+        return;
+      }
+
+      // 2) Allow transient typing states (don't force-correct these):
+      //    ".", "0.", "00.", "12." etc. (endsWith dot = still typing decimals)
+      if (_isEphemeral(trimmed)) {
+        _lastRaw = raw;
+        // Optionally let VM know it's effectively the numeric part (or skip):
+        // We skip VM update to avoid it clamping away the ephemeral state.
+        return;
+      }
+
+      // 3) Validate simple numeric form: up to 7 decimals.
+      //    If invalid, revert to last good text (but keep caret sane).
+      if (!RegExp(r'^\d*\.?\d{0,7}$').hasMatch(trimmed)) {
+        _syncingText = true;
+        try {
+          _amountCtl.text = _lastRaw;
+          _amountCtl.selection = TextSelection.fromPosition(
+            TextPosition(offset: _amountCtl.text.length),
+          );
+        } finally {
+          _syncingText = false;
+        }
+        return;
+      }
+
+      // 4) Update VM with the new value.
+      await vm.onAmountChanged(trimmed);
+
+      // 5) If VM clamped (e.g., precision/balance), mirror back—BUT NOT for ephemeral states.
+      final parsed = double.tryParse(trimmed) ?? 0.0;
       if ((parsed - vm.amount).abs() > 1e-9) {
         _syncingText = true;
         try {
@@ -61,6 +100,8 @@ class _SwapScreenState extends State<SwapScreen> {
           _syncingText = false;
         }
       }
+
+      _lastRaw = _amountCtl.text;
     });
   }
 
@@ -82,6 +123,14 @@ class _SwapScreenState extends State<SwapScreen> {
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
+  bool _isEphemeral(String s) {
+    // States where user is still typing a decimal:
+    // ".", "0.", "12." are allowed transiently
+    if (s == '.') return true;
+    if (s.endsWith('.')) return true;
+    return false;
+  }
+
   String _tight(double v, {int decimals = 7}) {
     final s = v.toStringAsFixed(decimals);
     return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
@@ -104,6 +153,7 @@ class _SwapScreenState extends State<SwapScreen> {
     } finally {
       _syncingText = false;
     }
+    _lastRaw = _amountCtl.text;
   }
 
   Future<void> _onFlip(SwapVM vm) async {
@@ -118,6 +168,7 @@ class _SwapScreenState extends State<SwapScreen> {
     } finally {
       _syncingText = false;
     }
+    _lastRaw = _amountCtl.text;
   }
 
   Future<void> _confirmAndSwap(SwapVM vm) async {
@@ -136,20 +187,11 @@ class _SwapScreenState extends State<SwapScreen> {
       return;
     }
 
-    // Pre-fee minOut for on-chain path
-    final minOutPreFee = vm.currentMinOutPreFee ?? (estOut * (1 - vm.slippagePct));
-
-    // For user display: after-fee min receive (VM already knows direction rules)
-    final minAfterFees = vm.currentMinOutAfterFees ?? minOutPreFee;
-
     final colors = AppColor.of(context);
 
-    // right before showModalBottomSheet
     if (context.read<SwapVM>().hasFeeEstimates == false) {
-      // No-op if already wired; VM will ignore.
       await context.read<SwapVM>().refreshBalances();
     }
-
 
     await showModalBottomSheet(
       context: context,
@@ -157,14 +199,13 @@ class _SwapScreenState extends State<SwapScreen> {
       backgroundColor: colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       builder: (sheetCtx) {
-        // 👇 listening read; this rebuilds when VM notifies (fees/quotes update)
         final vmLive = sheetCtx.watch<SwapVM>();
         final sLive  = vmLive.state;
 
-        final estOutLive = sLive.estReceive ?? estOut; // keep the earlier estOut as fallback
+        final estOutLive = sLive.estReceive ?? estOut;
         final minOutPreFeeLive =
-            vmLive.currentMinOutPreFee ?? (estOutLive != null ? estOutLive * (1 - vmLive.slippagePct) : null);
-        final minAfterFeesLive = vmLive.currentMinOutAfterFees ?? minOutPreFeeLive ?? 0.0;
+            vmLive.currentMinOutPreFee ?? ( estOutLive * (1 - vmLive.slippagePct));
+        final minAfterFeesLive = vmLive.currentMinOutAfterFees ?? minOutPreFeeLive;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
@@ -183,8 +224,7 @@ class _SwapScreenState extends State<SwapScreen> {
             const SizedBox(height: 10),
 
             InfoRow('From', '${_fmt.format(vmLive.amount)} ${sLive.isXlmToUsdc ? 'XLM' : 'USDC'}'),
-            if (estOutLive != null)
-              InfoRow('To (est.)', '${_fmt.format(estOutLive)} ${sLive.isXlmToUsdc ? 'USDC' : 'XLM'}'),
+            InfoRow('To (est.)', '${_fmt.format(estOutLive)} ${sLive.isXlmToUsdc ? 'USDC' : 'XLM'}'),
             InfoRow('Slippage', '${_fmtPct(vmLive.slippagePct)}%'),
 
             InfoRow(
@@ -216,7 +256,7 @@ class _SwapScreenState extends State<SwapScreen> {
                   text: "Swap Now",
                   onPressed: () async {
                     Navigator.pop(sheetCtx);
-                    await _doSwap(vmLive, vmLive.amount, minOutPreFeeLive ?? 0);
+                    await _doSwap(vmLive, vmLive.amount, minOutPreFeeLive);
                   },
                 ),
               ),
@@ -225,7 +265,6 @@ class _SwapScreenState extends State<SwapScreen> {
         );
       },
     );
-
   }
 
   Future<void> _doSwap(SwapVM vm, double amount, double minOutPreFee) async {
@@ -264,6 +303,7 @@ class _SwapScreenState extends State<SwapScreen> {
       } finally {
         _syncingText = false;
       }
+      _lastRaw = '';
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
@@ -290,6 +330,10 @@ class _SwapScreenState extends State<SwapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _syncingText) return;
       final raw = _amountCtl.text.trim();
+
+      // Respect ephemeral editing states while focused ('.', '12.')
+      if (_isEphemeral(raw)) return;
+
       final parsed = double.tryParse(raw.replaceAll(',', '')) ?? 0.0;
       if ((parsed - vm.amount).abs() > 1e-9) {
         _syncingText = true;
@@ -301,6 +345,7 @@ class _SwapScreenState extends State<SwapScreen> {
         } finally {
           _syncingText = false;
         }
+        _lastRaw = _amountCtl.text;
       }
     });
 
@@ -353,7 +398,6 @@ class _SwapScreenState extends State<SwapScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-
                   DirectionSwitcher(
                     isXlmToUsdc: s.isXlmToUsdc,
                     onFlip: () => _onFlip(vm),
@@ -382,17 +426,21 @@ class _SwapScreenState extends State<SwapScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Slippage tolerance',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w400,
-                            color: colors.textSecondary,
-                            letterSpacing: .2,
-                          )),
-                      Text('${_fmtPct(vm.slippagePct)}%',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: colors.textPrimary,
-                          )),
+                      Text(
+                        'Slippage tolerance',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w400,
+                          color: colors.textSecondary,
+                          letterSpacing: .2,
+                        ),
+                      ),
+                      Text(
+                        '${_fmtPct(vm.slippagePct)}%',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
+                        ),
+                      ),
                     ],
                   ),
                   if (s.isXlmToUsdc) ...[
@@ -403,16 +451,15 @@ class _SwapScreenState extends State<SwapScreen> {
                   ] else ...[
                     const SizedBox(height: 8),
                     const HintBox(
-                      text: 'Stellar fees are paid in XLM. Swapping a small amount to XLM first ensures you can send and swap smoothly.',
+                      text:
+                      'Stellar fees are paid in XLM. Swapping a small amount to XLM first ensures you can send and swap smoothly.',
                     ),
                   ]
-
                 ],
               ),
             ),
 
             const SizedBox(height: 8),
-
           ],
         ),
       ),
@@ -440,10 +487,7 @@ class _SwapScreenState extends State<SwapScreen> {
                   type: SnackBarType.error,
                 );
               }),
-              // fullWidth defaults to true; omit or set explicitly if you like:
-              // fullWidth: true,
-            )
-
+            ),
           ),
         ),
       ),

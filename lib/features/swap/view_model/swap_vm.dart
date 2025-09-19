@@ -2,20 +2,34 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:next_fi/features/swap/model/swap_dir.dart';
+import 'package:next_fi/features/swap/model/swap_state.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
-import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-
-import '../model/swap_state.dart';
-import '../model/swap_dir.dart';
+import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 
 class SwapVM extends ChangeNotifier {
-  SwapVM({required StellarWalletService svc}) : _svc = svc {
-    // Warm fee stream even if accountId is not yet bound; it will be re-wired later.
+  SwapVM({
+    required StellarWalletServices svc,
+    required SeedKeypairVM seedVM,
+  })  : _svc = svc,
+        _seedVM = seedVM {
+    // React to active-account changes from SeedKeypairVM
+    _seedListener = () {
+      final aid = _seedVM.accountId;
+      if ((aid ?? '') != (_state.accountId ?? '')) {
+        bindToAddress(aid);
+      }
+    };
+    _seedVM.addListener(_seedListener);
+
+    // Warm fee stream (rewired after bind)
     scheduleMicrotask(() async {
-      if (_feeSub == null) {
-        await _wireFeeStream();
+      await _wireFeeStream();
+      // Bind immediately if SeedKeypairVM already has an address
+      if ((_seedVM.accountId ?? '').isNotEmpty) {
+        bindToAddress(_seedVM.accountId);
       }
     });
   }
@@ -29,28 +43,36 @@ class SwapVM extends ChangeNotifier {
   static const double slippageMax = 0.05;
 
   // ── deps/internal ──────────────────────────────────────────────────────────
-  final StellarWalletService _svc;
+  final StellarWalletServices _svc;
+  final SeedKeypairVM _seedVM;
+  late final VoidCallback _seedListener;
+
   StreamSubscription? _acctSub;
   StreamSubscription? _feeSub;
 
+  bool _disposed = false;
+
   // ── view-facing ephemeral values (not in SwapState) ───────────────────────
-  double _amount = 0.0;                // user input (from-asset units)
+  double _amount = 0.0; // user input (from-asset units)
   double get amount => _amount;
 
-  double _slippagePct = 0.01;          // fractional (e.g. 0.01 = 1%)
+  double _slippagePct = 0.01; // fractional (e.g. 0.01 = 1%)
   double get slippagePct => _slippagePct;
 
   // Tx/profit fee in XLM (separate from network fee, which is in state.feeXlm)
-  double? _txFeeXlm;                   // may be null until fetched
+  double? _txFeeXlm; // may be null until fetched
   double get txFeeXlm => _txFeeXlm ?? 0.0;
 
   // ── state (immutable data class) ──────────────────────────────────────────
   SwapState _state = const SwapState();
   SwapState get state => _state;
-  void _set(SwapState s) { _state = s; notifyListeners(); }
+  void _set(SwapState s) {
+    _state = s;
+    _safeNotify();
+  }
 
   // public helpers
-  bool get isTestnet => _svc.isTestnet ?? identical(_svc.sdk, stellar.StellarSDK.TESTNET);
+  bool get isTestnet => _svc.isTestnet;
 
   // ──────────────────────────────────────────────────────────────────────────
   // Amount & Slippage API (UI calls these; VM does the work)
@@ -65,7 +87,7 @@ class SwapVM extends ChangeNotifier {
     final clamped = v > cap && cap > 0 ? cap : (v <= 0 ? 0.0 : v);
 
     _amount = _floorTo(clamped, 7);
-    notifyListeners(); // canSwap/labels update immediately
+    _safeNotify(); // canSwap/labels update immediately
 
     await updateQuote(_amount);
 
@@ -80,7 +102,7 @@ class SwapVM extends ChangeNotifier {
     final cap = availableFrom;
     final clamped = value > cap && cap > 0 ? cap : (value <= 0 ? 0.0 : value);
     _amount = _floorTo(clamped, 7);
-    notifyListeners();
+    _safeNotify();
     await updateQuote(_amount);
     if (_feeSub == null) {
       await _wireFeeStream();
@@ -101,7 +123,7 @@ class SwapVM extends ChangeNotifier {
     final clamped = value.clamp(slippageMin, slippageMax).toDouble();
     if ((clamped - _slippagePct).abs() < _EPS) return;
     _slippagePct = _roundFrac(clamped, 3); // 0.1% steps
-    notifyListeners(); // quote lines + confirm sheet recompute
+    _safeNotify(); // quote lines + confirm sheet recompute
   }
 
   /// Ensures the current amount does not exceed spendable "from" balance.
@@ -166,6 +188,9 @@ class SwapVM extends ChangeNotifier {
   // Direction / Address binding
   // ──────────────────────────────────────────────────────────────────────────
 
+  /// Bind the VM to the SeedKeypairVM’s active address.
+  void bindToSeedVM() => bindToAddress(_seedVM.accountId);
+
   /// Bind the VM to a (possibly new) account address.
   void bindToAddress(String? newAddr) {
     final addr = (newAddr ?? '').trim();
@@ -174,8 +199,10 @@ class SwapVM extends ChangeNotifier {
       _txFeeXlm = null;
       _set(_state.copyWith(
         accountId: null,
-        xlmBal: 0, usdcBal: 0,
-        estReceive: null, feeXlm: null,
+        xlmBal: 0,
+        usdcBal: 0,
+        estReceive: null,
+        feeXlm: null,
         needsTrustline: false,
         loading: false,
         error: 'No wallet found.',
@@ -188,13 +215,17 @@ class SwapVM extends ChangeNotifier {
     _txFeeXlm = null;
     _set(_state.copyWith(
       accountId: addr,
-      xlmBal: 0, usdcBal: 0,
-      estReceive: null, feeXlm: null,
+      xlmBal: 0,
+      usdcBal: 0,
+      estReceive: null,
+      feeXlm: null,
       needsTrustline: false,
       loading: true,
       error: '',
     ));
-    scheduleMicrotask(() async { await _primeAndWire(); });
+    scheduleMicrotask(() async {
+      await _primeAndWire();
+    });
   }
 
   Future<void> start() async {
@@ -252,8 +283,12 @@ class SwapVM extends ChangeNotifier {
 
       await _wireFeeStream();
 
-      if (_amount > 0) { await updateQuote(_amount); }
-    } catch (_) {/* keep last */}
+      if (_amount > 0) {
+        await updateQuote(_amount);
+      }
+    } catch (_) {
+      // keep last
+    }
   }
 
   double get availableFrom {
@@ -283,38 +318,46 @@ class SwapVM extends ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Swap execution
+  // Swap execution (uses SeedKeypairVM to derive KeyPair ephemerally)
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Execute swap. Provide a [secretSupplier] to fetch S… securely at submit time.
-  /// If not provided, it will fallback to deriving from the active mnemonic.
+  /// Execute swap.
+  /// Optionally provide a [keyPairSupplier] (e.g., hardware signer); otherwise derives from SeedKeypairVM.
   Future<String> executeSwap({
     required double amount,
     required double minOut,
-    Future<String?> Function()? secretSupplier,
+    Future<stellar.KeyPair?> Function()? keyPairSupplier,
+    String? destination,
+    String? memoText,
   }) async {
     final aid = _state.accountId;
     if (aid == null || aid.isEmpty) {
       throw StateError('Wallet not ready');
     }
 
-    String? secret;
-    if (secretSupplier != null) {
-      secret = await secretSupplier();
+    // Obtain signer
+    stellar.KeyPair? kp;
+    if (keyPairSupplier != null) {
+      kp = await keyPairSupplier();
     }
-    if (secret == null) {
-      final mnemonic = await SeedStorage.getActiveSeed() ?? await SeedStorage.getSeed();
-      if (mnemonic == null || mnemonic.isEmpty) {
-        throw StateError('No wallet seed available');
-      }
-      final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
-      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-      secret = kp.secretSeed;
-    }
+    kp ??= await _seedVM.deriveKeyPair();
 
+    // Execute
     final txid = _state.isXlmToUsdc
-        ? await _svc.swapXlmToUsdc(secretSeed: secret, sendAmountXlm: amount, minUsdcOut: minOut)
-        : await _svc.swapUsdcToXlm(secretSeed: secret, sendAmountUsdc: amount, minXlmOut: minOut);
+        ? await _svc.swapXlmToUsdc(
+      keyPair: kp,
+      sendAmountXlm: amount,
+      minUsdcOut: minOut,
+      destination: destination,
+      memoText: memoText,
+    )
+        : await _svc.swapUsdcToXlm(
+      keyPair: kp,
+      sendAmountUsdc: amount,
+      minXlmOut: minOut,
+      destination: destination,
+      memoText: memoText,
+    );
 
     await refreshBalances(); // streams will tick anyway
     return txid;
@@ -322,7 +365,9 @@ class SwapVM extends ChangeNotifier {
 
   @override
   void dispose() {
+    _seedVM.removeListener(_seedListener);
     _teardownStreams();
+    _disposed = true;
     super.dispose();
   }
 
@@ -334,15 +379,19 @@ class SwapVM extends ChangeNotifier {
       await _wireAccountStream();
       await _wireFeeStream(); // also fetch tx-fee
       _set(_state.copyWith(loading: false, error: ''));
-      if (_amount > 0) { await updateQuote(_amount); }
+      if (_amount > 0) {
+        await updateQuote(_amount);
+      }
     } catch (e) {
       _set(_state.copyWith(loading: false, error: 'Failed to initialize swap: $e'));
     }
   }
 
   void _teardownStreams() {
-    _acctSub?.cancel(); _acctSub = null;
-    _feeSub?.cancel();  _feeSub  = null;
+    _acctSub?.cancel();
+    _acctSub = null;
+    _feeSub?.cancel();
+    _feeSub = null;
   }
 
   Future<void> _wireAccountStream() async {
@@ -357,12 +406,16 @@ class SwapVM extends ChangeNotifier {
         usdcBal: s.usdc,
         needsTrustline: _state.isXlmToUsdc ? !s.hasUsdcTrustline : false,
       ));
-      if (prevNeeds != _state.needsTrustline) { await _wireFeeStream(); }
+      if (prevNeeds != _state.needsTrustline) {
+        await _wireFeeStream();
+      }
       // Auto-cap if user typed too much and balance changed under us
       if (_amount > 0) {
         await capAmountToAvailableAndRequote();
       }
-    }, onError: (_) {/* keep last */});
+    }, onError: (_) {
+      // keep last
+    });
   }
 
   Future<void> _wireFeeStream() async {
@@ -371,9 +424,9 @@ class SwapVM extends ChangeNotifier {
     // 1) Refresh *transaction/profit fee* (in XLM) so UI can show combined fee
     try {
       final x = await _svc.getCurrentFeeXlm();
-      if ((x - ( _txFeeXlm ?? 0.0 )).abs() > _EPS) {
+      if ((x - (_txFeeXlm ?? 0.0)).abs() > _EPS) {
         _txFeeXlm = x;
-        notifyListeners(); // estCombinedFeeXlm/currentMinOutAfterFees change
+        _safeNotify(); // estCombinedFeeXlm/currentMinOutAfterFees change
       }
     } catch (_) {
       // keep last known tx-fee
@@ -382,26 +435,38 @@ class SwapVM extends ChangeNotifier {
     // 2) Recompute op-count for *network fee* estimation stream
     int ops = 1; // swap op
     int feeStroops = 0;
-    try { feeStroops = await _svc.getCurrentFeeStroops(); } catch (_) {}
-    if (feeStroops > 0) ops += 1;                     // extra op: pay tx-fee in XLM
+    try {
+      feeStroops = await _svc.getCurrentFeeStroops();
+    } catch (_) {}
+    if (feeStroops > 0) ops += 1; // extra op: pay tx-fee in XLM
     if (_state.isXlmToUsdc && _state.needsTrustline) ops += 1; // if trustline needed
 
     // 3) Stream network fee estimate and update state.feeXlm continuously
-    _feeSub = _svc.feeEstimateStream(opCount: ops, percentile: 95).listen((f) {
+    _feeSub = _svc
+        .feeEstimateStream(opCount: ops, percentile: 95)
+        .listen((f) {
       if ((_state.feeXlm ?? 0.0) != f.totalXlm) {
         _set(_state.copyWith(feeXlm: f.totalXlm));
       }
-    }, onError: (_) {/* keep last */});
+    }, onError: (_) {
+      // keep last
+    });
   }
 
-  // ── math/utils ────────────────────────────────────────────────────────────
+  // ── math/utils & safe notify ──────────────────────────────────────────────
   double _floor6(double v) => (v * 1e6).floor() / 1e6;
   double _floorTo(double v, int dec) {
     final scale = math.pow(10, dec);
-    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
+    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale)
+        .toDouble();
   }
+
   double _roundFrac(double v, int places) {
     final m = math.pow(10, places).toDouble();
     return (v * m).roundToDouble() / m;
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
   }
 }

@@ -18,7 +18,8 @@ class SeedPhraseState {
     this.error,
   });
 
-  bool get isTwentyFour => words.length == 24;
+  int get wordCount => words.length;
+  bool get isTwentyFour => wordCount == 24;
 
   SeedPhraseState copyWith({
     String? mnemonic,
@@ -27,7 +28,7 @@ class SeedPhraseState {
     bool? obscured,
     bool? ack1,
     bool? ack2,
-    String? error, // set to '' to clear
+    String? error, // pass '' to clear
   }) {
     return SeedPhraseState(
       mnemonic: mnemonic ?? this.mnemonic,
@@ -36,7 +37,7 @@ class SeedPhraseState {
       obscured: obscured ?? this.obscured,
       ack1: ack1 ?? this.ack1,
       ack2: ack2 ?? this.ack2,
-      error: error,
+      error: error ?? this.error,
     );
   }
 }

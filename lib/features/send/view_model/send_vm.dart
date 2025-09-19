@@ -1,22 +1,22 @@
 // lib/features/send/viewmodel/send_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:next_fi/features/send/model/send_token.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/Services/seed_storage.dart';
-
-import '../model/send_token.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 
 class SendVM extends ChangeNotifier {
   SendVM({
-    required StellarWalletService service,
-    Future<String?> Function()? getActiveSeed,
+    required StellarWalletServices service,
+    required SeedKeypairVM seedVM,
   })  : _svc = service,
-        _getActiveSeed = getActiveSeed ?? SeedStorage.getActiveSeed;
+        _seedVM = seedVM;
 
   // DI
-  final StellarWalletService _svc;
-  final Future<String?> Function() _getActiveSeed;
+  final StellarWalletServices _svc;
+  final SeedKeypairVM _seedVM;
 
   // Wallet/display
   String? _accountId;
@@ -63,6 +63,17 @@ class SendVM extends ChangeNotifier {
   StreamSubscription? _feeSub;
   Timer? _debounce;
 
+  // lifecycle
+  bool _disposed = false;
+  void _safeNotify() { if (!_disposed) notifyListeners(); }
+  @override
+  void dispose() {
+    _feeSub?.cancel();
+    _debounce?.cancel();
+    _disposed = true;
+    super.dispose();
+  }
+
   // Configure a fresh “send session”
   void configure({
     required SendToken token,
@@ -76,7 +87,8 @@ class SendVM extends ChangeNotifier {
     _senderBalToken = senderBalanceToken;
     _prefillName = prefillName;
 
-    _accountId = senderAddress;
+    // Prefer cached address from SeedKeypairVM if present
+    _accountId = _seedVM.accountId ?? senderAddress;
 
     _to = (prefillTo ?? '').trim();
     _typedAmount = 0;
@@ -88,26 +100,23 @@ class SendVM extends ChangeNotifier {
     _txFeeXlm = null;
     _estNetworkFeeXlm = null;
 
-    notifyListeners();
+    _safeNotify();
     _start();
   }
 
-  // Boot: fees + stream
+  // Boot: derive signer, fees + stream
   Future<void> _start() async {
     try {
-      final m = await _getActiveSeed();
-      if (m == null || m.isEmpty) {
-        _loading = false;
-        _err = 'No wallet found.';
-        notifyListeners();
-        return;
-      }
+      // Ensure we can derive a signer; also refresh our accountId from it
+      final KeyPair kp = await _seedVM.deriveKeyPair();
+      _accountId = kp.accountId;
 
       _txFeeXlm = await _svc.getCurrentFeeXlm();
-
       try {
-        _estNetworkFeeXlm =
-        await _svc.estimateNetworkFeeXlm(opCount: _opCount, percentile: 90);
+        _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
+          opCount: _opCount,
+          percentile: 90,
+        );
       } catch (_) {
         _estNetworkFeeXlm = null;
       }
@@ -116,11 +125,11 @@ class SendVM extends ChangeNotifier {
 
       _loading = false;
       _err = null;
-      notifyListeners();
+      _safeNotify();
     } catch (_) {
       _loading = false;
-      _err = 'Failed to initialize sending.';
-      notifyListeners();
+      _err = 'No wallet found.';
+      _safeNotify();
     }
   }
 
@@ -129,29 +138,22 @@ class SendVM extends ChangeNotifier {
     _feeSub = _svc.feeEstimateStream(opCount: _opCount, percentile: 90).listen(
           (f) {
         _estNetworkFeeXlm = f.totalXlm;
-        notifyListeners();
+        _safeNotify();
       },
       onError: (_) {},
     );
   }
 
-  @override
-  void dispose() {
-    _feeSub?.cancel();
-    _debounce?.cancel();
-    super.dispose();
-  }
-
   // User interactions
   void setRecipient(String v) {
     _to = v.trim();
-    notifyListeners();
+    _safeNotify();
     _debounceCheckTrustline();
   }
 
   void setTypedAmount(double v) {
     _typedAmount = v.clamp(0, double.infinity);
-    notifyListeners();
+    _safeNotify();
   }
 
   // Trustline
@@ -167,24 +169,24 @@ class SendVM extends ChangeNotifier {
     final dest = _to;
     if (!_looksStellar(dest)) {
       _destHasUsdcTL = null;
-      notifyListeners();
+      _safeNotify();
       return;
     }
     if (isXlm) {
       _destHasUsdcTL = null;
-      notifyListeners();
+      _safeNotify();
       return;
     }
     _checking = true;
     _destHasUsdcTL = null;
-    notifyListeners();
+    _safeNotify();
     try {
       _destHasUsdcTL = await _svc.hasUsdcTrustline(dest);
     } catch (_) {
       _destHasUsdcTL = null;
     } finally {
       _checking = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -198,10 +200,12 @@ class SendVM extends ChangeNotifier {
     _txFeeXlm = await _svc.getCurrentFeeXlm();
     _resubscribeFeeStream();
     try {
-      _estNetworkFeeXlm =
-      await _svc.estimateNetworkFeeXlm(opCount: _opCount, percentile: 90);
+      _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
+        opCount: _opCount,
+        percentile: 90,
+      );
     } catch (_) {}
-    notifyListeners();
+    _safeNotify();
   }
 
   // Budget math
@@ -209,13 +213,13 @@ class SendVM extends ChangeNotifier {
 
   double get recipientWillReceiveXlmFromBudget {
     if (!isXlm) return 0;
-    final fee = _txFeeXlm ?? 0;
-    final net = _estNetworkFeeXlm ?? 0;
+    final fee = _txFeeXlm ?? 0;      // app fee (paid in XLM)
+    final net = _estNetworkFeeXlm ?? 0; // network fee estimate
     final budget = _typedAmount;
     if (budget <= 0) return 0;
-    final sendParam = (budget - net).clamp(0, double.infinity);
+    final sendParam = (budget - net).clamp(0, double.infinity); // what we pass as "amount" param
     if (sendParam <= fee + 1e-7) return 0;
-    final recv = _floor7(sendParam - fee);
+    final recv = _floor7(sendParam - fee); // service will split (dest + fee op)
     return recv > 0 ? recv : 0;
   }
 
@@ -244,38 +248,32 @@ class SendVM extends ChangeNotifier {
     final addr = (address).trim();
     if (addr.isEmpty) return;
 
-    // Save a friendly name for UI (optional)
     final name = displayName?.trim();
     if (name != null && name.isNotEmpty) {
       _prefillName = name;
     }
 
-    // Update recipient and re-run downstream checks
     _to = addr;
-    notifyListeners();          // refresh badges, templates, etc.
+    _safeNotify();          // refresh badges, templates, etc.
     _debounceCheckTrustline();  // re-check USDC trustline if needed
   }
 
-  /// Optional: clear any prefilled name (if the user edits the address manually)
   void clearPrefillName() {
     _prefillName = null;
-    notifyListeners();
+    _safeNotify();
   }
 
-  /// Optional: expose current friendly label to the UI
   String? get recipientLabel => _prefillName;
 
-  // Submit
+  // Submit (signer-based)
   Future<String> submit({String? memo}) async {
     final reason = blockingReason;
     if (reason != null) throw StateError(reason);
 
     await refreshFees();
 
-    final seed = await _getActiveSeed();
-    if (seed == null || seed.isEmpty) {
-      throw StateError('No wallet found.');
-    }
+    // Derive signer on demand (ephemeral)
+    final KeyPair keyPair = await _seedVM.deriveKeyPair();
 
     if (isXlm) {
       final net = _estNetworkFeeXlm ?? 0;
@@ -285,16 +283,17 @@ class SendVM extends ChangeNotifier {
       if (amountParam <= fee + 1e-7) {
         throw StateError('Amount too small after fees.');
       }
+
       final txids = await _svc.sendXlmWithFee(
-        secretSeed: seed,
+        keyPair: keyPair,
         destination: _to,
-        amount: _floor7(amountParam),
+        amount: _floor7(amountParam), // service will split to dest + fee op
         memoText: memo,
       );
       return txids.first;
     } else {
       final txids = await _svc.sendUsdcWithFee(
-        secretSeed: seed,
+        keyPair: keyPair,
         destination: _to,
         usdcAmount: _typedAmount,
         memoText: memo,
@@ -303,7 +302,6 @@ class SendVM extends ChangeNotifier {
     }
   }
 }
-
 
 // Small helper to silence unawaited futures.
 void unawaited(Future<void> f) {}

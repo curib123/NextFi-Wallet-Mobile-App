@@ -192,7 +192,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     Widget content;
     if (vm.state.loading && vm.state.txs.isEmpty) {
-      content = const PageLoader(label: 'Loading transactions…');
+      content = const PageLoader();
     } else if (vm.state.errorMsg != null) {
       content = Center(
         child: Padding(

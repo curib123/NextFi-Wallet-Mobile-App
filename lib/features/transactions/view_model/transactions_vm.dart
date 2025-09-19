@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import '../model/tx.dart';
 import '../model/transactions_state.dart';
 
 class TransactionsVM extends ChangeNotifier {
-  TransactionsVM({required StellarWalletService stellarSvc}) : _stellar = stellarSvc;
+  TransactionsVM({required StellarWalletServices stellarSvc}) : _stellar = stellarSvc;
 
-  final StellarWalletService _stellar;
+  final StellarWalletServices _stellar;
 
   TransactionsState _state = const TransactionsState();
   TransactionsState get state => _state;

@@ -1,7 +1,6 @@
 // lib/Screen/home.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
-import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/services/profit_address_vault_secure_storage.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
