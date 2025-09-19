@@ -335,11 +335,11 @@ class _EmptyRecipients extends StatelessWidget {
     // Compact mode if screen is narrow or text scale is large
     final bool compact = size.width < 360;
 
-    final double iconSize   = compact ? 36 : 44;
-    final double titleSize  = compact ? 14 : 16;
-    final double padAll     = compact ? 12 : 16;
-    final double gapSm      = compact ? 6  : 8;
-    final double gapMd      = compact ? 10 : 12;
+    final double iconSize   = compact ? 30 : 35;
+    final double titleSize  = compact ? 12 : 14;
+    final double padAll     = compact ? 12 : 14;
+    final double gapSm      = compact ? 2  : 6;
+    final double gapMd      = compact ? 5 : 6;
 
     return Center(
       child: Padding(
@@ -348,11 +348,6 @@ class _EmptyRecipients extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 420),
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: padAll, vertical: padAll),
-            decoration: BoxDecoration(
-              color: c.surfaceContainerHighest.withOpacity(.35),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: c.outlineVariant.withOpacity(.6)),
-            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -383,31 +378,6 @@ class _EmptyRecipients extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: gapMd),
-                // Compact button (reduced tap target & padding)
-                SizedBox(
-                  height: 36,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      minimumSize: Size(compact ? 0 : 140, 36),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: () async {
-                      final saved = await showRecipientUpsertSheet(context);
-                      if (saved == true && context.mounted) {
-                        showFloatingSnackBar(
-                          context,
-                          message: 'Recipient saved',
-                          type: SnackBarType.info,
-                        );
-                        onAdded?.call();
-                      }
-                    },
-                    icon: const Icon(LucideIcons.userPlus, size: 18),
-                    label: const Text('Add recipient'),
-                  ),
-                ),
               ],
             ),
           ),
