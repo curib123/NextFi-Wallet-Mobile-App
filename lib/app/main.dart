@@ -99,13 +99,19 @@ List<SingleChildWidget> _buildProviders() {
       },
     ),
 
-    // 6) WalletHome depends on Stellar + SeedKeypair
-    ChangeNotifierProvider<WalletHomeVM>(
+// ✅ 6) WalletHome depends on Stellar + SeedKeypair (auto-binds address)
+    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, WalletHomeVM>(
       create: (ctx) => WalletHomeVM(
         stellar: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
-      ),
+      )..bindToAddress(ctx.read<SeedKeypairVM>().accountId),
+      update: (ctx, stellar, seedVM, existing) {
+        final vm = existing ?? WalletHomeVM(stellar: stellar, seedVM: seedVM);
+        vm.bindToAddress(seedVM.accountId); // keep bound after rebuilds / wallet switch
+        return vm;
+      },
     ),
+
 
     // 7) Price chart depends on Currency
     ChangeNotifierProxyProvider<CurrencyVM, PriceChartVM>(
@@ -152,14 +158,16 @@ List<SingleChildWidget> _buildProviders() {
     ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, SwapVM>(
       create: (ctx) => SwapVM(
         svc: ctx.read<StellarWalletServices>(),
-        seedVM: ctx.read<SeedKeypairVM>(),
-      ),
-      update: (ctx, stellar, seedVM, swapVM) {
-        final vm = swapVM ?? SwapVM(svc: stellar, seedVM: seedVM);
-        vm.bindToSeedVM(); // keep bound after rebuilds/hot reload
+        keypairVM: ctx.read<SeedKeypairVM>(),
+      )..bindToActiveWallet(), // bind immediately to the active wallet
+      update: (ctx, stellar, seedVM, existing) {
+        final vm = existing ?? SwapVM(svc: stellar, keypairVM: seedVM);
+        // keep VM bound after rebuilds/hot reload or when SeedKeypairVM changes
+        vm.bindToAddress(seedVM.accountId);
         return vm;
       },
     ),
+
   ];
 }
 

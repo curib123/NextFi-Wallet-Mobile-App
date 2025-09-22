@@ -3,25 +3,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/common/components/button/CustomButton.dart';
-import 'package:next_fi/features/swap/view/widgets/balance_row.dart';
+import 'package:next_fi/common/components/modal/confirm_swap_sheet.dart';
+import 'package:next_fi/features/swap/view/widgets/amount_field_with_asset.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/common/components/button/CustomButton.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
 
-import 'package:next_fi/features/send/view/widgets/error_card.dart';
-import 'package:next_fi/features/send/view/widgets/page_loader.dart';
-import 'package:next_fi/features/send/view/widgets/percent_chips_row.dart';
-
-import 'package:next_fi/features/swap/view/widgets/amount_field.dart';
-import 'package:next_fi/features/swap/view/widgets/direction_switcher.dart';
-import 'package:next_fi/features/swap/view/widgets/hint_box.dart';
-import 'package:next_fi/features/swap/view/widgets/info_row.dart';
+import 'package:next_fi/features/swap/model/swap_mode.dart';
 import 'package:next_fi/features/swap/view/widgets/section_card.dart';
-
+import 'package:next_fi/features/swap/view/widgets/balance_row.dart';
+import 'package:next_fi/features/swap/view/widgets/percent_chips_row.dart';
+import 'package:next_fi/features/swap/view/widgets/hint_box.dart';
+import 'package:next_fi/features/swap/view/widgets/error_card.dart';
 import 'package:next_fi/features/swap/view_model/swap_vm.dart';
+import 'package:next_fi/features/swap/view/widgets/appbar_compact_switch.dart';
+import 'package:next_fi/features/swap/view/widgets/order_type_field.dart';
+import 'package:next_fi/features/swap/view/widgets/slippage_control.dart';
+import 'package:next_fi/features/swap/view/widgets/asset_select_row.dart';
+import 'package:next_fi/features/swap/view/widgets/schedule_range_row.dart';
+
 
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
@@ -32,76 +37,54 @@ class SwapScreen extends StatefulWidget {
 class _SwapScreenState extends State<SwapScreen> {
   final _amountCtl = TextEditingController();
   final _fmt = NumberFormat('#,##0.######');
+
   bool _started = false;
-
-  // Prevent loops when syncing TextField ⇄ VM after VM clamps amount.
   bool _syncingText = false;
+  bool _compact = true;
+  SwapTab _tab = SwapTab.market;
 
-  // Track last raw text to distinguish deletion & transient states.
-  String _lastRaw = '';
+  DateTime? _scheduleStart;
+  DateTime? _scheduleEnd;
+
+  bool? _lastIsXlmToUsdc;
 
   @override
   void initState() {
     super.initState();
-    _lastRaw = _amountCtl.text;
 
     _amountCtl.addListener(() async {
       if (_syncingText) return;
-
       final vm = context.read<SwapVM>();
-      final raw = _amountCtl.text;
-      final trimmed = raw.trim();
+      var raw = _amountCtl.text;
 
-      // 1) If empty: allow full clear. Set VM to 0 and don't mirror back.
-      if (trimmed.isEmpty) {
-        _lastRaw = raw;
-        await vm.setAmount(0.0);
-        return;
-      }
-
-      // 2) Allow transient typing states (don't force-correct these):
-      //    ".", "0.", "00.", "12." etc. (endsWith dot = still typing decimals)
-      if (_isEphemeral(trimmed)) {
-        _lastRaw = raw;
-        // Optionally let VM know it's effectively the numeric part (or skip):
-        // We skip VM update to avoid it clamping away the ephemeral state.
-        return;
-      }
-
-      // 3) Validate simple numeric form: up to 7 decimals.
-      //    If invalid, revert to last good text (but keep caret sane).
-      if (!RegExp(r'^\d*\.?\d{0,7}$').hasMatch(trimmed)) {
+      if (raw == ".") {
         _syncingText = true;
         try {
-          _amountCtl.text = _lastRaw;
-          _amountCtl.selection = TextSelection.fromPosition(
-            TextPosition(offset: _amountCtl.text.length),
-          );
+          _amountCtl.text = "0.";
+          _amountCtl.selection =
+              TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
         } finally {
           _syncingText = false;
         }
         return;
       }
 
-      // 4) Update VM with the new value.
-      await vm.onAmountChanged(trimmed);
+      // delegate to VM; in TO mode it solves required FROM
+      await vm.onAmountChanged(raw);
 
-      // 5) If VM clamped (e.g., precision/balance), mirror back—BUT NOT for ephemeral states.
-      final parsed = double.tryParse(trimmed) ?? 0.0;
-      if ((parsed - vm.amount).abs() > 1e-9) {
+      // strict sync only in FROM mode
+      final parsed = double.tryParse(raw.replaceAll(',', '').trim()) ?? 0.0;
+      if (vm.mode == AmountMode.from && (parsed - vm.amount).abs() > 1e-9) {
         _syncingText = true;
         try {
-          final fixed = _tight(vm.amount);
-          _amountCtl.text = vm.amount <= 0 ? '' : fixed;
-          _amountCtl.selection = TextSelection.fromPosition(
-            TextPosition(offset: _amountCtl.text.length),
-          );
+          _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
+          _amountCtl.selection =
+              TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
         } finally {
           _syncingText = false;
         }
       }
-
-      _lastRaw = _amountCtl.text;
+      if (mounted) setState(() {}); // refresh converted hint
     });
   }
 
@@ -109,9 +92,14 @@ class _SwapScreenState extends State<SwapScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_started) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      context.read<SwapVM>().start(); // idempotent
+      final vm = context.read<SwapVM>();
+      await vm.start(); // idempotent
+
+      // default visible input: TO (receive) for Market/Schedule, FROM for Limit (even if placeholder)
+      await _setModeForContext(vm);
+      setState(() {});
     });
     _started = true;
   }
@@ -122,152 +110,141 @@ class _SwapScreenState extends State<SwapScreen> {
     super.dispose();
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
-  bool _isEphemeral(String s) {
-    // States where user is still typing a decimal:
-    // ".", "0.", "12." are allowed transiently
-    if (s == '.') return true;
-    if (s.endsWith('.')) return true;
-    return false;
-  }
-
+  // ───────────── helpers ─────────────
   String _tight(double v, {int decimals = 7}) {
     final s = v.toStringAsFixed(decimals);
     return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
   }
 
   String _fmtPct(double frac) {
-    final p = frac * 100;
-    return (p % 1 == 0) ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
+    final pct = frac * 100;
+    return pct % 1 == 0 ? pct.toStringAsFixed(0) : pct.toStringAsFixed(1);
   }
 
-  Future<void> _onApplyPercent(SwapVM vm, double percent) async {
+  Future<void> _setModeForContext(SwapVM vm) async {
+    final desired = _tab == SwapTab.limit ? AmountMode.from : AmountMode.to;
+    if (vm.mode != desired) {
+      await vm.setAmountMode(desired);
+    }
+  }
+
+  String _activeSymbol({required bool isXlmToUsdc, required AmountMode mode}) {
+    if (mode == AmountMode.from) {
+      return isXlmToUsdc ? 'XLM' : 'USDC';
+    } else {
+      return isXlmToUsdc ? 'USDC' : 'XLM';
+    }
+  }
+
+  AmountMode _modeForChosenSymbol({required bool isXlmToUsdc, required String chosen}) {
+    if (isXlmToUsdc) {
+      return (chosen == 'XLM') ? AmountMode.from : AmountMode.to;
+    } else {
+      return (chosen == 'USDC') ? AmountMode.from : AmountMode.to;
+    }
+  }
+
+  Future<void> _applyPct(SwapVM vm, double p) async {
     HapticFeedback.selectionClick();
-    final newAmt = await vm.applyPercent(percent);
+    final prevMode = vm.mode;
+
+    if (vm.mode != AmountMode.from) {
+      await vm.setAmountMode(AmountMode.from);
+    }
+    final newAmt = await vm.applyPercent(p);
+
     _syncingText = true;
     try {
-      _amountCtl.text = newAmt <= 0 ? '' : _tight(newAmt);
-      _amountCtl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _amountCtl.text.length),
-      );
+      if (prevMode == AmountMode.from) {
+        _amountCtl.text = newAmt <= 0 ? '' : _tight(newAmt);
+      } else {
+        final est = vm.state.estReceive ?? (newAmt > 0 ? await vm.updateQuote(newAmt) : null);
+        _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
+      }
+      _amountCtl.selection =
+          TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
     } finally {
       _syncingText = false;
     }
-    _lastRaw = _amountCtl.text;
+
+    if (prevMode != AmountMode.from) {
+      await vm.setAmountMode(prevMode);
+    }
+    if (mounted) setState(() {});
   }
 
-  Future<void> _onFlip(SwapVM vm) async {
+  Future<void> _flip(SwapVM vm) async {
     HapticFeedback.lightImpact();
-    final adjusted = await vm.flipDirectionAndRequote();
+    final adjustedFrom = await vm.flipDirectionAndRequote();
+    await _setModeForContext(vm);
+
     _syncingText = true;
     try {
-      _amountCtl.text = adjusted <= 0 ? '' : _tight(adjusted);
-      _amountCtl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _amountCtl.text.length),
-      );
+      if (vm.mode == AmountMode.from) {
+        _amountCtl.text = adjustedFrom <= 0 ? '' : _tight(adjustedFrom);
+      } else {
+        final est = vm.state.estReceive ?? (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
+        _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
+      }
+      _amountCtl.selection =
+          TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
     } finally {
       _syncingText = false;
     }
-    _lastRaw = _amountCtl.text;
+    if (mounted) setState(() {});
   }
 
-  Future<void> _confirmAndSwap(SwapVM vm) async {
+  // ───────────────────────────────────────────────────────────────────────────
+  // Confirm flows — use separated modal that LISTENS to VM inside sheet
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Future<void> _confirmMarket(SwapVM vm) async {
     final s = vm.state;
 
-    if (!vm.hasAmount) return; // disabled state should prevent this
+    // Ensure VM reflects text now (important in TO mode)
+    await vm.onAmountChanged(_amountCtl.text);
+
+    if (!vm.hasAmount) return;
     if (!vm.canSwap) {
       showFloatingSnackBar(context, message: 'Insufficient balance', type: SnackBarType.error);
       return;
     }
-
-    // Fresh quote if needed
+    // Ensure quote before showing sheet
     final estOut = s.estReceive ?? await vm.updateQuote(vm.amount);
-    if (estOut == null) {
-      showFloatingSnackBar(context, message: 'No price quote available. Try a different amount.', type: SnackBarType.error);
+    if (estOut == null || estOut <= 0) {
+      showFloatingSnackBar(context, message: 'No price quote available.', type: SnackBarType.error);
       return;
     }
 
-    final colors = AppColor.of(context);
-
-    if (context.read<SwapVM>().hasFeeEstimates == false) {
-      await context.read<SwapVM>().refreshBalances();
+    final minOutPreFee = await showConfirmMarketSheet(context, fmt: _fmt);
+    if (minOutPreFee != null) {
+      await _execute(vm, vm.amount, minOutPreFee);
     }
-
-    await showModalBottomSheet(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: colors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      builder: (sheetCtx) {
-        final vmLive = sheetCtx.watch<SwapVM>();
-        final sLive  = vmLive.state;
-
-        final estOutLive = sLive.estReceive ?? estOut;
-        final minOutPreFeeLive =
-            vmLive.currentMinOutPreFee ?? ( estOutLive * (1 - vmLive.slippagePct));
-        final minAfterFeesLive = vmLive.currentMinOutAfterFees ?? minOutPreFeeLive;
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 34, height: 4,
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: colors.textSecondary.withOpacity(0.20),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            Text('Confirm swap',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textPrimary, letterSpacing: .2),
-            ),
-            const SizedBox(height: 10),
-
-            InfoRow('From', '${_fmt.format(vmLive.amount)} ${sLive.isXlmToUsdc ? 'XLM' : 'USDC'}'),
-            InfoRow('To (est.)', '${_fmt.format(estOutLive)} ${sLive.isXlmToUsdc ? 'USDC' : 'XLM'}'),
-            InfoRow('Slippage', '${_fmtPct(vmLive.slippagePct)}%'),
-
-            InfoRow(
-              'Est. minimum receive',
-              '${_fmt.format(minAfterFeesLive)} ${sLive.isXlmToUsdc ? 'USDC' : 'XLM'}',
-            ),
-            InfoRow(
-              'Est. transaction fee',
-              vmLive.hasFeeEstimates
-                  ? '≈ ${_fmt.format(vmLive.estCombinedFeeXlm)} XLM'
-                  '${sLive.needsTrustline ? '  · includes trustline' : ''}'
-                  : 'Calculating…',
-            ),
-
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: CustomButton(
-                  type: ButtonType.outlined,
-                  icon: Icons.cancel_rounded,
-                  text: "Cancel",
-                  onPressed: () => Navigator.pop(sheetCtx),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: CustomButton(
-                  icon: LucideIcons.check,
-                  text: "Swap Now",
-                  onPressed: () async {
-                    Navigator.pop(sheetCtx);
-                    await _doSwap(vmLive, vmLive.amount, minOutPreFeeLive);
-                  },
-                ),
-              ),
-            ]),
-          ]),
-        );
-      },
-    );
   }
 
-  Future<void> _doSwap(SwapVM vm, double amount, double minOutPreFee) async {
+  Future<void> _confirmSchedule(SwapVM vm) async {
+    final ok = await showConfirmScheduleSheet(
+      context,
+      fmt: _fmt,
+      start: _scheduleStart,
+      end: _scheduleEnd,
+    );
+    if (ok == true) {
+      await vm.placeScheduleOrder(
+        xlmToUsdc: vm.state.isXlmToUsdc,
+        amountFrom: vm.amount,
+        scheduleAt: _scheduleStart!,
+      );
+      if (!mounted) return;
+      showFloatingSnackBar(context, message: 'Scheduled swap added.', type: SnackBarType.success);
+      _amountCtl.clear();
+      await vm.setAmount(0);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+
+  Future<void> _execute(SwapVM vm, double amount, double minOutPreFee) async {
     final ctl = showAppAlert(
       context,
       type: AppAlertType.loading,
@@ -278,32 +255,27 @@ class _SwapScreenState extends State<SwapScreen> {
       primaryText: 'Hide',
       barrierDismissible: true,
     );
-
     try {
-      final txid = await vm.executeSwap(amount: amount, minOut: minOutPreFee);
+      final tx = await vm.executeSwap(amount: amount, minOut: minOutPreFee);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-
       ctl.update(
         AppAlertType.success,
         title: 'Swap submitted',
-        subtitle: txid,
+        subtitle: tx,
         primaryText: 'Copy TxID',
         onPrimary: () async {
-          await Clipboard.setData(ClipboardData(text: txid));
+          await Clipboard.setData(ClipboardData(text: tx));
           ctl.close();
         },
       );
-
-      // Clear text + VM
-      await vm.setAmount(0.0);
+      await vm.setAmount(0);
       _syncingText = true;
       try {
         _amountCtl.clear();
       } finally {
         _syncingText = false;
       }
-      _lastRaw = '';
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
@@ -319,46 +291,91 @@ class _SwapScreenState extends State<SwapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
     final vm = context.watch<SwapVM>();
     final s = vm.state;
+    final c = AppColor.of(context);
 
-    final hasAmount = vm.hasAmount;
-    final canSwap = vm.canSwap;
+    final double r = _compact ? 10 : 12;
+    final EdgeInsets pad =
+    EdgeInsets.symmetric(horizontal: _compact ? 10 : 12, vertical: _compact ? 9 : 12);
+    final double gapS = _compact ? 6 : 10;
+    final double gapM = _compact ? 8 : 12;
+    final double listTop = _compact ? 6 : 10;
+    final double listBottom = _compact ? 10 : 14;
 
-    // If VM clamped amount due to streams/balance changes, mirror back to field.
+    if (_lastIsXlmToUsdc != s.isXlmToUsdc) {
+      _lastIsXlmToUsdc = s.isXlmToUsdc;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _setModeForContext(vm);
+        _syncingText = true;
+        try {
+          if (vm.mode == AmountMode.from) {
+            _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
+          } else {
+            final est = vm.state.estReceive ?? (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
+            _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
+          }
+          _amountCtl.selection =
+              TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
+        } finally {
+          _syncingText = false;
+        }
+        if (mounted) setState(() {});
+      });
+    }
+
+    // keep FROM field in sync with VM when VM owns the truth
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _syncingText) return;
+      if (!mounted || _syncingText || vm.mode != AmountMode.from) return;
       final raw = _amountCtl.text.trim();
-
-      // Respect ephemeral editing states while focused ('.', '12.')
-      if (_isEphemeral(raw)) return;
-
       final parsed = double.tryParse(raw.replaceAll(',', '')) ?? 0.0;
       if ((parsed - vm.amount).abs() > 1e-9) {
         _syncingText = true;
         try {
           _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
-          _amountCtl.selection = TextSelection.fromPosition(
-            TextPosition(offset: _amountCtl.text.length),
-          );
+          _amountCtl.selection =
+              TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
         } finally {
           _syncingText = false;
         }
-        _lastRaw = _amountCtl.text;
       }
     });
 
+    final hasAmount = vm.hasAmount;
+    final canSwap = vm.canSwap;
+
+    final isXlmToUsdc = s.isXlmToUsdc;
+    final fromSymbol = isXlmToUsdc ? 'XLM' : 'USDC';
+    final toSymbol = isXlmToUsdc ? 'USDC' : 'XLM';
+    final activeSymbol = _activeSymbol(isXlmToUsdc: isXlmToUsdc, mode: vm.mode);
+    final amountLabel =
+    vm.mode == AmountMode.from ? 'You send ($activeSymbol)' : 'You receive ($activeSymbol)';
+
+    // converted hint data
+    double? convertedValue;
+    String convertedSymbol = '';
+    if (vm.mode == AmountMode.from) {
+      if (s.estReceive != null && s.estReceive! > 0) {
+        convertedValue = s.estReceive!;
+        convertedSymbol = toSymbol;
+      }
+    } else {
+      if (vm.amount > 0) {
+        convertedValue = vm.amount;
+        convertedSymbol = fromSymbol;
+      }
+    }
+
     return Scaffold(
-      backgroundColor: colors.background,
+      backgroundColor: c.background,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: colors.background,
-        titleSpacing: 20,
+        backgroundColor: c.background,
         title: const Text('Swap'),
-        centerTitle: false,
         actions: [
+          AppBarCompactSwitch(value: _compact, onChanged: (v) => setState(() => _compact = v)),
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(LucideIcons.refreshCcw),
@@ -375,121 +392,268 @@ class _SwapScreenState extends State<SwapScreen> {
           : (s.error != null && s.error!.isNotEmpty)
           ? ErrorCard(message: s.error!)
           : RefreshIndicator(
+        color: c.primary,
+        backgroundColor: c.surface,
         onRefresh: () async {
           await vm.refreshBalances();
           if (vm.amount > 0) await vm.updateQuote(vm.amount);
         },
-        color: colors.primary,
-        backgroundColor: colors.surface,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(12, listTop, 12, listBottom),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
-            const SizedBox(height: 6),
+            SizedBox(height: _compact ? 2 : 4),
             BalanceRow(
               xlm: s.xlmBal,
               usdc: s.usdcBal,
               numberFormat: NumberFormat('#,##0.####'),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: _compact ? 8 : 10),
 
             SectionCard(
+              padding: EdgeInsets.all(_compact ? 10 : 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  DirectionSwitcher(
+                  // Direction controls
+                  AssetSelectRow(
                     isXlmToUsdc: s.isXlmToUsdc,
-                    onFlip: () => _onFlip(vm),
+                    onFlip: () => _flip(vm),
+                    onChange: (fromIsXLM) async {
+                      if (fromIsXLM != s.isXlmToUsdc) await _flip(vm);
+                    },
+                    radius: r,
+                    contentPad: pad,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
+                  SizedBox(height: gapS),
 
-            SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  AmountField(label: 'Amount', controller: _amountCtl),
-                  const SizedBox(height: 8),
-                  PercentChipsRow(onPick: (pct) => _onApplyPercent(vm, pct)),
-                  const SizedBox(height: 10),
-                  Slider(
+                  // Order Type
+                  OrderTypeField(
+                    value: _tab,
+                    onChanged: (t) async {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _tab = t;
+                        // no limit-specific UI here anymore
+                        if (t != SwapTab.schedule) {
+                          _scheduleStart = null;
+                          _scheduleEnd = null;
+                        }
+                      });
+                      await _setModeForContext(vm);
+                      if (mounted) setState(() {});
+                    },
+                    radius: r,
+                    contentPad: pad,
+                  ),
+
+                  if (_tab == SwapTab.schedule) ...[
+                    SizedBox(height: _compact ? 8 : 10),
+                    ScheduleWindowField(
+                      start: _scheduleStart,
+                      end: _scheduleEnd,
+                      label: 'Execute window',
+                      radius: r,
+                      padding: pad,
+                      dense: _compact,
+                      onChanged: (DateTimeRange? range) {
+                        setState(() {
+                          if (range == null) {
+                            _scheduleStart = null;
+                            _scheduleEnd = null;
+                          } else {
+                            _scheduleStart = range.start;
+                            _scheduleEnd = range.end;
+                          }
+                        });
+                      },
+                    ),
+                    SizedBox(height: _compact ? 4 : 6),
+                    const HintBox(
+                      text: 'Your swap will execute in this window using the market price.',
+                    ),
+                  ],
+
+                  SizedBox(height: gapM),
+
+                  // Amount field with asset dropdown (changes input unit)
+                  AmountFieldWithAsset(
+                    label: amountLabel,
+                    controller: _amountCtl,
+                    onClear: () {
+                      _syncingText = true;
+                      try {
+                        _amountCtl.clear();
+                      } finally {
+                        _syncingText = false;
+                      }
+                      context.read<SwapVM>().setAmount(0);
+                      setState(() {}); // refresh converted hint
+                    },
+                    symbol: activeSymbol,
+                    onPickAsset: (chosen) async {
+                      final desired = _modeForChosenSymbol(
+                        isXlmToUsdc: isXlmToUsdc,
+                        chosen: chosen,
+                      );
+                      if (desired == vm.mode) return;
+
+                      await vm.setAmountMode(desired);
+
+                      _syncingText = true;
+                      try {
+                        if (vm.mode == AmountMode.from) {
+                          _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
+                        } else {
+                          final est = vm.state.estReceive ??
+                              (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
+                          _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
+                        }
+                        _amountCtl.selection =
+                            TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
+                      } finally {
+                        _syncingText = false;
+                      }
+                      if (mounted) setState(() {});
+                    },
+                    radius: r,
+                    contentPad: pad,
+                  ),
+
+                  // converted hint just under amount field
+                  if (convertedValue != null && convertedValue! > 0) ...[
+                    SizedBox(height: 6),
+                    _ConvertedHint(
+                      valueText: _tight(convertedValue!),
+                      symbol: convertedSymbol,
+                    ),
+                  ],
+
+                  SizedBox(height: gapS),
+
+                  // Quick % chips
+                  PercentChipsRow(onPick: (p) => _applyPct(vm, p)),
+
+                  SizedBox(height: gapM),
+
+                  // Slippage
+                  SlippageControl(
                     value: vm.slippagePct,
                     min: SwapVM.slippageMin,
                     max: SwapVM.slippageMax,
-                    divisions: 45, // 0.1% steps
-                    label: '${_fmtPct(vm.slippagePct)}%',
+                    label: 'Slippage',
                     onChanged: (v) => vm.setSlippagePct(v),
+                    fmt: _fmtPct,
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Slippage tolerance',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w400,
-                          color: colors.textSecondary,
-                          letterSpacing: .2,
-                        ),
-                      ),
-                      Text(
-                        '${_fmtPct(vm.slippagePct)}%',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (s.isXlmToUsdc) ...[
-                    const SizedBox(height: 8),
-                    const HintBox(
-                      text: 'We keep ~1 XLM for fees & reserve. Use the quick chips for a safe prefill.',
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 8),
-                    const HintBox(
-                      text:
-                      'Stellar fees are paid in XLM. Swapping a small amount to XLM first ensures you can send and swap smoothly.',
-                    ),
-                  ]
                 ],
               ),
             ),
 
-            const SizedBox(height: 8),
+            SizedBox(height: _compact ? 8 : 10),
+
+            if (s.isXlmToUsdc)
+              const HintBox(
+                text: 'We keep ~1 XLM for fees & reserve. Use the quick chips for a safe prefill.',
+              )
+            else
+              const HintBox(
+                text:
+                'Stellar fees are paid in XLM. Swapping a small amount to XLM first helps ensure you can transact smoothly.',
+              ),
           ],
         ),
       ),
-      bottomNavigationBar: (s.loading && s.accountId == null) || (s.error != null && s.error!.isNotEmpty)
+      bottomNavigationBar:
+      (s.loading && s.accountId == null) || (s.error != null && s.error!.isNotEmpty)
           ? null
           : SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          child: SizedBox(
-            width: double.infinity,
-            child: CustomButton(
-              text: s.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM',
-              icon: LucideIcons.arrowRightLeft,
-              type: !hasAmount ? ButtonType.disabled : ButtonType.filled,
-              onPressed: !hasAmount
-                  ? () {} // won't be called; button is disabled by type
-                  : (canSwap
-                  ? () => _confirmAndSwap(vm)
-                  : () {
-                HapticFeedback.selectionClick();
-                showFloatingSnackBar(
-                  context,
-                  message: 'Insufficient balance',
-                  type: SnackBarType.error,
-                );
-              }),
-            ),
-          ),
+          padding: EdgeInsets.fromLTRB(12, 0, 12, _compact ? 10 : 12),
+          child: _bottom(vm, hasAmount, canSwap),
         ),
+      ),
+    );
+  }
+
+  // CTA
+  Widget _bottom(SwapVM vm, bool hasAmount, bool canSwap) {
+    final s = vm.state;
+    switch (_tab) {
+      case SwapTab.market:
+        return CustomButton(
+          text: s.isXlmToUsdc ? 'Swap XLM → USDC' : 'Swap USDC → XLM',
+          icon: LucideIcons.arrowRightLeft,
+          type: !hasAmount ? ButtonType.disabled : ButtonType.filled,
+          onPressed: !hasAmount
+              ? () {}
+              : (canSwap
+              ? () => _confirmMarket(vm)
+              : () {
+            HapticFeedback.selectionClick();
+            showFloatingSnackBar(context,
+                message: 'Insufficient balance', type: SnackBarType.error);
+          }),
+        );
+
+      case SwapTab.limit:
+      // Placeholder button that will navigate to a dedicated Limit UI later.
+        return CustomButton(
+          text: 'Trade (Limit) — Coming Soon',
+          icon: LucideIcons.scanLine,
+          type: ButtonType.outlined,
+          onPressed: () {
+            // TODO: Navigate to Limit Swap UI (e.g., Navigator.pushNamed(context, '/swap/limit'))
+            HapticFeedback.selectionClick();
+            showFloatingSnackBar(context,
+                message: 'Limit trading UI is coming soon.', type: SnackBarType.info);
+          },
+        );
+
+      case SwapTab.schedule:
+        final rangeReady = _scheduleStart != null && _scheduleEnd != null;
+        return CustomButton(
+          text: s.isXlmToUsdc ? 'Schedule: XLM → USDC' : 'Schedule: USDC → XLM',
+          icon: LucideIcons.clock3,
+          type: (!hasAmount || !rangeReady) ? ButtonType.disabled : ButtonType.filled,
+          onPressed: (!hasAmount || !rangeReady)
+              ? () {}
+              : () async {
+            await _confirmSchedule(vm);
+          },
+        );
+    }
+  }
+}
+
+// ── tiny, minimalist converted hint ──────────────────────────────────────────
+class _ConvertedHint extends StatelessWidget {
+  final String valueText;
+  final String symbol;
+  const _ConvertedHint({required this.valueText, required this.symbol});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.border.withOpacity(.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.equal, size: 14, color: c.textSecondary),
+          const SizedBox(width: 8),
+          AssetLogo(keyOrSymbol: symbol, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            '$valueText $symbol',
+            style: TextStyle(fontSize: 13, color: c.textSecondary),
+          ),
+        ],
       ),
     );
   }

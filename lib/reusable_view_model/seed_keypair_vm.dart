@@ -5,7 +5,7 @@ import 'package:bip39/bip39.dart' as bip39;
 import 'package:ed25519_hd_key/ed25519_hd_key.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/services/seed_storage.dart';
 import 'package:next_fi/reusable_model/wallet_meta_model.dart';
 
 /// Helper for deterministic derivation (BIP-39 -> ed25519 using BIP-44 for Stellar).

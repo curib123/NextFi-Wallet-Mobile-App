@@ -5,7 +5,7 @@ import 'package:next_fi/features/wallet_home/model/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar show PaymentOperationResponse, Asset;
 
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/services/seed_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 
 // NEW: use the provider you built for deriving the account/keypair
@@ -126,6 +126,31 @@ class WalletHomeVM extends ChangeNotifier {
   bool _disposed = false;
   bool _bootEventsArmed = true; // emit boot alerts once
   DateTime? _lastFetch;
+
+  // ───────────────────── NEW: binding helpers ─────────────────────
+
+  /// Bind to a specific address (usually from SeedKeypairVM.accountId).
+  /// Will restart realtime streams and kick a refresh when it changes.
+  void bindToAddress(String? addr) {
+    final address = (addr ?? '').trim();
+    if (address.isEmpty) {
+      if (_state.address != null) {
+        _set(_state.copyWith(address: null, xlm: 0, usdc: 0));
+        _restartRealtime();
+      }
+      return;
+    }
+    if (_state.address == address) return;
+
+    _set(_state.copyWith(address: address));
+    _restartRealtime();
+    // Kick an immediate refresh (fire-and-forget)
+    // ignore: discarded_futures
+    refresh(force: true);
+  }
+
+  /// Convenience: bind directly from the injected SeedKeypairVM.
+  void bindToSeedVM() => bindToAddress(_seedVM.accountId);
 
   // ───────────────────── public API ─────────────────────
 
@@ -330,7 +355,7 @@ class WalletHomeVM extends ChangeNotifier {
   void onResumed() {
     startRealtime();
     // ignore: discarded_futures
-    unawaited(refresh());
+    refresh();
   }
 
   void onPausedOrInactive() {

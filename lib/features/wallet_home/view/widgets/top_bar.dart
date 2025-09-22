@@ -11,7 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/wallet_switch_result.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/services/seed_storage.dart';
 
 class TopBar extends StatelessWidget {
   const TopBar({super.key});

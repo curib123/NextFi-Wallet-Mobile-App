@@ -2,34 +2,23 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:next_fi/features/swap/model/swap_dir.dart';
-import 'package:next_fi/features/swap/model/swap_state.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
-import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
+import 'package:next_fi/features/swap/model/swap_dir.dart';
+import 'package:next_fi/features/swap/model/swap_state.dart';
+import 'package:next_fi/features/swap/model/swap_mode.dart'; // AmountMode
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 
 class SwapVM extends ChangeNotifier {
   SwapVM({
     required StellarWalletServices svc,
-    required SeedKeypairVM seedVM,
+    required SeedKeypairVM keypairVM,
   })  : _svc = svc,
-        _seedVM = seedVM {
-    // React to active-account changes from SeedKeypairVM
-    _seedListener = () {
-      final aid = _seedVM.accountId;
-      if ((aid ?? '') != (_state.accountId ?? '')) {
-        bindToAddress(aid);
-      }
-    };
-    _seedVM.addListener(_seedListener);
-
-    // Warm fee stream (rewired after bind)
+        _keys = keypairVM {
     scheduleMicrotask(() async {
-      await _wireFeeStream();
-      // Bind immediately if SeedKeypairVM already has an address
-      if ((_seedVM.accountId ?? '').isNotEmpty) {
-        bindToAddress(_seedVM.accountId);
+      if (_feeSub == null) {
+        await _wireFeeStream();
       }
     });
   }
@@ -44,16 +33,17 @@ class SwapVM extends ChangeNotifier {
 
   // ── deps/internal ──────────────────────────────────────────────────────────
   final StellarWalletServices _svc;
-  final SeedKeypairVM _seedVM;
-  late final VoidCallback _seedListener;
+  final SeedKeypairVM _keys;
 
   StreamSubscription? _acctSub;
   StreamSubscription? _feeSub;
 
-  bool _disposed = false;
+  // ── UI mode: enter by "Send" or "Receive" ─────────────────────────────────
+  AmountMode _mode = AmountMode.from;
+  AmountMode get mode => _mode;
 
   // ── view-facing ephemeral values (not in SwapState) ───────────────────────
-  double _amount = 0.0; // user input (from-asset units)
+  double _amount = 0.0; // *from-asset* units
   double get amount => _amount;
 
   double _slippagePct = 0.01; // fractional (e.g. 0.01 = 1%)
@@ -68,49 +58,78 @@ class SwapVM extends ChangeNotifier {
   SwapState get state => _state;
   void _set(SwapState s) {
     _state = s;
-    _safeNotify();
+    notifyListeners();
   }
 
-  // public helpers
-  bool get isTestnet => _svc.isTestnet;
+  bool get isTestnet =>
+      _svc.isTestnet ?? identical(_svc.sdk, stellar.StellarSDK.TESTNET);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Amount & Slippage API (UI calls these; VM does the work)
+  // Amount & Mode API
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Called by UI when text field changes. Parses, clamps to available, wires fees if needed, and requotes.
+  /// Switch between entering by **Send** (from) vs **Receive** (to).
+  Future<void> setAmountMode(AmountMode value) async {
+    if (_mode == value) return;
+    _mode = value;
+    // When switching to "to", refresh quote so UI can prefill receive field
+    if (_mode == AmountMode.to && _amount > 0) {
+      await updateQuote(_amount);
+    }
+    notifyListeners();
+  }
+
+  /// Called by UI when text field changes.
+  /// - In FROM mode: parse as from-amount (clamped to available).
+  /// - In TO mode: parse as desired receive, back-solve the needed from-amount.
   Future<void> onAmountChanged(String raw) async {
-    final v = double.tryParse(raw.trim()) ?? 0.0;
+    final parsed = double.tryParse(raw.trim()) ?? 0.0;
+
+    if (_mode == AmountMode.to) {
+      // Enter-by-Receive: solve for required FROM amount.
+      final desiredOut = parsed <= 0 ? 0.0 : parsed;
+      final solvedFrom = await _solveFromForDesiredOut(desiredOut);
+      final cap = availableFrom;
+      final clamped = solvedFrom > cap && cap > 0 ? cap : (solvedFrom <= 0 ? 0.0 : solvedFrom);
+
+      if ((clamped - _amount).abs() < _EPS) return;
+
+      _amount = _floorTo(clamped, 7);
+      notifyListeners();
+      await updateQuote(_amount);
+      if (_feeSub == null) await _wireFeeStream();
+      return;
+    }
+
+    // Enter-by-Send (FROM)
+    final v = parsed;
     if ((v - _amount).abs() < _EPS) return;
 
     final cap = availableFrom;
     final clamped = v > cap && cap > 0 ? cap : (v <= 0 ? 0.0 : v);
 
     _amount = _floorTo(clamped, 7);
-    _safeNotify(); // canSwap/labels update immediately
+    notifyListeners();
 
     await updateQuote(_amount);
 
-    // Ensure fee stream is alive once the user interacts.
     if (_feeSub == null) {
       await _wireFeeStream();
     }
   }
 
-  /// Programmatic set (e.g., after percent chips). Also clamps and wires fees if needed. Requotes.
+  /// Programmatic set (e.g., percent chips), always in *from* units.
   Future<void> setAmount(double value) async {
     final cap = availableFrom;
     final clamped = value > cap && cap > 0 ? cap : (value <= 0 ? 0.0 : value);
     _amount = _floorTo(clamped, 7);
-    _safeNotify();
+    notifyListeners();
     await updateQuote(_amount);
     if (_feeSub == null) {
       await _wireFeeStream();
     }
   }
 
-  /// Apply a percent of the available "from" balance (e.g., 0.25 = 25%).
-  /// Returns the new amount for UI convenience.
   Future<double> applyPercent(double percent) async {
     final base = availableFrom;
     final v = _floorTo(base * percent, 7);
@@ -118,16 +137,13 @@ class SwapVM extends ChangeNotifier {
     return _amount;
   }
 
-  /// Update slippage tolerance (fraction: 0.005..0.05).
   void setSlippagePct(double value) {
     final clamped = value.clamp(slippageMin, slippageMax).toDouble();
     if ((clamped - _slippagePct).abs() < _EPS) return;
     _slippagePct = _roundFrac(clamped, 3); // 0.1% steps
-    _safeNotify(); // quote lines + confirm sheet recompute
+    notifyListeners();
   }
 
-  /// Ensures the current amount does not exceed spendable "from" balance.
-  /// If capped, it adjusts amount and requotes. Returns the (possibly updated) amount.
   Future<double> capAmountToAvailableAndRequote() async {
     final cap = availableFrom;
     if (_amount > cap && cap > 0) {
@@ -136,29 +152,19 @@ class SwapVM extends ChangeNotifier {
     return _amount;
   }
 
-  // ── UI helpers so the view can "just listen" ──────────────────────────────
   bool get hasAmount => _amount > 0;
   bool get canSwap => _amount > 0 && hasEnough(_amount) && !_state.loading;
 
-  /// Network fee estimated by Horizon (XLM).
   double get estNetworkFeeXlm => _state.feeXlm ?? 0.0;
-
-  /// Combined fee (network + transaction/profit), all in XLM.
   double get estCombinedFeeXlm => estNetworkFeeXlm + txFeeXlm;
-
-  /// For nicer UI copy (e.g., show "Calculating…" instead of "—").
   bool get hasFeeEstimates => estNetworkFeeXlm > 0 || txFeeXlm > 0;
 
-  /// Current estimated min receive (pre-fee), using current slippage.
   double? get currentMinOutPreFee {
     final est = _state.estReceive;
     if (est == null) return null;
     return est * (1 - _slippagePct);
   }
 
-  /// Current estimated min receive (after fees):
-  /// - XLM→USDC: tx fee is paid in XLM, USDC out unaffected → same as pre-fee.
-  /// - USDC→XLM to self: actual wallet delta is reduced by txFeeXlm.
   double? get currentMinOutAfterFees {
     final pre = currentMinOutPreFee;
     if (pre == null) return null;
@@ -167,8 +173,6 @@ class SwapVM extends ChangeNotifier {
     return after <= 0 ? 0.0 : after;
   }
 
-  /// One-liner used by UI for the "Quote" section (pass a simple formatter).
-  /// Shows est. receive + slippage + Est. transaction fee (combined).
   String buildQuoteLine(String Function(num) fmt) {
     if (_state.estReceive == null) return 'Getting live quote…';
     final recv = fmt(_state.estReceive!);
@@ -188,10 +192,8 @@ class SwapVM extends ChangeNotifier {
   // Direction / Address binding
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Bind the VM to the SeedKeypairVM’s active address.
-  void bindToSeedVM() => bindToAddress(_seedVM.accountId);
+  void bindToActiveWallet() => bindToAddress(_keys.accountId);
 
-  /// Bind the VM to a (possibly new) account address.
   void bindToAddress(String? newAddr) {
     final addr = (newAddr ?? '').trim();
     if (addr.isEmpty) {
@@ -238,8 +240,6 @@ class SwapVM extends ChangeNotifier {
     }
   }
 
-  /// Flip swap direction and keep the current amount valid; requote afterwards.
-  /// Returns the (possibly adjusted) amount after direction flip.
   Future<double> flipDirectionAndRequote() async {
     final newDir = _state.isXlmToUsdc ? SwapDir.usdcToXlm : SwapDir.xlmToUsdc;
     await setDir(newDir);
@@ -250,8 +250,8 @@ class SwapVM extends ChangeNotifier {
     if (_state.dir == value) return;
     final needs = value == SwapDir.xlmToUsdc ? _state.needsTrustline : false;
     _set(_state.copyWith(dir: value, needsTrustline: needs));
-    await _wireFeeStream(); // recompute ops & refetch fees
-    await capAmountToAvailableAndRequote(); // auto-fix overshoot
+    await _wireFeeStream();
+    await capAmountToAvailableAndRequote();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -286,9 +286,7 @@ class SwapVM extends ChangeNotifier {
       if (_amount > 0) {
         await updateQuote(_amount);
       }
-    } catch (_) {
-      // keep last
-    }
+    } catch (_) {/* keep last */}
   }
 
   double get availableFrom {
@@ -299,7 +297,8 @@ class SwapVM extends ChangeNotifier {
     return _floor6(_state.usdcBal);
   }
 
-  bool hasEnough(double amount) => amount > 0 && amount <= (availableFrom + _EPS);
+  bool hasEnough(double amount) =>
+      amount > 0 && amount <= (availableFrom + _EPS);
 
   Future<double?> updateQuote(double amount) async {
     if (amount <= 0) {
@@ -318,56 +317,61 @@ class SwapVM extends ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Swap execution (uses SeedKeypairVM to derive KeyPair ephemerally)
+  // Orders (Schedule only) – naive in-VM storage for now
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Execute swap.
-  /// Optionally provide a [keyPairSupplier] (e.g., hardware signer); otherwise derives from SeedKeypairVM.
+  final List<_ScheduledOrder> _scheduled = <_ScheduledOrder>[];
+
+  Future<void> placeScheduleOrder({
+    required bool xlmToUsdc,
+    required double amountFrom,
+    required DateTime scheduleAt,
+  }) async {
+    if (amountFrom <= 0) {
+      throw ArgumentError('Invalid amount.');
+    }
+    _scheduled.add(_ScheduledOrder(
+      xlmToUsdc: xlmToUsdc,
+      amountFrom: _floorTo(amountFrom, 7),
+      scheduleAt: scheduleAt.toUtc(),
+      createdAt: DateTime.now(),
+    ));
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Swap execution
+  // ──────────────────────────────────────────────────────────────────────────
+
   Future<String> executeSwap({
     required double amount,
     required double minOut,
-    Future<stellar.KeyPair?> Function()? keyPairSupplier,
-    String? destination,
-    String? memoText,
   }) async {
     final aid = _state.accountId;
     if (aid == null || aid.isEmpty) {
       throw StateError('Wallet not ready');
     }
 
-    // Obtain signer
-    stellar.KeyPair? kp;
-    if (keyPairSupplier != null) {
-      kp = await keyPairSupplier();
-    }
-    kp ??= await _seedVM.deriveKeyPair();
+    final kp = await _keys.deriveKeyPair();
 
-    // Execute
     final txid = _state.isXlmToUsdc
         ? await _svc.swapXlmToUsdc(
       keyPair: kp,
       sendAmountXlm: amount,
       minUsdcOut: minOut,
-      destination: destination,
-      memoText: memoText,
     )
         : await _svc.swapUsdcToXlm(
       keyPair: kp,
       sendAmountUsdc: amount,
       minXlmOut: minOut,
-      destination: destination,
-      memoText: memoText,
     );
 
-    await refreshBalances(); // streams will tick anyway
+    await refreshBalances();
     return txid;
   }
 
   @override
   void dispose() {
-    _seedVM.removeListener(_seedListener);
     _teardownStreams();
-    _disposed = true;
     super.dispose();
   }
 
@@ -377,13 +381,14 @@ class SwapVM extends ChangeNotifier {
     try {
       await refreshBalances();
       await _wireAccountStream();
-      await _wireFeeStream(); // also fetch tx-fee
+      await _wireFeeStream();
       _set(_state.copyWith(loading: false, error: ''));
       if (_amount > 0) {
         await updateQuote(_amount);
       }
     } catch (e) {
-      _set(_state.copyWith(loading: false, error: 'Failed to initialize swap: $e'));
+      _set(_state.copyWith(
+          loading: false, error: 'Failed to initialize swap: $e'));
     }
   }
 
@@ -409,52 +414,82 @@ class SwapVM extends ChangeNotifier {
       if (prevNeeds != _state.needsTrustline) {
         await _wireFeeStream();
       }
-      // Auto-cap if user typed too much and balance changed under us
       if (_amount > 0) {
         await capAmountToAvailableAndRequote();
       }
-    }, onError: (_) {
-      // keep last
-    });
+    }, onError: (_) {/* keep last */});
   }
 
   Future<void> _wireFeeStream() async {
     _feeSub?.cancel();
 
-    // 1) Refresh *transaction/profit fee* (in XLM) so UI can show combined fee
+    // 1) Refresh transaction/profit fee (in XLM)
     try {
       final x = await _svc.getCurrentFeeXlm();
       if ((x - (_txFeeXlm ?? 0.0)).abs() > _EPS) {
         _txFeeXlm = x;
-        _safeNotify(); // estCombinedFeeXlm/currentMinOutAfterFees change
+        notifyListeners();
       }
-    } catch (_) {
-      // keep last known tx-fee
-    }
+    } catch (_) {/* keep last */}
 
-    // 2) Recompute op-count for *network fee* estimation stream
+    // 2) Determine op-count for network fee estimation
     int ops = 1; // swap op
     int feeStroops = 0;
     try {
       feeStroops = await _svc.getCurrentFeeStroops();
     } catch (_) {}
-    if (feeStroops > 0) ops += 1; // extra op: pay tx-fee in XLM
-    if (_state.isXlmToUsdc && _state.needsTrustline) ops += 1; // if trustline needed
+    if (feeStroops > 0) ops += 1; // pay tx-fee op
+    if (_state.isXlmToUsdc && _state.needsTrustline) ops += 1; // trustline op
 
-    // 3) Stream network fee estimate and update state.feeXlm continuously
-    _feeSub = _svc
-        .feeEstimateStream(opCount: ops, percentile: 95)
-        .listen((f) {
+    // 3) Stream network fee estimates
+    _feeSub = _svc.feeEstimateStream(opCount: ops, percentile: 95).listen((f) {
       if ((_state.feeXlm ?? 0.0) != f.totalXlm) {
         _set(_state.copyWith(feeXlm: f.totalXlm));
       }
-    }, onError: (_) {
-      // keep last
-    });
+    }, onError: (_) {/* keep last */});
   }
 
-  // ── math/utils & safe notify ──────────────────────────────────────────────
+  // Solve for FROM amount to reach a desired OUT using quotes.
+  Future<double> _solveFromForDesiredOut(double desiredOut) async {
+    if (desiredOut <= 0) return 0.0;
+
+    Future<double> _quoteOut(double from) async {
+      if (from <= 0) return 0.0;
+      final q = _state.isXlmToUsdc
+          ? await _svc.quoteXlmToUsdc(from)
+          : await _svc.quoteUsdcToXlm(from);
+      // Ensure non-null, concrete double
+      return (q ?? 0.0).toDouble();
+    }
+
+    // Use [0, availableFrom] as feasible search range.
+    double low = 0.0;
+    double high = availableFrom;
+    if (high <= 0) return 0.0;
+
+    final qHigh = await _quoteOut(high);
+    if (qHigh < desiredOut) {
+      // Can't reach desired receive with current balance; cap at high.
+      return high;
+    }
+
+    // Binary search for ~7dp precision.
+    for (int i = 0; i < 14; i++) {
+      final mid = (low + high) / 2.0;
+      final q = await _quoteOut(mid);
+      if ((q - desiredOut).abs() < 1e-7) return mid;
+      if (q < desiredOut) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return high; // best upper bound
+  }
+
+  // ── math/utils ────────────────────────────────────────────────────────────
   double _floor6(double v) => (v * 1e6).floor() / 1e6;
+
   double _floorTo(double v, int dec) {
     final scale = math.pow(10, dec);
     return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale)
@@ -465,8 +500,18 @@ class SwapVM extends ChangeNotifier {
     final m = math.pow(10, places).toDouble();
     return (v * m).roundToDouble() / m;
   }
+}
 
-  void _safeNotify() {
-    if (!_disposed) notifyListeners();
-  }
+// ── lightweight in-VM scheduled order record (can be moved to models later) ─
+class _ScheduledOrder {
+  final bool xlmToUsdc;
+  final double amountFrom;
+  final DateTime scheduleAt;
+  final DateTime createdAt;
+  _ScheduledOrder({
+    required this.xlmToUsdc,
+    required this.amountFrom,
+    required this.scheduleAt,
+    required this.createdAt,
+  });
 }

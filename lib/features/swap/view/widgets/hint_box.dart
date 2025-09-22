@@ -5,18 +5,19 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 class HintBox extends StatelessWidget {
   final String text;
   const HintBox({super.key, required this.text});
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: c.surface,
+        color: c.background,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.primary.withOpacity(0.12)),
+        border: Border.all(color: c.border.withOpacity(.35)),
       ),
       child: Row(children: [
-        const Icon(LucideIcons.info, size: 16),
+        Icon(LucideIcons.info, size: 18, color: c.info),
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, color: c.textSecondary))),
       ]),

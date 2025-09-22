@@ -10,39 +10,56 @@ class DirectionSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+
+    Widget seg(String label, bool active, VoidCallback onTap) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              gradient: active ? c.primaryGradient : null,
+              color: active ? null : c.surface,
+              border: Border.all(color: c.border.withOpacity(.35)),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : c.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.06),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? c.surface
+            : c.primary.withOpacity(.04),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.primary.withOpacity(0.14)),
+        border: Border.all(color: c.border.withOpacity(.35)),
       ),
-      child: Row(children: [
-        Expanded(child: _SegBtn(active: isXlmToUsdc, label: 'XLM → USDC', onTap: () { if (!isXlmToUsdc) onFlip(); })),
-        const SizedBox(width: 6),
-        Expanded(child: _SegBtn(active: !isXlmToUsdc, label: 'USDC → XLM', onTap: () { if (isXlmToUsdc) onFlip(); })),
-        const SizedBox(width: 6),
-        IconButton(visualDensity: VisualDensity.compact, onPressed: onFlip, icon: Icon(LucideIcons.arrowUpDown, color: c.primary), tooltip: 'Flip'),
-      ]),
-    );
-  }
-}
-
-class _SegBtn extends StatelessWidget {
-  final bool active;
-  final String label;
-  final VoidCallback onTap;
-  const _SegBtn({required this.active, required this.label, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(color: active ? c.primary : Colors.transparent, borderRadius: BorderRadius.circular(10)),
-        alignment: Alignment.center,
-        child: Text(label, style: TextStyle(color: active ? Colors.white : c.textPrimary, fontWeight: FontWeight.w700, fontSize: 12.5)),
+      child: Row(
+        children: [
+          const SizedBox(width: 6),
+          seg('XLM → USDC', isXlmToUsdc, () { if (!isXlmToUsdc) onFlip(); }),
+          const SizedBox(width: 6),
+          seg('USDC → XLM', !isXlmToUsdc, () { if (isXlmToUsdc) onFlip(); }),
+          const SizedBox(width: 6),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onFlip,
+            icon: Icon(LucideIcons.arrowUpDown, color: c.primary),
+            tooltip: 'Flip',
+          ),
+        ],
       ),
     );
   }

@@ -9,7 +9,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 // ⬇️ Pulls the active wallet mnemonic / publicAddress
 // (Fix: match your existing path casing)
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/services/seed_storage.dart';
 
 /// Stores and verifies a **Transaction Fee** configuration (separate from Stellar network fee).
 /// Uses a signed payload {schema, version, address, fee_stroops} verified by a signer pubkey.
