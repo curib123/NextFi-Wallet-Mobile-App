@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/common/components/modal/confirm_swap_sheet.dart';
-import 'package:next_fi/features/swap/view/widgets/amount_field_with_asset.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -13,6 +11,7 @@ import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/asset/asset_logo.dart';
+import 'package:next_fi/common/components/modal/confirm_swap_sheet.dart';
 
 import 'package:next_fi/features/swap/model/swap_mode.dart';
 import 'package:next_fi/features/swap/view/widgets/section_card.dart';
@@ -20,13 +19,13 @@ import 'package:next_fi/features/swap/view/widgets/balance_row.dart';
 import 'package:next_fi/features/swap/view/widgets/percent_chips_row.dart';
 import 'package:next_fi/features/swap/view/widgets/hint_box.dart';
 import 'package:next_fi/features/swap/view/widgets/error_card.dart';
-import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 import 'package:next_fi/features/swap/view/widgets/appbar_compact_switch.dart';
 import 'package:next_fi/features/swap/view/widgets/order_type_field.dart';
 import 'package:next_fi/features/swap/view/widgets/slippage_control.dart';
 import 'package:next_fi/features/swap/view/widgets/asset_select_row.dart';
 import 'package:next_fi/features/swap/view/widgets/schedule_range_row.dart';
-
+import 'package:next_fi/features/swap/view/widgets/amount_field_with_asset.dart';
+import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 
 class SwapScreen extends StatefulWidget {
   const SwapScreen({super.key});
@@ -37,6 +36,10 @@ class SwapScreen extends StatefulWidget {
 class _SwapScreenState extends State<SwapScreen> {
   final _amountCtl = TextEditingController();
   final _fmt = NumberFormat('#,##0.######');
+
+  // Allow partial decimals while the user is typing/deleting:
+  // "", "0", "0.", "1.", "1.2", "1.20" … up to 7 decimals
+  final RegExp _partialNumberRe = RegExp(r'^\d{0,12}([.]\d{0,7})?$');
 
   bool _started = false;
   bool _syncingText = false;
@@ -57,34 +60,45 @@ class _SwapScreenState extends State<SwapScreen> {
       final vm = context.read<SwapVM>();
       var raw = _amountCtl.text;
 
+      // keep "0." when user types just a dot
       if (raw == ".") {
         _syncingText = true;
         try {
           _amountCtl.text = "0.";
-          _amountCtl.selection =
-              TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
+          _amountCtl.selection = TextSelection.fromPosition(
+            TextPosition(offset: _amountCtl.text.length),
+          );
         } finally {
           _syncingText = false;
         }
         return;
       }
 
-      // delegate to VM; in TO mode it solves required FROM
+      // Always notify VM of what the user typed
       await vm.onAmountChanged(raw);
 
-      // strict sync only in FROM mode
-      final parsed = double.tryParse(raw.replaceAll(',', '').trim()) ?? 0.0;
+      // IMPORTANT: if user is typing/deleting a valid partial decimal,
+      // DO NOT overwrite the field (prevents "can't delete around decimal" bug)
+      if (_partialNumberRe.hasMatch(raw)) {
+        if (mounted) setState(() {}); // refresh converted hint
+        return;
+      }
+
+      // Fallback normalization when input is not a valid partial number
+      final parsed = double.tryParse(raw.replaceAll(',', '').trim()) ?? vm.amount;
       if (vm.mode == AmountMode.from && (parsed - vm.amount).abs() > 1e-9) {
         _syncingText = true;
         try {
           _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
-          _amountCtl.selection =
-              TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
+          _amountCtl.selection = TextSelection.fromPosition(
+            TextPosition(offset: _amountCtl.text.length),
+          );
         } finally {
           _syncingText = false;
         }
       }
-      if (mounted) setState(() {}); // refresh converted hint
+
+      if (mounted) setState(() {});
     });
   }
 
@@ -183,7 +197,8 @@ class _SwapScreenState extends State<SwapScreen> {
       if (vm.mode == AmountMode.from) {
         _amountCtl.text = adjustedFrom <= 0 ? '' : _tight(adjustedFrom);
       } else {
-        final est = vm.state.estReceive ?? (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
+        final est =
+            vm.state.estReceive ?? (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
         _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
       }
       _amountCtl.selection =
@@ -313,7 +328,8 @@ class _SwapScreenState extends State<SwapScreen> {
           if (vm.mode == AmountMode.from) {
             _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
           } else {
-            final est = vm.state.estReceive ?? (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
+            final est =
+                vm.state.estReceive ?? (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
             _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
           }
           _amountCtl.selection =
@@ -325,10 +341,15 @@ class _SwapScreenState extends State<SwapScreen> {
       });
     }
 
-    // keep FROM field in sync with VM when VM owns the truth
+    // keep FROM field in sync with VM when VM owns the truth,
+    // but don't fight the user while they are typing a valid partial number
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _syncingText || vm.mode != AmountMode.from) return;
       final raw = _amountCtl.text.trim();
+
+      // NEW: don't override while a valid partial is being typed
+      if (_partialNumberRe.hasMatch(raw)) return;
+
       final parsed = double.tryParse(raw.replaceAll(',', '')) ?? 0.0;
       if ((parsed - vm.amount).abs() > 1e-9) {
         _syncingText = true;
@@ -470,7 +491,8 @@ class _SwapScreenState extends State<SwapScreen> {
                     ),
                     SizedBox(height: _compact ? 4 : 6),
                     const HintBox(
-                      text: 'Your swap will execute in this window using the market price.',
+                      text:
+                      'Your swap will execute in this window using the market price.',
                     ),
                   ],
 
@@ -503,14 +525,19 @@ class _SwapScreenState extends State<SwapScreen> {
                       _syncingText = true;
                       try {
                         if (vm.mode == AmountMode.from) {
-                          _amountCtl.text = vm.amount <= 0 ? '' : _tight(vm.amount);
+                          _amountCtl.text =
+                          vm.amount <= 0 ? '' : _tight(vm.amount);
                         } else {
                           final est = vm.state.estReceive ??
-                              (vm.amount > 0 ? await vm.updateQuote(vm.amount) : null);
-                          _amountCtl.text = (est == null || est <= 0) ? '' : _tight(est);
+                              (vm.amount > 0
+                                  ? await vm.updateQuote(vm.amount)
+                                  : null);
+                          _amountCtl.text =
+                          (est == null || est <= 0) ? '' : _tight(est);
                         }
-                        _amountCtl.selection =
-                            TextSelection.fromPosition(TextPosition(offset: _amountCtl.text.length));
+                        _amountCtl.selection = TextSelection.fromPosition(
+                          TextPosition(offset: _amountCtl.text.length),
+                        );
                       } finally {
                         _syncingText = false;
                       }
@@ -522,7 +549,7 @@ class _SwapScreenState extends State<SwapScreen> {
 
                   // converted hint just under amount field
                   if (convertedValue != null && convertedValue! > 0) ...[
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     _ConvertedHint(
                       valueText: _tight(convertedValue!),
                       symbol: convertedSymbol,
@@ -553,7 +580,8 @@ class _SwapScreenState extends State<SwapScreen> {
 
             if (s.isXlmToUsdc)
               const HintBox(
-                text: 'We keep ~1 XLM for fees & reserve. Use the quick chips for a safe prefill.',
+                text:
+                'We keep ~1 XLM for fees & reserve. Use the quick chips for a safe prefill.',
               )
             else
               const HintBox(
@@ -563,8 +591,8 @@ class _SwapScreenState extends State<SwapScreen> {
           ],
         ),
       ),
-      bottomNavigationBar:
-      (s.loading && s.accountId == null) || (s.error != null && s.error!.isNotEmpty)
+      bottomNavigationBar: (s.loading && s.accountId == null) ||
+          (s.error != null && s.error!.isNotEmpty)
           ? null
           : SafeArea(
         top: false,
@@ -603,7 +631,6 @@ class _SwapScreenState extends State<SwapScreen> {
           icon: LucideIcons.scanLine,
           type: ButtonType.outlined,
           onPressed: () {
-            // TODO: Navigate to Limit Swap UI (e.g., Navigator.pushNamed(context, '/swap/limit'))
             HapticFeedback.selectionClick();
             showFloatingSnackBar(context,
                 message: 'Limit trading UI is coming soon.', type: SnackBarType.info);
