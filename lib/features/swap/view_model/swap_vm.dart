@@ -27,9 +27,19 @@ class SwapVM extends ChangeNotifier {
   static const double dustXlm = 1.0; // keep 1 XLM for reserve/fees
   static const double _EPS = 1e-6;
 
-  // Slippage bounds (fractional): 0.5%..5.0%, default 1.0%
-  static const double slippageMin = 0.005;
-  static const double slippageMax = 0.05;
+  // Slippage bounds (fraction): 0.5%..5.0%, default 1.0%
+  static const double slippageMin = 0.005; // 0.5%
+  static const double slippageMax = 0.05;  // 5.0%
+
+  // Convenience percent view for UI (0.5..5.0)
+  static double get slippageMinPct => slippageMin * 100; // 0.5
+  static double get slippageMaxPct => slippageMax * 100; // 5.0
+
+  // Debounce delay for network quoting while typing
+  static const Duration _quoteDebounce = Duration(milliseconds: 120);
+
+  // EMA smoothing factor for rate cache (higher = quicker adaptation)
+  static const double _emaAlpha = 0.35;
 
   // ── deps/internal ──────────────────────────────────────────────────────────
   final StellarWalletServices _svc;
@@ -37,6 +47,9 @@ class SwapVM extends ChangeNotifier {
 
   StreamSubscription? _acctSub;
   StreamSubscription? _feeSub;
+
+  Timer? _quoteTimer;
+  int _quoteSeq = 0; // increments per request; guards against stale updates
 
   // ── UI mode: enter by "Send" or "Receive" ─────────────────────────────────
   AmountMode _mode = AmountMode.from;
@@ -46,19 +59,56 @@ class SwapVM extends ChangeNotifier {
   double _amount = 0.0; // *from-asset* units
   double get amount => _amount;
 
-  double _slippagePct = 0.01; // fractional (e.g. 0.01 = 1%)
+  // fractional: 0.01 == 1%
+  double _slippagePct = 0.01; // default 1%
   double get slippagePct => _slippagePct;
+
+  // quick helpers for UIs that like whole percents
+  double get slippagePctPercent => _roundFrac(_slippagePct * 100, 2);
+  void setSlippagePctPercent(double pct) => setSlippagePct(pct / 100);
 
   // Tx/profit fee in XLM (separate from network fee, which is in state.feeXlm)
   double? _txFeeXlm; // may be null until fetched
   double get txFeeXlm => _txFeeXlm ?? 0.0;
 
+  // ── fast path: cached rate (to give instant estimates) ────────────────────
+  // For xlm->usdc we store USDC per 1 XLM. For usdc->xlm we store XLM per 1 USDC.
+  double? _rateXlmToUsdc;
+  double? _rateUsdcToXlm;
+  DateTime? _rateUpdatedAt;
+
+  void _bumpRate({required bool xlmToUsdc, required double from, required double to}) {
+    if (from <= 0 || to <= 0) return;
+    final now = DateTime.now();
+    if (xlmToUsdc) {
+      final r = to / from; // USDC per XLM
+      _rateXlmToUsdc = (_rateXlmToUsdc == null) ? r : _ema(_rateXlmToUsdc!, r, _emaAlpha);
+    } else {
+      final r = to / from; // XLM per USDC
+      _rateUsdcToXlm = (_rateUsdcToXlm == null) ? r : _ema(_rateUsdcToXlm!, r, _emaAlpha);
+    }
+    _rateUpdatedAt = now;
+  }
+
+  double? _getCachedRate({required bool xlmToUsdc}) {
+    final r = xlmToUsdc ? _rateXlmToUsdc : _rateUsdcToXlm;
+    if (r == null) return null;
+    // Expire old rates quickly to avoid stale feel
+    if (_rateUpdatedAt != null &&
+        DateTime.now().difference(_rateUpdatedAt!) > const Duration(seconds: 30)) {
+      return null;
+    }
+    return r;
+  }
+
+  double _ema(double prev, double next, double alpha) => prev + alpha * (next - prev);
+
   // ── state (immutable data class) ──────────────────────────────────────────
   SwapState _state = const SwapState();
   SwapState get state => _state;
-  void _set(SwapState s) {
+  void _set(SwapState s, {bool notify = true}) {
     _state = s;
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   bool get isTestnet =>
@@ -72,9 +122,10 @@ class SwapVM extends ChangeNotifier {
   Future<void> setAmountMode(AmountMode value) async {
     if (_mode == value) return;
     _mode = value;
+
     // When switching to "to", refresh quote so UI can prefill receive field
     if (_mode == AmountMode.to && _amount > 0) {
-      await updateQuote(_amount);
+      _scheduleQuote(_amount, immediateFastPath: true);
     }
     notifyListeners();
   }
@@ -86,17 +137,22 @@ class SwapVM extends ChangeNotifier {
     final parsed = double.tryParse(raw.trim()) ?? 0.0;
 
     if (_mode == AmountMode.to) {
-      // Enter-by-Receive: solve for required FROM amount.
+      // Enter-by-Receive: solve for required FROM amount (fast path)
       final desiredOut = parsed <= 0 ? 0.0 : parsed;
-      final solvedFrom = await _solveFromForDesiredOut(desiredOut);
+      final solvedFrom = await _solveFromForDesiredOutFast(desiredOut);
       final cap = availableFrom;
       final clamped = solvedFrom > cap && cap > 0 ? cap : (solvedFrom <= 0 ? 0.0 : solvedFrom);
 
-      if ((clamped - _amount).abs() < _EPS) return;
+      if ((clamped - _amount).abs() < _EPS) {
+        // Still schedule a precise quote so estReceive syncs
+        _scheduleQuote(_amount, immediateFastPath: true);
+        return;
+      }
 
       _amount = _floorTo(clamped, 7);
+      // Notify once; precise quote will trigger another notify when it lands
       notifyListeners();
-      await updateQuote(_amount);
+      _scheduleQuote(_amount, immediateFastPath: true);
       if (_feeSub == null) await _wireFeeStream();
       return;
     }
@@ -111,7 +167,7 @@ class SwapVM extends ChangeNotifier {
     _amount = _floorTo(clamped, 7);
     notifyListeners();
 
-    await updateQuote(_amount);
+    _scheduleQuote(_amount, immediateFastPath: true);
 
     if (_feeSub == null) {
       await _wireFeeStream();
@@ -124,7 +180,7 @@ class SwapVM extends ChangeNotifier {
     final clamped = value > cap && cap > 0 ? cap : (value <= 0 ? 0.0 : value);
     _amount = _floorTo(clamped, 7);
     notifyListeners();
-    await updateQuote(_amount);
+    _scheduleQuote(_amount, immediateFastPath: true);
     if (_feeSub == null) {
       await _wireFeeStream();
     }
@@ -137,10 +193,11 @@ class SwapVM extends ChangeNotifier {
     return _amount;
   }
 
+  /// Sets slippage as a FRACTION (0.01 == 1%), clamped to 0.5%..5.0%.
   void setSlippagePct(double value) {
     final clamped = value.clamp(slippageMin, slippageMax).toDouble();
     if ((clamped - _slippagePct).abs() < _EPS) return;
-    _slippagePct = _roundFrac(clamped, 3); // 0.1% steps
+    _slippagePct = _roundFrac(clamped, 4); // precision enough for UI at 0.1% step
     notifyListeners();
   }
 
@@ -148,6 +205,9 @@ class SwapVM extends ChangeNotifier {
     final cap = availableFrom;
     if (_amount > cap && cap > 0) {
       await setAmount(cap);
+    } else {
+      // still ensure quote is up-to-date
+      _scheduleQuote(_amount, immediateFastPath: true);
     }
     return _amount;
   }
@@ -176,7 +236,7 @@ class SwapVM extends ChangeNotifier {
   String buildQuoteLine(String Function(num) fmt) {
     if (_state.estReceive == null) return 'Getting live quote…';
     final recv = fmt(_state.estReceive!);
-    final sl = (_slippagePct * 100);
+    final sl = slippagePctPercent; // show human-friendly %
     final slStr = sl % 1 == 0 ? sl.toStringAsFixed(0) : sl.toStringAsFixed(1);
 
     final feeCombined = estCombinedFeeXlm;
@@ -251,6 +311,9 @@ class SwapVM extends ChangeNotifier {
     final needs = value == SwapDir.xlmToUsdc ? _state.needsTrustline : false;
     _set(_state.copyWith(dir: value, needsTrustline: needs));
     await _wireFeeStream();
+
+    // Kick a fast estimate using the opposite cached rate
+    _scheduleQuote(_amount, immediateFastPath: true);
     await capAmountToAvailableAndRequote();
   }
 
@@ -284,7 +347,7 @@ class SwapVM extends ChangeNotifier {
       await _wireFeeStream();
 
       if (_amount > 0) {
-        await updateQuote(_amount);
+        _scheduleQuote(_amount, immediateFastPath: true);
       }
     } catch (_) {/* keep last */}
   }
@@ -300,42 +363,62 @@ class SwapVM extends ChangeNotifier {
   bool hasEnough(double amount) =>
       amount > 0 && amount <= (availableFrom + _EPS);
 
+  // Public, but now just calls the optimized scheduler (debounced quote)
   Future<double?> updateQuote(double amount) async {
-    if (amount <= 0) {
-      if (_state.estReceive != null) _set(_state.copyWith(estReceive: null));
-      return null;
-    }
-    try {
-      final q = _state.isXlmToUsdc
-          ? await _svc.quoteXlmToUsdc(amount)
-          : await _svc.quoteUsdcToXlm(amount);
-      _set(_state.copyWith(estReceive: q));
-      return q;
-    } catch (_) {
-      return _state.estReceive; // keep last estimate
-    }
+    _scheduleQuote(amount, immediateFastPath: true);
+    return _state.estReceive;
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Orders (Schedule only) – naive in-VM storage for now
-  // ──────────────────────────────────────────────────────────────────────────
-
-  final List<_ScheduledOrder> _scheduled = <_ScheduledOrder>[];
-
-  Future<void> placeScheduleOrder({
-    required bool xlmToUsdc,
-    required double amountFrom,
-    required DateTime scheduleAt,
-  }) async {
-    if (amountFrom <= 0) {
-      throw ArgumentError('Invalid amount.');
+  void _scheduleQuote(double amount, {bool immediateFastPath = false}) {
+    // First: fast path — update UI instantly using cached rate
+    if (immediateFastPath) {
+      final fast = _fastEstimate(amount);
+      if (fast != null) {
+        _set(_state.copyWith(estReceive: fast), notify: true);
+      } else {
+        if (amount <= 0 && _state.estReceive != null) {
+          _set(_state.copyWith(estReceive: null), notify: true);
+        }
+      }
     }
-    _scheduled.add(_ScheduledOrder(
-      xlmToUsdc: xlmToUsdc,
-      amountFrom: _floorTo(amountFrom, 7),
-      scheduleAt: scheduleAt.toUtc(),
-      createdAt: DateTime.now(),
-    ));
+
+    // Debounce the precise network quote
+    _quoteTimer?.cancel();
+    if (amount <= 0) {
+      _quoteTimer = Timer(_quoteDebounce, () {
+        if (_state.estReceive != null) {
+          _set(_state.copyWith(estReceive: null));
+        }
+      });
+      return;
+    }
+
+    final mySeq = ++_quoteSeq;
+    _quoteTimer = Timer(_quoteDebounce, () async {
+      try {
+        final q = _state.isXlmToUsdc
+            ? await _svc.quoteXlmToUsdc(amount)
+            : await _svc.quoteUsdcToXlm(amount);
+        if (mySeq != _quoteSeq) return; // stale
+        if (q != null && q > 0) {
+          _bumpRate(
+            xlmToUsdc: _state.isXlmToUsdc,
+            from: amount,
+            to: q,
+          );
+          _set(_state.copyWith(estReceive: q));
+        }
+      } catch (_) {
+        // keep last estimate; ignore error (prevents flicker)
+      }
+    });
+  }
+
+  double? _fastEstimate(double amount) {
+    if (amount <= 0) return null;
+    final r = _getCachedRate(xlmToUsdc: _state.isXlmToUsdc);
+    if (r == null) return _state.estReceive; // fallback: keep last
+    return _roundFrac(amount * r, 7);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -371,6 +454,7 @@ class SwapVM extends ChangeNotifier {
 
   @override
   void dispose() {
+    _quoteTimer?.cancel();
     _teardownStreams();
     super.dispose();
   }
@@ -384,7 +468,7 @@ class SwapVM extends ChangeNotifier {
       await _wireFeeStream();
       _set(_state.copyWith(loading: false, error: ''));
       if (_amount > 0) {
-        await updateQuote(_amount);
+        _scheduleQuote(_amount, immediateFastPath: true);
       }
     } catch (e) {
       _set(_state.copyWith(
@@ -449,42 +533,53 @@ class SwapVM extends ChangeNotifier {
     }, onError: (_) {/* keep last */});
   }
 
-  // Solve for FROM amount to reach a desired OUT using quotes.
-  Future<double> _solveFromForDesiredOut(double desiredOut) async {
+  // ── fast “receive-mode” solver with 1–2 precise quotes ────────────────────
+  Future<double> _solveFromForDesiredOutFast(double desiredOut) async {
     if (desiredOut <= 0) return 0.0;
 
-    Future<double> _quoteOut(double from) async {
-      if (from <= 0) return 0.0;
-      final q = _state.isXlmToUsdc
-          ? await _svc.quoteXlmToUsdc(from)
-          : await _svc.quoteUsdcToXlm(from);
-      // Ensure non-null, concrete double
-      return (q ?? 0.0).toDouble();
+    // 1) Use cached rate to guess quickly
+    final r = _getCachedRate(xlmToUsdc: _state.isXlmToUsdc);
+    double guess = (r == null)
+        ? (_amount > 0 ? _amount : desiredOut) // fallback
+        : (desiredOut / r);
+
+    // clamp to feasible range
+    final cap = availableFrom;
+    if (cap <= 0) return 0.0;
+    if (guess > cap) guess = cap;
+
+    // 2) One precise quote at guess
+    final q1 = await (_state.isXlmToUsdc
+        ? _svc.quoteXlmToUsdc(guess)
+        : _svc.quoteUsdcToXlm(guess));
+    final q1v = (q1 ?? 0.0).toDouble();
+
+    // If null or zero (unlikely), return guess and let debounced quote refine later
+    if (q1v <= 0) return guess;
+
+    // Keep rate fresh
+    _bumpRate(xlmToUsdc: _state.isXlmToUsdc, from: guess, to: q1v);
+
+    // Perfectly matched already
+    final diff = (q1v - desiredOut).abs();
+    if (diff <= 1e-7) return guess;
+
+    // 3) Proportional correction (assume near-linear short range)
+    // from2 ≈ guess * desiredOut / q1
+    double corr = guess * desiredOut / q1v;
+    if (corr > cap) corr = cap;
+    if ((corr - guess).abs() < 1e-9) return corr;
+
+    // 4) One more precise quote for corr; then stop.
+    final q2 = await (_state.isXlmToUsdc
+        ? _svc.quoteXlmToUsdc(corr)
+        : _svc.quoteUsdcToXlm(corr));
+    final q2v = (q2 ?? 0.0).toDouble();
+    if (q2v > 0) {
+      _bumpRate(xlmToUsdc: _state.isXlmToUsdc, from: corr, to: q2v);
     }
 
-    // Use [0, availableFrom] as feasible search range.
-    double low = 0.0;
-    double high = availableFrom;
-    if (high <= 0) return 0.0;
-
-    final qHigh = await _quoteOut(high);
-    if (qHigh < desiredOut) {
-      // Can't reach desired receive with current balance; cap at high.
-      return high;
-    }
-
-    // Binary search for ~7dp precision.
-    for (int i = 0; i < 14; i++) {
-      final mid = (low + high) / 2.0;
-      final q = await _quoteOut(mid);
-      if ((q - desiredOut).abs() < 1e-7) return mid;
-      if (q < desiredOut) {
-        low = mid;
-      } else {
-        high = mid;
-      }
-    }
-    return high; // best upper bound
+    return _floorTo(corr, 7);
   }
 
   // ── math/utils ────────────────────────────────────────────────────────────
@@ -500,18 +595,4 @@ class SwapVM extends ChangeNotifier {
     final m = math.pow(10, places).toDouble();
     return (v * m).roundToDouble() / m;
   }
-}
-
-// ── lightweight in-VM scheduled order record (can be moved to models later) ─
-class _ScheduledOrder {
-  final bool xlmToUsdc;
-  final double amountFrom;
-  final DateTime scheduleAt;
-  final DateTime createdAt;
-  _ScheduledOrder({
-    required this.xlmToUsdc,
-    required this.amountFrom,
-    required this.scheduleAt,
-    required this.createdAt,
-  });
 }
