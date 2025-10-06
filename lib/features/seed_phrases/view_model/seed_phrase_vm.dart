@@ -95,6 +95,10 @@ class SeedPhraseVM extends ChangeNotifier {
   bool get readyToSecure =>
       !_state.obscured && _state.ack1 && _state.ack2 && !_state.loading;
 
+  /// Save securely:
+  /// - VALIDATES the phrase
+  /// - ADDS a **new wallet** and makes it **ACTIVE** (does NOT overwrite existing)
+  /// - Verifies persistence by re-reading the ACTIVE seed
   Future<bool> saveSecurely() async {
     final phrase = normalized();
 
@@ -106,16 +110,33 @@ class SeedPhraseVM extends ChangeNotifier {
 
     try {
       _set(_state.copyWith(loading: true, error: ''));
-      final ok = await SeedStorage.saveSeed(phrase);
-      if (!ok) {
-        _set(_state.copyWith(loading: false, error: 'Failed to save your wallet. Please try again.'));
-        return false;
-      }
+
+      // IMPORTANT CHANGE:
+      // Previously this used SeedStorage.saveSeed(phrase) which REPLACED the ACTIVE wallet.
+      // We now ADD a new wallet and make it ACTIVE, preserving previous wallets.
+      await SeedStorage.addWallet(
+        phrase,
+        // Optional: pass a name if you collect it in the UI
+        // name: 'My Wallet',
+        makeActive: true,
+      );
+
+      // Verify by reading back the ACTIVE seed
       final stored = await SeedStorage.getSeed();
       if (stored == null || stored.isEmpty) {
         _set(_state.copyWith(loading: false, error: 'Could not verify saved phrase. Please try again.'));
         return false;
       }
+
+      // (Optional) strict equality check
+      // If you normalize stored before compare, keep it consistent:
+      final ok = stored.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ') ==
+          phrase;
+      if (!ok) {
+        _set(_state.copyWith(loading: false, error: 'Saved phrase mismatch. Please try again.'));
+        return false;
+      }
+
       _set(_state.copyWith(loading: false));
       return true;
     } catch (e) {
