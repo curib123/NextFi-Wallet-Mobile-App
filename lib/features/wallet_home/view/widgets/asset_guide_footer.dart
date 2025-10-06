@@ -488,7 +488,6 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
         decoration: BoxDecoration(
           gradient: _bg(base),
           borderRadius: BorderRadius.circular(widget.borderRadius),
-          border: Border.all(color: c.border.withOpacity(0.5)),
         ),
         padding: pad,
         child: Row(

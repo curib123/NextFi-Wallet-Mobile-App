@@ -145,13 +145,9 @@ class _HeaderSectionState extends State<HeaderSection> {
           decoration: BoxDecoration(
             color: widget.colors.surface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: widget.colors.primary.withOpacity(0.10),
-              width: 1,
-            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.16),
+                color: Colors.black.withOpacity(0.10),
                 blurRadius: 18,
                 offset: const Offset(0, 10),
               ),
@@ -274,7 +270,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                 height: 40,
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: _swapButtonColor(),
+                    backgroundColor: widget.colors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -349,8 +345,7 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = colors.primary.withOpacity(0.10);
-    final border = colors.primary.withOpacity(0.14);
+    final bg = colors.primary.withOpacity(0.05);
     return Column(
       children: [
         InkWell(
@@ -361,11 +356,10 @@ class _ActionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(50),
-              border: Border.all(color: border),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
             margin: const EdgeInsets.symmetric(vertical: 10),
-            child: Icon(icon, color: colors.primary, size: 30),
+            child: Icon(icon, color: colors.primary, size: 25),
           ),
         ),
         const SizedBox(height: 6),
