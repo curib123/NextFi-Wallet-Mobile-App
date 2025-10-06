@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:next_fi/features/auth_gate/model/auth_gate_state.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/biometrics_button.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/headings.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/lock_badge.dart';
@@ -23,10 +24,11 @@ class AuthGateScreen extends StatefulWidget {
 
 class _AuthGateScreenState extends State<AuthGateScreen>
     with WidgetsBindingObserver {
-  static const double _kFormWidth = 280;
+  static const double _kFormWidth = 360;
 
   final TextEditingController _pinController = TextEditingController();
   final FocusNode _pinFocus = FocusNode();
+  final ScrollController _scroll = ScrollController();
   Timer? _smallVisualDelay;
 
   // Cache VM to avoid using context in dispose()
@@ -37,9 +39,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Safe: runs after first frame; we'll use the cached _vm and mounted guards.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Ensure _vm has been set by didChangeDependencies (it will, before first frame)
       await _vm.init();
       if (!mounted) return;
 
@@ -59,22 +59,35 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         );
       }
     });
+
+    // When the PIN field gains focus, nudge to ensure visibility.
+    _pinFocus.addListener(() {
+      if (_pinFocus.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (!_scroll.hasClients) return;
+          _scroll.animateTo(
+            _scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        });
+      }
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Cache provider reference while the widget is alive
     _vm = context.read<AuthGateVM>();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // No context usage here
     _vm.disposeTimers();
     _pinController.dispose();
     _pinFocus.dispose();
+    _scroll.dispose();
     _smallVisualDelay?.cancel();
     super.dispose();
   }
@@ -82,7 +95,6 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Use cached VM; no context here
       _vm.refreshLockout();
       _vm.maybeAutoBiometric();
     }
@@ -117,6 +129,8 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         : "Re-enter the same 6-digit PIN")
         : "Unlock your wallet securely";
 
+    final kb = MediaQuery.of(context).viewInsets.bottom;
+
     return WillPopScope(
       onWillPop: () async => Navigator.canPop(context),
       child: GestureDetector(
@@ -124,81 +138,94 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: Scaffold(
           backgroundColor: colors.background,
+          resizeToAvoidBottomInset: true,
           appBar: TopBar(colors: colors),
-          body: SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    LockBadge(unlocked: s.unlockedVisual, colors: colors),
-                    const SizedBox(height: 28),
-
-                    Headings(headline: headline, subhead: subhead, colors: colors),
-
-                    if (isLockedOut) ...[
-                      const SizedBox(height: 12),
-                      LockoutBanner(remaining: s.lockoutRemaining!, colors: colors),
-                    ],
-
-                    const SizedBox(height: 28),
-
-                    PinField(
-                      maxWidth: _kFormWidth,
-                      controller: _pinController,
-                      focusNode: _pinFocus,
-                      enabled: !isLockedOut && !s.submitting,
-                      obscure: s.obscurePin,
-                      colors: colors,
-                      onSubmit: () => _submit(vm),
-                      onToggleObscure: vm.toggleObscurePin,
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    PrimaryAction(
-                      maxWidth: _kFormWidth,
-                      colors: colors,
-                      text: s.isNewUser
-                          ? (s.firstPinEntry == null ? "Continue" : "Save PIN")
-                          : "Unlock",
-                      icon: s.unlockedVisual
-                          ? Icons.lock_open_rounded
-                          : (s.isNewUser
-                          ? (s.firstPinEntry == null
-                          ? Icons.arrow_forward
-                          : Icons.save)
-                          : Icons.lock_rounded),
-                      enabled: !s.submitting && !isLockedOut,
-                      onPressed: () => _submit(vm),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    if (!s.isNewUser &&
-                        s.deviceSupportsBiometrics &&
-                        s.biometricsEnabled)
-                      BiometricsButton(
-                        maxWidth: _kFormWidth,
-                        colors: colors,
-                        onPressed: () async {
-                          final res = await _vm.authenticateWithBiometrics();
-                          if (!mounted) return;
-                          if (res.message != null) {
-                            showFloatingSnackBar(
-                              context,
-                              message: res.message!,
-                              type: res.success
-                                  ? SnackBarType.success
-                                  : SnackBarType.error,
-                            );
-                          }
-                          if (res.success) _onSuccessNavigate();
-                        },
+          body: DecoratedBox(
+            // Subtle background polish without clashing with your theme
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colors.background.withOpacity(.98),
+                  colors.background.withOpacity(.94),
+                ],
+              ),
+            ),
+            child: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, viewport) {
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: SingleChildScrollView(
+                        controller: _scroll,
+                        padding: EdgeInsets.fromLTRB(24, 16, 24, 16 + kb),
+                        keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            // Make content at least viewport height minus keyboard
+                            minHeight: viewport.maxHeight - kb,
+                          ),
+                          child: Center(
+                            // True vertical centering when space allows
+                            child: _AuthCard(
+                              formWidth: _kFormWidth,
+                              colors: colors,
+                              state: s,
+                              isLockedOut: isLockedOut,
+                              onSubmit: () => _submit(vm),
+                              onToggleObscure: vm.toggleObscurePin,
+                              onBiometricToggle: (val) async {
+                                await vm.setBiometricsEnabled(val);
+                                if (!mounted) return;
+                                if (val) {
+                                  final res = await vm.authenticateWithBiometrics();
+                                  if (!mounted) return;
+                                  if (res.message != null) {
+                                    showFloatingSnackBar(
+                                      context,
+                                      message: res.message!,
+                                      type: res.success
+                                          ? SnackBarType.success
+                                          : SnackBarType.error,
+                                    );
+                                  }
+                                  if (res.success) _onSuccessNavigate();
+                                } else {
+                                  showFloatingSnackBar(
+                                    context,
+                                    message: "Biometrics disabled",
+                                    type: SnackBarType.info,
+                                  );
+                                }
+                              },
+                              onBiometricPressed: () async {
+                                final res = await _vm.authenticateWithBiometrics();
+                                if (!mounted) return;
+                                if (res.message != null) {
+                                  showFloatingSnackBar(
+                                    context,
+                                    message: res.message!,
+                                    type: res.success
+                                        ? SnackBarType.success
+                                        : SnackBarType.error,
+                                  );
+                                }
+                                if (res.success) _onSuccessNavigate();
+                              },
+                              pinController: _pinController,
+                              pinFocus: _pinFocus,
+                              headline: headline,
+                              subhead: subhead,
+                            ),
+                          ),
+                        ),
                       ),
-                  ],
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -247,10 +274,154 @@ class _AuthGateScreenState extends State<AuthGateScreen>
       case PinStatus.saved:
       case PinStatus.verified:
         _pinController.clear();
-        // Avoid context lookup; this works even if focus tree changed
         FocusManager.instance.primaryFocus?.unfocus();
         _onSuccessNavigate();
         break;
     }
+  }
+}
+
+/// Extracted for clarity. Simple, elegant card with soft elevation.
+class _AuthCard extends StatelessWidget {
+  const _AuthCard({
+    required this.formWidth,
+    required this.colors,
+    required this.state,
+    required this.isLockedOut,
+    required this.onSubmit,
+    required this.onToggleObscure,
+    required this.onBiometricToggle,
+    required this.onBiometricPressed,
+    required this.pinController,
+    required this.pinFocus,
+    required this.headline,
+    required this.subhead,
+  });
+
+  final double formWidth;
+  final AppColor colors;
+  final AuthGateState state;
+  final bool isLockedOut;
+
+  final VoidCallback onSubmit;
+  final VoidCallback onBiometricPressed;
+  final ValueChanged<bool> onBiometricToggle;
+  final VoidCallback onToggleObscure;
+
+  final TextEditingController pinController;
+  final FocusNode pinFocus;
+
+  final String headline;
+  final String subhead;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = state;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+      constraints: BoxConstraints(maxWidth: formWidth),
+
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Lock badge
+          AnimatedOpacity(
+            opacity: 1.0,
+            duration: const Duration(milliseconds: 250),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: LockBadge(
+                unlocked: s.unlockedVisual,
+                colors: colors,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // Headings
+          Headings(headline: headline, subhead: subhead, colors: colors),
+
+          if (isLockedOut) ...[
+            const SizedBox(height: 10),
+            LockoutBanner(remaining: s.lockoutRemaining!, colors: colors),
+          ],
+
+          const SizedBox(height: 16),
+
+          // PIN input
+          PinField(
+            maxWidth: formWidth,
+            controller: pinController,
+            focusNode: pinFocus,
+            enabled: !isLockedOut && !s.submitting,
+            obscure: s.obscurePin,
+            colors: colors,
+            onSubmit: onSubmit,
+            onToggleObscure: onToggleObscure,
+          ),
+
+          const SizedBox(height: 16),
+
+          // Primary action
+          PrimaryAction(
+            maxWidth: formWidth,
+            colors: colors,
+            text: s.isNewUser
+                ? (s.firstPinEntry == null ? "Continue" : "Save PIN")
+                : "Unlock",
+            icon: s.unlockedVisual
+                ? Icons.lock_open_rounded
+                : (s.isNewUser
+                ? (s.firstPinEntry == null
+                ? Icons.arrow_forward
+                : Icons.save_rounded)
+                : Icons.lock_rounded),
+            enabled: !s.submitting && !isLockedOut,
+            onPressed: onSubmit,
+          ),
+
+          // Biometrics switch
+          if (!s.isNewUser && s.deviceSupportsBiometrics) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    "Use biometrics to unlock",
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: s.biometricsEnabled,
+                  onChanged: (s.submitting || isLockedOut)
+                      ? null
+                      : onBiometricToggle,
+                ),
+              ],
+            ),
+          ],
+
+          // Biometrics button (if enabled)
+          if (!s.isNewUser &&
+              s.deviceSupportsBiometrics &&
+              s.biometricsEnabled) ...[
+            const SizedBox(height: 8),
+            BiometricsButton(
+              maxWidth: formWidth,
+              colors: colors,
+              onPressed: onBiometricPressed,
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
