@@ -31,8 +31,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   final ScrollController _scroll = ScrollController();
   Timer? _smallVisualDelay;
 
-  // Cache VM to avoid using context in dispose()
-  late AuthGateVM _vm;
+  late AuthGateVM _vm; // cache VM to avoid using context in dispose()
 
   @override
   void initState() {
@@ -177,30 +176,6 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                               isLockedOut: isLockedOut,
                               onSubmit: () => _submit(vm),
                               onToggleObscure: vm.toggleObscurePin,
-                              onBiometricToggle: (val) async {
-                                await vm.setBiometricsEnabled(val);
-                                if (!mounted) return;
-                                if (val) {
-                                  final res = await vm.authenticateWithBiometrics();
-                                  if (!mounted) return;
-                                  if (res.message != null) {
-                                    showFloatingSnackBar(
-                                      context,
-                                      message: res.message!,
-                                      type: res.success
-                                          ? SnackBarType.success
-                                          : SnackBarType.error,
-                                    );
-                                  }
-                                  if (res.success) _onSuccessNavigate();
-                                } else {
-                                  showFloatingSnackBar(
-                                    context,
-                                    message: "Biometrics disabled",
-                                    type: SnackBarType.info,
-                                  );
-                                }
-                              },
                               onBiometricPressed: () async {
                                 final res = await _vm.authenticateWithBiometrics();
                                 if (!mounted) return;
@@ -290,7 +265,6 @@ class _AuthCard extends StatelessWidget {
     required this.isLockedOut,
     required this.onSubmit,
     required this.onToggleObscure,
-    required this.onBiometricToggle,
     required this.onBiometricPressed,
     required this.pinController,
     required this.pinFocus,
@@ -305,7 +279,6 @@ class _AuthCard extends StatelessWidget {
 
   final VoidCallback onSubmit;
   final VoidCallback onBiometricPressed;
-  final ValueChanged<bool> onBiometricToggle;
   final VoidCallback onToggleObscure;
 
   final TextEditingController pinController;
@@ -323,7 +296,6 @@ class _AuthCard extends StatelessWidget {
       curve: Curves.easeOut,
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
       constraints: BoxConstraints(maxWidth: formWidth),
-
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -384,32 +356,7 @@ class _AuthCard extends StatelessWidget {
             onPressed: onSubmit,
           ),
 
-          // Biometrics switch
-          if (!s.isNewUser && s.deviceSupportsBiometrics) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    "Use biometrics to unlock",
-                    style: TextStyle(
-                      color: colors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                Switch(
-                  value: s.biometricsEnabled,
-                  onChanged: (s.submitting || isLockedOut)
-                      ? null
-                      : onBiometricToggle,
-                ),
-              ],
-            ),
-          ],
-
-          // Biometrics button (if enabled)
+          // 🔑 Biometrics quick-unlock button (only if enabled via Settings)
           if (!s.isNewUser &&
               s.deviceSupportsBiometrics &&
               s.biometricsEnabled) ...[

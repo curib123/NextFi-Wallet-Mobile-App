@@ -1,8 +1,13 @@
-// lib/features/settings/model/setting_models.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-enum SettingAction { wallet, changePin, fiatCurrency }
+enum SettingAction {
+  wallet,
+  changePin,
+  fiatCurrency,
+  biometrics,
+  themeMode, // <-- NEW: used for the Light/Dark switch
+}
 
 @immutable
 class SettingItem {

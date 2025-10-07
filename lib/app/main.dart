@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 // ───────────────────── 3rd-party packages ─────────────────────
 import 'package:flutter_phoenix/flutter_phoenix.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
@@ -33,8 +34,45 @@ import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
 import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 
+// ───────────────────────── Theme persistence ─────────────────────────
+// Same key/options as used in SettingsVM
+const String _kThemePrefKey = 'pref.theme_mode.v1';
+const FlutterSecureStorage _secure = FlutterSecureStorage(
+  aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+);
+
+// Global theme mode notifier used by MaterialApp
+final ValueNotifier<ThemeMode> _themeModeVN = ValueNotifier(ThemeMode.system);
+
+// Helper to read initial theme mode from secure storage
+Future<void> _loadInitialThemeMode() async {
+  final raw = await _secure.read(key: _kThemePrefKey) ?? 'system';
+  final mode = switch (raw) {
+    'light' => ThemeMode.light,
+    'dark' => ThemeMode.dark,
+    _ => ThemeMode.system,
+  };
+  _themeModeVN.value = mode;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load persisted theme BEFORE runApp to avoid a flash
+  await _loadInitialThemeMode();
+
+  // Bridge from SettingsVM -> MaterialApp
+  ThemeBridge.apply = (mode) async {
+    _themeModeVN.value = mode;
+    // Persist here too so changing from a different entry point stays consistent
+    final raw = switch (mode) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      ThemeMode.system => 'system',
+    };
+    await _secure.write(key: _kThemePrefKey, value: raw);
+  };
 
   runApp(
     Phoenix(
@@ -99,7 +137,7 @@ List<SingleChildWidget> _buildProviders() {
       },
     ),
 
-// ✅ 6) WalletHome depends on Stellar + SeedKeypair (auto-binds address)
+    // ✅ 6) WalletHome depends on Stellar + SeedKeypair (auto-binds address)
     ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, WalletHomeVM>(
       create: (ctx) => WalletHomeVM(
         stellar: ctx.read<StellarWalletServices>(),
@@ -111,7 +149,6 @@ List<SingleChildWidget> _buildProviders() {
         return vm;
       },
     ),
-
 
     // 7) Price chart depends on Currency
     ChangeNotifierProxyProvider<CurrencyVM, PriceChartVM>(
@@ -138,7 +175,7 @@ List<SingleChildWidget> _buildProviders() {
       update: (ctx, stellar, prev) => prev ?? TransactionsVM(stellarSvc: stellar),
     ),
 
-    // 10) Send depends on Stellar + SeedKeypair (adjust to your SendVM ctor)
+    // 10) Send depends on Stellar + SeedKeypair
     ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, SendVM>(
       create: (ctx) => SendVM(
         service: ctx.read<StellarWalletServices>(),
@@ -167,7 +204,6 @@ List<SingleChildWidget> _buildProviders() {
         return vm;
       },
     ),
-
   ];
 }
 
@@ -176,13 +212,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'NextFi Wallet',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
-      theme: _lightTheme,
-      darkTheme: _darkTheme,
-      home: const Home(),
+    // Listen to theme changes
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: _themeModeVN,
+      builder: (_, mode, __) {
+        return MaterialApp(
+          title: 'NextFi Wallet',
+          debugShowCheckedModeBanner: false,
+          themeMode: mode,            // ← live-updated by SettingsVM via ThemeBridge
+          theme: _lightTheme,
+          darkTheme: _darkTheme,
+          home: const Home(),
+        );
+      },
     );
   }
 }
