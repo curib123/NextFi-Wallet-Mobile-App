@@ -20,16 +20,14 @@ class SettingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
 
-    final leadingBg = (item.accentColor ?? c.primary).withOpacity(0.10);
-    final leadingBorder = (item.accentColor ?? c.primary).withOpacity(0.25);
+    final leadingBg = (item.accentColor ?? c.primary).withOpacity(0.07);
 
     final Widget leading = Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
         color: leadingBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: leadingBorder),
+        borderRadius: BorderRadius.circular(50),
       ),
       alignment: Alignment.center,
       child: Icon(item.icon, color: item.accentColor ?? c.primary, size: 18),
