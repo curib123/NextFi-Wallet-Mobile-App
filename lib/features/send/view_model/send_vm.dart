@@ -1,6 +1,6 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
+import 'dart:async'; // Timer, StreamSubscription
+import 'package:flutter/foundation.dart'; // ChangeNotifier
+import 'package:flutter/scheduler.dart';  // SchedulerBinding
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/features/send/model/send_token.dart';

@@ -1,6 +1,6 @@
 import 'dart:convert' show utf8; // for memo byte counting
 import 'dart:math' as math;
-import 'dart:ui' as ui; // for FontFeature.tabularFigures
+import 'dart:ui' as ui; // FontFeature.tabularFigures
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +10,11 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/asset/asset_logo.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
+
+// Be sure this path matches the actual file name/case in your project.
+// If you added the optional `address` param to the helper, import that file.
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
+
 import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
@@ -23,6 +27,7 @@ import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart'
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
 
+// Local widgets
 import 'widgets/error_card.dart';
 import 'widgets/balance_line.dart';
 import 'widgets/recipient_loading_line.dart';
@@ -119,10 +124,7 @@ class _SendScreenState extends State<SendScreen> {
     super.dispose();
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
   // Helpers
-  // ────────────────────────────────────────────────────────────────────────────
-
   Future<void> _refresh() async {
     final vm = context.read<SendVM>();
     await vm.refreshFees();
@@ -142,8 +144,8 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   /// Percent chips:
-  /// - USDC send: base = full USDC balance (as before).
-  /// - XLM send: 100% keeps 1 XLM if sender has USDC trustline; other % = full balance * pct.
+  /// - USDC: base = full USDC balance.
+  /// - XLM: if 100% and the sender has a USDC trustline, keep 1 XLM (so USDC stays usable).
   void _applyPercent(SendVM vm, double percent) {
     double base = vm.senderBalanceToken;
 
@@ -242,10 +244,7 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
   // Scanner + Contacts
-  // ────────────────────────────────────────────────────────────────────────────
-
   Future<void> _openScanner() async {
     HapticFeedback.selectionClick();
     FocusScope.of(context).unfocus();
@@ -396,8 +395,12 @@ class _SendScreenState extends State<SendScreen> {
           RecipientAddTemplate(
             address: typedAddr,
             onAdd: () async {
-              final ok =
-              await showRecipientUpsertSheet(context, address: typedAddr);
+              // If your helper supports an `address:` param, keep this.
+              // Otherwise, remove `address: typedAddr`.
+              final ok = await showRecipientUpsertSheet(
+                context,
+                // address: typedAddr, // uncomment only if your helper has this param
+              );
               if (ok == true && mounted) setState(() {});
             },
           ),
@@ -408,13 +411,13 @@ class _SendScreenState extends State<SendScreen> {
           key: _form,
           child: Column(
             children: [
-              // ───────── Recipient (show full; wrap unlimited lines; selectable)
+              // Recipient (wrap long; selectable; compact)
               TextFormField(
                 controller: _toCtl,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
-                textInputAction: TextInputAction.newline, // allow multi-line
-                keyboardType: TextInputType.multiline,    // enable wrapping
-                enableInteractiveSelection: true,         // select/copy long keys
+                textInputAction: TextInputAction.newline,
+                keyboardType: TextInputType.multiline,
+                enableInteractiveSelection: true,
                 style: const TextStyle(
                   fontSize: 12.0,
                   height: 1.2,
@@ -422,31 +425,25 @@ class _SendScreenState extends State<SendScreen> {
                   fontFeatures: [ui.FontFeature.tabularFigures()],
                 ),
                 minLines: 1,
-                maxLines: null,   // allow unlimited wrapping (show full length)
+                maxLines: null,
                 decoration: modernInput(
                   context,
                   placeholder: 'Recipient Address (G… 56 chars)',
                   prefix: Icon(LucideIcons.contact, color: c.primary, size: 18),
                 ).copyWith(
-                  // make field compact
                   isDense: true,
                   contentPadding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-
-                  // tighten icon areas
                   prefixIconConstraints:
                   const BoxConstraints(minWidth: 28, minHeight: 28),
-                  // don't force suffix width; let it hug its content
-                  suffixIconConstraints:
-                  const BoxConstraints(minHeight: 28),
-
-                  helperText:
-                  vm.recipientLabel == null ? null : 'To: ${vm.recipientLabel}',
-                  helperStyle: TextStyle(color: c.textSecondary, fontSize: 12),
-
-                  // COMPACT 3-ACTION SUFFIX (Clear · Contacts · Scan)
+                  suffixIconConstraints: const BoxConstraints(minHeight: 28),
+                  helperText: vm.recipientLabel == null
+                      ? null
+                      : 'To: ${vm.recipientLabel}',
+                  helperStyle:
+                  TextStyle(color: c.textSecondary, fontSize: 12),
                   suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min, // hug buttons tightly
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       if (_toCtl.text.trim().isNotEmpty)
                         IconButton(
@@ -461,8 +458,8 @@ class _SendScreenState extends State<SendScreen> {
                           icon: const Icon(LucideIcons.x),
                           iconSize: 16,
                           padding: const EdgeInsets.all(4),
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28),
+                          constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
                           visualDensity:
                           const VisualDensity(horizontal: -4, vertical: -4),
                         ),
@@ -492,14 +489,14 @@ class _SendScreenState extends State<SendScreen> {
                   ),
                 ),
                 validator: (_) => vm.blockingReason,
-                onChanged: (_) => setState(() {}), // update suffix immediately
+                onChanged: (_) => setState(() {}),
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
               const SizedBox(height: 6),
               const TrustlineHint(),
               const SizedBox(height: 10),
 
-              // ───────── Amount ─────────
+              // Amount
               TextFormField(
                 controller: _amtCtl,
                 keyboardType:
@@ -522,7 +519,6 @@ class _SendScreenState extends State<SendScreen> {
                 validator: (_) => vm.blockingReason,
               ),
 
-              // Tiny tip (only when it matters)
               if (vm.isXlm && vm.selfHasUsdcTrustline) ...[
                 const SizedBox(height: 6),
                 Row(
@@ -542,7 +538,7 @@ class _SendScreenState extends State<SendScreen> {
               const SizedBox(height: 10),
               PercentChipsRow(onPick: (pct) => _applyPercent(vm, pct)),
 
-              // ───────── Memo (optional) ─────────
+              // Memo (optional)
               const SizedBox(height: 12),
               TextFormField(
                 controller: _memoCtl,
@@ -580,7 +576,7 @@ class _SendScreenState extends State<SendScreen> {
         ),
         const SizedBox(height: 12),
 
-        // ───────── Preview ─────────
+        // Preview
         SlimPreviewCard(
           isXLM: vm.isXlm,
           token: tokenStr,
@@ -625,8 +621,8 @@ class _SendScreenState extends State<SendScreen> {
           ? null
           : AnimatedPadding(
         duration: const Duration(milliseconds: 150),
-        padding:
-        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
         child: SafeArea(
           top: false,
           child: Container(

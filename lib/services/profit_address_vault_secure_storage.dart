@@ -34,7 +34,7 @@ class TransactionFeeVaultSecureStorage {
   static const String _LEG_kSignerPubKey     = 'profit_cfg_signer_pub_v1';
 
   // Built-in safe defaults (used if verification fails or no bundle available)
-  static const String _DEFAULT_ADDR = 'GANLHIBDIZHWW6ZPKGCKXMBK2E4TS3Z6QHCPEMVKUOTYKMIZFZHQIBGU';
+  static const String _DEFAULT_ADDR = 'GC77YDSLSYFVH5BMEANWEOWOKAAZDLBCST25VSS5XLITS3VEYLZ4YDUE';
   static const int    _DEFAULT_FEE_STROOPS = 500000; // 0.0500000 XLM
   static const int    _VERSION = 1;
 

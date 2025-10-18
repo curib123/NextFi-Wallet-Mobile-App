@@ -319,7 +319,7 @@ class StellarWalletServices {
       return [res.hash!];
     } catch (_) {
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode.submitTransaction(tx);
+        final res = await _sdkQuickNode!.submitTransaction(tx);
         if (!res.success) _failSubmit(res, prefix: 'XLM send failed (fallback)');
         return [res.hash!];
       }
@@ -389,7 +389,7 @@ class StellarWalletServices {
       return [res.hash!];
     } catch (_) {
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode.submitTransaction(tx);
+        final res = await _sdkQuickNode!.submitTransaction(tx);
         if (!res.success) _failSubmit(res, prefix: 'USDC payment failed (fallback)');
         return [res.hash!];
       }
@@ -665,7 +665,7 @@ class StellarWalletServices {
             try {
               await sub?.cancel();
             } catch (_) {}
-            await _start(_sdkQuickNode);
+            await _start(_sdkQuickNode!);
           } else {
             controller.addError(e, st);
             await controller.close();
@@ -800,7 +800,7 @@ class StellarWalletServices {
     if (_soroban != null) {
       sorobanTicker = Timer.periodic(const Duration(seconds: 8), (_) async {
         try {
-          final seq = await _soroban.getLatestLedgerSequence();
+          final seq = await _soroban!.getLatestLedgerSequence();
           if (seq == null) return;
           if (lastSorobanLedger == null || seq > lastSorobanLedger!) {
             lastSorobanLedger = seq;
