@@ -1,12 +1,15 @@
+// lib/features/wallet_home/view_model/wallet_home_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar
-    show PaymentOperationResponse, Asset;
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar show PaymentOperationResponse, Asset;
 
-import 'package:next_fi/Services/seed_storage.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/seed_storage.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+
+// NEW: use the provider you built for deriving the account/keypair
+import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 
 /// UI-neutral severity for toasts/snackbars
 enum UiSeverity { info, success, warning, error }
@@ -85,20 +88,25 @@ class NavigateToSwap extends WalletHomeUiEvent {
 
 /// ───────────────────────── ViewModel ─────────────────────────
 class WalletHomeVM extends ChangeNotifier {
-  WalletHomeVM({required StellarWalletService stellar}) : _stellar = stellar;
+  WalletHomeVM({
+    required StellarWalletServices stellar,
+    required SeedKeypairVM seedVM, // <— inject
+  })  : _stellar = stellar,
+        _seedVM = seedVM;
 
-  final StellarWalletService _stellar;
+  final StellarWalletServices _stellar;
+  final SeedKeypairVM _seedVM;
 
   WalletHomeState _state = const WalletHomeState();
   WalletHomeState get state => _state;
+
   void _set(WalletHomeState s) {
     _state = s;
     if (!_disposed) notifyListeners();
   }
 
   // ─────────────── UI events stream (for the View) ───────────────
-  final StreamController<WalletHomeUiEvent> _ui =
-  StreamController<WalletHomeUiEvent>.broadcast();
+  final StreamController<WalletHomeUiEvent> _ui = StreamController<WalletHomeUiEvent>.broadcast();
   Stream<WalletHomeUiEvent> get uiEvents => _ui.stream;
   void _emit(WalletHomeUiEvent e) {
     if (!_ui.isClosed) _ui.add(e);
@@ -119,20 +127,49 @@ class WalletHomeVM extends ChangeNotifier {
   bool _bootEventsArmed = true; // emit boot alerts once
   DateTime? _lastFetch;
 
+  // ───────────────────── NEW: binding helpers ─────────────────────
+
+  /// Bind to a specific address (usually from SeedKeypairVM.accountId).
+  /// Will restart realtime streams and kick a refresh when it changes.
+  void bindToAddress(String? addr) {
+    final address = (addr ?? '').trim();
+    if (address.isEmpty) {
+      if (_state.address != null) {
+        _set(_state.copyWith(address: null, xlm: 0, usdc: 0));
+        _restartRealtime();
+      }
+      return;
+    }
+    if (_state.address == address) return;
+
+    _set(_state.copyWith(address: address));
+    _restartRealtime();
+    // Kick an immediate refresh (fire-and-forget)
+    // ignore: discarded_futures
+    refresh(force: true);
+  }
+
+  /// Convenience: bind directly from the injected SeedKeypairVM.
+  void bindToSeedVM() => bindToAddress(_seedVM.accountId);
+
   // ───────────────────── public API ─────────────────────
 
   Future<void> boot() async {
     if (_state.loadingWallet) return;
     _set(_state.copyWith(loadingWallet: true, loadingBalances: true));
 
-    // Let the View show a loader as early as possible (first boot only)
     if (_bootEventsArmed) _emit(const BootBalancesLoading());
 
     try {
+      // Load display name for header
       final name = (await SeedStorage.getActiveWalletMeta())?.name;
 
-      final mnemonic = await SeedStorage.getActiveSeed();
-      if (mnemonic == null || mnemonic.trim().isEmpty) {
+      // Ensure SeedKeypairVM is initialized and has (or derives) the public address
+      await _seedVM.init(); // idempotent
+      final address = _seedVM.accountId;
+
+      if (address == null || address.isEmpty) {
+        // No active wallet/seed
         _set(_state.copyWith(
           walletName: name,
           address: null,
@@ -149,16 +186,12 @@ class WalletHomeVM extends ChangeNotifier {
         return;
       }
 
-      final wallet = await StellarWalletService.walletFromMnemonic(mnemonic);
-      final kp = await StellarWalletService.getKeyPair(wallet, index: 0);
-      final changed = _state.address != kp.accountId;
-
-      _set(_state.copyWith(walletName: name, address: kp.accountId));
+      final changed = _state.address != address;
+      _set(_state.copyWith(walletName: name, address: address));
 
       if (changed) _restartRealtime();
       await refresh(force: true);
 
-      // On first boot, tell the View balances are ready with amounts
       if (_bootEventsArmed) {
         _emit(BootBalancesReady(xlm: _state.xlm, usdc: _state.usdc));
         _bootEventsArmed = false;
@@ -170,7 +203,8 @@ class WalletHomeVM extends ChangeNotifier {
   }
 
   Future<bool> switchTo(String walletId) async {
-    final ok = await SeedStorage.setActiveWallet(walletId);
+    // Switch ACTIVE inside the seed VM (keeps meta/public in sync)
+    final ok = await _seedVM.switchTo(walletId);
     if (!ok) return false;
     _bootEventsArmed = true;
     await boot();
@@ -186,9 +220,10 @@ class WalletHomeVM extends ChangeNotifier {
     _set(_state.copyWith(loadingBalances: true));
 
     try {
+      final addr = _state.address!;
       final results = await Future.wait<double>([
-        _stellar.getXlmBalance(_state.address!).catchError((_) => 0.0),
-        _stellar.getUsdcBalance(_state.address!).catchError((_) => 0.0),
+        _stellar.getXlmBalance(addr).catchError((_) => 0.0),
+        _stellar.getUsdcBalance(addr).catchError((_) => 0.0),
       ], eagerError: false);
 
       final now = DateTime.now();
@@ -223,8 +258,7 @@ class WalletHomeVM extends ChangeNotifier {
         id: id,
         from: op.from ?? '',
         to: op.to ?? '',
-        assetCode:
-        op.assetType == stellar.Asset.TYPE_NATIVE ? 'XLM' : (op.assetCode ?? 'ASSET'),
+        assetCode: op.assetType == stellar.Asset.TYPE_NATIVE ? 'XLM' : (op.assetCode ?? 'ASSET'),
         amount: double.tryParse(op.amount) ?? 0.0,
         at: DateTime.now(),
       );
@@ -320,7 +354,8 @@ class WalletHomeVM extends ChangeNotifier {
   // app lifecycle hooks
   void onResumed() {
     startRealtime();
-    unawaited(refresh());
+    // ignore: discarded_futures
+    refresh();
   }
 
   void onPausedOrInactive() {

@@ -3,7 +3,7 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class PercentChipsRow extends StatelessWidget {
   const PercentChipsRow({super.key, required this.onPick});
-  final void Function(double pct) onPick; // 0.10, 0.25, ...
+  final void Function(double pct) onPick;
 
   @override
   Widget build(BuildContext context) {
@@ -14,11 +14,11 @@ class PercentChipsRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: c.primary.withOpacity(0.05),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: c.primary.withOpacity(0.18)),
+          border: Border.all(color: c.border.withOpacity(.35)),
+          gradient: c.primaryGradient,
         ),
-        child: Text(label, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 12)),
+        child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
       ),
     );
 
@@ -26,7 +26,7 @@ class PercentChipsRow extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Wrap(
         spacing: 8, runSpacing: 8,
-        children: [chip('10%', 0.10), chip('25%', 0.25), chip('50%', 0.50), chip('75%', 0.75), chip('100%', 1.00)],
+        children: [chip('10%', .10), chip('25%', .25), chip('50%', .50), chip('75%', .75), chip('100%', 1.0)],
       ),
     );
   }

@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:http/io_client.dart';
 
 import 'package:next_fi/Services/currency_secure_storage.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 
 class CurrencyVM extends ChangeNotifier {
   CurrencyVM({
-    required StellarWalletService stellar,
+    required StellarWalletServices stellar,
     this.httpTimeout = const Duration(seconds: 10),
   }) : _stellar = stellar {
     _client = _buildClient();
@@ -18,7 +18,7 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   // ── Deps & Config ─────────────────────────────────────────────────────────
-  final StellarWalletService _stellar;
+  final StellarWalletServices _stellar;
   final Duration httpTimeout;
 
   // ── HTTP client ───────────────────────────────────────────────────────────

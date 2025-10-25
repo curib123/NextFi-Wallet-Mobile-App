@@ -83,6 +83,34 @@ class AuthGateVM extends ChangeNotifier {
     _startOrStopLockoutTimer(rem);
   }
 
+  /// Optional: call if you need to re-check device biometrics support at runtime.
+  Future<void> refreshBiometricSupport() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      final available = await _localAuth.getAvailableBiometrics();
+      _set(_state.copyWith(
+        deviceSupportsBiometrics: (canCheck || isSupported) && available.isNotEmpty,
+      ));
+    } catch (_) {
+      _set(_state.copyWith(deviceSupportsBiometrics: false));
+    }
+  }
+
+  /// Toggle biometrics from UI (Switch). When enabling, we only flip the flag;
+  /// your UI can decide to immediately prompt with authenticateWithBiometrics().
+  Future<void> setBiometricsEnabled(bool enable) async {
+    if (enable) {
+      // Guard: only enable if user already completed PIN and device supports it.
+      if (_state.isNewUser || !_state.deviceSupportsBiometrics) return;
+      await SecurityStorage.setBiometricsEnabled(true);
+      _set(_state.copyWith(biometricsEnabled: true));
+    } else {
+      await SecurityStorage.setBiometricsEnabled(false);
+      _set(_state.copyWith(biometricsEnabled: false));
+    }
+  }
+
   void disposeTimers() {
     _lockoutTimer?.cancel();
   }
@@ -132,6 +160,7 @@ class AuthGateVM extends ChangeNotifier {
       return const BioResult(success: false, message: "Biometric authentication failed");
     } on PlatformException catch (e) {
       final code = e.code;
+      // If device is misconfigured (no enrollment / no passcode), disable toggle to avoid loop.
       if (_state.biometricsEnabled &&
           (code == 'NotEnrolled' || code == 'NotAvailable' || code == 'PasscodeNotSet')) {
         await SecurityStorage.setBiometricsEnabled(false);

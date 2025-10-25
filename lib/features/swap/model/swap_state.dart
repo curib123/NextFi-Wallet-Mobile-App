@@ -1,5 +1,7 @@
-// lib/features/swap/model/swap_state.dart
 import 'swap_dir.dart';
+
+/// Internal sentinel used to mean "no change" in copyWith for nullable fields.
+const Object _noChange = Object();
 
 class SwapState {
   final bool loading;
@@ -9,8 +11,12 @@ class SwapState {
   final double xlmBal;
   final double usdcBal;
 
+  /// Estimated "to" amount for current "from" amount.
   final double? estReceive;
+
+  /// Network fee estimate (in XLM).
   final double? feeXlm;
+
   final bool needsTrustline;
 
   final SwapDir dir;
@@ -29,25 +35,31 @@ class SwapState {
 
   bool get isXlmToUsdc => dir == SwapDir.xlmToUsdc;
 
+  /// `copyWith` that supports:
+  /// - Keeping current values when a parameter is omitted
+  /// - Explicitly clearing nullable fields by passing `null`
   SwapState copyWith({
     bool? loading,
-    String? error,
-    String? accountId,
+    Object? error = _noChange,       // String? or _noChange
+    Object? accountId = _noChange,   // String? or _noChange
     double? xlmBal,
     double? usdcBal,
-    double? estReceive,
-    double? feeXlm,
+    Object? estReceive = _noChange,  // double? or _noChange
+    Object? feeXlm = _noChange,      // double? or _noChange
     bool? needsTrustline,
     SwapDir? dir,
   }) {
     return SwapState(
       loading: loading ?? this.loading,
-      error: error,
-      accountId: accountId ?? this.accountId,
+      error: identical(error, _noChange) ? this.error : error as String?,
+      accountId:
+      identical(accountId, _noChange) ? this.accountId : accountId as String?,
       xlmBal: xlmBal ?? this.xlmBal,
       usdcBal: usdcBal ?? this.usdcBal,
-      estReceive: estReceive,
-      feeXlm: feeXlm,
+      estReceive: identical(estReceive, _noChange)
+          ? this.estReceive
+          : estReceive as double?,
+      feeXlm: identical(feeXlm, _noChange) ? this.feeXlm : feeXlm as double?,
       needsTrustline: needsTrustline ?? this.needsTrustline,
       dir: dir ?? this.dir,
     );

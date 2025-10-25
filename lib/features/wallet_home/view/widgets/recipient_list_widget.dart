@@ -86,7 +86,7 @@ class RecipientListWidget extends StatelessWidget {
                     return;
                   }
 
-                  final addr = (r.address ?? '').trim();
+                  final addr = (r.address).trim();
                   if (addr.isEmpty) {
                     showFloatingSnackBar(
                       context,
@@ -323,63 +323,70 @@ class _OverflowMenu extends StatelessWidget {
 }
 
 class _EmptyRecipients extends StatelessWidget {
-  const _EmptyRecipients({required this.colors});
+  const _EmptyRecipients({required this.colors, this.onAdded});
   final AppColor colors;
+  final VoidCallback? onAdded;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
+    final size = MediaQuery.of(context).size;
+
+    // Compact mode if screen is narrow or text scale is large
+    final bool compact = size.width < 360;
+
+    final double iconSize   = compact ? 30 : 35;
+    final double titleSize  = compact ? 12 : 14;
+    final double padAll     = compact ? 12 : 14;
+    final double gapSm      = compact ? 2  : 6;
+    final double gapMd      = compact ? 5 : 6;
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: c.surfaceContainerHighest.withOpacity(.35),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.outlineVariant.withOpacity(.6)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.users, size: 48, color: colors.textSecondary),
-              const SizedBox(height: 12),
-              Text(
-                'No recipients yet',
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+        padding: EdgeInsets.all(padAll),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: padAll, vertical: padAll),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.users, size: iconSize, color: colors.textSecondary),
+                SizedBox(height: gapMd),
+                // Title — single line with ellipsis
+                Text(
+                  'No recipients yet',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Save frequently used XLM/USDC addresses for faster sends.',
-                style: TextStyle(color: colors.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () async {
-                  final saved = await showRecipientUpsertSheet(context);
-                  if (saved == true && context.mounted) {
-                    showFloatingSnackBar(
-                      context,
-                      message: 'Recipient saved',
-                      type: SnackBarType.info,
-                    );
-                  }
-                },
-                icon: const Icon(LucideIcons.userPlus),
-                label: const Text('Add recipient'),
-              ),
-            ],
+                SizedBox(height: gapSm),
+                // Subtitle — two lines max to avoid overflow
+                Text(
+                  'Save frequently used XLM/USDC addresses for faster sends.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+                SizedBox(height: gapMd),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
+
 
 Future<bool?> _confirmDelete(BuildContext context, String name) {
   final t = Theme.of(context).textTheme;

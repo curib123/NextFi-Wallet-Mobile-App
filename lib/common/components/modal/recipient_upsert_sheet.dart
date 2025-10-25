@@ -11,9 +11,11 @@ import 'package:next_fi/common/components/button/CustomButton.dart';
 
 /// Call this to open the sheet.
 /// Returns true if something was saved.
+/// You can pass [address] to prefill the address field.
 Future<bool?> showRecipientUpsertSheet(
     BuildContext context, {
       RecipientAddressModel? initial,
+      String? address,
     }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -23,13 +25,14 @@ Future<bool?> showRecipientUpsertSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _RecipientEditSheet(initial: initial),
+    builder: (_) => _RecipientEditSheet(initial: initial, address: address),
   );
 }
 
 class _RecipientEditSheet extends StatefulWidget {
-  const _RecipientEditSheet({this.initial});
+  const _RecipientEditSheet({this.initial, this.address});
   final RecipientAddressModel? initial;
+  final String? address;
 
   @override
   State<_RecipientEditSheet> createState() => _RecipientEditSheetState();
@@ -62,6 +65,14 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     _addr = TextEditingController(text: widget.initial?.address ?? '');
     _color = widget.initial?.color ?? Colors.blue.value;
 
+    // Prefill address if provided and not already set by initial
+    if ((_addr.text.isEmpty) && (widget.address != null) && widget.address!.trim().isNotEmpty) {
+      final incoming = widget.address!.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+      _addr.text = incoming;
+      _addr.selection = TextSelection.collapsed(offset: _addr.text.length);
+      _addrTouched = true; // show validation chip immediately
+    }
+
     _name.addListener(() => setState(() {}));
     _addr.addListener(() => setState(() {}));
   }
@@ -73,8 +84,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
     super.dispose();
   }
 
-  // Accept classic G... and (visually) allow M... muxed;
-  // relies on StrKey validator for checksum/account id.
+  // Accept classic G...; validation uses StrKey checksum/account id.
   bool _isValidStellarAddress(String a) {
     final s = a.trim();
     return StrKey.isValidStellarAccountId(s);
@@ -150,17 +160,10 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
             borderRadius: BorderRadius.circular(12),
           ),
           alignment: Alignment.center,
-          child: Icon(
-            isEdit ? Icons.edit : Icons.person_add_alt_1_rounded,
-          ),
+          child: Icon(isEdit ? Icons.edit : Icons.person_add_alt_1_rounded),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            isEdit ? 'Edit Recipient' : 'Add Recipient',
-            style: t.titleLarge,
-          ),
-        ),
+        Expanded(child: Text(isEdit ? 'Edit Recipient' : 'Add Recipient', style: t.titleLarge)),
         IconButton(
           onPressed: () => Navigator.pop(context, false),
           icon: const Icon(Icons.close_rounded),
@@ -190,10 +193,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
       curve: Curves.easeOut,
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -228,18 +228,10 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
                   color: Color(c),
                   shape: BoxShape.circle,
                   boxShadow: selected
-                      ? const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 3),
-                    )
-                  ]
+                      ? const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3))]
                       : null,
                 ),
-                child: selected
-                    ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
-                    : null,
+                child: selected ? const Icon(Icons.check_rounded, color: Colors.white, size: 18) : null,
               ),
             );
           }).toList(),
@@ -280,124 +272,139 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet> {
       top: false,
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: LayoutBuilder(builder: (context, constraints) {
-          final maxW = constraints.maxWidth;
-          final isWide = maxW >= 520;
-
-          final content = Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHandle(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: _buildHeader(isEdit),
-              ),
-              const SizedBox(height: 8),
-              Form(
-                key: _formKey,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Name
-                      TextFormField(
-                        controller: _name,
-                        autofocus: widget.initial == null,
-                        textCapitalization: TextCapitalization.words,
-                        textInputAction: TextInputAction.next,
-                        decoration: modernInput(
-                          context,
-                          placeholder: 'Name (e.g., Alice — USDC payouts)',
-                          prefix: const Icon(Icons.badge_outlined),
-                        ),
-                        validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Address
-                      TextFormField(
-                        controller: _addr,
-                        onTap: () => setState(() => _addrTouched = true),
-                        textCapitalization: TextCapitalization.characters,
-                        textInputAction: TextInputAction.done,
-                        decoration: modernInput(
-                          context,
-                          placeholder: 'Wallet Address (G… 56 chars)',
-                          prefix: const Icon(Icons.account_balance_wallet_outlined),
-                          suffix: addressSuffix,
-                        ),
-                        inputFormatters: [
-                          // Force uppercase (Stellar base32 uses A–Z and 2–7)
-                          TextInputFormatter.withFunction(
-                                (oldValue, newValue) =>
-                                newValue.copyWith(text: newValue.text.toUpperCase()),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final content = Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildHandle(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: _buildHeader(isEdit),
+                ),
+                const SizedBox(height: 8),
+                Form(
+                  key: _formKey,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Name (smaller)
+                        TextFormField(
+                          controller: _name,
+                          autofocus: widget.initial == null,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.next,
+                          style: const TextStyle(fontSize: 13.5),
+                          decoration: modernInput(
+                            context,
+                            placeholder: 'Name (e.g., Alice — USDC payouts)',
+                            prefix: const Icon(Icons.badge_outlined),
+                          ).copyWith(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            hintStyle: TextStyle(
+                              fontSize: 13.0,
+                              color: Theme.of(context).hintColor,
+                            ),
                           ),
-                          FilteringTextInputFormatter.deny(RegExp(r'\s')), // no spaces
-                        ],
-                        minLines: 1,
-                        maxLines: 2,
-                        validator: (v) => (v == null || !_isValidStellarAddress(v))
-                            ? 'Enter a valid Stellar address (G…)'
-                            : null,
-                        onFieldSubmitted: (_) => _canSave ? _save() : null,
-                      ),
-                      _addressStatus(),
-                      const SizedBox(height: 16),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+                        ),
+                        const SizedBox(height: 12),
 
-                      _colorPicker(),
-                      const SizedBox(height: 24),
+                        // Address (smaller, up to 3 lines so long G… addresses are visible)
+                        TextFormField(
+                          controller: _addr,
+                          onTap: () => setState(() => _addrTouched = true),
+                          textCapitalization: TextCapitalization.characters,
+                          textInputAction: TextInputAction.done, // wrapping doesn't need newline
+                          style: const TextStyle(
+                            fontSize: 12.5, // smaller text for long address
+                            letterSpacing: 0.2,
+                          ),
+                          decoration: modernInput(
+                            context,
+                            placeholder: 'Wallet Address (G… 56 chars)',
+                            prefix: const Icon(Icons.account_balance_wallet_outlined),
+                            suffix: addressSuffix,
+                          ).copyWith(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            hintStyle: TextStyle(
+                              fontSize: 12.0,
+                              color: Theme.of(context).hintColor,
+                            ),
+                          ),
+                          inputFormatters: [
+                            // Force uppercase (Stellar base32 uses A–Z and 2–7)
+                            TextInputFormatter.withFunction(
+                                  (oldValue, newValue) =>
+                                  newValue.copyWith(text: newValue.text.toUpperCase()),
+                            ),
+                            FilteringTextInputFormatter.deny(RegExp(r'\s')), // no spaces
+                          ],
+                          minLines: 1, // show 1 line initially
+                          maxLines: 3, // allow up to 3 lines of wrap
+                          validator: (v) => (v == null || !_isValidStellarAddress(v))
+                              ? 'Enter a valid Stellar address (G…)'
+                              : null,
+                          onFieldSubmitted: (_) => _canSave ? _save() : null,
+                        ),
+                        _addressStatus(),
+                        const SizedBox(height: 16),
+
+                        _colorPicker(),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Sticky action bar (CustomButton)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: CustomButton(
+                          text: 'Cancel',
+                          type: _saving ? ButtonType.disabled : ButtonType.outlined,
+                          onPressed: _saving ? () {} : () => Navigator.pop(context, false),
+                          fullWidth: true,
+                          icon: Icons.close_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CustomButton(
+                          text: isEdit ? 'Save' : 'Add',
+                          type: _canSave ? ButtonType.filled : ButtonType.disabled,
+                          onPressed: _canSave ? _save : () {},
+                          fullWidth: true,
+                          icon: _saving ? Icons.hourglass_bottom_rounded : Icons.save_outlined,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
+              ],
+            );
 
-              // Sticky action bar (CustomButton)
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
-                    )
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: CustomButton(
-                        text: 'Cancel',
-                        type: _saving ? ButtonType.disabled : ButtonType.outlined,
-                        onPressed: _saving ? () {} : () => Navigator.pop(context, false),
-                        fullWidth: true,
-                        icon: Icons.close_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: CustomButton(
-                        text: isEdit ? 'Save' : 'Add',
-                        type: _canSave ? ButtonType.filled : ButtonType.disabled,
-                        onPressed: _canSave ? _save : () {},
-                        fullWidth: true,
-                        icon: _saving ? Icons.hourglass_bottom_rounded : Icons.save_outlined,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-
-          return SingleChildScrollView(child: content);
-        }),
+            return SingleChildScrollView(child: content);
+          },
+        ),
       ),
     );
   }

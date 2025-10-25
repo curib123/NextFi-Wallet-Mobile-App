@@ -1,9 +1,11 @@
-// lib/features/seed_phrase/view/seed_phrase_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/features/seed_phrases/view/widgets/word_picker.dart';
+import 'package:provider/provider.dart';
+
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/confirm_tile.dart';
@@ -11,7 +13,7 @@ import 'package:next_fi/features/seed_phrases/view/widgets/meta_header.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/phrase_card.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/warning_box.dart' show WarningBox;
 import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
-import 'package:provider/provider.dart';
+
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -32,14 +34,20 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final colors = AppColor.of(context);
       SystemChrome.setSystemUIOverlayStyle(
-        SystemUiOverlayStyle(statusBarColor: colors.surface, statusBarIconBrightness: Brightness.dark),
+        SystemUiOverlayStyle(
+          statusBarColor: colors.surface,
+          statusBarIconBrightness: Brightness.dark,
+        ),
       );
       await context.read<SeedPhraseVM>().init();
     });
   }
 
   @override
-  void dispose() { WidgetsBinding.instance.removeObserver(this); super.dispose(); }
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -54,8 +62,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
     HapticFeedback.lightImpact();
     final colors = AppColor.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: const Text('Copied seed phrase (keep it safe!)', style: TextStyle(color: Colors.white)),
-          backgroundColor: colors.primary, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: const Text('Copied seed phrase (keep it safe!)', style: TextStyle(color: Colors.white)),
+        backgroundColor: colors.primary,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -66,97 +77,132 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
     }
     final colors = AppColor.of(context);
     final ok = await showModalBottomSheet<bool>(
-      context: context, isScrollControlled: true, backgroundColor: colors.surface, showDragHandle: true,
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      showDragHandle: true,
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 20, right: 20, top: 8, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Row(children: [
-            Icon(LucideIcons.copy, color: colors.textPrimary, size: 20),
-            const SizedBox(width: 8),
-            Text('Copy recovery phrase?', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-          ]),
-          const SizedBox(height: 12),
-          _guideRow(colors, LucideIcons.shieldAlert, "Never share your phrase",
-              "Anyone with this phrase can control your funds."),
-          const SizedBox(height: 10),
-          _guideRow(colors, LucideIcons.phoneOff, "Avoid screenshots",
-              "Screenshots may be backed up to cloud services."),
-          const SizedBox(height: 10),
-          _guideRow(colors, LucideIcons.eye, "Ensure privacy",
-              "Make sure no one is looking at your screen."),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: OutlinedButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colors.textSecondary,
-                side: BorderSide(color: colors.border.withOpacity(.8)),
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 8,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Icon(LucideIcons.copy, color: colors.textPrimary, size: 20),
+              const SizedBox(width: 8),
+              Text('Copy recovery phrase?', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 12),
+            _guideRow(colors, LucideIcons.shieldAlert, "Never share your phrase",
+                "Anyone with this phrase can control your funds."),
+            const SizedBox(height: 10),
+            _guideRow(colors, LucideIcons.phoneOff, "Avoid screenshots",
+                "Screenshots may be backed up to cloud services."),
+            const SizedBox(height: 10),
+            _guideRow(colors, LucideIcons.eye, "Ensure privacy",
+                "Make sure no one is looking at your screen."),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.textSecondary,
+                    side: BorderSide(color: colors.border.withOpacity(.8)),
+                  ),
+                  child: const Text('Cancel'),
+                ),
               ),
-              child: const Text('Cancel'),
-            )),
-            const SizedBox(width: 10),
-            Expanded(child: FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ButtonStyle(
-                backgroundColor: MaterialStatePropertyAll(colors.primary),
-                foregroundColor: const MaterialStatePropertyAll(Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ButtonStyle(
+                    backgroundColor: MaterialStatePropertyAll(colors.primary),
+                    foregroundColor: const MaterialStatePropertyAll(Colors.white),
+                  ),
+                  child: const Text('Copy anyway'),
+                ),
               ),
-              child: const Text('Copy anyway'),
-            )),
-          ]),
-        ]),
+            ]),
+          ],
+        ),
       ),
     );
     if (ok == true) await _copyAll(context, s.mnemonic);
   }
 
-  Future<void> _confirmRegenerate(BuildContext context) async {
+  Future<void> _confirmRegenerate(BuildContext context, {int? wordCount}) async {
     final colors = AppColor.of(context);
     final ok = await showModalBottomSheet<bool>(
-      context: context, isScrollControlled: true, backgroundColor: colors.surface, showDragHandle: true,
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      showDragHandle: true,
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 20, right: 20, top: 8, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Row(children: [
-            Icon(LucideIcons.refreshCw, color: colors.textPrimary, size: 20),
-            const SizedBox(width: 8),
-            Text('Generate a new phrase', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-          ]),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'This will replace the current recovery phrase with a new one. '
-                  'Make sure you have securely stored the current phrase if you still need it.',
-              style: TextStyle(color: colors.textSecondary, height: 1.45),
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 8,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Icon(LucideIcons.refreshCw, color: colors.textPrimary, size: 20),
+              const SizedBox(width: 8),
+              Text('Generate a new phrase', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'This will replace the current recovery phrase with a new one. '
+                    'Make sure you have securely stored the current phrase if you still need it.',
+                style: TextStyle(color: colors.textSecondary, height: 1.45),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: OutlinedButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colors.textSecondary,
-                side: BorderSide(color: colors.border.withOpacity(.8)),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.textSecondary,
+                    side: BorderSide(color: colors.border.withOpacity(.8)),
+                  ),
+                  child: const Text('Cancel'),
+                ),
               ),
-              child: const Text('Cancel'),
-            )),
-            const SizedBox(width: 10),
-            Expanded(child: FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ButtonStyle(
-                backgroundColor: MaterialStatePropertyAll(colors.primary),
-                foregroundColor: const MaterialStatePropertyAll(Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ButtonStyle(
+                    backgroundColor: MaterialStatePropertyAll(colors.primary),
+                    foregroundColor: const MaterialStatePropertyAll(Colors.white),
+                  ),
+                  child: const Text('Generate'),
+                ),
               ),
-              child: const Text('Generate'),
-            )),
-          ]),
-        ]),
+            ]),
+          ],
+        ),
       ),
     );
     if (ok == true) {
-      await context.read<SeedPhraseVM>().regenerate();
-      showFloatingSnackBar(context, message: 'Generated a new recovery phrase.', type: SnackBarType.success);
+      await context.read<SeedPhraseVM>().regenerate(wordCountOverride: wordCount);
+      final chosen = wordCount ?? context.read<SeedPhraseVM>().wordCount;
+      showFloatingSnackBar(
+        context,
+        message: 'Generated a new $chosen-word recovery phrase.',
+        type: SnackBarType.success,
+      );
     }
   }
 
@@ -170,61 +216,82 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
     final colors = AppColor.of(context);
     bool a1 = s.ack1, a2 = s.ack2;
     final ok = await showModalBottomSheet<bool>(
-      context: context, isScrollControlled: true, backgroundColor: colors.surface, showDragHandle: true,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) {
-        final ready = a1 && a2;
-        return Padding(
-          padding: EdgeInsets.only(left: 20, right: 20, top: 8, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(children: [
-              Icon(LucideIcons.shieldCheck, color: colors.textPrimary, size: 20),
-              const SizedBox(width: 8),
-              Text("Security checklist", style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-            ]),
-            const SizedBox(height: 10),
-            ConfirmTile(
-              title: "I wrote my recovery phrase on paper (or stored it offline).",
-              icon: LucideIcons.pencil,
-              value: a1,
-              onChanged: (v) => setS(() => a1 = v),
-              accent: colors.primary,
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final ready = a1 && a2;
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 8,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
             ),
-            const SizedBox(height: 10),
-            ConfirmTile(
-              title: "I understand NextFi cannot help recover this phrase.",
-              icon: LucideIcons.shield,
-              value: a2,
-              onChanged: (v) => setS(() => a2 = v),
-              accent: colors.success,
-            ),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(child: OutlinedButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colors.textSecondary,
-                  side: BorderSide(color: colors.border.withOpacity(.8)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(children: [
+                  Icon(LucideIcons.shieldCheck, color: colors.textPrimary, size: 20),
+                  const SizedBox(width: 8),
+                  Text("Security checklist",
+                      style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 10),
+                ConfirmTile(
+                  title: "I wrote my recovery phrase on paper (or stored it offline).",
+                  icon: LucideIcons.pencil,
+                  value: a1,
+                  onChanged: (v) => setS(() => a1 = v),
+                  accent: colors.primary,
                 ),
-                child: const Text('Cancel'),
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: FilledButton(
-                onPressed: ready ? () => Navigator.pop(ctx, true) : null,
-                style: ButtonStyle(
-                  backgroundColor: MaterialStateProperty.resolveWith(
-                        (st) => st.contains(MaterialState.disabled) ? colors.primary.withOpacity(.45) : colors.primary,
+                const SizedBox(height: 10),
+                ConfirmTile(
+                  title: "I understand NextFi cannot help recover this phrase.",
+                  icon: LucideIcons.shield,
+                  value: a2,
+                  onChanged: (v) => setS(() => a2 = v),
+                  accent: colors.success,
+                ),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colors.textSecondary,
+                        side: BorderSide(color: colors.border.withOpacity(.8)),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
                   ),
-                  foregroundColor: const MaterialStatePropertyAll(Colors.white),
-                ),
-                child: const Text('Confirm & Secure'),
-              )),
-            ]),
-          ]),
-        );
-      }),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: ready ? () => Navigator.pop(ctx, true) : null,
+                      style: ButtonStyle(
+                        backgroundColor: MaterialStateProperty.resolveWith(
+                              (st) => st.contains(MaterialState.disabled)
+                              ? colors.primary.withOpacity(.45)
+                              : colors.primary,
+                        ),
+                        foregroundColor: const MaterialStatePropertyAll(Colors.white),
+                      ),
+                      child: const Text('Confirm & Secure'),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          );
+        },
+      ),
     );
     if (ok == true) {
-      vm.setAck1(a1); vm.setAck2(a2);
+      vm.setAck1(a1);
+      vm.setAck2(a2);
       await _startAuthFlow(context, vm);
     }
   }
@@ -283,15 +350,19 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
               icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Text('Your Recovery Phrase',
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
+            title: Text(
+              'Your Recovery Phrase',
+              style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+            ),
             centerTitle: false,
             actions: [
               IconButton(
                 tooltip: 'Copy all',
                 onPressed: s.obscured ? null : () => _showCopyGuide(context, s),
-                icon: Icon(LucideIcons.copy,
-                    color: s.obscured ? colors.textSecondary.withOpacity(.45) : colors.textPrimary),
+                icon: Icon(
+                  LucideIcons.copy,
+                  color: s.obscured ? colors.textSecondary.withOpacity(.45) : colors.textPrimary,
+                ),
               ),
               IconButton(
                 tooltip: s.obscured ? 'Reveal phrase' : 'Hide phrase',
@@ -317,6 +388,15 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                       children: [
                         FadeInDown(duration: const Duration(milliseconds: 450), child: const WarningBox()),
                         const SizedBox(height: 18),
+
+                        // ——— 12/24 word picker ———
+                        WordCountPicker(
+                          current: vm.wordCount,
+                          loading: s.loading,
+                          onPick: (count) => _confirmRegenerate(context, wordCount: count),
+                        ),
+                        const SizedBox(height: 12),
+
                         FadeInUp(
                           duration: const Duration(milliseconds: 550),
                           child: MetaHeader(
@@ -331,7 +411,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                           child: PhraseCard(
                             words: s.obscured ? List.filled(s.words.length, "••••••") : s.words,
                             obscured: s.obscured,
-                            isTwentyFour: s.isTwentyFour,
+                            // Use VM's selection for a reliable flag
+                            isTwentyFour: vm.wordCount == 24,
                             onTapObscured: vm.toggleObscure,
                           ),
                         ),
@@ -388,10 +469,17 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
         Icon(icon, color: colors.textPrimary, size: 18),
         const SizedBox(width: 10),
         Expanded(
-          child: Text.rich(TextSpan(children: [
-            TextSpan(text: "$title\n", style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-            TextSpan(text: subtitle, style: TextStyle(color: colors.textSecondary, height: 1.45)),
-          ])),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: "$title\n",
+                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                ),
+                TextSpan(text: subtitle, style: TextStyle(color: colors.textSecondary, height: 1.45)),
+              ],
+            ),
+          ),
         ),
       ],
     );

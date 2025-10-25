@@ -1,25 +1,33 @@
 import 'dart:convert' show utf8; // for memo byte counting
 import 'dart:math' as math;
+import 'dart:ui' as ui; // FontFeature.tabularFigures
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/common/components/asset/asset_logo.dart';
-import 'package:next_fi/common/components/loader/page_loader.dart';
-import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
-import 'package:next_fi/features/send/model/send_token.dart';
-import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/asset/asset_logo.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
+
+// Be sure this path matches the actual file name/case in your project.
+// If you added the optional `address` param to the helper, import that file.
+import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
+
 import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
+
+import 'package:next_fi/features/send/model/send_token.dart';
+import 'package:next_fi/features/send/view_model/send_vm.dart';
+
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
+import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
 
-import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
-import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
+// Local widgets
 import 'widgets/error_card.dart';
 import 'widgets/balance_line.dart';
 import 'widgets/recipient_loading_line.dart';
@@ -58,14 +66,14 @@ class _SendScreenState extends State<SendScreen> {
   final _toCtl = TextEditingController();
   final _amtCtl = TextEditingController();
 
-  // NEW: optional memo
+  // Optional memo (TEXT; 28-byte limit)
   final _memoCtl = TextEditingController();
   int _memoBytes = 0;
 
   final _numFmt = NumberFormat('#,##0.######');
 
   bool _booted = false;
-  bool _scannerOpenedOnce = false; // guard to avoid double auto-open
+  bool _scannerOpenedOnce = false;
 
   @override
   void didChangeDependencies() {
@@ -91,16 +99,14 @@ class _SendScreenState extends State<SendScreen> {
       vm.setRecipient(_toCtl.text.trim());
       setState(() {});
     });
-
-    // NEW: memo listener (keep byte-accurate count)
     _memoCtl.addListener(() {
       _memoBytes = utf8.encode(_memoCtl.text).length;
       setState(() {});
     });
 
-    // Auto-open scanner if requested and there is no prefilled address (only once)
     if (widget.autoOpenScanner && !_scannerOpenedOnce) {
-      final hasPrefill = (widget.prefillAddress ?? '').trim().isNotEmpty || _toCtl.text.trim().isNotEmpty;
+      final hasPrefill = (widget.prefillAddress ?? '').trim().isNotEmpty ||
+          _toCtl.text.trim().isNotEmpty;
       if (!hasPrefill) {
         _scannerOpenedOnce = true;
         WidgetsBinding.instance.addPostFrameCallback((_) => _openScanner());
@@ -118,10 +124,7 @@ class _SendScreenState extends State<SendScreen> {
     super.dispose();
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
   // Helpers
-  // ────────────────────────────────────────────────────────────────────────────
-
   Future<void> _refresh() async {
     final vm = context.read<SendVM>();
     await vm.refreshFees();
@@ -131,7 +134,8 @@ class _SendScreenState extends State<SendScreen> {
 
   double _floorTo(double v, int dec) {
     final scale = math.pow(10, dec);
-    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
+    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale)
+        .toDouble();
   }
 
   String _fmtAmount(double v, {int decimals = 7}) {
@@ -139,34 +143,46 @@ class _SendScreenState extends State<SendScreen> {
     return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
   }
 
-  double _calcMaxTyped(SendVM vm) {
-    if (vm.isXlm) {
-      final fees = (vm.txFeeXlm ?? 0) + (vm.estNetworkFeeXlm ?? 0);
-      final raw = (vm.senderBalanceToken - fees);
-      return _floorTo(raw > 0 ? raw : 0, 7);
-    }
-    return _floorTo(vm.senderBalanceToken, 7);
-  }
-
+  /// Percent chips:
+  /// - USDC: base = full USDC balance.
+  /// - XLM: if 100% and the sender has a USDC trustline, keep 1 XLM (so USDC stays usable).
   void _applyPercent(SendVM vm, double percent) {
-    final base = vm.isXlm ? _calcMaxTyped(vm) : vm.senderBalanceToken;
-    final v = _floorTo(base * percent, 7);
+    double base = vm.senderBalanceToken;
+
+    if (vm.isXlm && percent == 1.0 && vm.selfHasUsdcTrustline) {
+      if (base > 1.0) {
+        base = base - 1.0;
+      } else {
+        base = 0.0;
+      }
+      showFloatingSnackBar(
+        context,
+        message: 'Kept 1 XLM for network fees so USDC stays usable.',
+        type: SnackBarType.info,
+      );
+    } else {
+      base = base * percent;
+    }
+
+    final v = _floorTo(base, 7);
     HapticFeedback.selectionClick();
     _amtCtl.text = _fmtAmount(v);
-    _amtCtl.selection = TextSelection.fromPosition(TextPosition(offset: _amtCtl.text.length));
+    _amtCtl.selection =
+        TextSelection.fromPosition(TextPosition(offset: _amtCtl.text.length));
   }
 
   String? _currentMemoOrNull() {
     final t = _memoCtl.text.trim();
     if (t.isEmpty) return null;
     final bytes = utf8.encode(t);
-    if (bytes.length > 28) return null; // blocked by validator anyway
+    if (bytes.length > 28) return null;
     return t;
   }
 
   Future<void> _confirmAndSend(SendVM vm) async {
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
-    final recipientGets = vm.isXlm ? vm.recipientWillReceiveXlmFromBudget : vm.typedAmount;
+    final recipientGets =
+    vm.isXlm ? vm.recipientWillReceiveXlmFromBudget : vm.typedAmount;
 
     await showModalBottomSheet(
       context: context,
@@ -181,12 +197,10 @@ class _SendScreenState extends State<SendScreen> {
           recipientGets: _numFmt.format(recipientGets),
           txFeeXlm: (vm.txFeeXlm ?? 0).toStringAsFixed(7),
           netFeeXlm: (vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7),
-          extraLabel: vm.isXlm ? 'Total budget (deducted)' : 'XLM required for fees',
+          extraLabel: vm.isXlm ? 'Total deducted' : 'XLM required for fees',
           extraValue: vm.isXlm
               ? '${_numFmt.format(vm.typedAmount)} XLM'
               : '${(vm.needsXlmForFeesIfUsdcSend).toStringAsFixed(7)} XLM',
-          // If you want to show the memo inside the review sheet,
-          // add a memoText param in SlimReviewSheet and pass _currentMemoOrNull().
           onCancel: () => Navigator.pop(context),
           onConfirm: () async {
             Navigator.pop(context);
@@ -221,18 +235,20 @@ class _SendScreenState extends State<SendScreen> {
       _amtCtl.clear();
       _memoCtl.clear();
     } catch (e) {
-      ctl.update(AppAlertType.error, title: 'Send failed', subtitle: '$e', primaryText: 'Close');
+      ctl.update(
+        AppAlertType.error,
+        title: 'Send failed',
+        subtitle: '$e',
+        primaryText: 'Close',
+      );
     }
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Scanner + Address book integration
-  // ────────────────────────────────────────────────────────────────────────────
-
+  // Scanner + Contacts
   Future<void> _openScanner() async {
     HapticFeedback.selectionClick();
-    FocusScope.of(context).unfocus(); // hide keyboard
-    await Future.delayed(const Duration(milliseconds: 60)); // let UI settle
+    FocusScope.of(context).unfocus();
+    await Future.delayed(const Duration(milliseconds: 60));
 
     final raw = await Navigator.push(
       context,
@@ -248,7 +264,7 @@ class _SendScreenState extends State<SendScreen> {
     final schemeIdx = s.toLowerCase().indexOf('stellar:');
     if (schemeIdx != -1) {
       final after = s.substring(schemeIdx + 'stellar:'.length);
-      final cut = after.split(RegExp(r'[\#/]')).first; // strip # or /
+      final cut = after.split(RegExp(r'[#/]')).first;
       final qIdx = cut.indexOf('?');
       final path = qIdx == -1 ? cut : cut.substring(0, qIdx);
       if (_looksLikeStellarPk(path)) addr = path;
@@ -259,10 +275,9 @@ class _SendScreenState extends State<SendScreen> {
           final params = Uri.splitQueryString(query, encoding: utf8);
           memoText = params['memo'];
           memoType = params['memo_type']?.toLowerCase();
-        } catch (_) {/* ignore bad query */}
+        } catch (_) {}
       }
     } else {
-      // Fallback: find first G... base32 public key length 56
       addr = _parseStellarAddress(s);
     }
 
@@ -275,7 +290,6 @@ class _SendScreenState extends State<SendScreen> {
       return;
     }
 
-    // Only accept TEXT memos here
     if (memoText != null && memoText.trim().isNotEmpty) {
       if (memoType == null || memoType == 'text') {
         _memoCtl.text = memoText;
@@ -289,11 +303,11 @@ class _SendScreenState extends State<SendScreen> {
     }
 
     _toCtl.text = addr;
-    _toCtl.selection = TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
+    _toCtl.selection =
+        TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
     context.read<SendVM>().setRecipient(addr);
   }
 
-  // open recipients list and populate on select
   Future<void> _openRecipientsPicker() async {
     HapticFeedback.selectionClick();
     FocusScope.of(context).unfocus();
@@ -303,9 +317,8 @@ class _SendScreenState extends State<SendScreen> {
       MaterialPageRoute(
         builder: (innerCtx) => RecipientListWidget(
           colors: AppColor.of(innerCtx),
-          // Selection mode → pop with the chosen model
           onSelect: (r) => Navigator.of(innerCtx).pop(r),
-          fromAddress: widget.address, // optional; not used in selection mode
+          fromAddress: widget.address,
         ),
       ),
     );
@@ -313,32 +326,28 @@ class _SendScreenState extends State<SendScreen> {
     if (!mounted || picked == null) return;
 
     final vm = context.read<SendVM>();
-    final addr = (picked.address).trim();
+    final addr = picked.address.trim();
 
     _toCtl.text = addr;
-    _toCtl.selection = TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
+    _toCtl.selection =
+        TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
 
-    // Use VM helper so UI can show a friendly label + re-check trustlines
     vm.pickRecipient(addr, displayName: picked.name);
   }
 
-  /// Accepts raw G... public keys or `stellar:G...` URIs (optional query like ?memo=).
   String? _parseStellarAddress(String input) {
     final s = input.trim();
 
-    // Handle stellar: URI
     final uriIdx = s.toLowerCase().indexOf('stellar:');
     if (uriIdx != -1) {
       final after = s.substring(uriIdx + 'stellar:'.length);
-      final cut = after.split(RegExp(r'[\?\#/]')).first;
+      final cut = after.split(RegExp(r'[?#/]')).first;
       if (_looksLikeStellarPk(cut)) return cut;
     }
 
-    // Fallback: find first G... base32 public key length 56
     final reg = RegExp(r'\bG[A-Z2-7]{55}\b');
     final m = reg.firstMatch(s);
     if (m != null) return m.group(0);
-
     return null;
   }
 
@@ -351,13 +360,17 @@ class _SendScreenState extends State<SendScreen> {
     final recipients = context.watch<RecipientAddressVM>();
 
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
-    final recipientGets = vm.isXlm ? vm.recipientWillReceiveXlmFromBudget : vm.typedAmount;
+    final recipientGets =
+    vm.isXlm ? vm.recipientWillReceiveXlmFromBudget : vm.typedAmount;
 
     final typedAddr = _toCtl.text.trim();
-    final saved = (!recipients.loading && typedAddr.isNotEmpty) ? recipients.byAddress(typedAddr) : null;
+    final saved = (!recipients.loading && typedAddr.isNotEmpty)
+        ? recipients.byAddress(typedAddr)
+        : null;
 
     final list = ListView(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics:
+      const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
       children: [
         BalanceLine(token: tokenStr, balance: vm.senderBalanceToken),
@@ -372,7 +385,8 @@ class _SendScreenState extends State<SendScreen> {
             colorValue: saved.color,
             address: saved.address,
             onEdit: () async {
-              final ok = await showRecipientUpsertSheet(context, initial: saved);
+              final ok =
+              await showRecipientUpsertSheet(context, initial: saved);
               if (ok == true && mounted) setState(() {});
             },
           ),
@@ -381,7 +395,12 @@ class _SendScreenState extends State<SendScreen> {
           RecipientAddTemplate(
             address: typedAddr,
             onAdd: () async {
-              final ok = await showRecipientUpsertSheet(context);
+              // If your helper supports an `address:` param, keep this.
+              // Otherwise, remove `address: typedAddr`.
+              final ok = await showRecipientUpsertSheet(
+                context,
+                // address: typedAddr, // uncomment only if your helper has this param
+              );
               if (ok == true && mounted) setState(() {});
             },
           ),
@@ -392,66 +411,99 @@ class _SendScreenState extends State<SendScreen> {
           key: _form,
           child: Column(
             children: [
-              // ───────── Recipient with address book + Scanner suffix ─────────
+              // Recipient (wrap long; selectable; compact)
               TextFormField(
                 controller: _toCtl,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
-                textInputAction: TextInputAction.next,
+                textInputAction: TextInputAction.newline,
+                keyboardType: TextInputType.multiline,
+                enableInteractiveSelection: true,
+                style: const TextStyle(
+                  fontSize: 12.0,
+                  height: 1.2,
+                  letterSpacing: 0.15,
+                  fontFeatures: [ui.FontFeature.tabularFigures()],
+                ),
+                minLines: 1,
+                maxLines: null,
                 decoration: modernInput(
                   context,
-                  placeholder: 'Recipient Address',
-                  prefix: Icon(LucideIcons.contact, color: AppColor.of(context).primary),
+                  placeholder: 'Recipient Address (G… 56 chars)',
+                  prefix: Icon(LucideIcons.contact, color: c.primary, size: 18),
                 ).copyWith(
-                  helperText: context.read<SendVM>().recipientLabel == null
+                  isDense: true,
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  prefixIconConstraints:
+                  const BoxConstraints(minWidth: 28, minHeight: 28),
+                  suffixIconConstraints: const BoxConstraints(minHeight: 28),
+                  helperText: vm.recipientLabel == null
                       ? null
-                      : 'To: ${context.read<SendVM>().recipientLabel}',
-                  helperStyle: TextStyle(color: AppColor.of(context).textSecondary),
-                  // THREE actions: clear (when not empty) + address book + scan
-                  suffixIcon: SizedBox(
-                    width: _toCtl.text.trim().isNotEmpty ? 144 : 100,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (_toCtl.text.trim().isNotEmpty)
-                          IconButton(
-                            tooltip: 'Clear',
-                            onPressed: () {
-                              _toCtl.clear();
-                              final vm = context.read<SendVM>();
-                              vm.clearPrefillName();
-                              vm.setRecipient('');
-                            },
-                            icon: const Icon(LucideIcons.x),
-                          ),
+                      : 'To: ${vm.recipientLabel}',
+                  helperStyle:
+                  TextStyle(color: c.textSecondary, fontSize: 12),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_toCtl.text.trim().isNotEmpty)
                         IconButton(
-                          tooltip: 'Choose from contacts',
-                          onPressed: _openRecipientsPicker,
-                          icon: const Icon(LucideIcons.contact), // or LucideIcons.users
+                          tooltip: 'Clear',
+                          onPressed: () {
+                            _toCtl.clear();
+                            final vm = context.read<SendVM>();
+                            vm.clearPrefillName();
+                            vm.setRecipient('');
+                            setState(() {});
+                          },
+                          icon: const Icon(LucideIcons.x),
+                          iconSize: 16,
+                          padding: const EdgeInsets.all(4),
+                          constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                          visualDensity:
+                          const VisualDensity(horizontal: -4, vertical: -4),
                         ),
-                        IconButton(
-                          tooltip: 'Scan QR',
-                          onPressed: _openScanner,
-                          icon: const Icon(LucideIcons.scanLine),
-                        ),
-                      ],
-                    ),
+                      IconButton(
+                        tooltip: 'Choose from contacts',
+                        onPressed: _openRecipientsPicker,
+                        icon: const Icon(LucideIcons.contact),
+                        iconSize: 16,
+                        padding: const EdgeInsets.all(4),
+                        constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
+                        visualDensity:
+                        const VisualDensity(horizontal: -4, vertical: -4),
+                      ),
+                      IconButton(
+                        tooltip: 'Scan QR',
+                        onPressed: _openScanner,
+                        icon: const Icon(LucideIcons.scanLine),
+                        iconSize: 16,
+                        padding: const EdgeInsets.all(4),
+                        constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
+                        visualDensity:
+                        const VisualDensity(horizontal: -4, vertical: -4),
+                      ),
+                    ],
                   ),
                 ),
-                validator: (_) =>
-                vm.blockingReason == null || !vm.blockingReason!.contains('Stellar')
-                    ? null
-                    : 'Enter a valid Stellar address',
+                validator: (_) => vm.blockingReason,
+                onChanged: (_) => setState(() {}),
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
               const SizedBox(height: 6),
               const TrustlineHint(),
               const SizedBox(height: 10),
 
-              // ───────── Amount ─────────
+              // Amount
               TextFormField(
                 controller: _amtCtl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$'))],
+                keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                ],
                 decoration: modernInput(
                   context,
                   placeholder: vm.isXlm ? 'Amount (XLM)' : 'Amount (USDC)',
@@ -459,13 +511,34 @@ class _SendScreenState extends State<SendScreen> {
                     padding: const EdgeInsets.all(8),
                     child: AssetLogo(keyOrSymbol: tokenStr, size: 18),
                   ),
+                ).copyWith(
+                  isDense: true,
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
                 validator: (_) => vm.blockingReason,
               ),
+
+              if (vm.isXlm && vm.selfHasUsdcTrustline) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(LucideIcons.info, size: 14, color: c.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Tip: If you choose 100%, we’ll keep 1 XLM so USDC stays usable (fees need XLM).',
+                        style: TextStyle(fontSize: 12, color: c.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
               const SizedBox(height: 10),
               PercentChipsRow(onPick: (pct) => _applyPercent(vm, pct)),
 
-              // ───────── Memo (optional) ─────────
+              // Memo (optional)
               const SizedBox(height: 12),
               TextFormField(
                 controller: _memoCtl,
@@ -473,13 +546,15 @@ class _SendScreenState extends State<SendScreen> {
                 decoration: modernInput(
                   context,
                   placeholder: 'Memo (optional)',
-                  prefix: Icon(LucideIcons.stickyNote, color: AppColor.of(context).primary),
+                  prefix: Icon(LucideIcons.stickyNote, color: c.primary),
                 ).copyWith(
-                  // Byte-accurate counter (28 bytes max for Stellar TEXT memo)
+                  isDense: true,
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   counterText: '$_memoBytes / 28 bytes',
-                  helperText: 'Some exchanges require a memo. '
-                      'Example: 123456 or "Invoice #123". If unsure, leave blank.',
-                  helperStyle: TextStyle(color: AppColor.of(context).textSecondary),
+                  helperText:
+                  'Some exchanges require a memo. If unsure, leave blank.',
+                  helperStyle: TextStyle(color: c.textSecondary, fontSize: 12),
                   suffixIcon: (_memoCtl.text.isEmpty)
                       ? null
                       : IconButton(
@@ -488,10 +563,11 @@ class _SendScreenState extends State<SendScreen> {
                     icon: const Icon(LucideIcons.x),
                   ),
                 ),
-                // NOTE: Stellar TEXT memos are limited to 28 BYTES, not characters.
                 validator: (_) {
                   final bytes = utf8.encode(_memoCtl.text);
-                  return (bytes.length <= 28) ? null : 'Memo too long (max 28 bytes)';
+                  return (bytes.length <= 28)
+                      ? null
+                      : 'Memo too long (max 28 bytes)';
                 },
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
               ),
@@ -500,6 +576,7 @@ class _SendScreenState extends State<SendScreen> {
         ),
         const SizedBox(height: 12),
 
+        // Preview
         SlimPreviewCard(
           isXLM: vm.isXlm,
           token: tokenStr,
@@ -507,7 +584,8 @@ class _SendScreenState extends State<SendScreen> {
           estNetworkFeeXlm: vm.estNetworkFeeXlm ?? 0,
           txFeeXlm: vm.txFeeXlm ?? 0,
           totalBudgetXlm: vm.isXlm ? vm.totalDeductXlmIfXlmSend : null,
-          needsXlmForFeesIfUsdc: vm.isXlm ? null : vm.needsXlmForFeesIfUsdcSend,
+          needsXlmForFeesIfUsdc:
+          vm.isXlm ? null : vm.needsXlmForFeesIfUsdcSend,
         ),
       ],
     );
@@ -523,32 +601,44 @@ class _SendScreenState extends State<SendScreen> {
           children: [
             AssetLogo(size: 18, keyOrSymbol: tokenStr),
             const SizedBox(width: 8),
-            Text('Send $tokenStr', style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
+            Text('Send $tokenStr',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: c.textPrimary)),
           ],
         ),
       ),
       body: vm.loading
-          ? const PageLoader(
-        size: 36, // tweak as needed
-        // speed: Duration(milliseconds: 1400), // optional
-        // color: null, // optional; defaults to AppColor.textSecondary
-      )
+          ? const PageLoader(size: 36)
           : vm.error != null
           ? ErrorCard(message: vm.error!)
-          : RefreshIndicator(onRefresh: _refresh, color: c.primary, displacement: 24, child: list),
+          : RefreshIndicator(
+        onRefresh: _refresh,
+        color: c.primary,
+        displacement: 24,
+        child: list,
+      ),
       bottomNavigationBar: (vm.loading || vm.error != null)
           ? null
           : AnimatedPadding(
         duration: const Duration(milliseconds: 150),
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
         child: SafeArea(
           top: false,
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             decoration: BoxDecoration(
               color: c.surface,
-              border: Border(top: BorderSide(color: c.primary.withOpacity(0.10))),
-              boxShadow: [BoxShadow(blurRadius: 12, offset: const Offset(0, -4), color: Colors.black.withOpacity(0.04))],
+              border: Border(
+                top: BorderSide(color: c.primary.withOpacity(0.10)),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                  color: Colors.black.withOpacity(0.04),
+                ),
+              ],
             ),
             child: SizedBox(
               width: double.infinity,
@@ -558,17 +648,24 @@ class _SendScreenState extends State<SendScreen> {
                   final reason = vm.blockingReason;
                   if (reason != null) {
                     HapticFeedback.selectionClick();
-                    showFloatingSnackBar(context, message: reason, type: SnackBarType.error);
+                    showFloatingSnackBar(context,
+                        message: reason, type: SnackBarType.error);
                     return;
                   }
                   await _confirmAndSend(vm);
                 },
-                icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
-                label: Text('Send $tokenStr', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                icon: const Icon(LucideIcons.send,
+                    color: Colors.white, size: 18),
+                label: const Text(
+                  'Send',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
               ),

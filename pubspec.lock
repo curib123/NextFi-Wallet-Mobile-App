@@ -278,6 +278,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.1"
+  ed25519_hd_key:
+    dependency: "direct main"
+    description:
+      name: ed25519_hd_key
+      sha256: "31e191ec97492873067e46dc9cc0c7d55170559c83a478400feffa0627acaccf"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.0"
   eip1559:
     dependency: transitive
     description:

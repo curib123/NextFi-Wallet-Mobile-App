@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:bip39/bip39.dart' as bip39;
 import 'package:bip39/src/wordlists/english.dart' as english;
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/services/seed_storage.dart';
 import 'package:next_fi/features/import_wallet/model/import_wallet_state.dart';
 
 class ImportWalletVM extends ChangeNotifier {

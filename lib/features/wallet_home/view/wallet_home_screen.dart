@@ -20,7 +20,7 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/Services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
@@ -104,7 +104,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     final currency = context.watch<CurrencyVM>();
     final assetsVM = context.watch<AssetVM>();
-    final stellar = context.read<StellarWalletService>();
+    final stellar = context.read<StellarWalletServices>();
 
     final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
     final fxXlm = currency.xlmToFiat(s.xlm);

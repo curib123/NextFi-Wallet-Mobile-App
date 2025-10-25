@@ -1,135 +1,46 @@
+// StellarWalletServices.dart
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:bip39/bip39.dart' as bip39;
 import 'package:http/http.dart' as http;
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-// Keep this import as in your codebase (shim or direct):
-import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
+import 'package:next_fi/services/stellar/wallet_models.dart';
+import 'package:next_fi/services/stellar/soroban_rpc.dart';
+import 'package:next_fi/services/profit_address_vault_secure_storage.dart';
 
-// ================= helper models (unchanged) =================
-
-class AccountState {
-  final double xlm;
-  final double usdc;
-  final bool hasUsdcTrustline;
-  final DateTime updatedAt;
-  const AccountState({
-    required this.xlm,
-    required this.usdc,
-    required this.hasUsdcTrustline,
-    required this.updatedAt,
-  });
-}
-
-class FeeEstimate {
-  final int perOpStroops;
-  final int totalStroops;
-  final double totalXlm;
-  final int baseFee;
-  final int opCount;
-  final int percentile;
-  final DateTime ledgerClosedAt;
-  const FeeEstimate({
-    required this.perOpStroops,
-    required this.totalStroops,
-    required this.totalXlm,
-    required this.baseFee,
-    required this.opCount,
-    required this.percentile,
-    required this.ledgerClosedAt,
-  });
-}
-
-class PairPrice {
-  final double usdcPerXlm; // counter/base = USDC per 1 XLM
-  double get xlmPerUsdc => usdcPerXlm == 0 ? 0 : 1 / usdcPerXlm;
-  final DateTime at;
-  const PairPrice(this.usdcPerXlm, this.at);
-}
-
-// ========== Minimal Soroban JSON-RPC client (fallback only) ==========
-class _SorobanRpc {
-  String base = 'https://rpc.ankr.com/stellar_soroban';
-  final Map<String, String>? headers;
-  _SorobanRpc(this.base, [this.headers]);
-
-  Future<Map<String, dynamic>?> _rpc(
-      String method, {
-        Object? params,
-        Duration timeout = const Duration(seconds: 20),
-      }) async {
-    final uri = Uri.parse(base);
-    final payload = json.encode({
-      'jsonrpc': '2.0',
-      'id': 1,
-      'method': method,
-      'params': params ?? {},
-    });
-    final resp = await http
-        .post(
-      uri,
-      headers: {
-        'content-type': 'application/json',
-        if (headers != null) ...headers!,
-      },
-      body: payload,
-    )
-        .timeout(timeout);
-    if (resp.statusCode != 200) return null;
-    final j = json.decode(resp.body) as Map<String, dynamic>;
-    if (j['error'] != null) return null;
-    return j['result'] as Map<String, dynamic>?;
-  }
-
-  Future<String?> sendTransaction(String envelopeB64) async {
-    final r = await _rpc('sendTransaction', params: {'transaction': envelopeB64});
-    return (r?['hash'] as String?);
-  }
-
-  Future<int?> getLatestLedgerSequence() async {
-    final r = await _rpc('getLatestLedger');
-    final n = r?['sequence'];
-    if (n is int) return n;
-    if (n is num) return n.toInt();
-    return null;
-  }
-}
-
-// ================= StellarWalletService =================
-
-class StellarWalletService {
-  /// IMPORTANT: issuer is injected from the ViewModel.
-  /// Wire like: `StellarWalletService(usdcIssuer: assetVM.usdcIssuer, testnet: ...)`
+/// Production-ready Stellar service with:
+/// - CreateAccount vs Payment for XLM sends (dest not yet funded)
+/// - Hardened USDC sends (sender+dest trustline checks)
+/// - Classic G… address normalization (rejects M… unless you add proper support)
+/// - Clearer Horizon error messages on submit
+/// - Read fallbacks (QuickNode) with headers; submit fallbacks kept simple
+class StellarWalletServices {
   final String usdcIssuer;
-
-  // Primary SDK (SDF Horizon)
   final StellarSDK sdk;
 
-  // QuickNode Horizon fallback (optional)
+  // Optional Horizon alternatives (reads use headers; submits prefer public Horizon)
   final String? quickNodeUrlMainnet;
   final String? quickNodeUrlTestnet;
   final Map<String, String>? quickNodeDefaultHeaders;
   final StellarSDK? _sdkQuickNode;
 
-  // Soroban JSON-RPC fallback (optional)
+  // Optional Soroban RPC (only used for fee/ledger watch; not for classic submits)
   final String? sorobanUrlMainnet;
   final String? sorobanUrlTestnet;
   final Map<String, String>? sorobanDefaultHeaders;
-  final _SorobanRpc? _soroban;
+  final SorobanRpc? _soroban;
 
   final TransactionFeeVaultSecureStorage configVault;
 
-  StellarWalletService({
+  StellarWalletServices({
     required this.usdcIssuer,
     bool testnet = false,
     TransactionFeeVaultSecureStorage? configVault,
-
-    // QuickNode Horizon
     this.quickNodeUrlMainnet,
     this.quickNodeUrlTestnet,
     this.quickNodeDefaultHeaders,
-
-    // Soroban JSON-RPC
     this.sorobanUrlMainnet,
     this.sorobanUrlTestnet,
     this.sorobanDefaultHeaders,
@@ -140,30 +51,51 @@ class StellarWalletService {
         })(),
         _soroban = (() {
           final url = testnet ? sorobanUrlTestnet : sorobanUrlMainnet;
-          return (url != null && url.isNotEmpty) ? _SorobanRpc(url, sorobanDefaultHeaders) : null;
+          return (url != null && url.isNotEmpty)
+              ? SorobanRpc(url, sorobanDefaultHeaders)
+              : null;
         })(),
         configVault = configVault ?? TransactionFeeVaultSecureStorage();
 
   bool get _isTestnet => identical(sdk, StellarSDK.TESTNET);
   Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
+  // ---------- Mnemonics ----------
+  Future<String> _generateMnemonic({int wordCount = 12}) async {
+    final wc = (wordCount == 24) ? 24 : 12;
+    final strength = wc == 24 ? 256 : 128; // 24w -> 256b, 12w -> 128b
+    final m = bip39.generateMnemonic(strength: strength);
+    return m.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  bool _validateMnemonic(String mnemonic) {
+    final norm = mnemonic.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+    final wc = norm.isEmpty ? 0 : norm.split(' ').length;
+    if (wc != 12 && wc != 24) return false;
+    return bip39.validateMnemonic(norm);
+  }
+
+  // Public mnemonic API
+  Future<String> generateMnemonic({int wordCount = 12}) =>
+      _generateMnemonic(wordCount: wordCount);
+  bool validateMnemonic(String mnemonic) => _validateMnemonic(mnemonic);
+  Future<String> get mnemonic12 => _generateMnemonic(wordCount: 12);
+  Future<String> get mnemonic24 => _generateMnemonic(wordCount: 24);
+
+  // ---------- Assets ----------
   Asset get _xlm => Asset.NATIVE;
   Asset get _usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
+  static const double _kTxFeeUsdc = 0.005; // App fee “pegged” in USDC, converted to XLM
   static String _fmt7(num v) => v.toStringAsFixed(7);
+  static Never _fail(String message, [Object? inner]) =>
+      throw Exception(inner == null ? message : '$message (inner: $inner)');
 
-  static Never _fail(String message, [Object? inner]) {
-    throw Exception(inner == null ? message : '$message (inner: $inner)');
-  }
-
-  // Primary Horizon base (public)
   String get horizonBase =>
       _isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org';
-
-  // QuickNode base (fallback), if configured
   String? get _qnBase => _isTestnet ? quickNodeUrlTestnet : quickNodeUrlMainnet;
 
-  // ===== HTTP helper with SDF ➜ QuickNode fallback =====
+  // ---------- HTTP with fallback (reads only) ----------
   Future<http.Response> _getWithFallback(
       String path, {
         Map<String, String>? query,
@@ -173,7 +105,6 @@ class StellarWalletService {
     try {
       final r = await http.get(primary).timeout(timeout);
       if (r.statusCode == 200) return r;
-
       if (r.statusCode == 429 || (r.statusCode >= 500 && r.statusCode <= 599)) {
         final fr = await _tryQuickNode(path, query: query, timeout: timeout);
         if (fr != null) return fr;
@@ -201,67 +132,71 @@ class StellarWalletService {
     }
   }
 
-  // ===== Basics =====
-
-  static Future<String> generateMnemonic() => Wallet.generate24WordsMnemonic();
-  static Future<Wallet> walletFromMnemonic(String mnemonic) => Wallet.from(mnemonic);
-  static Future<KeyPair> getKeyPair(Wallet wallet, {int index = 0}) => wallet.getKeyPair(index: index);
-
-  Future<AccountResponse> _loadAccount(String accountId) => sdk.accounts.account(accountId);
+  // ---------- Basics ----------
+  Future<AccountResponse> _loadAccount(String accountId) =>
+      sdk.accounts.account(accountId);
 
   bool get isTestnet => _isTestnet;
+  Future<String> getTransactionFeeAddress() async =>
+      (await configVault.readOrInit()).address;
 
-  Future<String> getTransactionFeeAddress() async => (await configVault.readOrInit()).address;
+  int _toStroops(double amount) => (amount * 1e7).round();
+  double _fromStroops(int stroops) => stroops / 1e7;
 
-  // === Dynamic tx-fee: 0.005 USDC paid in XLM (unchanged behavior) ===
-  static const double _kTxFeeUsdc = 0.005;
-
+  // Convert fixed USDC app-fee to XLM dynamically (with quotes -> fallback -> stored -> default)
   Future<double> _computeDynamicFeeXlm() async {
     try {
       final x1 = await quoteUsdcToXlm(_kTxFeeUsdc);
       if (x1 != null && x1 > 0) return x1;
     } catch (_) {}
     try {
-      final usdcFor1Xlm = await quoteXlmToUsdc(1.0);
-      if (usdcFor1Xlm != null && usdcFor1Xlm > 0) {
-        final x2 = _kTxFeeUsdc / usdcFor1Xlm;
+      final usdcPer1Xlm = await quoteXlmToUsdc(1.0);
+      if (usdcPer1Xlm != null && usdcPer1Xlm > 0) {
+        final x2 = _kTxFeeUsdc / usdcPer1Xlm;
         if (x2 > 0) return x2;
       }
     } catch (_) {}
     try {
       return await configVault.getFeeXlm();
     } catch (_) {
-      return 0.05;
+      return 0.05; // safe default if all else fails
     }
   }
 
   Future<int> getCurrentFeeStroops() async {
     final xlm = await _computeDynamicFeeXlm();
-    final stroops = (xlm * 1e7).ceil();
-    return stroops;
+    return (xlm * 1e7).ceil();
   }
 
-  Future<double> getCurrentFeeXlm() async {
-    final stroops = await getCurrentFeeStroops();
-    return _fromStroops(stroops);
+  Future<double> getCurrentFeeXlm() async =>
+      _fromStroops(await getCurrentFeeStroops());
+  Future<String> getCurrentFeeLabel() async =>
+      '${(await getCurrentFeeXlm()).toStringAsFixed(7)} XLM';
+
+  // ---------- Helpers: account existence + address normalization ----------
+  Future<bool> _accountExists(String accountId) async {
+    try {
+      await _loadAccount(accountId);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<String> getCurrentFeeLabel() async {
-    final xlm = await getCurrentFeeXlm();
-    return '${xlm.toStringAsFixed(7)} XLM';
+  /// Ensures we use classic **G…** account ID (rejects muxed M… here).
+  String _toClassicAccountId(String addr) {
+    final a = addr.trim();
+    if (a.startsWith('G') && a.length >= 56) {
+      // Basic sanity validation via StrKey is internal to SDK; this is sufficient for flow guard.
+      return a;
+    }
+    if (a.startsWith('M')) {
+      _fail('Muxed (M…) addresses are not supported here. Use classic G… + memo.');
+    }
+    _fail('Invalid account id: $a');
   }
 
-  @Deprecated('Use getTransactionFeeAddress() instead.')
-  Future<String> getProfitAddress() => getTransactionFeeAddress();
-
-  @Deprecated('Fixed-fee mode: use getCurrentFeeXlm() / getCurrentFeeStroops() instead.')
-  Future<int> getCurrentFeeBps() async => 0;
-
-  int _toStroops(double amount) => (amount * 1e7).round();
-  double _fromStroops(int stroops) => stroops / 1e7;
-
-  // ===== Balances =====
-
+  // ---------- Balances ----------
   Future<double> getXlmBalance(String accountId) async {
     try {
       final acc = await _loadAccount(accountId);
@@ -288,104 +223,86 @@ class StellarWalletService {
     }
   }
 
-  // ===== Trustlines =====
-
+  // ---------- Trustlines ----------
   Future<bool> hasUsdcTrustline(String accountId) async {
     final acc = await _loadAccount(accountId);
-    return acc.balances.any((b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer);
+    return acc.balances
+        .any((b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer);
   }
 
   Future<String> createUsdcTrustline({
-    required String secretSeed,
+    required KeyPair keyPair,
     String limit = '922337203685.4775807',
   }) async {
     try {
-      final kp = KeyPair.fromSecretSeed(secretSeed);
-      final acc = await _loadAccount(kp.accountId);
-
+      final acc = await _loadAccount(keyPair.accountId);
       final tx = TransactionBuilder(acc)
           .addOperation(ChangeTrustOperationBuilder(_usdc, limit).build())
-          .setMaxOperationFee(100)
+          .setMaxOperationFee(100) // base safe per-op
           .build();
-      tx.sign(kp, _network);
+      tx.sign(keyPair, _network);
 
-      try {
-        final res = await sdk.submitTransaction(tx);
-        if (!res.success) _fail('ChangeTrust(USDC) failed: ${res.resultXdr}');
-        return res.hash!;
-      } catch (_) {
-        final hash = await _trySorobanSend(tx);
-        if (hash != null) return hash;
-
-        if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode.submitTransaction(tx);
-          if (!res.success) _fail('ChangeTrust(USDC) failed on QuickNode: ${res.resultXdr}');
-          return res.hash!;
-        }
-        rethrow;
-      }
+      final res = await sdk.submitTransaction(tx);
+      if (!res.success) _failSubmit(res, prefix: 'ChangeTrust(USDC) failed');
+      return res.hash!;
     } catch (e) {
       _fail('Failed to create USDC trustline', e);
     }
   }
 
-  Future<String?> _trySorobanSend(Transaction tx) async {
-    if (_soroban == null) return null;
-    try {
-      final envelopeB64 = tx.toEnvelopeXdrBase64();
-      final hash = await _soroban.sendTransaction(envelopeB64);
-      return hash;
-    } catch (_) {
-      return null;
-    }
+  Future<void> _ensureUsdcTrustlineSelf(
+      KeyPair keyPair, {
+        String limit = '922337203685.4775807',
+      }) async {
+    if (await hasUsdcTrustline(keyPair.accountId)) return;
+    await createUsdcTrustline(keyPair: keyPair, limit: limit);
   }
 
-  Future<void> _ensureUsdcTrustlineSelf(String secretSeed, {String limit = '922337203685.4775807'}) async {
-    final kp = KeyPair.fromSecretSeed(secretSeed);
-    if (await hasUsdcTrustline(kp.accountId)) return;
-    await createUsdcTrustline(secretSeed: secretSeed, limit: limit);
-  }
-
-  // ===== Payments (dynamic 0.01 USDC-worth in XLM; separate from network fee) =====
-
+  // ---------- Payments (app fee paid in XLM) ----------
   Future<List<String>> sendXlmWithFee({
-    required String secretSeed,
+    required KeyPair keyPair,
     required String destination,
     required double amount,
     String? memoText,
   }) async {
     if (amount <= 0) _fail('Amount must be > 0');
-    final dest = destination.trim();
-    if (dest.isEmpty) _fail('Destination is required');
 
-    final feeAddr = await getTransactionFeeAddress();
+    final dest = _toClassicAccountId(destination);
+    final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
+
+    // App fee
     final feeStroops = await getCurrentFeeStroops();
     final feeXlm = _fromStroops(feeStroops);
-
-    KeyPair.fromAccountId(dest);
-    KeyPair.fromAccountId(feeAddr);
-    if (dest == feeAddr) _fail('Destination cannot be the transaction fee address.');
-
     final totalStroops = _toStroops(amount);
     if (totalStroops <= feeStroops) {
       _fail('Amount too small: must be greater than transaction fee of ${_fmt7(feeXlm)} XLM');
     }
-    final recvPart = totalStroops - feeStroops;
+    final recvXlm = _fromStroops(totalStroops - feeStroops);
 
-    final sender = KeyPair.fromSecretSeed(secretSeed);
-    final acc = await _loadAccount(sender.accountId);
+    final acc = await _loadAccount(keyPair.accountId);
 
-    final opCount = feeStroops > 0 ? 2 : 1;
-    final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+    // Estimate network fee per op
+    final needsFeeOp = feeStroops > 0;
+    final opCount = needsFeeOp ? 2 : 1;
+    final feeXlmNet =
+    await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
     final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
 
-    final tb = TransactionBuilder(acc)
-      ..setMaxOperationFee(perOpStroops)
-      ..addOperation(
-        PaymentOperationBuilder(dest, _xlm, _fmt7(_fromStroops(recvPart))).build(),
-      );
+    final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);
 
-    if (feeStroops > 0) {
+    final destExists = await _accountExists(dest);
+    if (destExists) {
+      tb.addOperation(
+        PaymentOperationBuilder(dest, _xlm, _fmt7(recvXlm)).build(),
+      );
+    } else {
+      // Create (fund) new account with recv amount
+      tb.addOperation(
+        CreateAccountOperationBuilder(dest, _fmt7(recvXlm)).build(),
+      );
+    }
+
+    if (needsFeeOp) {
       tb.addOperation(
         PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
       );
@@ -393,19 +310,17 @@ class StellarWalletService {
     if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
     final tx = tb.build();
-    tx.sign(sender, _network);
+    tx.sign(keyPair, _network);
 
+    // Submit via public Horizon; optional fallback via alt Horizon (no custom headers)
     try {
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _fail('XLM payment failed: ${res.resultXdr}');
+      if (!res.success) _failSubmit(res, prefix: 'XLM send failed');
       return [res.hash!];
     } catch (_) {
-      final hash = await _trySorobanSend(tx);
-      if (hash != null) return [hash];
-
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode.submitTransaction(tx);
-        if (!res.success) _fail('XLM payment failed on QuickNode: ${res.resultXdr}');
+        final res = await _sdkQuickNode!.submitTransaction(tx);
+        if (!res.success) _failSubmit(res, prefix: 'XLM send failed (fallback)');
         return [res.hash!];
       }
       rethrow;
@@ -413,37 +328,43 @@ class StellarWalletService {
   }
 
   Future<List<String>> sendUsdcWithFee({
-    required String secretSeed,
+    required KeyPair keyPair,
     required String destination,
     required double usdcAmount,
     String? memoText,
   }) async {
     if (usdcAmount <= 0) _fail('usdcAmount must be > 0');
-    final dest = destination.trim();
-    if (dest.isEmpty) _fail('Destination is required');
 
-    final feeAddr = await getTransactionFeeAddress();
-    final feeStroops = await getCurrentFeeStroops();
-    final feeXlm = _fromStroops(feeStroops);
+    final dest = _toClassicAccountId(destination);
+    final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
 
-    KeyPair.fromAccountId(dest);
-    KeyPair.fromAccountId(feeAddr);
-    if (dest == feeAddr) _fail('Destination cannot be the transaction fee address.');
-
+    // Destination MUST exist and have USDC trustline
+    if (!await _accountExists(dest)) {
+      _fail('Destination account does not exist. Ask recipient to create/fund a Stellar account first.');
+    }
+    await _ensureUsdcTrustlineSelf(keyPair); // sender trustline
     if (!await hasUsdcTrustline(dest)) {
       _fail('Destination has no USDC trustline. Ask recipient to add USDC first.');
     }
 
-    final sender = KeyPair.fromSecretSeed(secretSeed);
-    final acc = await _loadAccount(sender.accountId);
+    // App fee in XLM
+    final feeStroops = await getCurrentFeeStroops();
+    final feeXlm = _fromStroops(feeStroops);
 
-    final senderXlmBal = await getXlmBalance(sender.accountId);
+    // Ensure sender has enough XLM to pay your app fee
+    final senderXlmBal = await getXlmBalance(keyPair.accountId);
     if (senderXlmBal + 1e-7 < feeXlm) {
-      _fail('Insufficient XLM to pay the transaction fee of ${_fmt7(feeXlm)} XLM.');
+      _fail(
+        'Insufficient XLM to pay the transaction fee of ${_fmt7(feeXlm)} XLM.',
+      );
     }
 
-    final opCount = feeStroops > 0 ? 2 : 1;
-    final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+    final acc = await _loadAccount(keyPair.accountId);
+
+    final needsFeeOp = feeStroops > 0;
+    final opCount = needsFeeOp ? 2 : 1;
+    final feeXlmNet =
+    await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
     final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
 
     final tb = TransactionBuilder(acc)
@@ -452,7 +373,7 @@ class StellarWalletService {
         PaymentOperationBuilder(dest, _usdc, _fmt7(usdcAmount)).build(),
       );
 
-    if (feeStroops > 0) {
+    if (needsFeeOp) {
       tb.addOperation(
         PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
       );
@@ -460,29 +381,25 @@ class StellarWalletService {
     if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
     final tx = tb.build();
-    tx.sign(sender, _network);
+    tx.sign(keyPair, _network);
 
     try {
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _fail('USDC payment failed: ${res.resultXdr}');
+      if (!res.success) _failSubmit(res, prefix: 'USDC payment failed');
       return [res.hash!];
     } catch (_) {
-      final hash = await _trySorobanSend(tx);
-      if (hash != null) return [hash];
-
       if (_sdkQuickNode != null) {
-        final res = await _sdkQuickNode.submitTransaction(tx);
-        if (!res.success) _fail('USDC payment failed on QuickNode: ${res.resultXdr}');
+        final res = await _sdkQuickNode!.submitTransaction(tx);
+        if (!res.success) _failSubmit(res, prefix: 'USDC payment failed (fallback)');
         return [res.hash!];
       }
       rethrow;
     }
   }
 
-  // ===== Swaps (Strict-Send) with dynamic XLM transaction fee =====
-
+  // ---------- Swaps (Strict-Send) ----------
   Future<String> swapXlmToUsdc({
-    required String secretSeed,
+    required KeyPair keyPair,
     required double sendAmountXlm,
     required double minUsdcOut,
     String? destination,
@@ -492,28 +409,35 @@ class StellarWalletService {
     if (minUsdcOut <= 0) _fail('minUsdcOut must be > 0');
 
     try {
-      final kp = KeyPair.fromSecretSeed(secretSeed);
-      final dest = (destination?.trim().isNotEmpty == true) ? destination!.trim() : kp.accountId;
+      final self = keyPair.accountId;
+      final dest = (destination?.trim().isNotEmpty == true)
+          ? _toClassicAccountId(destination!.trim())
+          : self;
 
+      if (!await _accountExists(dest)) {
+        _fail('Destination account does not exist. Ask recipient to create/fund a Stellar account first.');
+      }
       if (!await hasUsdcTrustline(dest)) {
         _fail('Destination has no USDC trustline. Ask recipient to add USDC first.');
       }
 
-      final feeAddr = await getTransactionFeeAddress();
-      KeyPair.fromAccountId(feeAddr);
-
+      final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
       final feeStroops = await getCurrentFeeStroops();
       final feeXlm = _fromStroops(feeStroops);
 
-      final senderXlmBal = await getXlmBalance(kp.accountId);
+      final senderXlmBal = await getXlmBalance(self);
       if (senderXlmBal + 1e-7 < (sendAmountXlm + feeXlm)) {
-        _fail('Insufficient XLM to swap ${_fmt7(sendAmountXlm)} and pay ${_fmt7(feeXlm)} transaction fee.');
+        _fail(
+          'Insufficient XLM to swap ${_fmt7(sendAmountXlm)} and pay ${_fmt7(feeXlm)} transaction fee.',
+        );
       }
 
-      final acc = await _loadAccount(kp.accountId);
+      final acc = await _loadAccount(self);
 
-      final opCount = feeStroops > 0 ? 2 : 1;
-      final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+      final needsFeeOp = feeStroops > 0;
+      final opCount = needsFeeOp ? 2 : 1;
+      final feeXlmNet =
+      await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
 
       final opPath = PathPaymentStrictSendOperationBuilder(
@@ -528,7 +452,7 @@ class StellarWalletService {
         ..setMaxOperationFee(perOpStroops)
         ..addOperation(opPath);
 
-      if (feeStroops > 0) {
+      if (needsFeeOp) {
         tb.addOperation(
           PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
         );
@@ -536,30 +460,18 @@ class StellarWalletService {
       if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
       final tx = tb.build();
-      tx.sign(kp, _network);
+      tx.sign(keyPair, _network);
 
-      try {
-        final res = await sdk.submitTransaction(tx);
-        if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed: ${res.resultXdr}');
-        return res.hash!;
-      } catch (_) {
-        final hash = await _trySorobanSend(tx);
-        if (hash != null) return hash;
-
-        if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode.submitTransaction(tx);
-          if (!res.success) _fail('PathPaymentStrictSend XLM→USDC failed on QuickNode: ${res.resultXdr}');
-          return res.hash!;
-        }
-        rethrow;
-      }
+      final res = await sdk.submitTransaction(tx);
+      if (!res.success) _failSubmit(res, prefix: 'PathPaymentStrictSend XLM→USDC failed');
+      return res.hash!;
     } catch (e) {
       _fail('Failed to swap XLM→USDC', e);
     }
   }
 
   Future<String> swapUsdcToXlm({
-    required String secretSeed,
+    required KeyPair keyPair,
     required double sendAmountUsdc,
     required double minXlmOut,
     String? destination,
@@ -569,31 +481,34 @@ class StellarWalletService {
     if (minXlmOut <= 0) _fail('minXlmOut must be > 0');
 
     try {
-      final kp = KeyPair.fromSecretSeed(secretSeed);
-      final self = kp.accountId;
-      final dest = (destination?.trim().isNotEmpty == true) ? destination!.trim() : self;
+      final self = keyPair.accountId;
+      final dest = (destination?.trim().isNotEmpty == true)
+          ? _toClassicAccountId(destination!.trim())
+          : self;
 
-      await _ensureUsdcTrustlineSelf(secretSeed);
+      await _ensureUsdcTrustlineSelf(keyPair);
 
-      final feeAddr = await getTransactionFeeAddress();
-      KeyPair.fromAccountId(feeAddr);
-
+      final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
       final feeStroops = await getCurrentFeeStroops();
       final feeXlm = _fromStroops(feeStroops);
 
-      final acc = await _loadAccount(kp.accountId);
+      final acc = await _loadAccount(self);
 
-      final opCount = feeStroops > 0 ? 2 : 1;
-      final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+      final needsFeeOp = feeStroops > 0;
+      final opCount = needsFeeOp ? 2 : 1;
+      final feeXlmNet =
+      await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
 
       final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);
 
       if (dest == self) {
+        // Self swap (receive XLM then pay app fee from received XLM)
         if (minXlmOut + 1e-7 < feeXlm) {
-          _fail('minXlmOut too small to cover transaction fee of ${_fmt7(feeXlm)} XLM.');
+          _fail(
+            'minXlmOut too small to cover transaction fee of ${_fmt7(feeXlm)} XLM.',
+          );
         }
-
         final opPath = PathPaymentStrictSendOperationBuilder(
           _usdc,
           _fmt7(sendAmountUsdc),
@@ -608,9 +523,15 @@ class StellarWalletService {
             PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
           );
       } else {
+        // External dest: ensure sender already has fee XLM
         final senderXlmBal = await getXlmBalance(self);
         if (senderXlmBal + 1e-7 < feeXlm) {
-          _fail('Insufficient XLM to pay transaction fee of ${_fmt7(feeXlm)} XLM for external swap.');
+          _fail(
+            'Insufficient XLM to pay transaction fee of ${_fmt7(feeXlm)} XLM for external swap.',
+          );
+        }
+        if (!await _accountExists(dest)) {
+          _fail('Destination account does not exist. Ask recipient to create/fund a Stellar account first.');
         }
 
         final opPath = PathPaymentStrictSendOperationBuilder(
@@ -631,30 +552,19 @@ class StellarWalletService {
       if (memoText?.isNotEmpty == true) tb.addMemo(Memo.text(memoText!));
 
       final tx = tb.build();
-      tx.sign(kp, _network);
+      tx.sign(keyPair, _network);
 
-      try {
-        final res = await sdk.submitTransaction(tx);
-        if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed: ${res.resultXdr}');
-        return res.hash!;
-      } catch (_) {
-        final hash = await _trySorobanSend(tx);
-        if (hash != null) return hash;
-
-        if (_sdkQuickNode != null) {
-          final res = await _sdkQuickNode.submitTransaction(tx);
-          if (!res.success) _fail('PathPaymentStrictSend USDC→XLM failed on QuickNode: ${res.resultXdr}');
-          return res.hash!;
-        }
-        rethrow;
+      final res = await sdk.submitTransaction(tx);
+      if (!res.success) {
+        _failSubmit(res, prefix: 'PathPaymentStrictSend USDC→XLM failed');
       }
+      return res.hash!;
     } catch (e) {
       _fail('Failed to swap USDC→XLM', e);
     }
   }
 
-  // ===== Quotes (Horizon REST: SDF ➜ QuickNode) =====
-
+  // ---------- Quotes ----------
   Future<double?> quoteStrictSend({
     required Asset sourceAsset,
     required String sourceAmount,
@@ -662,11 +572,7 @@ class StellarWalletService {
   }) async {
     String _destAssetToQuery(Asset a) {
       if (a is AssetTypeNative) return 'native';
-      if (a is AssetTypeCreditAlphaNum) {
-        final code = a.code;
-        final issuer = a.issuerId;
-        return '$code:$issuer';
-      }
+      if (a is AssetTypeCreditAlphaNum) return '${a.code}:${a.issuerId}';
       return 'native';
     }
 
@@ -684,7 +590,11 @@ class StellarWalletService {
     };
 
     try {
-      final resp = await _getWithFallback('/paths/strict-send', query: qp, timeout: const Duration(seconds: 20));
+      final resp = await _getWithFallback(
+        '/paths/strict-send',
+        query: qp,
+        timeout: const Duration(seconds: 20),
+      );
       if (resp.statusCode != 200) return null;
 
       final data = json.decode(resp.body) as Map<String, dynamic>;
@@ -698,29 +608,34 @@ class StellarWalletService {
     }
   }
 
-  Future<double?> quoteXlmToUsdc(double sendAmountXlm) => quoteStrictSend(
-    sourceAsset: _xlm,
-    sourceAmount: _fmt7(sendAmountXlm),
-    destinationAssets: [_usdc],
-  );
+  Future<double?> quoteXlmToUsdc(double sendAmountXlm) =>
+      quoteStrictSend(
+        sourceAsset: _xlm,
+        sourceAmount: _fmt7(sendAmountXlm),
+        destinationAssets: [_usdc],
+      );
 
-  Future<double?> quoteUsdcToXlm(double sendAmountUsdc) => quoteStrictSend(
-    sourceAsset: _usdc,
-    sourceAmount: _fmt7(sendAmountUsdc),
-    destinationAssets: [_xlm],
-  );
+  Future<double?> quoteUsdcToXlm(double sendAmountUsdc) =>
+      quoteStrictSend(
+        sourceAsset: _usdc,
+        sourceAmount: _fmt7(sendAmountUsdc),
+        destinationAssets: [_xlm],
+      );
 
   Future<double> estimateNetworkFeeXlm({int opCount = 1, int percentile = 90}) async {
     final ops = opCount <= 0 ? 1 : opCount;
     try {
-      final resp = await _getWithFallback('/fee_stats', timeout: const Duration(seconds: 10));
+      final resp =
+      await _getWithFallback('/fee_stats', timeout: const Duration(seconds: 10));
       if (resp.statusCode == 200) {
         final data = json.decode(resp.body) as Map<String, dynamic>;
 
-        final base = int.tryParse('${data['last_ledger_base_fee'] ?? '100'}') ?? 100;
+        final base =
+            int.tryParse('${data['last_ledger_base_fee'] ?? '100'}') ?? 100;
         final fc = (data['fee_charged'] as Map?) ?? const {};
         final p = percentile.clamp(10, 99);
-        final perTxStroops = int.tryParse('${fc['p$p'] ?? fc['p50'] ?? base}') ?? base;
+        final perTxStroops =
+            int.tryParse('${fc['p$p'] ?? fc['p50'] ?? base}') ?? base;
 
         var perOpStroops = (perTxStroops / ops).ceil();
         final maxReasonable = base * 50;
@@ -731,15 +646,11 @@ class StellarWalletService {
         return totalStroops * 1e-7;
       }
     } catch (_) {}
+    // Fallback: 200 stroops/op
     return (200 * (opCount <= 0 ? 1 : opCount)) * 1e-7;
   }
 
-  // ===== Federation =====
-  Future<FederationResponse> resolveFederationAddress(String stellarAddress) =>
-      Federation.resolveStellarAddress(stellarAddress);
-
-  // ===== Streaming (SSE) & helpers (unchanged logic, but using usdcIssuer) =====
-
+  // ---------- Streams ----------
   Stream<T> _sseWithFallback<T>(Stream<T> Function(StellarSDK s) build) {
     final controller = StreamController<T>();
     StreamSubscription<T>? sub;
@@ -754,7 +665,7 @@ class StellarWalletService {
             try {
               await sub?.cancel();
             } catch (_) {}
-            await _start(_sdkQuickNode);
+            await _start(_sdkQuickNode!);
           } else {
             controller.addError(e, st);
             await controller.close();
@@ -779,9 +690,11 @@ class StellarWalletService {
           .forAccount(accountId)
           .cursor("now")
           .stream()
-          .where((resp) => resp is PaymentOperationResponse && resp.transactionSuccessful)
+          .where((resp) =>
+      resp is PaymentOperationResponse && resp.transactionSuccessful)
           .cast<PaymentOperationResponse>();
     }
+
     return _sseWithFallback<PaymentOperationResponse>(_build);
   }
 
@@ -850,7 +763,8 @@ class StellarWalletService {
 
         int base = 100;
         try {
-          final resp = await _getWithFallback('/fee_stats', timeout: const Duration(seconds: 6));
+          final resp =
+          await _getWithFallback('/fee_stats', timeout: const Duration(seconds: 6));
           if (resp.statusCode == 200) {
             final data = json.decode(resp.body) as Map<String, dynamic>;
             base = int.tryParse('${data['last_ledger_base_fee'] ?? '100'}') ?? 100;
@@ -875,17 +789,18 @@ class StellarWalletService {
 
     push(DateTime.now());
 
-    Stream<void> _ledgerStream(StellarSDK s) => s.ledgers.cursor("now").stream().map((_) => null);
+    Stream<void> _ledgerStream(StellarSDK s) =>
+        s.ledgers.cursor("now").stream().map((_) => null);
 
-    final ledSub = _sseWithFallback<void>(_ledgerStream).listen((_) {
-      push(DateTime.now());
-    }, onError: controller.addError, onDone: controller.close);
+    final ledSub =
+    _sseWithFallback<void>(_ledgerStream).listen((_) => push(DateTime.now()),
+        onError: controller.addError, onDone: controller.close);
 
     Timer? sorobanTicker;
     if (_soroban != null) {
       sorobanTicker = Timer.periodic(const Duration(seconds: 8), (_) async {
         try {
-          final seq = await _soroban.getLatestLedgerSequence();
+          final seq = await _soroban!.getLatestLedgerSequence();
           if (seq == null) return;
           if (lastSorobanLedger == null || seq > lastSorobanLedger!) {
             lastSorobanLedger = seq;
@@ -902,7 +817,9 @@ class StellarWalletService {
     return controller.stream;
   }
 
-  TradesRequestBuilder _tradesForPairOn(StellarSDK s, Asset base, Asset counter) {
+  // ---------- Trades / Prices ----------
+  TradesRequestBuilder _tradesForPairOn(
+      StellarSDK s, Asset base, Asset counter) {
     String typeOf(Asset a) {
       if (a is AssetTypeNative) return 'native';
       if (a is AssetTypeCreditAlphaNum4) return 'credit_alphanum4';
@@ -933,16 +850,16 @@ class StellarWalletService {
         double? price;
         final ba = double.tryParse('${t.baseAmount}');
         final ca = double.tryParse('${t.counterAmount}');
-        if (ba != null && ba > 0 && ca != null) {
-          price = ca / ba; // USDC per XLM
-        }
+        if (ba != null && ba > 0 && ca != null) price = ca / ba; // USDC per XLM
         price ??= double.tryParse('${t.price}');
         if (price != null && price > 0) {
+          // PairPrice expects: usdcPerXlm, xlmPerUsdc
           return PairPrice(price, DateTime.now());
         }
         throw StateError('Invalid trade price');
       });
     }
+
     return _sseWithFallback<PairPrice>(_build);
   }
 
@@ -952,11 +869,16 @@ class StellarWalletService {
   Stream<double> quoteUsdcToXlmStream(double sendAmountUsdc) =>
       xlmUsdcPriceStream().map((p) => sendAmountUsdc * p.xlmPerUsdc);
 
-  @Deprecated('Use paymentsStream(accountId).listen(...) and cancel on dispose.')
-  void streamPayments(
-      String accountId,
-      void Function(PaymentOperationResponse) onPayment,
-      ) {
-    paymentsStream(accountId).listen(onPayment);
+  // ---------- Error helpers ----------
+  Never _failSubmit(
+      SubmitTransactionResponse res, {
+        String prefix = 'Transaction failed',
+      }) {
+    final code = res.extras?.resultCodes?.transactionResultCode ?? 'tx_failed';
+    final ops = res.extras?.resultCodes?.operationsResultCodes?.join(', ');
+    final hash = res.hash;
+    final msg =
+        '$prefix ($code${ops != null ? '; ops: $ops' : ''}${hash != null ? '; hash: $hash' : ''})';
+    _fail(msg);
   }
 }

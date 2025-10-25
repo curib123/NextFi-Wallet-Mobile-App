@@ -1,7 +1,7 @@
 // lib/Screen/home.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Services/profit_address_vault_secure_storage.dart';
-import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/features/settings/view_model/settings_vm.dart';
+import 'package:next_fi/services/profit_address_vault_secure_storage.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
@@ -10,7 +10,8 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/Services/seed_storage.dart';
+import 'package:next_fi/services/seed_storage.dart';
+
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -19,7 +20,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with WidgetsBindingObserver {
   bool _showSplash = true;
   bool _isLoading = true;
   bool _hasMnemonic = false;
@@ -28,7 +29,37 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    // Apply system theme once at startup.
+    _applySystemThemeToRoot();
+
+    // Also react to platform brightness changes ASAP (in addition to didChangePlatformBrightness).
+    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
+      _applySystemThemeToRoot();
+    };
+
     _boot();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Called by Flutter when platform brightness toggles (e.g., user changes system theme)
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _applySystemThemeToRoot();
+  }
+
+  void _applySystemThemeToRoot() {
+    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final mode = (brightness == Brightness.dark) ? ThemeMode.dark : ThemeMode.light;
+    // Hand off to your app-level theme controller via ThemeBridge.
+    ThemeBridge.apply?.call(mode);
   }
 
   Future<void> _boot() async {

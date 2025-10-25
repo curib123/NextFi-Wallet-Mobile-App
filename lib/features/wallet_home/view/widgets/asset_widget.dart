@@ -298,16 +298,20 @@ class AssetWidget extends StatelessWidget {
           final isUp = priceDelta >= 0;
           final logoUrl = logos[a.id];
 
+          // ── Tile with subtle shadow + rounded corners ──
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              color: Theme.of(context).cardColor,
+              elevation: 2, // subtle lift
+              shadowColor: Colors.black.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: () => _openReceive(context, a),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                   padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   child: Row(
                     children: [
                       _logo(logoUrl),
@@ -512,77 +516,91 @@ class AssetWidget extends StatelessWidget {
     final contentW = (sw - 128).clamp(180.0, sw);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      child: Shimmer.fromColors(
-        baseColor: colors.border.withOpacity(.28),
-        highlightColor: colors.border.withOpacity(.12),
-        child: Padding(
-          // Match real tile inner padding
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Row(
-            children: [
-              // Logo (36, r=8)
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Shimmer.fromColors(
+          baseColor: colors.border.withOpacity(.28),
+          highlightColor: colors.border.withOpacity(.12),
+          child: Padding(
+            // Match real tile inner padding
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: Row(
+              children: [
+                // Logo (36, r=8)
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-              // Left texts (name, balance, price per coin)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // Left texts (name, balance, price per coin)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name line (bold in real)
+                      block(contentW * 0.38, 14, r: 4),
+                      const SizedBox(height: 6),
+                      // Balance amount + symbol
+                      block(contentW * 0.28, 12, r: 4),
+                      const SizedBox(height: 6),
+                      // Price per coin line
+                      block(contentW * 0.30, 12, r: 4),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Right column (fiat total, % badge, price delta)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Name line (bold in real)
-                    block(contentW * 0.38, 14, r: 4),
+                    // Fiat total (bold in real)
+                    block(72, 16, r: 4),
                     const SizedBox(height: 6),
-                    // Balance amount + symbol
-                    block(contentW * 0.28, 12, r: 4),
+
+                    // % badge pill (icon + number in real)
+                    Container(
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // tiny icon stub
+                          block(10, 10, r: 3),
+                          const SizedBox(width: 6),
+                          block(36, 10, r: 3),
+                        ],
+                      ),
+                    ),
+
                     const SizedBox(height: 6),
-                    // Price per coin line
-                    block(contentW * 0.30, 12, r: 4),
+                    // Price delta per coin
+                    block(64, 12, r: 4),
                   ],
                 ),
-              ),
-
-              const SizedBox(width: 12),
-
-              // Right column (fiat total, % badge, price delta)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Fiat total (bold in real)
-                  block(72, 16, r: 4),
-                  const SizedBox(height: 6),
-
-                  // % badge pill (icon + number in real)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // tiny icon stub
-                        block(10, 10, r: 3),
-                        const SizedBox(width: 6),
-                        block(36, 10, r: 3),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-                  // Price delta per coin
-                  block(64, 12, r: 4),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

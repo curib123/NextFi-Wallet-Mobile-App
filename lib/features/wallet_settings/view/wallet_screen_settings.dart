@@ -6,7 +6,6 @@ import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
-import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
 import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
