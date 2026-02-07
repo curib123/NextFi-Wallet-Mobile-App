@@ -37,7 +37,7 @@ dependencies:
   google_fonts: ^6.2.1
   animate_do: ^3.0.2
   lucide_icons: ^0.257.0
-  web3dart: ^2.7.3
+  web3dart: ^3.0.2
   flutter_secure_storage: ^9.2.4
   provider: 6.1.5
   fl_chart: ^1.0.0
@@ -48,12 +48,9 @@ dependencies:
   shimmer: ^3.0.0
   local_auth: ^2.3.0
   flutter_phoenix: ^1.1.1
-  stellar_flutter_sdk: ^2.1.2
-  bip39: ^1.0.6
-  crypto: ^3.0.3
+  stellar_flutter_sdk: ^3.0.1
   mobile_scanner: ^7.0.1
   url_launcher: ^6.3.0
-  ed25519_hd_key: ^2.3.0
 
 
 

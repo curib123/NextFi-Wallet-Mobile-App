@@ -1,3 +1,4 @@
+// lib/features/swap/model/swap_state.dart
 import 'swap_dir.dart';
 
 /// Internal sentinel used to mean "no change" in copyWith for nullable fields.
@@ -40,26 +41,28 @@ class SwapState {
   /// - Explicitly clearing nullable fields by passing `null`
   SwapState copyWith({
     bool? loading,
-    Object? error = _noChange,       // String? or _noChange
-    Object? accountId = _noChange,   // String? or _noChange
+    Object? error = _noChange,
+    Object? accountId = _noChange,
     double? xlmBal,
     double? usdcBal,
-    Object? estReceive = _noChange,  // double? or _noChange
-    Object? feeXlm = _noChange,      // double? or _noChange
+    Object? estReceive = _noChange,
+    Object? feeXlm = _noChange,
     bool? needsTrustline,
     SwapDir? dir,
   }) {
     return SwapState(
       loading: loading ?? this.loading,
       error: identical(error, _noChange) ? this.error : error as String?,
-      accountId:
-      identical(accountId, _noChange) ? this.accountId : accountId as String?,
+      accountId: identical(accountId, _noChange)
+          ? this.accountId
+          : accountId as String?,
       xlmBal: xlmBal ?? this.xlmBal,
       usdcBal: usdcBal ?? this.usdcBal,
       estReceive: identical(estReceive, _noChange)
           ? this.estReceive
           : estReceive as double?,
-      feeXlm: identical(feeXlm, _noChange) ? this.feeXlm : feeXlm as double?,
+      feeXlm:
+      identical(feeXlm, _noChange) ? this.feeXlm : feeXlm as double?,
       needsTrustline: needsTrustline ?? this.needsTrustline,
       dir: dir ?? this.dir,
     );

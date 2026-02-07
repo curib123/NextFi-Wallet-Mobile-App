@@ -1,3 +1,4 @@
+// lib/features/seed_phrases/view/seed_phrase_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
@@ -22,16 +23,19 @@ import '../model/seed_phrase_state.dart';
 
 class SeedPhraseScreen extends StatefulWidget {
   const SeedPhraseScreen({super.key});
+
   @override
   State<SeedPhraseScreen> createState() => _SeedPhraseScreenState();
 }
 
-class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBindingObserver {
+class _SeedPhraseScreenState extends State<SeedPhraseScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final colors = AppColor.of(context);
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
@@ -51,19 +55,27 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       if (mounted) context.read<SeedPhraseVM>().forceHide();
     }
   }
 
-  // —— helpers ——
+  // ──────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ──────────────────────────────────────────────────────────────────────────
+
   Future<void> _copyAll(BuildContext context, String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     HapticFeedback.lightImpact();
+    if (!context.mounted) return;
     final colors = AppColor.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Copied seed phrase (keep it safe!)', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Copied seed phrase (keep it safe!)',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: colors.primary,
         behavior: SnackBarBehavior.floating,
       ),
@@ -72,131 +84,63 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
 
   Future<void> _showCopyGuide(BuildContext context, SeedPhraseState s) async {
     if (s.obscured) {
-      showFloatingSnackBar(context, message: "Reveal the phrase first to copy.", type: SnackBarType.info);
+      showFloatingSnackBar(
+        context,
+        message: "Reveal the phrase first to copy.",
+        type: SnackBarType.info,
+      );
       return;
     }
     final colors = AppColor.of(context);
-    final ok = await showModalBottomSheet<bool>(
+    final ok = await _showActionSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.surface,
-      showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 8,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(children: [
-              Icon(LucideIcons.copy, color: colors.textPrimary, size: 20),
-              const SizedBox(width: 8),
-              Text('Copy recovery phrase?', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-            ]),
-            const SizedBox(height: 12),
-            _guideRow(colors, LucideIcons.shieldAlert, "Never share your phrase",
-                "Anyone with this phrase can control your funds."),
-            const SizedBox(height: 10),
-            _guideRow(colors, LucideIcons.phoneOff, "Avoid screenshots",
-                "Screenshots may be backed up to cloud services."),
-            const SizedBox(height: 10),
-            _guideRow(colors, LucideIcons.eye, "Ensure privacy",
-                "Make sure no one is looking at your screen."),
-            const SizedBox(height: 16),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colors.textSecondary,
-                    side: BorderSide(color: colors.border.withOpacity(.8)),
-                  ),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  style: ButtonStyle(
-                    backgroundColor: MaterialStatePropertyAll(colors.primary),
-                    foregroundColor: const MaterialStatePropertyAll(Colors.white),
-                  ),
-                  child: const Text('Copy anyway'),
-                ),
-              ),
-            ]),
-          ],
-        ),
+      icon: LucideIcons.copy,
+      title: 'Copy recovery phrase?',
+      confirmLabel: 'Copy anyway',
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _guideRow(colors, LucideIcons.shieldAlert, "Never share your phrase",
+              "Anyone with this phrase can control your funds."),
+          const SizedBox(height: 10),
+          _guideRow(colors, LucideIcons.phoneOff, "Avoid screenshots",
+              "Screenshots may be backed up to cloud services."),
+          const SizedBox(height: 10),
+          _guideRow(colors, LucideIcons.eye, "Ensure privacy",
+              "Make sure no one is looking at your screen."),
+        ],
       ),
     );
-    if (ok == true) await _copyAll(context, s.mnemonic);
+    if (ok == true && context.mounted) {
+      await _copyAll(context, s.mnemonic);
+    }
   }
 
-  Future<void> _confirmRegenerate(BuildContext context, {int? wordCount}) async {
+  Future<void> _confirmRegenerate(
+      BuildContext context, {
+        int? wordCount,
+      }) async {
     final colors = AppColor.of(context);
-    final ok = await showModalBottomSheet<bool>(
+    final ok = await _showActionSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.surface,
-      showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 8,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(children: [
-              Icon(LucideIcons.refreshCw, color: colors.textPrimary, size: 20),
-              const SizedBox(width: 8),
-              Text('Generate a new phrase', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-            ]),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'This will replace the current recovery phrase with a new one. '
-                    'Make sure you have securely stored the current phrase if you still need it.',
-                style: TextStyle(color: colors.textSecondary, height: 1.45),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colors.textSecondary,
-                    side: BorderSide(color: colors.border.withOpacity(.8)),
-                  ),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  style: ButtonStyle(
-                    backgroundColor: MaterialStatePropertyAll(colors.primary),
-                    foregroundColor: const MaterialStatePropertyAll(Colors.white),
-                  ),
-                  child: const Text('Generate'),
-                ),
-              ),
-            ]),
-          ],
+      icon: LucideIcons.refreshCw,
+      title: 'Generate a new phrase',
+      confirmLabel: 'Generate',
+      body: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'This will replace the current recovery phrase with a new one. '
+              'Make sure you have securely stored the current phrase if you '
+              'still need it.',
+          style: TextStyle(color: colors.textSecondary, height: 1.45),
         ),
       ),
     );
-    if (ok == true) {
-      await context.read<SeedPhraseVM>().regenerate(wordCountOverride: wordCount);
+    if (ok == true && context.mounted) {
+      await context
+          .read<SeedPhraseVM>()
+          .regenerate(wordCountOverride: wordCount);
+      if (!context.mounted) return;
       final chosen = wordCount ?? context.read<SeedPhraseVM>().wordCount;
       showFloatingSnackBar(
         context,
@@ -206,15 +150,24 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
     }
   }
 
-  Future<void> _openChecklist(BuildContext context, SeedPhraseVM vm, SeedPhraseState s) async {
+  Future<void> _openChecklist(
+      BuildContext context,
+      SeedPhraseVM vm,
+      SeedPhraseState s,
+      ) async {
     if (s.obscured) {
-      showFloatingSnackBar(context, message: "Reveal your recovery phrase first.", type: SnackBarType.warning);
+      showFloatingSnackBar(
+        context,
+        message: "Reveal your recovery phrase first.",
+        type: SnackBarType.warning,
+      );
       return;
     }
     if (s.loading) return;
 
     final colors = AppColor.of(context);
     bool a1 = s.ack1, a2 = s.ack2;
+
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -233,15 +186,12 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(children: [
-                  Icon(LucideIcons.shieldCheck, color: colors.textPrimary, size: 20),
-                  const SizedBox(width: 8),
-                  Text("Security checklist",
-                      style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
-                ]),
+                _sheetHeader(
+                    colors, LucideIcons.shieldCheck, "Security checklist"),
                 const SizedBox(height: 10),
                 ConfirmTile(
-                  title: "I wrote my recovery phrase on paper (or stored it offline).",
+                  title:
+                  "I wrote my recovery phrase on paper (or stored it offline).",
                   icon: LucideIcons.pencil,
                   value: a1,
                   onChanged: (v) => setS(() => a1 = v),
@@ -249,47 +199,29 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                 ),
                 const SizedBox(height: 10),
                 ConfirmTile(
-                  title: "I understand NextFi cannot help recover this phrase.",
+                  title:
+                  "I understand NextFi cannot help recover this phrase.",
                   icon: LucideIcons.shield,
                   value: a2,
                   onChanged: (v) => setS(() => a2 = v),
                   accent: colors.success,
                 ),
                 const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colors.textSecondary,
-                        side: BorderSide(color: colors.border.withOpacity(.8)),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: ready ? () => Navigator.pop(ctx, true) : null,
-                      style: ButtonStyle(
-                        backgroundColor: MaterialStateProperty.resolveWith(
-                              (st) => st.contains(MaterialState.disabled)
-                              ? colors.primary.withOpacity(.45)
-                              : colors.primary,
-                        ),
-                        foregroundColor: const MaterialStatePropertyAll(Colors.white),
-                      ),
-                      child: const Text('Confirm & Secure'),
-                    ),
-                  ),
-                ]),
+                _sheetActions(
+                  colors: colors,
+                  confirmLabel: 'Confirm & Secure',
+                  confirmEnabled: ready,
+                  onCancel: () => Navigator.pop(ctx, false),
+                  onConfirm: () => Navigator.pop(ctx, true),
+                ),
               ],
             ),
           );
         },
       ),
     );
-    if (ok == true) {
+
+    if (ok == true && mounted) {
       vm.setAck1(a1);
       vm.setAck2(a2);
       await _startAuthFlow(context, vm);
@@ -297,7 +229,6 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
   }
 
   Future<void> _startAuthFlow(BuildContext context, SeedPhraseVM vm) async {
-    final s = vm.state;
     if (!vm.readyToSecure) return;
 
     await Navigator.of(context).push(
@@ -310,20 +241,21 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
               final ok = await vm.saveSecurely();
               if (!ok) {
                 final err = vm.state.error;
-                if (err != null && err.isNotEmpty) {
-                  showFloatingSnackBar(context, message: err, type: SnackBarType.error);
+                if (err != null && err.isNotEmpty && mounted) {
+                  showFloatingSnackBar(context,
+                      message: err, type: SnackBarType.error);
                 }
                 return;
               }
+              if (!mounted) return;
               context.read<TabVM>().setTab(1);
               if (Navigator.of(context).canPop()) Navigator.of(context).pop();
               Phoenix.rebirth(context);
               restarted = true;
             } catch (e) {
-              showFloatingSnackBar(context, message: "Unexpected error: $e", type: SnackBarType.error);
-            } finally {
-              if (!restarted && mounted) {
-                // VM already handles loading flags
+              if (mounted) {
+                showFloatingSnackBar(context,
+                    message: "Unexpected error: $e", type: SnackBarType.error);
               }
             }
           },
@@ -331,6 +263,10 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
       ),
     );
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Build
+  // ──────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -343,40 +279,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
 
         return Scaffold(
           backgroundColor: colors.surface,
-          appBar: AppBar(
-            elevation: 0,
-            backgroundColor: colors.surface,
-            leading: IconButton(
-              icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Text(
-              'Your Recovery Phrase',
-              style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
-            ),
-            centerTitle: false,
-            actions: [
-              IconButton(
-                tooltip: 'Copy all',
-                onPressed: s.obscured ? null : () => _showCopyGuide(context, s),
-                icon: Icon(
-                  LucideIcons.copy,
-                  color: s.obscured ? colors.textSecondary.withOpacity(.45) : colors.textPrimary,
-                ),
-              ),
-              IconButton(
-                tooltip: s.obscured ? 'Reveal phrase' : 'Hide phrase',
-                onPressed: vm.toggleObscure,
-                icon: Icon(s.obscured ? LucideIcons.eye : LucideIcons.eyeOff, color: colors.textPrimary),
-              ),
-              IconButton(
-                tooltip: 'Generate new phrase',
-                onPressed: () => _confirmRegenerate(context),
-                icon: Icon(LucideIcons.refreshCw, color: colors.textPrimary),
-              ),
-              const SizedBox(width: 4),
-            ],
-          ),
+          appBar: _buildAppBar(colors, vm, s),
           body: SafeArea(
             child: Column(
               children: [
@@ -386,14 +289,18 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        FadeInDown(duration: const Duration(milliseconds: 450), child: const WarningBox()),
+                        FadeInDown(
+                          duration: const Duration(milliseconds: 450),
+                          child: const WarningBox(),
+                        ),
                         const SizedBox(height: 18),
 
-                        // ——— 12/24 word picker ———
+                        // 12 / 24 word picker
                         WordCountPicker(
                           current: vm.wordCount,
                           loading: s.loading,
-                          onPick: (count) => _confirmRegenerate(context, wordCount: count),
+                          onPick: (count) =>
+                              _confirmRegenerate(context, wordCount: count),
                         ),
                         const SizedBox(height: 12),
 
@@ -402,16 +309,19 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                           child: MetaHeader(
                             wordCount: wordCount,
                             obscured: s.obscured,
-                            onCopy: s.obscured ? null : () => _showCopyGuide(context, s),
+                            onCopy: s.obscured
+                                ? null
+                                : () => _showCopyGuide(context, s),
                           ),
                         ),
                         const SizedBox(height: 10),
                         FadeInUp(
                           duration: const Duration(milliseconds: 650),
                           child: PhraseCard(
-                            words: s.obscured ? List.filled(s.words.length, "••••••") : s.words,
+                            words: s.obscured
+                                ? List.filled(s.words.length, "••••••")
+                                : s.words,
                             obscured: s.obscured,
-                            // Use VM's selection for a reliable flag
                             isTwentyFour: vm.wordCount == 24,
                             onTapObscured: vm.toggleObscure,
                           ),
@@ -420,20 +330,27 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                         FadeIn(
                           duration: const Duration(milliseconds: 500),
                           child: Text(
-                            "💡 Tip: Write it down on paper and store offline. Never share it. Screenshots can be risky.",
+                            "💡 Tip: Write it down on paper and store offline. "
+                                "Never share it. Screenshots can be risky.",
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: colors.textSecondary, fontSize: 13, height: 1.5),
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 13,
+                              height: 1.5,
+                            ),
                           ),
                         ),
                         if (s.error != null && s.error!.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          Text(s.error!, style: const TextStyle(color: Colors.red)),
+                          Text(s.error!,
+                              style: const TextStyle(color: Colors.red)),
                         ],
                       ],
                     ),
                   ),
                 ),
-                Divider(color: colors.border.withOpacity(0.2), height: 1),
+                Divider(
+                    color: colors.border.withValues(alpha: 0.2), height: 1),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                   child: Column(
@@ -441,7 +358,9 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
                       CustomButton(
                         text: s.loading ? "Securing..." : "Secure & Continue",
                         icon: LucideIcons.arrowRight,
-                        type: readyVisual ? ButtonType.filled : ButtonType.outlined,
+                        type: readyVisual
+                            ? ButtonType.filled
+                            : ButtonType.outlined,
                         onPressed: () => _openChecklist(context, vm, s),
                       ),
                       const SizedBox(height: 10),
@@ -462,7 +381,56 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
     );
   }
 
-  Widget _guideRow(AppColor colors, IconData icon, String title, String subtitle) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // UI components
+  // ──────────────────────────────────────────────────────────────────────────
+
+  PreferredSizeWidget _buildAppBar(
+      AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+    return AppBar(
+      elevation: 0,
+      backgroundColor: colors.surface,
+      leading: IconButton(
+        icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Text(
+        'Your Recovery Phrase',
+        style: TextStyle(
+            color: colors.textPrimary, fontWeight: FontWeight.w700),
+      ),
+      centerTitle: false,
+      actions: [
+        IconButton(
+          tooltip: 'Copy all',
+          onPressed: s.obscured ? null : () => _showCopyGuide(context, s),
+          icon: Icon(
+            LucideIcons.copy,
+            color: s.obscured
+                ? colors.textSecondary.withValues(alpha: 0.45)
+                : colors.textPrimary,
+          ),
+        ),
+        IconButton(
+          tooltip: s.obscured ? 'Reveal phrase' : 'Hide phrase',
+          onPressed: vm.toggleObscure,
+          icon: Icon(
+            s.obscured ? LucideIcons.eye : LucideIcons.eyeOff,
+            color: colors.textPrimary,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Generate new phrase',
+          onPressed: () => _confirmRegenerate(context),
+          icon: Icon(LucideIcons.refreshCw, color: colors.textPrimary),
+        ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  Widget _guideRow(
+      AppColor colors, IconData icon, String title, String subtitle) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -470,18 +438,111 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen> with WidgetsBinding
         const SizedBox(width: 10),
         Expanded(
           child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: "$title\n",
-                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
-                ),
-                TextSpan(text: subtitle, style: TextStyle(color: colors.textSecondary, height: 1.45)),
-              ],
-            ),
+            TextSpan(children: [
+              TextSpan(
+                text: "$title\n",
+                style: TextStyle(
+                    color: colors.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              TextSpan(
+                text: subtitle,
+                style: TextStyle(color: colors.textSecondary, height: 1.45),
+              ),
+            ]),
           ),
         ),
       ],
     );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Shared bottom-sheet helpers
+  // ──────────────────────────────────────────────────────────────────────────
+
+  Future<T?> _showActionSheet<T>({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required String confirmLabel,
+    required Widget body,
+  }) {
+    final colors = AppColor.of(context);
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 8,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _sheetHeader(colors, icon, title),
+            const SizedBox(height: 12),
+            body,
+            const SizedBox(height: 16),
+            _sheetActions(
+              colors: colors,
+              confirmLabel: confirmLabel,
+              onCancel: () => Navigator.pop(ctx, false as T),
+              onConfirm: () => Navigator.pop(ctx, true as T),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetHeader(AppColor colors, IconData icon, String title) {
+    return Row(children: [
+      Icon(icon, color: colors.textPrimary, size: 20),
+      const SizedBox(width: 8),
+      Text(
+        title,
+        style: TextStyle(
+            color: colors.textPrimary, fontWeight: FontWeight.w700),
+      ),
+    ]);
+  }
+
+  Widget _sheetActions({
+    required AppColor colors,
+    required String confirmLabel,
+    required VoidCallback onCancel,
+    required VoidCallback onConfirm,
+    bool confirmEnabled = true,
+  }) {
+    return Row(children: [
+      Expanded(
+        child: OutlinedButton(
+          onPressed: onCancel,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colors.textSecondary,
+            side: BorderSide(color: colors.border.withValues(alpha: 0.8)),
+          ),
+          child: const Text('Cancel'),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: FilledButton(
+          onPressed: confirmEnabled ? onConfirm : null,
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.disabled)
+                  ? colors.primary.withValues(alpha: 0.45)
+                  : colors.primary,
+            ),
+            foregroundColor: const WidgetStatePropertyAll(Colors.white),
+          ),
+          child: Text(confirmLabel),
+        ),
+      ),
+    ]);
   }
 }

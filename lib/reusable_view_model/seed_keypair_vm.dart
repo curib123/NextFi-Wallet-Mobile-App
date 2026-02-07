@@ -1,66 +1,53 @@
 // lib/reusable_view_model/seed_keypair_vm.dart
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:bip39/bip39.dart' as bip39;
-import 'package:ed25519_hd_key/ed25519_hd_key.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/services/seed_storage.dart';
 import 'package:next_fi/reusable_model/wallet_meta_model.dart';
 
-/// Helper for deterministic derivation (BIP-39 -> ed25519 using BIP-44 for Stellar).
+/// Helper for deterministic derivation using the SDK's built-in SEP-0005 Wallet.
+///
+/// Uses `stellar_flutter_sdk` v3's [Wallet] class which implements
+/// BIP-39 mnemonic handling and SLIP-0010 / BIP-44 key derivation
+/// (path: m/44'/148'/index') internally — no external `bip39` or
+/// `ed25519_hd_key` packages required.
 class StellarDerivation {
-  /// Derive a Stellar KeyPair from a BIP-39 mnemonic.
+  /// Derive a Stellar [KeyPair] from a BIP-39 mnemonic.
   ///
-  /// Default path: m/44'/148'/0' (Stellar coin type 148; account 0).
-  /// For multiple accounts/addresses, bump [account] and/or [index] (both hardened).
+  /// The SDK's [Wallet] class handles:
+  ///   1. Mnemonic validation
+  ///   2. BIP-39 seed generation (PBKDF2-HMAC-SHA512, 2048 iterations)
+  ///   3. SLIP-0010 derivation on path m/44'/148'/[index]'
+  ///
+  /// [index] defaults to 0 (first Stellar account).
   static Future<KeyPair> deriveKeyPairFromMnemonic(
       String mnemonic, {
-        int account = 0,
-        int? index, // optional hardened child
+        int index = 0,
         String passphrase = '',
       }) async {
-    final m = mnemonic.trim();
-    if (!bip39.validateMnemonic(m)) {
-      throw ArgumentError('Invalid mnemonic.');
-    }
-
-    // 1) BIP-39 -> seed bytes
-    final Uint8List seed = bip39.mnemonicToSeed(m, passphrase: passphrase);
-
-    // 2) Derive ed25519 key via BIP-44: m/44'/148'/account'[/index']
-    final segments = <String>["m", "44'", "148'", "$account'"];
-    if (index != null) segments.add("$index'");
-    final path = segments.join('/');
-
-    final KeyData keyData = await ED25519_HD_KEY.derivePath(path, seed);
-    final Uint8List sk = Uint8List.fromList(keyData.key); // 32-byte ed25519 secret seed
-
-    // 3) Build KeyPair (SDK differences handled)
-    try {
-      // Available in newer stellar_flutter_sdk
-      return KeyPair.fromSecretSeedList(sk);
-    } catch (_) {
-      // Fallback for older SDK: encode raw 32-byte seed to StrKey then import
-      final String secret = StrKey.encodeStellarSecretSeed(sk);
-      return KeyPair.fromSecretSeed(secret);
-    }
-  }
-
-  /// Convenience: derive only the public account ID.
-  static Future<String> deriveAccountId(
-      String mnemonic, {
-        int account = 0,
-        int? index,
-        String passphrase = '',
-      }) async {
-    final kp = await deriveKeyPairFromMnemonic(
-      mnemonic,
-      account: account,
-      index: index,
+    final wallet = await Wallet.from(
+      mnemonic.trim(),
       passphrase: passphrase,
     );
-    return kp.accountId;
+    return wallet.getKeyPair(index: index);
+  }
+
+  /// Convenience: derive only the public account ID (G…).
+  static Future<String> deriveAccountId(
+      String mnemonic, {
+        int index = 0,
+        String passphrase = '',
+      }) async {
+    final wallet = await Wallet.from(
+      mnemonic.trim(),
+      passphrase: passphrase,
+    );
+    return wallet.getAccountId(index: index);
+  }
+
+  /// Validate a mnemonic phrase using the SDK's built-in validator.
+  static Future<bool> validateMnemonic(String mnemonic) async {
+    return Wallet.validate(mnemonic.trim());
   }
 }
 
@@ -76,9 +63,8 @@ class SeedKeypairVM extends ChangeNotifier {
   String? _accountId; // cached public address for quick UI access
   DateTime? _lastSyncedAt;
 
-  // Optional derivation parameters (default Stellar: account=0, no index)
-  int _account = 0;
-  int? _index;
+  // Derivation index (Stellar BIP-44 account index, default 0).
+  int _index = 0;
 
   bool get isLoading => _isLoading;
   bool get isBusy => _isBusy;
@@ -86,21 +72,12 @@ class SeedKeypairVM extends ChangeNotifier {
   String? get activeWalletId => _activeId;
   WalletMetaModel? get meta => _meta;
 
-  /// Public address (G...)
+  /// Public address (G…)
   String? get accountId => _accountId;
 
-  int get account => _account;
-  int? get index => _index;
+  int get index => _index;
 
-  set account(int v) {
-    if (_account != v) {
-      _account = v;
-      _accountId = null; // invalidate cache until rederived
-      _safeNotify();
-    }
-  }
-
-  set index(int? v) {
+  set index(int v) {
     if (_index != v) {
       _index = v;
       _accountId = null; // invalidate cache until rederived
@@ -122,23 +99,7 @@ class SeedKeypairVM extends ChangeNotifier {
 
       // If we don't have a cached public address, derive once and persist.
       if (_accountId == null) {
-        final mnemonic = await SeedStorage.getActiveSeed();
-        if (mnemonic != null && mnemonic.trim().isNotEmpty) {
-          final pub = await StellarDerivation.deriveAccountId(
-            mnemonic,
-            account: _account,
-            index: _index,
-          );
-          _accountId = pub;
-          _lastSyncedAt = DateTime.now();
-
-          // Save to meta for faster future loads (best-effort).
-          final id = _activeId;
-          if (id != null) {
-            await SeedStorage.setWalletPublicAddress(id, pub);
-            _meta = await SeedStorage.getActiveWalletMeta(); // refresh meta cache
-          }
-        }
+        await _deriveAndCachePublicAddress();
       }
     } finally {
       _isLoading = false;
@@ -157,22 +118,7 @@ class SeedKeypairVM extends ChangeNotifier {
       _accountId = _meta?.publicAddress ?? _accountId;
 
       if (_accountId == null) {
-        final mnemonic = await SeedStorage.getActiveSeed();
-        if (mnemonic != null && mnemonic.trim().isNotEmpty) {
-          final pub = await StellarDerivation.deriveAccountId(
-            mnemonic,
-            account: _account,
-            index: _index,
-          );
-          _accountId = pub;
-          _lastSyncedAt = DateTime.now();
-
-          final id = _activeId;
-          if (id != null) {
-            await SeedStorage.setWalletPublicAddress(id, pub);
-            _meta = await SeedStorage.getActiveWalletMeta();
-          }
-        }
+        await _deriveAndCachePublicAddress();
       }
     } finally {
       _isBusy = false;
@@ -180,7 +126,7 @@ class SeedKeypairVM extends ChangeNotifier {
     }
   }
 
-  /// Switch ACTIVE wallet (no pruning — aligns with your SeedStorage semantics).
+  /// Switch ACTIVE wallet (no pruning — aligns with SeedStorage semantics).
   Future<bool> switchTo(String id) async {
     if (_isBusy) return false;
     _isBusy = true;
@@ -194,20 +140,8 @@ class SeedKeypairVM extends ChangeNotifier {
       _accountId = _meta?.publicAddress;
       _lastSyncedAt = null;
 
-      // Derive public if missing
       if (_accountId == null) {
-        final mnemonic = await SeedStorage.getActiveSeed();
-        if (mnemonic != null && mnemonic.trim().isNotEmpty) {
-          _accountId = await StellarDerivation.deriveAccountId(
-            mnemonic,
-            account: _account,
-            index: _index,
-          );
-          if (_activeId != null) {
-            await SeedStorage.setWalletPublicAddress(_activeId!, _accountId!);
-            _meta = await SeedStorage.getActiveWalletMeta();
-          }
-        }
+        await _deriveAndCachePublicAddress();
       }
       return true;
     } finally {
@@ -216,7 +150,7 @@ class SeedKeypairVM extends ChangeNotifier {
     }
   }
 
-  /// Ephemerally derive the KeyPair from the ACTIVE wallet’s mnemonic.
+  /// Ephemerally derive the KeyPair from the ACTIVE wallet's mnemonic.
   /// Does NOT keep the mnemonic or private key in member fields.
   Future<KeyPair> deriveKeyPair({String passphrase = ''}) async {
     final mnemonic = await SeedStorage.getActiveSeed();
@@ -225,7 +159,6 @@ class SeedKeypairVM extends ChangeNotifier {
     }
     final kp = await StellarDerivation.deriveKeyPairFromMnemonic(
       mnemonic,
-      account: _account,
       index: _index,
       passphrase: passphrase,
     );
@@ -245,6 +178,28 @@ class SeedKeypairVM extends ChangeNotifier {
 
   /// Optionally expose last sync time for UI.
   DateTime? get lastSyncedAt => _lastSyncedAt;
+
+  // ----- private helpers -----
+
+  /// Derives the public address from the active seed, caches it, and
+  /// persists to SeedStorage (best-effort).
+  Future<void> _deriveAndCachePublicAddress() async {
+    final mnemonic = await SeedStorage.getActiveSeed();
+    if (mnemonic == null || mnemonic.trim().isEmpty) return;
+
+    final pub = await StellarDerivation.deriveAccountId(
+      mnemonic,
+      index: _index,
+    );
+    _accountId = pub;
+    _lastSyncedAt = DateTime.now();
+
+    final id = _activeId;
+    if (id != null) {
+      await SeedStorage.setWalletPublicAddress(id, pub);
+      _meta = await SeedStorage.getActiveWalletMeta();
+    }
+  }
 
   // ----- lifecycle & safe notify -----
   void _safeNotify() {

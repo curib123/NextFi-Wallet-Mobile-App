@@ -13,51 +13,49 @@ class SeedPhraseVM extends ChangeNotifier {
   SeedPhraseState get state => _state;
 
   bool _disposed = false;
-  void _set(SeedPhraseState s) { _state = s; if (!_disposed) notifyListeners(); }
-  @override void dispose() { _disposed = true; super.dispose(); }
 
-  /// Current target word count. Defaults to 12.
+  void _set(SeedPhraseState s) {
+    _state = s;
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Word count
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Current target word count (12 or 24). Defaults to 12.
   int _wordCount = 12;
   int get wordCount => _wordCount;
   bool get isTwentyFour => _wordCount == 24;
 
-  /// Switch word count to 12 or 24 and (optionally) regenerate immediately.
+  /// Switch word count and optionally regenerate immediately.
   Future<void> setWordCount(int count, {bool regenerateNow = false}) async {
     if (count != 12 && count != 24) return;
-    if (_wordCount == count) return;
+    if (_wordCount == count && !regenerateNow) return;
     _wordCount = count;
     if (regenerateNow) await regenerate();
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Init / Regenerate
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Initialize with a fresh mnemonic if one hasn't been generated yet.
   Future<void> init() async {
     if (_state.mnemonic.isNotEmpty) return;
     await regenerate();
   }
 
-  /// Quick helpers using the service getters.
-  Future<void> regenerate12() => _regenerateViaGetter(12);
-  Future<void> regenerate24() => _regenerateViaGetter(24);
-
-  Future<void> _regenerateViaGetter(int wc) async {
-    try {
-      _set(_state.copyWith(loading: true, error: ''));
-      final m = wc == 24 ? await _svc.mnemonic24 : await _svc.mnemonic12;
-      final w = m.trim().split(RegExp(r'\s+'));
-      _set(_state.copyWith(
-        loading: false,
-        mnemonic: m.trim(),
-        words: w,
-        obscured: true,
-        ack1: false,
-        ack2: false,
-      ));
-      _wordCount = wc;
-    } catch (e) {
-      _set(_state.copyWith(loading: false, error: 'Failed to generate phrase: $e'));
-    }
-  }
-
-  /// Generate a new phrase using StellarWalletServices (12 or 24 words).
+  /// Generate a new mnemonic (12 or 24 words) using [StellarWalletServices].
+  ///
+  /// [wordCountOverride] lets callers request a specific length without
+  /// permanently changing [wordCount] on failure.
   Future<void> regenerate({int? wordCountOverride}) async {
     final count = (wordCountOverride == 12 || wordCountOverride == 24)
         ? wordCountOverride!
@@ -65,75 +63,104 @@ class SeedPhraseVM extends ChangeNotifier {
 
     try {
       _set(_state.copyWith(loading: true, error: ''));
-      // Prefer the new getters; equivalent to generateMnemonic(wordCount: count)
-      final m = count == 24 ? await _svc.mnemonic24 : await _svc.mnemonic12;
 
-      final w = m.trim().split(RegExp(r'\s+'));
+      final m = count == 24
+          ? await _svc.generateMnemonic24()
+          : await _svc.generateMnemonic12();
+
+      final trimmed = m.trim();
+      final words = trimmed.split(RegExp(r'\s+'));
+
       _set(_state.copyWith(
         loading: false,
-        mnemonic: m.trim(),
-        words: w,
+        mnemonic: trimmed,
+        words: words,
         obscured: true,
         ack1: false,
         ack2: false,
       ));
-      _wordCount = count; // persist chosen count
+      _wordCount = count;
     } catch (e) {
-      _set(_state.copyWith(loading: false, error: 'Failed to generate phrase: $e'));
+      _set(_state.copyWith(
+        loading: false,
+        error: 'Failed to generate phrase: $e',
+      ));
     }
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // UI toggles
+  // ──────────────────────────────────────────────────────────────────────────
 
   void toggleObscure() =>
       _set(_state.copyWith(obscured: !_state.obscured, error: ''));
 
+  void forceHide() {
+    if (!_state.obscured) _set(_state.copyWith(obscured: true));
+  }
+
   void setAck1(bool v) => _set(_state.copyWith(ack1: v));
   void setAck2(bool v) => _set(_state.copyWith(ack2: v));
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Validation / readiness
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Normalize whitespace and case for storage / comparison.
   String normalized() =>
       _state.mnemonic.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
 
   bool get readyToSecure =>
       !_state.obscured && _state.ack1 && _state.ack2 && !_state.loading;
 
-  /// Save securely:
-  /// - VALIDATES the phrase
-  /// - ADDS a **new wallet** and makes it **ACTIVE** (does NOT overwrite existing)
-  /// - Verifies persistence by re-reading the ACTIVE seed
+  // ──────────────────────────────────────────────────────────────────────────
+  // Save
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Save the current phrase securely:
+  ///   1. Validates via [StellarWalletServices.validateMnemonic] (async).
+  ///   2. Adds a **new wallet** entry and makes it **active**
+  ///      (preserves existing wallets).
+  ///   3. Verifies persistence by reading back the active seed.
   Future<bool> saveSecurely() async {
     final phrase = normalized();
 
-    // Use the service validator (includes 12/24 check + checksum)
-    if (!_svc.validateMnemonic(phrase)) {
-      _set(_state.copyWith(error: 'Please enter a valid 12- or 24-word recovery phrase.'));
+    // Validate (async in SDK v3).
+    final valid = await _svc.validateMnemonic(phrase);
+    if (!valid) {
+      _set(_state.copyWith(
+        error: 'Please enter a valid 12- or 24-word recovery phrase.',
+      ));
       return false;
     }
 
     try {
       _set(_state.copyWith(loading: true, error: ''));
 
-      // IMPORTANT CHANGE:
-      // Previously this used SeedStorage.saveSeed(phrase) which REPLACED the ACTIVE wallet.
-      // We now ADD a new wallet and make it ACTIVE, preserving previous wallets.
+      // Add as a new wallet and make it active (does NOT overwrite existing).
       await SeedStorage.addWallet(
         phrase,
-        // Optional: pass a name if you collect it in the UI
-        // name: 'My Wallet',
         makeActive: true,
       );
 
-      // Verify by reading back the ACTIVE seed
-      final stored = await SeedStorage.getSeed();
-      if (stored == null || stored.isEmpty) {
-        _set(_state.copyWith(loading: false, error: 'Could not verify saved phrase. Please try again.'));
+      // Verify by reading back the active seed.
+      final stored = await SeedStorage.getActiveSeed();
+      if (stored == null || stored.trim().isEmpty) {
+        _set(_state.copyWith(
+          loading: false,
+          error: 'Could not verify saved phrase. Please try again.',
+        ));
         return false;
       }
 
-      // (Optional) strict equality check
-      // If you normalize stored before compare, keep it consistent:
-      final ok = stored.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ') ==
-          phrase;
-      if (!ok) {
-        _set(_state.copyWith(loading: false, error: 'Saved phrase mismatch. Please try again.'));
+      // Strict equality check (normalized).
+      final storedNorm =
+      stored.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      if (storedNorm != phrase) {
+        _set(_state.copyWith(
+          loading: false,
+          error: 'Saved phrase mismatch. Please try again.',
+        ));
         return false;
       }
 
@@ -143,9 +170,5 @@ class SeedPhraseVM extends ChangeNotifier {
       _set(_state.copyWith(loading: false, error: 'Unexpected error: $e'));
       return false;
     }
-  }
-
-  void forceHide() {
-    if (!_state.obscured) _set(_state.copyWith(obscured: true));
   }
 }
