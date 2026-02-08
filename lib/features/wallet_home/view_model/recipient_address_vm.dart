@@ -1,4 +1,4 @@
-// lib/features/wallet_home/vm/recipient_address_vm.dart
+// lib/features/wallet_home/view_model/recipient_address_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';

@@ -532,7 +532,10 @@ class _SendScreenState extends State<SendScreen> {
           address: saved.address,
           onEdit: () async {
             final ok = await showRecipientUpsertSheet(context,
-                initial: saved);
+                initial: saved,
+                address: typedAddr,
+            );
+
             if (ok == true && mounted) setState(() {});
           },
         ),

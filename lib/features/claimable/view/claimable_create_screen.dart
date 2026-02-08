@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -12,9 +13,13 @@ import 'package:next_fi/common/components/asset/asset_logo.dart';
 import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 
 import 'package:next_fi/features/claimable/model/claimable_item.dart';
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
+import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
+import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
+import 'package:next_fi/features/scanner/view/scanner_screen.dart';
 
 class ClaimableCreateScreen extends StatefulWidget {
   const ClaimableCreateScreen({super.key});
@@ -130,6 +135,31 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return null;
   }
 
+  Future<void> _saveRecipientIfNeeded(String address) async {
+    if (!mounted) return;
+
+    final recipientVM = context.read<RecipientAddressVM>();
+    await recipientVM.ready;
+
+    final existing = recipientVM.byAddress(address);
+    if (existing != null) {
+      return;
+    }
+
+    final saved = await showRecipientUpsertSheet(
+      context,
+      address: address,
+    );
+
+    if (saved == true && mounted) {
+      showFloatingSnackBar(
+        context,
+        message: 'Recipient saved',
+        type: SnackBarType.info,
+      );
+    }
+  }
+
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     final reason = _validate();
@@ -185,6 +215,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         },
       );
 
+      await _saveRecipientIfNeeded(addr);
+
       _amountCtl.clear();
       _recipientCtl.clear();
       await _loadBalances();
@@ -199,6 +231,39 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _selectRecipient() async {
+    final c = AppColor.of(context);
+    final selected = await Navigator.push<RecipientAddressModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RecipientListWidget(
+          colors: c,
+          onSelect: (recipient) {
+            Navigator.pop(context, recipient);
+          },
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      _recipientCtl.text = selected.address;
+      setState(() {});
+    }
+  }
+
+  Future<void> _scanQR() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ScannerScreen(),
+      ),
+    );
+
+    if (result != null && mounted) {
+      _recipientCtl.text = result.trim();
+      setState(() {});
     }
   }
 
@@ -220,31 +285,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         children: [
-          // Asset toggle
           _buildAssetToggle(c),
           const SizedBox(height: 14),
-
-          // Balance display
           _buildBalanceRow(c),
           const SizedBox(height: 14),
-
-          // Mode toggle
           _buildModeToggle(c),
           const SizedBox(height: 16),
-
-          // Form
           Form(
             key: _form,
             child: Column(
               children: [
-                // Recipient
                 _buildRecipientField(c),
                 const SizedBox(height: 14),
-
-                // Amount
                 _buildAmountField(c),
-
-                // Time picker (if time-locked)
                 if (_mode == ClaimableMode.timeLocked) ...[
                   const SizedBox(height: 16),
                   _buildTimePicker(c),
@@ -252,10 +305,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // Info card
           _buildInfoCard(c),
         ],
       ),
@@ -440,15 +490,29 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         isDense: true,
         contentPadding:
         const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        suffixIcon: _recipientCtl.text.trim().isNotEmpty
-            ? IconButton(
-          onPressed: () {
-            _recipientCtl.clear();
-            setState(() {});
-          },
-          icon: const Icon(LucideIcons.x, size: 16),
-        )
-            : null,
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: _scanQR,
+              icon: Icon(LucideIcons.qrCode, size: 16, color: c.primary),
+              tooltip: 'Scan QR code',
+            ),
+            IconButton(
+              onPressed: _selectRecipient,
+              icon: Icon(LucideIcons.contact, size: 16, color: c.primary),
+              tooltip: 'Select from saved recipients',
+            ),
+            if (_recipientCtl.text.trim().isNotEmpty)
+              IconButton(
+                onPressed: () {
+                  _recipientCtl.clear();
+                  setState(() {});
+                },
+                icon: const Icon(LucideIcons.x, size: 16),
+              ),
+          ],
+        ),
       ),
       validator: (_) {
         final addr = _recipientCtl.text.trim();
