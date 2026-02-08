@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:next_fi/features/settings/view/settings_screen.dart';
+import 'package:next_fi/features/claimable/view/claimable_list_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
 import 'package:next_fi/features/transactions/view/transaction_screen.dart';
 import 'package:next_fi/features/wallet_home/view/wallet_home_screen.dart';
@@ -15,12 +15,13 @@ class TabVM extends ChangeNotifier {
   bool get isFirstTime => _isFirstTime;
 
   final List<Widget> screens = const [
-    WalletHomeScreen(),
-    SwapScreen(),
-    TransactionScreen(),
+    WalletHomeScreen(),        // 0 – Wallet
+    SwapScreen(),              // 1 – Swap
+    ClaimableListScreen(),     // 2 – Claimable
+    TransactionScreen(),       // 3 – Activity
   ];
 
-  TabProvider() {
+  TabVM() {
     _loadFirstTimeStatus();
   }
 
@@ -30,14 +31,12 @@ class TabVM extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ✅ Loads the first-time flag securely (does NOT change it)
   Future<void> _loadFirstTimeStatus() async {
     String? value = await _secureStorage.read(key: 'first_time');
     _isFirstTime = value == null ? true : value.toLowerCase() == 'true';
     notifyListeners();
   }
 
-  /// ✅ Manually update the first-time flag securely
   Future<void> setFirstTimeFlag(bool value) async {
     await _secureStorage.write(key: 'first_time', value: value.toString());
     _isFirstTime = value;

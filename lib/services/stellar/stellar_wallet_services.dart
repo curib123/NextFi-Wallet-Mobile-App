@@ -10,6 +10,47 @@ import 'package:next_fi/services/stellar/wallet_models.dart';
 import 'package:next_fi/services/stellar/soroban_rpc.dart';
 import 'package:next_fi/services/profit_address_vault_secure_storage.dart';
 
+/// Callback for progress updates during operations
+typedef ProgressCallback = void Function(String message);
+
+/// User-friendly error with actionable advice
+class StellarWalletError implements Exception {
+  /// User-friendly message
+  final String message;
+
+  /// Technical details for logging/debugging
+  final String? technicalDetails;
+
+  /// Actionable advice for the user
+  final String? advice;
+
+  /// Error code for programmatic handling
+  final String? code;
+
+  StellarWalletError(
+      this.message, {
+        this.technicalDetails,
+        this.advice,
+        this.code,
+      });
+
+  @override
+  String toString() {
+    final parts = [message];
+    if (advice != null) parts.add('\n$advice');
+    return parts.join();
+  }
+
+  /// Get full details including technical info
+  String toDetailedString() {
+    final parts = [message];
+    if (advice != null) parts.add('Advice: $advice');
+    if (technicalDetails != null) parts.add('Details: $technicalDetails');
+    if (code != null) parts.add('Code: $code');
+    return parts.join('\n');
+  }
+}
+
 /// Production-ready Stellar wallet service built on `stellar_flutter_sdk` **v3**.
 ///
 /// **v3 changes applied:**
@@ -91,30 +132,167 @@ class StellarWalletServices {
   Network get _network => _isTestnet ? Network.TESTNET : Network.PUBLIC;
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Error Helpers
+  // ──────────────────────────────────────────────────────────────────────────
+
+  static String _fmt7(num v) => v.toStringAsFixed(7);
+
+  /// Throw a user-friendly error
+  Never _fail(
+      String userMessage, {
+        Object? technicalError,
+        String? advice,
+        String? code,
+      }) {
+    throw StellarWalletError(
+      userMessage,
+      technicalDetails: technicalError?.toString(),
+      advice: advice,
+      code: code,
+    );
+  }
+
+  /// Map Stellar transaction result codes to user-friendly messages
+  String _getUserFriendlyTxError(String code, List<String>? ops) {
+    switch (code) {
+      case 'tx_insufficient_balance':
+        return 'Not enough funds to complete this transaction';
+      case 'tx_bad_seq':
+        return 'Transaction timed out';
+      case 'tx_insufficient_fee':
+        return 'Network fee was too low';
+      case 'tx_no_account':
+        return 'Account not found on the network';
+      case 'tx_failed':
+        if (ops != null) {
+          if (ops.contains('op_underfunded')) {
+            return 'Insufficient balance in your account';
+          }
+          if (ops.contains('op_no_trust')) {
+            return 'Recipient hasn\'t added this asset yet';
+          }
+          if (ops.contains('op_line_full')) {
+            return 'Recipient\'s account is at maximum capacity for this asset';
+          }
+          if (ops.contains('op_no_destination')) {
+            return 'Recipient account doesn\'t exist';
+          }
+        }
+        return 'Transaction could not be completed';
+      case 'tx_too_late':
+        return 'Transaction expired - took too long to process';
+      case 'tx_too_early':
+        return 'Transaction submitted too early';
+      default:
+        return 'Transaction failed';
+    }
+  }
+
+  /// Get actionable advice for transaction errors
+  String? _getTxErrorAdvice(String code, List<String>? ops) {
+    switch (code) {
+      case 'tx_insufficient_balance':
+        return 'Check your balance and try sending a smaller amount';
+      case 'tx_bad_seq':
+        return 'Please wait a moment and try again. This happens when multiple transactions are sent at once';
+      case 'tx_insufficient_fee':
+        return 'The app will automatically use the correct fee when you try again';
+      case 'tx_no_account':
+        return 'Make sure you\'re connected to the correct network (mainnet or testnet)';
+      case 'tx_failed':
+        if (ops != null) {
+          if (ops.contains('op_underfunded')) {
+            return 'You need more funds to complete this transaction, including network fees';
+          }
+          if (ops.contains('op_no_trust')) {
+            return 'Ask the recipient to add this asset to their wallet first';
+          }
+          if (ops.contains('op_line_full')) {
+            return 'The recipient needs to reduce their balance of this asset before receiving more';
+          }
+          if (ops.contains('op_no_destination')) {
+            return 'The recipient needs to create their Stellar account first';
+          }
+        }
+        return 'Please check your transaction details and try again';
+      case 'tx_too_late':
+      case 'tx_too_early':
+        return 'Please try again - the network timing will be adjusted automatically';
+      default:
+        return 'If this problem continues, please contact support';
+    }
+  }
+
+  /// Handle transaction submission errors with user-friendly messages
+  Never _failSubmit(
+      SubmitTransactionResponse res, {
+        String prefix = 'Transaction failed',
+      }) {
+    final code = res.extras?.resultCodes?.transactionResultCode ?? 'unknown';
+    final ops = res.extras?.resultCodes?.operationsResultCodes;
+    final hash = res.hash;
+
+    final userMessage = _getUserFriendlyTxError(code, ops!.cast<String>());
+    final technicalDetails = 'Code: $code${ops != null ? ', Operations: ${ops.join(", ")}' : ''}${hash != null ? ', Hash: $hash' : ''}';
+    final advice = _getTxErrorAdvice(code, ops.cast<String>());
+
+    throw StellarWalletError(
+      userMessage,
+      technicalDetails: technicalDetails,
+      advice: advice,
+      code: code,
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Mnemonic & Wallet Management (SDK v3 Wallet – SEP-0005)
   // ──────────────────────────────────────────────────────────────────────────
 
   /// Generate a 12-word mnemonic using Stellar SDK.
   Future<String> generateMnemonic12() async {
-    return await Wallet.generate12WordsMnemonic();
+    try {
+      return await Wallet.generate12WordsMnemonic();
+    } catch (e) {
+      _fail(
+        'Unable to generate recovery phrase',
+        technicalError: e,
+        advice: 'Please try again. If the problem persists, restart the app',
+      );
+    }
   }
 
   /// Generate a 24-word mnemonic using Stellar SDK.
   Future<String> generateMnemonic24() async {
-    return await Wallet.generate24WordsMnemonic();
+    try {
+      return await Wallet.generate24WordsMnemonic();
+    } catch (e) {
+      _fail(
+        'Unable to generate recovery phrase',
+        technicalError: e,
+        advice: 'Please try again. If the problem persists, restart the app',
+      );
+    }
   }
 
   /// Generate a mnemonic with custom word count.
   Future<String> generateMnemonic({int wordCount = 12}) async {
-    switch (wordCount) {
-      case 12:
-        return await Wallet.generate12WordsMnemonic();
-      case 18:
-        return await Wallet.generate18WordsMnemonic();
-      case 24:
-        return await Wallet.generate24WordsMnemonic();
-      default:
-        return await Wallet.generate12WordsMnemonic();
+    try {
+      switch (wordCount) {
+        case 12:
+          return await Wallet.generate12WordsMnemonic();
+        case 18:
+          return await Wallet.generate18WordsMnemonic();
+        case 24:
+          return await Wallet.generate24WordsMnemonic();
+        default:
+          return await Wallet.generate12WordsMnemonic();
+      }
+    } catch (e) {
+      _fail(
+        'Unable to generate recovery phrase',
+        technicalError: e,
+        advice: 'Please try again. If the problem persists, restart the app',
+      );
     }
   }
 
@@ -129,7 +307,15 @@ class StellarWalletServices {
 
   /// Create a [Wallet] instance from a mnemonic.
   Future<Wallet> createWallet(String mnemonic, {String passphrase = ''}) async {
-    return await Wallet.from(mnemonic, passphrase: passphrase);
+    try {
+      return await Wallet.from(mnemonic, passphrase: passphrase);
+    } catch (e) {
+      _fail(
+        'Invalid recovery phrase',
+        technicalError: e,
+        advice: 'Please check your recovery phrase and try again. Make sure all words are spelled correctly',
+      );
+    }
   }
 
   /// Get keypair at specific [index] from mnemonic.
@@ -139,8 +325,16 @@ class StellarWalletServices {
         int index = 0,
         String passphrase = '',
       }) async {
-    final wallet = await Wallet.from(mnemonic, passphrase: passphrase);
-    return await wallet.getKeyPair(index: index);
+    try {
+      final wallet = await Wallet.from(mnemonic, passphrase: passphrase);
+      return await wallet.getKeyPair(index: index);
+    } catch (e) {
+      _fail(
+        'Unable to derive account from recovery phrase',
+        technicalError: e,
+        advice: 'Please check your recovery phrase and try again',
+      );
+    }
   }
 
   /// Get account ID at specific [index] without full keypair.
@@ -149,8 +343,16 @@ class StellarWalletServices {
         int index = 0,
         String passphrase = '',
       }) async {
-    final wallet = await Wallet.from(mnemonic, passphrase: passphrase);
-    return await wallet.getAccountId(index: index);
+    try {
+      final wallet = await Wallet.from(mnemonic, passphrase: passphrase);
+      return await wallet.getAccountId(index: index);
+    } catch (e) {
+      _fail(
+        'Unable to derive account from recovery phrase',
+        technicalError: e,
+        advice: 'Please check your recovery phrase and try again',
+      );
+    }
   }
 
   /// Derive multiple accounts from mnemonic.
@@ -159,14 +361,22 @@ class StellarWalletServices {
         required int count,
         String passphrase = '',
       }) async {
-    final wallet = await Wallet.from(mnemonic, passphrase: passphrase);
-    final accounts = <KeyPair>[];
+    try {
+      final wallet = await Wallet.from(mnemonic, passphrase: passphrase);
+      final accounts = <KeyPair>[];
 
-    for (int i = 0; i < count; i++) {
-      accounts.add(await wallet.getKeyPair(index: i));
+      for (int i = 0; i < count; i++) {
+        accounts.add(await wallet.getKeyPair(index: i));
+      }
+
+      return accounts;
+    } catch (e) {
+      _fail(
+        'Unable to derive accounts from recovery phrase',
+        technicalError: e,
+        advice: 'Please check your recovery phrase and try again',
+      );
     }
-
-    return accounts;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -175,17 +385,41 @@ class StellarWalletServices {
 
   /// Store mnemonic securely.
   Future<void> storeMnemonic(String mnemonic, {String key = 'stellar_mnemonic'}) async {
-    await _secureStorage.write(key: key, value: mnemonic);
+    try {
+      await _secureStorage.write(key: key, value: mnemonic);
+    } catch (e) {
+      _fail(
+        'Unable to save recovery phrase securely',
+        technicalError: e,
+        advice: 'Please check your device storage permissions and try again',
+      );
+    }
   }
 
   /// Retrieve stored mnemonic.
   Future<String?> retrieveMnemonic({String key = 'stellar_mnemonic'}) async {
-    return await _secureStorage.read(key: key);
+    try {
+      return await _secureStorage.read(key: key);
+    } catch (e) {
+      _fail(
+        'Unable to retrieve recovery phrase',
+        technicalError: e,
+        advice: 'Please check your device security settings',
+      );
+    }
   }
 
   /// Delete stored mnemonic.
   Future<void> deleteMnemonic({String key = 'stellar_mnemonic'}) async {
-    await _secureStorage.delete(key: key);
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (e) {
+      _fail(
+        'Unable to delete recovery phrase',
+        technicalError: e,
+        advice: 'Please try again or restart the app',
+      );
+    }
   }
 
   /// Store keypair secret seed securely.
@@ -193,19 +427,43 @@ class StellarWalletServices {
       String secretSeed, {
         String key = 'stellar_secret',
       }) async {
-    await _secureStorage.write(key: key, value: secretSeed);
+    try {
+      await _secureStorage.write(key: key, value: secretSeed);
+    } catch (e) {
+      _fail(
+        'Unable to save secret key securely',
+        technicalError: e,
+        advice: 'Please check your device storage permissions and try again',
+      );
+    }
   }
 
   /// Retrieve stored secret seed.
   Future<String?> retrieveSecretSeed({String key = 'stellar_secret'}) async {
-    return await _secureStorage.read(key: key);
+    try {
+      return await _secureStorage.read(key: key);
+    } catch (e) {
+      _fail(
+        'Unable to retrieve secret key',
+        technicalError: e,
+        advice: 'Please check your device security settings',
+      );
+    }
   }
 
   /// Create keypair from stored secret.
   Future<KeyPair?> getKeyPairFromStorage({String key = 'stellar_secret'}) async {
-    final secret = await _secureStorage.read(key: key);
-    if (secret == null) return null;
-    return KeyPair.fromSecretSeed(secret);
+    try {
+      final secret = await _secureStorage.read(key: key);
+      if (secret == null) return null;
+      return KeyPair.fromSecretSeed(secret);
+    } catch (e) {
+      _fail(
+        'Unable to load account key',
+        technicalError: e,
+        advice: 'Your account key may be invalid. Please check your settings',
+      );
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -215,9 +473,6 @@ class StellarWalletServices {
   Asset get _usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
   static const double _kTxFeeUsdc = 0.005;
-  static String _fmt7(num v) => v.toStringAsFixed(7);
-  static Never _fail(String message, [Object? inner]) =>
-      throw Exception(inner == null ? message : '$message (inner: $inner)');
 
   String get horizonBase =>
       _isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org';
@@ -268,8 +523,17 @@ class StellarWalletServices {
   // ──────────────────────────────────────────────────────────────────────────
   // Account Management
   // ──────────────────────────────────────────────────────────────────────────
-  Future<AccountResponse> _loadAccount(String accountId) =>
-      sdk.accounts.account(accountId);
+  Future<AccountResponse> _loadAccount(String accountId) async {
+    try {
+      return await sdk.accounts.account(accountId);
+    } catch (e) {
+      _fail(
+        'Unable to load account information',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
 
   bool get isTestnet => _isTestnet;
 
@@ -277,7 +541,11 @@ class StellarWalletServices {
     try {
       return (await configVault.readOrInit()).address;
     } catch (e) {
-      _fail('Failed to get transaction fee address', e);
+      _fail(
+        'Unable to load fee settings',
+        technicalError: e,
+        advice: 'Please restart the app. If the problem continues, you may need to reinstall',
+      );
     }
   }
 
@@ -328,15 +596,29 @@ class StellarWalletServices {
   String _toClassicAccountId(String addr) {
     final a = addr.trim();
     if (a.isEmpty) {
-      _fail('Account address cannot be empty');
+      _fail(
+        'Please enter a valid Stellar address',
+        code: 'EMPTY_ADDRESS',
+        advice: 'Stellar addresses start with "G" and are 56 characters long',
+      );
     }
     if (a.startsWith('G') && a.length >= 56) {
       return a;
     }
     if (a.startsWith('M')) {
-      _fail('Muxed (M…) addresses are not supported here. Use classic G… + memo.');
+      _fail(
+        'This address format isn\'t supported yet',
+        technicalError: 'Muxed address (M...) provided',
+        advice: 'Please use a standard Stellar address (starts with "G") and add a memo if needed',
+        code: 'MUXED_ADDRESS',
+      );
     }
-    _fail('Invalid account id: $a');
+    _fail(
+      'This doesn\'t look like a valid Stellar address',
+      technicalError: 'Invalid format: $a',
+      advice: 'Stellar addresses start with "G" and are 56 characters long. Please check and try again',
+      code: 'INVALID_ADDRESS',
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -350,7 +632,11 @@ class StellarWalletServices {
       }
       return 0.0;
     } catch (e) {
-      _fail('Failed to fetch XLM balance', e);
+      _fail(
+        'Unable to fetch XLM balance',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -364,7 +650,11 @@ class StellarWalletServices {
       }
       return 0.0;
     } catch (e) {
-      _fail('Failed to fetch USDC balance', e);
+      _fail(
+        'Unable to fetch USDC balance',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -390,7 +680,11 @@ class StellarWalletServices {
 
       return 0.0;
     } catch (e) {
-      _fail('Failed to fetch asset balance', e);
+      _fail(
+        'Unable to fetch balance',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -400,7 +694,11 @@ class StellarWalletServices {
       final acc = await _loadAccount(accountId);
       return acc.balances;
     } catch (e) {
-      _fail('Failed to fetch balances', e);
+      _fail(
+        'Unable to fetch account balances',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -413,7 +711,11 @@ class StellarWalletServices {
       return acc.balances
           .any((b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer);
     } catch (e) {
-      _fail('Failed to check USDC trustline', e);
+      _fail(
+        'Unable to check USDC status',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -429,7 +731,11 @@ class StellarWalletServices {
       }
       return false;
     } catch (e) {
-      _fail('Failed to check trustline', e);
+      _fail(
+        'Unable to check asset status',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -446,10 +752,15 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'ChangeTrust(USDC) failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to add USDC');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to create USDC trustline', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to add USDC to your wallet',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -460,7 +771,11 @@ class StellarWalletServices {
   }) async {
     try {
       if (asset is AssetTypeNative) {
-        _fail('Cannot create trustline for native XLM');
+        _fail(
+          'XLM is already in your wallet',
+          advice: 'You don\'t need to add XLM - it\'s the native Stellar currency',
+          code: 'NATIVE_ASSET',
+        );
       }
 
       final acc = await _loadAccount(keyPair.accountId);
@@ -471,10 +786,15 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'ChangeTrust failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to add asset');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to create trustline', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to add asset to your wallet',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -484,12 +804,21 @@ class StellarWalletServices {
   }) async {
     try {
       if (asset is AssetTypeNative) {
-        _fail('Cannot remove trustline for native XLM');
+        _fail(
+          'XLM cannot be removed',
+          advice: 'XLM is the native Stellar currency and is always in your wallet',
+          code: 'NATIVE_ASSET',
+        );
       }
 
       final balance = await getAssetBalance(keyPair.accountId, asset);
       if (balance > 0) {
-        _fail('Cannot remove trustline with non-zero balance: ${_fmt7(balance)}');
+        _fail(
+          'Can\'t remove this asset yet',
+          technicalError: 'Current balance: ${_fmt7(balance)}',
+          advice: 'You need to send or swap all your funds before removing this asset from your wallet',
+          code: 'NON_ZERO_BALANCE',
+        );
       }
 
       final acc = await _loadAccount(keyPair.accountId);
@@ -500,18 +829,25 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Remove trustline failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to remove asset');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to remove trustline', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to remove asset from your wallet',
+        technicalError: e,
+        advice: 'Please try again. If the problem persists, check your internet connection',
+      );
     }
   }
 
   Future<void> _ensureUsdcTrustlineSelf(
       KeyPair keyPair, {
         String limit = '922337203685.4775807',
+        ProgressCallback? onProgress,
       }) async {
     if (await hasUsdcTrustline(keyPair.accountId)) return;
+    onProgress?.call('Setting up USDC in your wallet...');
     await createUsdcTrustline(keyPair: keyPair, limit: limit);
   }
 
@@ -519,8 +855,12 @@ class StellarWalletServices {
       KeyPair keyPair,
       Asset asset, {
         String limit = '922337203685.4775807',
+        ProgressCallback? onProgress,
       }) async {
     if (await hasTrustline(keyPair.accountId, asset)) return;
+
+    final assetName = asset is AssetTypeCreditAlphaNum ? asset.code : 'asset';
+    onProgress?.call('Setting up $assetName in your wallet...');
     await createTrustline(keyPair: keyPair, asset: asset, limit: limit);
   }
 
@@ -534,20 +874,43 @@ class StellarWalletServices {
     required double amount,
     required List<Claimant> claimants,
     String? memoText,
+    ProgressCallback? onProgress,
   }) async {
-    if (amount <= 0) _fail('Amount must be > 0');
-    if (claimants.isEmpty) _fail('Must have at least one claimant');
+    if (amount <= 0) {
+      _fail(
+        'Invalid amount entered',
+        technicalError: 'Amount: $amount',
+        advice: 'Please enter an amount greater than 0',
+        code: 'INVALID_AMOUNT',
+      );
+    }
+    if (claimants.isEmpty) {
+      _fail(
+        'No recipient specified',
+        technicalError: 'Claimants list is empty',
+        advice: 'Please add at least one recipient who can claim this payment',
+        code: 'NO_CLAIMANTS',
+      );
+    }
 
     try {
       if (asset is! AssetTypeNative) {
-        await _ensureTrustline(keyPair, asset);
+        await _ensureTrustline(keyPair, asset, onProgress: onProgress);
       }
 
+      onProgress?.call('Checking balance...');
       final balance = await getAssetBalance(keyPair.accountId, asset);
       if (balance < amount) {
-        _fail('Insufficient balance. Have ${_fmt7(balance)} but need ${_fmt7(amount)}');
+        final assetName = asset is AssetTypeCreditAlphaNum ? asset.code : 'XLM';
+        _fail(
+          'Not enough $assetName in your wallet',
+          technicalError: 'Have: ${_fmt7(balance)}, Need: ${_fmt7(amount)}',
+          advice: 'You need ${_fmt7(amount - balance)} more $assetName to create this payment',
+          code: 'INSUFFICIENT_BALANCE',
+        );
       }
 
+      onProgress?.call('Creating claimable payment...');
       final acc = await _loadAccount(keyPair.accountId);
 
       final tb = TransactionBuilder(acc)
@@ -568,18 +931,27 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Create claimable balance failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to create payment');
+
+      onProgress?.call('Payment created successfully!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to create claimable balance', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to create claimable payment',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
   Future<String> claimClaimableBalance({
     required KeyPair keyPair,
     required String balanceId,
+    ProgressCallback? onProgress,
   }) async {
     try {
+      onProgress?.call('Claiming payment...');
       final acc = await _loadAccount(keyPair.accountId);
 
       final tx = TransactionBuilder(acc)
@@ -591,13 +963,21 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Claim claimable balance failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to claim payment');
+
+      onProgress?.call('Payment claimed successfully!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to claim claimable balance', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to claim payment',
+        technicalError: e,
+        advice: 'The payment may have expired or already been claimed. Please check and try again',
+      );
     }
   }
 
+  /// Get claimable balances that this account can claim (received)
   Future<List<ClaimableBalanceResponse>> getClaimableBalances({
     required String accountId,
     int limit = 200,
@@ -609,7 +989,93 @@ class StellarWalletServices {
           .execute();
       return page.records ?? [];
     } catch (e) {
-      _fail('Failed to get claimable balances', e);
+      _fail(
+        'Unable to fetch claimable payments',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get claimable balances created by this account (sent)
+  Future<List<ClaimableBalanceResponse>> getSentClaimableBalances({
+    required String accountId,
+    int limit = 200,
+  }) async {
+    try {
+      final page = await sdk.claimableBalances
+          .forSponsor(accountId)
+          .limit(limit)
+          .execute();
+      return page.records ?? [];
+    } catch (e) {
+      _fail(
+        'Unable to fetch sent claimable payments',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get all claimable balances (both sent and received)
+  Future<Map<String, List<ClaimableBalanceResponse>>> getAllClaimableBalances({
+    required String accountId,
+    int limit = 200,
+  }) async {
+    try {
+      final received = await getClaimableBalances(
+        accountId: accountId,
+        limit: limit,
+      );
+      final sent = await getSentClaimableBalances(
+        accountId: accountId,
+        limit: limit,
+      );
+
+      return {
+        'received': received,
+        'sent': sent,
+      };
+    } catch (e) {
+      _fail(
+        'Unable to fetch claimable payments',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get details of a specific claimable balance by ID
+  Future<ClaimableBalanceResponse?> getClaimableBalanceById({
+    required String balanceId,
+  }) async {
+    try {
+      return await sdk.claimableBalances.claimableBalance(balanceId as Uri);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Check if a claimable balance can be claimed by the account
+  Future<bool> canClaimBalance({
+    required String accountId,
+    required String balanceId,
+  }) async {
+    try {
+      final balance = await getClaimableBalanceById(balanceId: balanceId);
+      if (balance == null) return false;
+
+      // Check if account is in the claimants list
+      for (final claimant in balance.claimants) {
+        if (claimant.destination == accountId) {
+          // TODO: Check if predicate conditions are met
+          // For now, just check if account is a claimant
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -619,6 +1085,7 @@ class StellarWalletServices {
     required double amount,
     required String recipientId,
     required DateTime unlockTime,
+    ProgressCallback? onProgress,
   }) async {
     final unlockTimestamp = unlockTime.millisecondsSinceEpoch ~/ 1000;
 
@@ -634,6 +1101,7 @@ class StellarWalletServices {
       asset: asset,
       amount: amount,
       claimants: [claimant],
+      onProgress: onProgress,
     );
   }
 
@@ -642,6 +1110,7 @@ class StellarWalletServices {
     required Asset asset,
     required double amount,
     required String recipientId,
+    ProgressCallback? onProgress,
   }) async {
     final claimant = Claimant(
       recipientId,
@@ -653,6 +1122,7 @@ class StellarWalletServices {
       asset: asset,
       amount: amount,
       claimants: [claimant],
+      onProgress: onProgress,
     );
   }
 
@@ -671,10 +1141,20 @@ class StellarWalletServices {
   }) async {
     try {
       if (key.isEmpty || key.length > 64) {
-        _fail('Key must be 1-64 characters');
+        _fail(
+          'Data key is ${key.isEmpty ? "empty" : "too long"}',
+          technicalError: 'Length: ${key.length} characters (max: 64)',
+          advice: 'Please use a key between 1 and 64 characters',
+          code: 'INVALID_KEY_LENGTH',
+        );
       }
       if (value.length > 64) {
-        _fail('Value must be 0-64 characters');
+        _fail(
+          'Data value is too long',
+          technicalError: 'Length: ${value.length} characters (max: 64)',
+          advice: 'Please shorten your data to 64 characters or less',
+          code: 'INVALID_VALUE_LENGTH',
+        );
       }
 
       // Encode the string value to bytes for ManageDataOperationBuilder.
@@ -691,10 +1171,15 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Set account data failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to save data');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to set account data', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to save account data',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -714,10 +1199,15 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Delete account data failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to delete data');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to delete account data', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to delete account data',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -775,10 +1265,15 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Set account options failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to update account settings');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to set account options', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to update account settings',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -799,14 +1294,22 @@ class StellarWalletServices {
   Future<String> mergeAccount({
     required KeyPair keyPair,
     required String destinationId,
+    ProgressCallback? onProgress,
   }) async {
     try {
       final dest = _toClassicAccountId(destinationId);
 
+      onProgress?.call('Checking destination account...');
       if (!await _accountExists(dest)) {
-        _fail('Destination account does not exist');
+        _fail(
+          'Destination account doesn\'t exist',
+          technicalError: 'Account not found: $dest',
+          advice: 'The destination account needs to be active on the Stellar network before you can merge',
+          code: 'DESTINATION_NOT_FOUND',
+        );
       }
 
+      onProgress?.call('Merging accounts...');
       final acc = await _loadAccount(keyPair.accountId);
 
       final tx = TransactionBuilder(acc)
@@ -818,10 +1321,17 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Account merge failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to merge accounts');
+
+      onProgress?.call('Accounts merged successfully!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to merge account', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to merge accounts',
+        technicalError: e,
+        advice: 'Make sure you have no active trustlines, offers, or data entries before merging',
+      );
     }
   }
 
@@ -858,10 +1368,15 @@ class StellarWalletServices {
       tx.sign(sponsorKeyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Sponsorship failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to sponsor account');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to sponsor account', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to sponsor account',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -876,11 +1391,13 @@ class StellarWalletServices {
     required double amount,
     required double price,
     int? offerId,
+    ProgressCallback? onProgress,
   }) async {
     try {
-      await _ensureTrustline(keyPair, selling);
-      await _ensureTrustline(keyPair, buying);
+      await _ensureTrustline(keyPair, selling, onProgress: onProgress);
+      await _ensureTrustline(keyPair, buying, onProgress: onProgress);
 
+      onProgress?.call('Creating sell order...');
       final acc = await _loadAccount(keyPair.accountId);
 
       final builder = ManageSellOfferOperationBuilder(
@@ -901,10 +1418,17 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Create sell offer failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to create sell order');
+
+      onProgress?.call('Sell order created!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to create sell offer', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to create sell order',
+        technicalError: e,
+        advice: 'Please check your balance and internet connection',
+      );
     }
   }
 
@@ -915,11 +1439,13 @@ class StellarWalletServices {
     required double amount,
     required double price,
     int? offerId,
+    ProgressCallback? onProgress,
   }) async {
     try {
-      await _ensureTrustline(keyPair, selling);
-      await _ensureTrustline(keyPair, buying);
+      await _ensureTrustline(keyPair, selling, onProgress: onProgress);
+      await _ensureTrustline(keyPair, buying, onProgress: onProgress);
 
+      onProgress?.call('Creating buy order...');
       final acc = await _loadAccount(keyPair.accountId);
 
       final builder = ManageBuyOfferOperationBuilder(
@@ -940,10 +1466,17 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Create buy offer failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to create buy order');
+
+      onProgress?.call('Buy order created!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to create buy offer', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to create buy order',
+        technicalError: e,
+        advice: 'Please check your balance and internet connection',
+      );
     }
   }
 
@@ -952,8 +1485,10 @@ class StellarWalletServices {
     required int offerId,
     required Asset selling,
     required Asset buying,
+    ProgressCallback? onProgress,
   }) async {
     try {
+      onProgress?.call('Canceling order...');
       final acc = await _loadAccount(keyPair.accountId);
 
       final builder = ManageSellOfferOperationBuilder(
@@ -970,10 +1505,17 @@ class StellarWalletServices {
       tx.sign(keyPair, _network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'Cancel offer failed');
+      if (!res.success) _failSubmit(res, prefix: 'Unable to cancel order');
+
+      onProgress?.call('Order canceled!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to cancel offer', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to cancel order',
+        technicalError: e,
+        advice: 'The order may have already been filled or canceled',
+      );
     }
   }
 
@@ -988,7 +1530,11 @@ class StellarWalletServices {
           .execute();
       return page.records ?? [];
     } catch (e) {
-      _fail('Failed to get account offers', e);
+      _fail(
+        'Unable to fetch open orders',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -1004,7 +1550,11 @@ class StellarWalletServices {
           .limit(limit)
           .execute();
     } catch (e) {
-      _fail('Failed to get order book', e);
+      _fail(
+        'Unable to fetch order book',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -1016,72 +1566,112 @@ class StellarWalletServices {
     required String destination,
     required double amount,
     String? memoText,
+    ProgressCallback? onProgress,
   }) async {
-    if (amount <= 0) _fail('Amount must be > 0');
-
-    final dest = _toClassicAccountId(destination);
-    final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
-
-    final feeStroops = await getCurrentFeeStroops();
-    final feeXlm = _fromStroops(feeStroops);
-    final totalStroops = _toStroops(amount);
-
-    if (totalStroops <= feeStroops) {
-      _fail('Amount too small: must be greater than transaction fee of ${_fmt7(feeXlm)} XLM');
-    }
-
-    final recvXlm = _fromStroops(totalStroops - feeStroops);
-    final acc = await _loadAccount(keyPair.accountId);
-
-    final needsFeeOp = feeStroops > 0;
-    final opCount = needsFeeOp ? 2 : 1;
-    final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
-    final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
-
-    final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);
-
-    final destExists = await _accountExists(dest);
-    if (destExists) {
-      tb.addOperation(
-        PaymentOperationBuilder(dest, _xlm, _fmt7(recvXlm)).build(),
-      );
-    } else {
-      if (recvXlm < 1.0) {
-        _fail('Destination account does not exist. Minimum 1 XLM required to create account, but only ${_fmt7(recvXlm)} XLM after fees.');
-      }
-      tb.addOperation(
-        CreateAccountOperationBuilder(dest, _fmt7(recvXlm)).build(),
+    if (amount <= 0) {
+      _fail(
+        'Please enter a valid amount',
+        technicalError: 'Amount: $amount',
+        advice: 'Try entering an amount like 10 or 25.50',
+        code: 'INVALID_AMOUNT',
       );
     }
-
-    if (needsFeeOp) {
-      tb.addOperation(
-        PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
-      );
-    }
-
-    if (memoText?.isNotEmpty == true) {
-      tb.addMemo(Memo.text(memoText!));
-    }
-
-    final tx = tb.build();
-    tx.sign(keyPair, _network);
 
     try {
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'XLM send failed');
-      return [res.hash!];
-    } catch (e) {
-      if (_sdkQuickNode != null) {
-        try {
-          final res = await _sdkQuickNode!.submitTransaction(tx);
-          if (!res.success) _failSubmit(res, prefix: 'XLM send failed (fallback)');
-          return [res.hash!];
-        } catch (_) {
-          _fail('XLM send failed', e);
-        }
+      onProgress?.call('Validating address...');
+      final dest = _toClassicAccountId(destination);
+      final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
+
+      onProgress?.call('Calculating fees...');
+      final feeStroops = await getCurrentFeeStroops();
+      final feeXlm = _fromStroops(feeStroops);
+      final totalStroops = _toStroops(amount);
+
+      if (totalStroops <= feeStroops) {
+        _fail(
+          'Amount is too small to send',
+          technicalError: 'Amount must be greater than fee: ${_fmt7(feeXlm)} XLM',
+          advice: 'Please enter an amount greater than ${_fmt7(feeXlm)} XLM to cover the transaction fee',
+          code: 'AMOUNT_TOO_SMALL',
+        );
       }
-      rethrow;
+
+      final recvXlm = _fromStroops(totalStroops - feeStroops);
+
+      onProgress?.call('Loading account...');
+      final acc = await _loadAccount(keyPair.accountId);
+
+      final needsFeeOp = feeStroops > 0;
+      final opCount = needsFeeOp ? 2 : 1;
+      final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+      final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
+
+      final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);
+
+      onProgress?.call('Checking destination...');
+      final destExists = await _accountExists(dest);
+      if (destExists) {
+        tb.addOperation(
+          PaymentOperationBuilder(dest, _xlm, _fmt7(recvXlm)).build(),
+        );
+      } else {
+        if (recvXlm < 1.0) {
+          _fail(
+            'Cannot create new account with this amount',
+            technicalError: 'Need 1 XLM minimum, but only ${_fmt7(recvXlm)} XLM available after fees',
+            advice: 'New Stellar accounts need at least 1 XLM. Try sending ${_fmt7(1.0 + feeXlm)} XLM or more',
+            code: 'INSUFFICIENT_FOR_ACCOUNT_CREATION',
+          );
+        }
+        tb.addOperation(
+          CreateAccountOperationBuilder(dest, _fmt7(recvXlm)).build(),
+        );
+      }
+
+      if (needsFeeOp) {
+        tb.addOperation(
+          PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
+        );
+      }
+
+      if (memoText?.isNotEmpty == true) {
+        tb.addMemo(Memo.text(memoText!));
+      }
+
+      final tx = tb.build();
+      tx.sign(keyPair, _network);
+
+      onProgress?.call('Sending transaction...');
+      try {
+        final res = await sdk.submitTransaction(tx);
+        if (!res.success) _failSubmit(res, prefix: 'Payment failed');
+        onProgress?.call('Payment sent successfully!');
+        return [res.hash!];
+      } catch (e) {
+        if (_sdkQuickNode != null) {
+          try {
+            final res = await _sdkQuickNode!.submitTransaction(tx);
+            if (!res.success) _failSubmit(res, prefix: 'Payment failed');
+            onProgress?.call('Payment sent successfully!');
+            return [res.hash!];
+          } catch (_) {
+            if (e is StellarWalletError) rethrow;
+            _fail(
+              'Unable to send payment',
+              technicalError: e,
+              advice: 'Please check your internet connection and try again',
+            );
+          }
+        }
+        rethrow;
+      }
+    } catch (e) {
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to send XLM',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -1090,76 +1680,127 @@ class StellarWalletServices {
     required String destination,
     required double usdcAmount,
     String? memoText,
+    ProgressCallback? onProgress,
   }) async {
-    if (usdcAmount <= 0) _fail('usdcAmount must be > 0');
-
-    final dest = _toClassicAccountId(destination);
-    final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
-
-    if (!await _accountExists(dest)) {
-      _fail('Destination account does not exist. Ask recipient to create/fund a Stellar account first.');
-    }
-
-    await _ensureUsdcTrustlineSelf(keyPair);
-
-    if (!await hasUsdcTrustline(dest)) {
-      _fail('Destination has no USDC trustline. Ask recipient to add USDC first.');
-    }
-
-    final feeStroops = await getCurrentFeeStroops();
-    final feeXlm = _fromStroops(feeStroops);
-
-    final senderXlmBal = await getXlmBalance(keyPair.accountId);
-    if (senderXlmBal < feeXlm) {
-      _fail('Insufficient XLM to pay the transaction fee of ${_fmt7(feeXlm)} XLM.');
-    }
-
-    final senderUsdcBal = await getUsdcBalance(keyPair.accountId);
-    if (senderUsdcBal < usdcAmount) {
-      _fail('Insufficient USDC balance. Have ${_fmt7(senderUsdcBal)} but need ${_fmt7(usdcAmount)}.');
-    }
-
-    final acc = await _loadAccount(keyPair.accountId);
-
-    final needsFeeOp = feeStroops > 0;
-    final opCount = needsFeeOp ? 2 : 1;
-    final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
-    final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
-
-    final tb = TransactionBuilder(acc)
-      ..setMaxOperationFee(perOpStroops)
-      ..addOperation(
-        PaymentOperationBuilder(dest, _usdc, _fmt7(usdcAmount)).build(),
-      );
-
-    if (needsFeeOp) {
-      tb.addOperation(
-        PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
+    if (usdcAmount <= 0) {
+      _fail(
+        'Please enter a valid amount',
+        technicalError: 'Amount: $usdcAmount',
+        advice: 'Try entering an amount like 10 or 25.50',
+        code: 'INVALID_AMOUNT',
       );
     }
-
-    if (memoText?.isNotEmpty == true) {
-      tb.addMemo(Memo.text(memoText!));
-    }
-
-    final tx = tb.build();
-    tx.sign(keyPair, _network);
 
     try {
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'USDC payment failed');
-      return [res.hash!];
-    } catch (e) {
-      if (_sdkQuickNode != null) {
-        try {
-          final res = await _sdkQuickNode!.submitTransaction(tx);
-          if (!res.success) _failSubmit(res, prefix: 'USDC payment failed (fallback)');
-          return [res.hash!];
-        } catch (_) {
-          _fail('USDC payment failed', e);
-        }
+      onProgress?.call('Validating address...');
+      final dest = _toClassicAccountId(destination);
+      final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
+
+      onProgress?.call('Checking destination account...');
+      if (!await _accountExists(dest)) {
+        _fail(
+          'Recipient doesn\'t have a Stellar account yet',
+          technicalError: 'Account not found: $dest',
+          advice: 'The recipient needs to create their Stellar account first. They can do this by receiving XLM from another wallet or using an exchange',
+          code: 'DESTINATION_NOT_FOUND',
+        );
       }
-      rethrow;
+
+      await _ensureUsdcTrustlineSelf(keyPair, onProgress: onProgress);
+
+      onProgress?.call('Checking recipient USDC setup...');
+      if (!await hasUsdcTrustline(dest)) {
+        _fail(
+          'Recipient can\'t receive USDC yet',
+          technicalError: 'No USDC trustline for: $dest',
+          advice: 'The recipient needs to add USDC to their wallet first. This is a one-time setup they can do in their Stellar wallet settings',
+          code: 'NO_DESTINATION_TRUSTLINE',
+        );
+      }
+
+      onProgress?.call('Calculating fees...');
+      final feeStroops = await getCurrentFeeStroops();
+      final feeXlm = _fromStroops(feeStroops);
+
+      onProgress?.call('Checking balances...');
+      final senderXlmBal = await getXlmBalance(keyPair.accountId);
+      if (senderXlmBal < feeXlm) {
+        _fail(
+          'Not enough XLM for transaction fee',
+          technicalError: 'Have: ${_fmt7(senderXlmBal)} XLM, Need: ${_fmt7(feeXlm)} XLM',
+          advice: 'You need ${_fmt7(feeXlm - senderXlmBal)} more XLM to pay the transaction fee',
+          code: 'INSUFFICIENT_XLM_FOR_FEE',
+        );
+      }
+
+      final senderUsdcBal = await getUsdcBalance(keyPair.accountId);
+      if (senderUsdcBal < usdcAmount) {
+        _fail(
+          'Not enough USDC in your wallet',
+          technicalError: 'Have: ${_fmt7(senderUsdcBal)} USDC, Need: ${_fmt7(usdcAmount)} USDC',
+          advice: 'You need ${_fmt7(usdcAmount - senderUsdcBal)} more USDC to complete this transaction',
+          code: 'INSUFFICIENT_USDC',
+        );
+      }
+
+      onProgress?.call('Preparing transaction...');
+      final acc = await _loadAccount(keyPair.accountId);
+
+      final needsFeeOp = feeStroops > 0;
+      final opCount = needsFeeOp ? 2 : 1;
+      final feeXlmNet = await estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
+      final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
+
+      final tb = TransactionBuilder(acc)
+        ..setMaxOperationFee(perOpStroops)
+        ..addOperation(
+          PaymentOperationBuilder(dest, _usdc, _fmt7(usdcAmount)).build(),
+        );
+
+      if (needsFeeOp) {
+        tb.addOperation(
+          PaymentOperationBuilder(feeAddr, _xlm, _fmt7(feeXlm)).build(),
+        );
+      }
+
+      if (memoText?.isNotEmpty == true) {
+        tb.addMemo(Memo.text(memoText!));
+      }
+
+      final tx = tb.build();
+      tx.sign(keyPair, _network);
+
+      onProgress?.call('Sending transaction...');
+      try {
+        final res = await sdk.submitTransaction(tx);
+        if (!res.success) _failSubmit(res, prefix: 'Payment failed');
+        onProgress?.call('Payment sent successfully!');
+        return [res.hash!];
+      } catch (e) {
+        if (_sdkQuickNode != null) {
+          try {
+            final res = await _sdkQuickNode!.submitTransaction(tx);
+            if (!res.success) _failSubmit(res, prefix: 'Payment failed');
+            onProgress?.call('Payment sent successfully!');
+            return [res.hash!];
+          } catch (_) {
+            if (e is StellarWalletError) rethrow;
+            _fail(
+              'Unable to send payment',
+              technicalError: e,
+              advice: 'Please check your internet connection and try again',
+            );
+          }
+        }
+        rethrow;
+      }
+    } catch (e) {
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to send USDC',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
     }
   }
 
@@ -1172,9 +1813,24 @@ class StellarWalletServices {
     required double minUsdcOut,
     String? destination,
     String? memoText,
+    ProgressCallback? onProgress,
   }) async {
-    if (sendAmountXlm <= 0) _fail('sendAmountXlm must be > 0');
-    if (minUsdcOut <= 0) _fail('minUsdcOut must be > 0');
+    if (sendAmountXlm <= 0) {
+      _fail(
+        'Please enter a valid amount',
+        technicalError: 'Amount: $sendAmountXlm',
+        advice: 'Try entering an amount like 10 or 25',
+        code: 'INVALID_AMOUNT',
+      );
+    }
+    if (minUsdcOut <= 0) {
+      _fail(
+        'Minimum output must be greater than 0',
+        technicalError: 'Min output: $minUsdcOut',
+        advice: 'Please set a valid minimum USDC amount to receive',
+        code: 'INVALID_MIN_OUTPUT',
+      );
+    }
 
     try {
       final self = keyPair.accountId;
@@ -1182,20 +1838,34 @@ class StellarWalletServices {
           ? _toClassicAccountId(destination!.trim())
           : self;
 
-      await _ensureUsdcTrustlineSelf(keyPair);
+      onProgress?.call('Setting up USDC...');
+      await _ensureUsdcTrustlineSelf(keyPair, onProgress: onProgress);
 
+      onProgress?.call('Checking destination...');
       if (!await _accountExists(dest)) {
-        _fail('Destination account does not exist. Ask recipient to create/fund a Stellar account first.');
+        _fail(
+          'Recipient doesn\'t have a Stellar account yet',
+          technicalError: 'Account not found: $dest',
+          advice: 'The recipient needs to create their Stellar account first',
+          code: 'DESTINATION_NOT_FOUND',
+        );
       }
 
       if (!await hasUsdcTrustline(dest)) {
-        _fail('Destination has no USDC trustline. Ask recipient to add USDC first.');
+        _fail(
+          'Recipient can\'t receive USDC yet',
+          technicalError: 'No USDC trustline for: $dest',
+          advice: 'The recipient needs to add USDC to their wallet first',
+          code: 'NO_DESTINATION_TRUSTLINE',
+        );
       }
 
+      onProgress?.call('Calculating fees...');
       final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
       final feeStroops = await getCurrentFeeStroops();
       final feeXlm = _fromStroops(feeStroops);
 
+      onProgress?.call('Checking balance...');
       final senderXlmBal = await getXlmBalance(self);
 
       const minReserve = 1.5;
@@ -1203,10 +1873,14 @@ class StellarWalletServices {
 
       if (senderXlmBal < totalNeeded) {
         _fail(
-          'Insufficient XLM. Need ${_fmt7(totalNeeded)} (${_fmt7(sendAmountXlm)} to swap + ${_fmt7(feeXlm)} fee + ${_fmt7(minReserve)} reserve), but have ${_fmt7(senderXlmBal)}.',
+          'Not enough XLM for this swap',
+          technicalError: 'Have: ${_fmt7(senderXlmBal)} XLM | Need: ${_fmt7(totalNeeded)} XLM',
+          advice: 'Breakdown: ${_fmt7(sendAmountXlm)} to swap + ${_fmt7(feeXlm)} network fee + ${_fmt7(minReserve)} account reserve. You need ${_fmt7(totalNeeded - senderXlmBal)} more XLM',
+          code: 'INSUFFICIENT_BALANCE',
         );
       }
 
+      onProgress?.call('Preparing swap...');
       final acc = await _loadAccount(self);
 
       final needsFeeOp = feeStroops > 0;
@@ -1239,11 +1913,19 @@ class StellarWalletServices {
       final tx = tb.build();
       tx.sign(keyPair, _network);
 
+      onProgress?.call('Executing swap...');
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) _failSubmit(res, prefix: 'PathPaymentStrictSend XLM→USDC failed');
+      if (!res.success) _failSubmit(res, prefix: 'Swap failed');
+
+      onProgress?.call('Swap completed successfully!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to swap XLM→USDC', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to swap XLM to USDC',
+        technicalError: e,
+        advice: 'The swap may have failed due to price slippage. Try adjusting your minimum output or check market conditions',
+      );
     }
   }
 
@@ -1253,9 +1935,24 @@ class StellarWalletServices {
     required double minXlmOut,
     String? destination,
     String? memoText,
+    ProgressCallback? onProgress,
   }) async {
-    if (sendAmountUsdc <= 0) _fail('sendAmountUsdc must be > 0');
-    if (minXlmOut <= 0) _fail('minXlmOut must be > 0');
+    if (sendAmountUsdc <= 0) {
+      _fail(
+        'Please enter a valid amount',
+        technicalError: 'Amount: $sendAmountUsdc',
+        advice: 'Try entering an amount like 10 or 25',
+        code: 'INVALID_AMOUNT',
+      );
+    }
+    if (minXlmOut <= 0) {
+      _fail(
+        'Minimum output must be greater than 0',
+        technicalError: 'Min output: $minXlmOut',
+        advice: 'Please set a valid minimum XLM amount to receive',
+        code: 'INVALID_MIN_OUTPUT',
+      );
+    }
 
     try {
       final self = keyPair.accountId;
@@ -1263,17 +1960,26 @@ class StellarWalletServices {
           ? _toClassicAccountId(destination!.trim())
           : self;
 
-      await _ensureUsdcTrustlineSelf(keyPair);
+      onProgress?.call('Checking USDC setup...');
+      await _ensureUsdcTrustlineSelf(keyPair, onProgress: onProgress);
 
+      onProgress?.call('Checking balance...');
       final senderUsdcBal = await getUsdcBalance(self);
       if (senderUsdcBal < sendAmountUsdc) {
-        _fail('Insufficient USDC balance. Have ${_fmt7(senderUsdcBal)} but need ${_fmt7(sendAmountUsdc)}.');
+        _fail(
+          'Not enough USDC in your wallet',
+          technicalError: 'Have: ${_fmt7(senderUsdcBal)} USDC, Need: ${_fmt7(sendAmountUsdc)} USDC',
+          advice: 'You need ${_fmt7(sendAmountUsdc - senderUsdcBal)} more USDC to complete this swap',
+          code: 'INSUFFICIENT_USDC',
+        );
       }
 
+      onProgress?.call('Calculating fees...');
       final feeAddr = _toClassicAccountId(await getTransactionFeeAddress());
       final feeStroops = await getCurrentFeeStroops();
       final feeXlm = _fromStroops(feeStroops);
 
+      onProgress?.call('Preparing swap...');
       final acc = await _loadAccount(self);
 
       final needsFeeOp = feeStroops > 0;
@@ -1286,7 +1992,10 @@ class StellarWalletServices {
       if (dest == self) {
         if (minXlmOut < feeXlm) {
           _fail(
-            'minXlmOut too small to cover transaction fee of ${_fmt7(feeXlm)} XLM.',
+            'Swap amount too low to cover fees',
+            technicalError: 'Minimum output: ${_fmt7(minXlmOut)} XLM | Fee required: ${_fmt7(feeXlm)} XLM',
+            advice: 'The swap needs to receive at least ${_fmt7(feeXlm)} XLM to cover the transaction fee. Try increasing your swap amount',
+            code: 'MIN_OUTPUT_TOO_LOW',
           );
         }
 
@@ -1307,12 +2016,21 @@ class StellarWalletServices {
         final senderXlmBal = await getXlmBalance(self);
         if (senderXlmBal < feeXlm) {
           _fail(
-            'Insufficient XLM to pay transaction fee of ${_fmt7(feeXlm)} XLM for external swap.',
+            'Not enough XLM for transaction fee',
+            technicalError: 'Have: ${_fmt7(senderXlmBal)} XLM, Need: ${_fmt7(feeXlm)} XLM',
+            advice: 'You need ${_fmt7(feeXlm - senderXlmBal)} more XLM to pay the network fee for this swap',
+            code: 'INSUFFICIENT_XLM_FOR_FEE',
           );
         }
 
+        onProgress?.call('Checking destination...');
         if (!await _accountExists(dest)) {
-          _fail('Destination account does not exist. Ask recipient to create/fund a Stellar account first.');
+          _fail(
+            'Recipient doesn\'t have a Stellar account yet',
+            technicalError: 'Account not found: $dest',
+            advice: 'The recipient needs to create their Stellar account first',
+            code: 'DESTINATION_NOT_FOUND',
+          );
         }
 
         final opPath = PathPaymentStrictSendOperationBuilder(
@@ -1337,13 +2055,21 @@ class StellarWalletServices {
       final tx = tb.build();
       tx.sign(keyPair, _network);
 
+      onProgress?.call('Executing swap...');
       final res = await sdk.submitTransaction(tx);
       if (!res.success) {
-        _failSubmit(res, prefix: 'PathPaymentStrictSend USDC→XLM failed');
+        _failSubmit(res, prefix: 'Swap failed');
       }
+
+      onProgress?.call('Swap completed successfully!');
       return res.hash!;
     } catch (e) {
-      _fail('Failed to swap USDC→XLM', e);
+      if (e is StellarWalletError) rethrow;
+      _fail(
+        'Unable to swap USDC to XLM',
+        technicalError: e,
+        advice: 'The swap may have failed due to price slippage. Try adjusting your minimum output or check market conditions',
+      );
     }
   }
 
@@ -1665,18 +2391,4 @@ class StellarWalletServices {
 
   Stream<double> quoteUsdcToXlmStream(double sendAmountUsdc) =>
       xlmUsdcPriceStream().map((p) => sendAmountUsdc * p.xlmPerUsdc);
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Error helpers
-  // ──────────────────────────────────────────────────────────────────────────
-  Never _failSubmit(
-      SubmitTransactionResponse res, {
-        String prefix = 'Transaction failed',
-      }) {
-    final code = res.extras?.resultCodes?.transactionResultCode ?? 'tx_failed';
-    final ops = res.extras?.resultCodes?.operationsResultCodes?.join(', ');
-    final hash = res.hash;
-    final msg = '$prefix ($code${ops != null ? '; ops: $ops' : ''}${hash != null ? '; hash: $hash' : ''})';
-    _fail(msg);
-  }
 }

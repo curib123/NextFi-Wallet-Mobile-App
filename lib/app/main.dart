@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
-import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -24,28 +22,28 @@ import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
+import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
+import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
+import 'package:next_fi/features/send/view_model/send_vm.dart';
 import 'package:next_fi/features/settings/view_model/settings_vm.dart';
+import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_creation/view_model/wallet_creation_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
-import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 
 // ───────────────────────── Theme persistence ─────────────────────────
-// Same key/options as used in SettingsVM
 const String _kThemePrefKey = 'pref.theme_mode.v1';
 const FlutterSecureStorage _secure = FlutterSecureStorage(
   aOptions: AndroidOptions(encryptedSharedPreferences: true),
   iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
 );
 
-// Global theme mode notifier used by MaterialApp
 final ValueNotifier<ThemeMode> _themeModeVN = ValueNotifier(ThemeMode.system);
 
-// Helper to read initial theme mode from secure storage
 Future<void> _loadInitialThemeMode() async {
   final raw = await _secure.read(key: _kThemePrefKey) ?? 'system';
   final mode = switch (raw) {
@@ -59,13 +57,10 @@ Future<void> _loadInitialThemeMode() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load persisted theme BEFORE runApp to avoid a flash
   await _loadInitialThemeMode();
 
-  // Bridge from SettingsVM -> MaterialApp
   ThemeBridge.apply = (mode) async {
     _themeModeVN.value = mode;
-    // Persist here too so changing from a different entry point stays consistent
     final raw = switch (mode) {
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
@@ -85,43 +80,44 @@ Future<void> main() async {
 }
 
 List<SingleChildWidget> _buildProviders() {
-  // Toggle here if you run testnet builds
   const bool kIsTestnet = false;
 
-  // Safe defaults so we can boot the service before AssetVM exists.
-  const String _defaultUsdcMainnet =
+  const String defaultUsdcMainnet =
       'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
-  const String _defaultUsdcTestnet =
+  const String defaultUsdcTestnet =
       'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
   return [
-    // 1) Boot an initial Stellar service (replaced later once AssetVM provides issuer)
+    // 1) Boot an initial Stellar service
     Provider<StellarWalletServices>(
       create: (_) => StellarWalletServices(
-        usdcIssuer: kIsTestnet ? _defaultUsdcTestnet : _defaultUsdcMainnet,
+        usdcIssuer: kIsTestnet ? defaultUsdcTestnet : defaultUsdcMainnet,
         testnet: kIsTestnet,
       ),
     ),
 
-    // 2) Seed keypair VM (derives/holds active account id)
+    // 2) Seed keypair VM
     ChangeNotifierProvider(
       create: (_) => SeedKeypairVM()..init(),
     ),
 
     // 3) Currency depends on Stellar service
     ChangeNotifierProxyProvider<StellarWalletServices, CurrencyVM>(
-      create: (ctx) => CurrencyVM(stellar: ctx.read<StellarWalletServices>()),
-      update: (ctx, stellar, prev) => prev ?? CurrencyVM(stellar: stellar),
+      create: (ctx) =>
+          CurrencyVM(stellar: ctx.read<StellarWalletServices>()),
+      update: (ctx, stellar, prev) =>
+      prev ?? CurrencyVM(stellar: stellar),
     ),
 
-    // 4) AssetVM depends on Currency; holds authoritative USDC issuer
+    // 4) AssetVM depends on Currency
     ChangeNotifierProxyProvider<CurrencyVM, AssetVM>(
-      create: (ctx) => AssetVM(ctx.read<CurrencyVM>(), isTestnet: kIsTestnet),
+      create: (ctx) =>
+          AssetVM(ctx.read<CurrencyVM>(), isTestnet: kIsTestnet),
       update: (ctx, currency, prev) =>
       prev ?? AssetVM(currency, isTestnet: kIsTestnet),
     ),
 
-    // 5) Replace Stellar service when AssetVM is ready (issuer/network aware)
+    // 5) Replace Stellar service when AssetVM is ready
     ProxyProvider<AssetVM, StellarWalletServices>(
       update: (ctx, assetVM, old) {
         final issuer = assetVM.usdcIssuer;
@@ -137,15 +133,17 @@ List<SingleChildWidget> _buildProviders() {
       },
     ),
 
-    // ✅ 6) WalletHome depends on Stellar + SeedKeypair (auto-binds address)
-    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, WalletHomeVM>(
+    // 6) WalletHome depends on Stellar + SeedKeypair
+    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
+        WalletHomeVM>(
       create: (ctx) => WalletHomeVM(
         stellar: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
       )..bindToAddress(ctx.read<SeedKeypairVM>().accountId),
       update: (ctx, stellar, seedVM, existing) {
-        final vm = existing ?? WalletHomeVM(stellar: stellar, seedVM: seedVM);
-        vm.bindToAddress(seedVM.accountId); // keep bound after rebuilds / wallet switch
+        final vm =
+            existing ?? WalletHomeVM(stellar: stellar, seedVM: seedVM);
+        vm.bindToAddress(seedVM.accountId);
         return vm;
       },
     ),
@@ -171,12 +169,15 @@ List<SingleChildWidget> _buildProviders() {
 
     // 9) Transactions depends on Stellar
     ChangeNotifierProxyProvider<StellarWalletServices, TransactionsVM>(
-      create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletServices>()),
-      update: (ctx, stellar, prev) => prev ?? TransactionsVM(stellarSvc: stellar),
+      create: (ctx) => TransactionsVM(
+          stellarSvc: ctx.read<StellarWalletServices>()),
+      update: (ctx, stellar, prev) =>
+      prev ?? TransactionsVM(stellarSvc: stellar),
     ),
 
     // 10) Send depends on Stellar + SeedKeypair
-    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, SendVM>(
+    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
+        SendVM>(
       create: (ctx) => SendVM(
         service: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
@@ -185,24 +186,38 @@ List<SingleChildWidget> _buildProviders() {
       prev ?? SendVM(service: stellar, seedVM: seedVM),
     ),
 
-    // 11) Seed phrase depends on Stellar (for mnemonic gen/validate)
+    // 11) Seed phrase depends on Stellar
     ChangeNotifierProxyProvider<StellarWalletServices, SeedPhraseVM>(
-      create: (ctx) => SeedPhraseVM(service: ctx.read<StellarWalletServices>()),
-      update: (ctx, stellar, vm) => vm ?? SeedPhraseVM(service: stellar),
+      create: (ctx) =>
+          SeedPhraseVM(service: ctx.read<StellarWalletServices>()),
+      update: (ctx, stellar, vm) =>
+      vm ?? SeedPhraseVM(service: stellar),
     ),
 
     // 12) Swap depends on Stellar + SeedKeypair
-    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, SwapVM>(
+    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
+        SwapVM>(
       create: (ctx) => SwapVM(
         svc: ctx.read<StellarWalletServices>(),
         keypairVM: ctx.read<SeedKeypairVM>(),
-      )..bindToActiveWallet(), // bind immediately to the active wallet
+      )..bindToActiveWallet(),
       update: (ctx, stellar, seedVM, existing) {
-        final vm = existing ?? SwapVM(svc: stellar, keypairVM: seedVM);
-        // keep VM bound after rebuilds/hot reload or when SeedKeypairVM changes
+        final vm =
+            existing ?? SwapVM(svc: stellar, keypairVM: seedVM);
         vm.bindToAddress(seedVM.accountId);
         return vm;
       },
+    ),
+
+    // 13) Claimable balances depends on Stellar + SeedKeypair
+    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
+        ClaimableVM>(
+      create: (ctx) => ClaimableVM(
+        service: ctx.read<StellarWalletServices>(),
+        seedVM: ctx.read<SeedKeypairVM>(),
+      ),
+      update: (ctx, stellar, seedVM, prev) =>
+      prev ?? ClaimableVM(service: stellar, seedVM: seedVM),
     ),
   ];
 }
@@ -212,14 +227,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Listen to theme changes
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: _themeModeVN,
       builder: (_, mode, __) {
         return MaterialApp(
           title: 'NextFi Wallet',
           debugShowCheckedModeBanner: false,
-          themeMode: mode,            // ← live-updated by SettingsVM via ThemeBridge
+          themeMode: mode,
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),
