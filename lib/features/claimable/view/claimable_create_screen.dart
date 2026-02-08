@@ -35,8 +35,15 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
   bool _isXlm = true;
   ClaimableMode _mode = ClaimableMode.unconditional;
+
+  // ── Unlock (time-locked mode) ──────────────────────────────────────────
   DateTime? _unlockDate;
   TimeOfDay? _unlockTime;
+
+  // ── Expiration (both modes) ────────────────────────────────────────────
+  bool _hasExpiry = false;
+  DateTime? _expiryDate;
+  TimeOfDay? _expiryTime;
 
   double? _xlmBal;
   double? _usdcBal;
@@ -83,7 +90,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   bool _looksLikeStellarPk(String x) =>
       RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
 
-  Future<void> _pickDate() async {
+  // ── Unlock pickers ─────────────────────────────────────────────────────
+
+  Future<void> _pickUnlockDate() async {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -96,7 +105,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     }
   }
 
-  Future<void> _pickTime() async {
+  Future<void> _pickUnlockTime() async {
     final time = await showTimePicker(
       context: context,
       initialTime: _unlockTime ?? TimeOfDay.now(),
@@ -118,6 +127,49 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
+  // ── Expiry pickers ─────────────────────────────────────────────────────
+
+  Future<void> _pickExpiryDate() async {
+    final now = DateTime.now();
+    final earliest = _mode == ClaimableMode.timeLocked && _unlockDate != null
+        ? _unlockDate!.add(const Duration(days: 1))
+        : now.add(const Duration(hours: 1));
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? earliest,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 5)),
+    );
+    if (date != null && mounted) {
+      setState(() => _expiryDate = date);
+    }
+  }
+
+  Future<void> _pickExpiryTime() async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _expiryTime ?? TimeOfDay.now(),
+    );
+    if (time != null && mounted) {
+      setState(() => _expiryTime = time);
+    }
+  }
+
+  DateTime? get _combinedExpiryDateTime {
+    if (_expiryDate == null) return null;
+    final t = _expiryTime ?? const TimeOfDay(hour: 23, minute: 59);
+    return DateTime(
+      _expiryDate!.year,
+      _expiryDate!.month,
+      _expiryDate!.day,
+      t.hour,
+      t.minute,
+    );
+  }
+
+  // ── Validation ─────────────────────────────────────────────────────────
+
   String? _validate() {
     final addr = _recipientCtl.text.trim();
     if (!_looksLikeStellarPk(addr)) return 'Enter a valid Stellar address (G…)';
@@ -130,6 +182,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       final dt = _combinedUnlockDateTime;
       if (dt == null) return 'Pick an unlock date';
       if (dt.isBefore(DateTime.now())) return 'Unlock time must be in the future';
+    }
+
+    if (_hasExpiry) {
+      final exp = _combinedExpiryDateTime;
+      if (exp == null) return 'Pick an expiration date';
+      if (exp.isBefore(DateTime.now())) return 'Expiration must be in the future';
+
+      if (_mode == ClaimableMode.timeLocked) {
+        final unlock = _combinedUnlockDateTime;
+        if (unlock != null && exp.isBefore(unlock)) {
+          return 'Expiration must be after unlock time';
+        }
+      }
     }
 
     return null;
@@ -186,18 +251,38 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
     try {
       String txHash;
-      if (_mode == ClaimableMode.unconditional) {
+
+      if (_mode == ClaimableMode.unconditional && !_hasExpiry) {
+        // ── Instant, no expiry (original) ──────────────────────────────
         txHash = await vm.createUnconditional(
           isXlm: _isXlm,
           amount: amt,
           recipientId: addr,
         );
-      } else {
+      } else if (_mode == ClaimableMode.unconditional && _hasExpiry) {
+        // ── Instant with expiry ────────────────────────────────────────
+        txHash = await vm.createUnconditionalWithExpiry(
+          isXlm: _isXlm,
+          amount: amt,
+          recipientId: addr,
+          expiryTime: _combinedExpiryDateTime!,
+        );
+      } else if (_mode == ClaimableMode.timeLocked && !_hasExpiry) {
+        // ── Time-locked, no expiry (original) ──────────────────────────
         txHash = await vm.createTimeLocked(
           isXlm: _isXlm,
           amount: amt,
           recipientId: addr,
           unlockTime: _combinedUnlockDateTime!,
+        );
+      } else {
+        // ── Time-locked with expiry ────────────────────────────────────
+        txHash = await vm.createTimeLockedWithExpiry(
+          isXlm: _isXlm,
+          amount: amt,
+          recipientId: addr,
+          unlockTime: _combinedUnlockDateTime!,
+          expiryTime: _combinedExpiryDateTime!,
         );
       }
 
@@ -267,6 +352,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════════════════════
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -298,10 +387,16 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 _buildRecipientField(c),
                 const SizedBox(height: 14),
                 _buildAmountField(c),
+
+                // ── Unlock picker (time-locked only) ─────────────────────
                 if (_mode == ClaimableMode.timeLocked) ...[
                   const SizedBox(height: 16),
-                  _buildTimePicker(c),
+                  _buildUnlockPicker(c),
                 ],
+
+                // ── Expiration toggle + picker (both modes) ──────────────
+                const SizedBox(height: 16),
+                _buildExpirySection(c),
               ],
             ),
           ),
@@ -312,6 +407,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       bottomNavigationBar: _buildBottomBar(c),
     );
   }
+
+  // ── Asset toggle ───────────────────────────────────────────────────────
 
   Widget _buildAssetToggle(AppColor c) {
     return Row(
@@ -365,6 +462,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
+  // ── Balance row ────────────────────────────────────────────────────────
+
   Widget _buildBalanceRow(AppColor c) {
     if (_loadingBal) {
       return Container(
@@ -409,6 +508,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       ),
     );
   }
+
+  // ── Mode toggle ────────────────────────────────────────────────────────
 
   Widget _buildModeToggle(AppColor c) {
     return Row(
@@ -469,6 +570,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
+  // ── Recipient field ────────────────────────────────────────────────────
+
   Widget _buildRecipientField(AppColor c) {
     return TextFormField(
       controller: _recipientCtl,
@@ -525,6 +628,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
+  // ── Amount field ───────────────────────────────────────────────────────
+
   Widget _buildAmountField(AppColor c) {
     return TextFormField(
       controller: _amountCtl,
@@ -549,14 +654,16 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             HapticFeedback.selectionClick();
             final bal = _currentBal;
             final v = _isXlm && bal > 1 ? bal - 1 : bal;
-            _amountCtl.text =
-            v > 0 ? v.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '') : '';
+            _amountCtl.text = v > 0
+                ? v.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
+                : '';
             _amountCtl.selection = TextSelection.fromPosition(
                 TextPosition(offset: _amountCtl.text.length));
           },
           borderRadius: BorderRadius.circular(6),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Text('MAX',
                 style: TextStyle(
                   color: c.primary,
@@ -576,7 +683,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildTimePicker(AppColor c) {
+  // ── Unlock picker (time-locked mode) ───────────────────────────────────
+
+  Widget _buildUnlockPicker(AppColor c) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -609,7 +718,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   label: _unlockDate != null
                       ? _dateFmt.format(_unlockDate!)
                       : 'Pick date',
-                  onTap: _pickDate,
+                  onTap: _pickUnlockDate,
                 ),
               ),
               const SizedBox(width: 10),
@@ -620,7 +729,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   label: _unlockTime != null
                       ? _unlockTime!.format(context)
                       : 'Pick time',
-                  onTap: _pickTime,
+                  onTap: _pickUnlockTime,
                 ),
               ),
             ],
@@ -654,12 +763,150 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
+  // ── Expiration section (both modes) ────────────────────────────────────
+
+  Widget _buildExpirySection(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _hasExpiry
+            ? c.warning.withValues(alpha: 0.03)
+            : c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _hasExpiry
+              ? c.warning.withValues(alpha: 0.15)
+              : c.border.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Toggle row
+          Row(
+            children: [
+              Icon(
+                LucideIcons.timerOff,
+                size: 16,
+                color: _hasExpiry ? c.warning : c.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Set expiration',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: 28,
+                child: Switch.adaptive(
+                  value: _hasExpiry,
+                  activeColor: c.warning,
+                  onChanged: (v) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _hasExpiry = v;
+                      if (!v) {
+                        _expiryDate = null;
+                        _expiryTime = null;
+                      }
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          if (!_hasExpiry) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Without expiration, the balance stays claimable indefinitely.',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                height: 1.4,
+              ),
+            ),
+          ],
+
+          if (_hasExpiry) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _pickerButton(
+                    c,
+                    icon: LucideIcons.calendar,
+                    label: _expiryDate != null
+                        ? _dateFmt.format(_expiryDate!)
+                        : 'Expiry date',
+                    onTap: _pickExpiryDate,
+                    accentColor: c.warning,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _pickerButton(
+                    c,
+                    icon: LucideIcons.clock,
+                    label: _expiryTime != null
+                        ? _expiryTime!.format(context)
+                        : 'Expiry time',
+                    onTap: _pickExpiryTime,
+                    accentColor: c.warning,
+                  ),
+                ),
+              ],
+            ),
+            if (_combinedExpiryDateTime != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: c.warning.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.alertTriangle,
+                        size: 13, color: c.warning),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'If unclaimed by ${_dateFmt.format(_combinedExpiryDateTime!)} at '
+                            '${_expiryTime?.format(context) ?? '11:59 PM'}, '
+                            'you can reclaim the funds.',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Shared picker button ───────────────────────────────────────────────
+
   Widget _pickerButton(
       AppColor c, {
         required IconData icon,
         required String label,
         required VoidCallback onTap,
+        Color? accentColor,
       }) {
+    final color = accentColor ?? c.primary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -675,7 +922,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           ),
           child: Row(
             children: [
-              Icon(icon, size: 15, color: c.primary),
+              Icon(icon, size: 15, color: color),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(label,
@@ -693,8 +940,30 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
+  // ── Info card ──────────────────────────────────────────────────────────
+
   Widget _buildInfoCard(AppColor c) {
     final isTimeLocked = _mode == ClaimableMode.timeLocked;
+
+    String body;
+    if (isTimeLocked && _hasExpiry) {
+      body = 'Funds are locked until the unlock time. '
+          'The recipient can claim between the unlock and expiration dates. '
+          'After expiry, you can reclaim the unclaimed balance.';
+    } else if (isTimeLocked) {
+      body = 'Funds are locked on the Stellar network until the unlock time. '
+          'The recipient can claim them after that point. '
+          'If unclaimed, you can reclaim the balance.';
+    } else if (_hasExpiry) {
+      body = 'The recipient can claim these funds immediately, '
+          'but must do so before the expiration date. '
+          'After expiry, you can reclaim the unclaimed balance.';
+    } else {
+      body = 'The recipient can claim these funds at any time. '
+          'The balance is held on the Stellar network, not in their account, '
+          'until they claim it.';
+    }
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -708,7 +977,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           Row(
             children: [
               Icon(
-                isTimeLocked ? LucideIcons.shieldQuestion : LucideIcons.info,
+                isTimeLocked
+                    ? LucideIcons.shieldQuestion
+                    : LucideIcons.info,
                 size: 15,
                 color: c.textSecondary,
               ),
@@ -722,13 +993,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            isTimeLocked
-                ? 'Funds are locked on the Stellar network until the unlock time. '
-                'The recipient can claim them after that point. '
-                'If unclaimed, you can reclaim the balance.'
-                : 'The recipient can claim these funds at any time. '
-                'The balance is held on the Stellar network, not in their account, '
-                'until they claim it.',
+            body,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 12,
@@ -739,6 +1004,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       ),
     );
   }
+
+  // ── Bottom bar ─────────────────────────────────────────────────────────
 
   Widget _buildBottomBar(AppColor c) {
     return SafeArea(

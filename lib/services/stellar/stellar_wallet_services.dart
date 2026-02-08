@@ -1079,6 +1079,126 @@ class StellarWalletServices {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+// ADD these methods to the "Claimable Balances" section of
+// StellarWalletServices.dart (alongside existing createTimeLockedPayment, etc.)
+// ══════════════════════════════════════════════════════════════════════════
+
+  // ── Expiration-aware claimable balance creators ─────────────────────────
+
+  /// Create an **instant** claimable balance **with expiration**.
+  ///
+  /// The recipient can claim immediately but must do so before [expiryTime].
+  /// After expiry, the sender can reclaim the funds.
+  ///
+  /// Predicates:
+  /// - Recipient: `beforeAbsoluteTime(expiry)` → claim before expiry
+  /// - Sender:    `NOT(beforeAbsoluteTime(expiry))` → reclaim after expiry
+  Future<String> createUnconditionalWithExpiry({
+    required KeyPair keyPair,
+    required Asset asset,
+    required double amount,
+    required String recipientId,
+    required DateTime expiryTime,
+    ProgressCallback? onProgress,
+  }) async {
+    if (expiryTime.isBefore(DateTime.now())) {
+      _fail(
+        'Expiration time must be in the future',
+        advice: 'Choose a date and time after right now',
+        code: 'EXPIRY_IN_PAST',
+      );
+    }
+
+    final expiryTimestamp = expiryTime.millisecondsSinceEpoch ~/ 1000;
+
+    // Recipient can claim any time BEFORE expiry
+    final recipientClaimant = Claimant(
+      recipientId,
+      Claimant.predicateBeforeAbsoluteTime(expiryTimestamp),
+    );
+
+    // Sender can reclaim AFTER expiry (NOT before expiry = after expiry)
+    final senderClaimant = Claimant(
+      keyPair.accountId,
+      Claimant.predicateNot(
+        Claimant.predicateBeforeAbsoluteTime(expiryTimestamp),
+      ),
+    );
+
+    return createClaimableBalance(
+      keyPair: keyPair,
+      asset: asset,
+      amount: amount,
+      claimants: [recipientClaimant, senderClaimant],
+      onProgress: onProgress,
+    );
+  }
+
+  /// Create a **time-locked** claimable balance **with expiration**.
+  ///
+  /// The recipient can claim only between [unlockTime] and [expiryTime].
+  /// After expiry, the sender can reclaim the funds.
+  ///
+  /// Predicates:
+  /// - Recipient: `AND(NOT(beforeAbsoluteTime(unlock)), beforeAbsoluteTime(expiry))`
+  ///              → claim after unlock AND before expiry
+  /// - Sender:    `NOT(beforeAbsoluteTime(expiry))` → reclaim after expiry
+  Future<String> createTimeLockedWithExpiry({
+    required KeyPair keyPair,
+    required Asset asset,
+    required double amount,
+    required String recipientId,
+    required DateTime unlockTime,
+    required DateTime expiryTime,
+    ProgressCallback? onProgress,
+  }) async {
+    if (unlockTime.isBefore(DateTime.now())) {
+      _fail(
+        'Unlock time must be in the future',
+        advice: 'Choose a date and time after right now',
+        code: 'UNLOCK_IN_PAST',
+      );
+    }
+
+    if (expiryTime.isBefore(unlockTime)) {
+      _fail(
+        'Expiration must be after unlock time',
+        advice: 'The expiration date needs to be after the unlock date so the recipient has a window to claim',
+        code: 'EXPIRY_BEFORE_UNLOCK',
+      );
+    }
+
+    final unlockTimestamp = unlockTime.millisecondsSinceEpoch ~/ 1000;
+    final expiryTimestamp = expiryTime.millisecondsSinceEpoch ~/ 1000;
+
+    // Recipient can claim AFTER unlock AND BEFORE expiry
+    final recipientClaimant = Claimant(
+      recipientId,
+      Claimant.predicateAnd(
+        Claimant.predicateNot(
+          Claimant.predicateBeforeAbsoluteTime(unlockTimestamp),
+        ),
+        Claimant.predicateBeforeAbsoluteTime(expiryTimestamp),
+      ),
+    );
+
+    // Sender can reclaim AFTER expiry
+    final senderClaimant = Claimant(
+      keyPair.accountId,
+      Claimant.predicateNot(
+        Claimant.predicateBeforeAbsoluteTime(expiryTimestamp),
+      ),
+    );
+
+    return createClaimableBalance(
+      keyPair: keyPair,
+      asset: asset,
+      amount: amount,
+      claimants: [recipientClaimant, senderClaimant],
+      onProgress: onProgress,
+    );
+  }
   Future<String> createTimeLockedPayment({
     required KeyPair keyPair,
     required Asset asset,

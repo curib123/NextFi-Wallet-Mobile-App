@@ -12,6 +12,7 @@ import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 ///
 /// Handles fetching, parsing, and claiming of Stellar claimable balances.
 /// Supports both received (claimable by user) and sent (created by user) balances.
+/// Supports expiration predicates for both instant and time-locked modes.
 class ClaimableVM extends ChangeNotifier {
   ClaimableVM({
     required StellarWalletServices service,
@@ -71,13 +72,18 @@ class ClaimableVM extends ChangeNotifier {
   // Computed properties
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Number of claimable (ready) received items
+  /// Number of claimable (ready) received items — excludes expired
   int get receivedReadyCount =>
-      _receivedItems.where((i) => i.canClaimNow).length;
+      _receivedItems.where((i) => i.canClaimNow && !i.isExpired).length;
 
-  /// Number of locked received items
-  int get receivedLockedCount =>
-      _receivedItems.where((i) => i.unlockTime != null && !i.canClaimNow).length;
+  /// Number of locked received items — excludes expired
+  int get receivedLockedCount => _receivedItems
+      .where((i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
+      .length;
+
+  /// Number of expired received items
+  int get receivedExpiredCount =>
+      _receivedItems.where((i) => i.isExpired).length;
 
   /// Total received count
   int get receivedTotalCount => _receivedItems.length;
@@ -87,11 +93,15 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Number of sent items that are ready to claim (by recipients)
   int get sentReadyCount =>
-      _sentItems.where((i) => i.canClaimNow).length;
+      _sentItems.where((i) => i.canClaimNow && !i.isExpired).length;
 
   /// Number of sent items that are locked
-  int get sentLockedCount =>
-      _sentItems.where((i) => i.unlockTime != null && !i.canClaimNow).length;
+  int get sentLockedCount => _sentItems
+      .where((i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
+      .length;
+
+  /// Number of sent items that are expired (reclaimable by sender)
+  int get sentExpiredCount => _sentItems.where((i) => i.isExpired).length;
 
   /// Total count of current tab
   int get currentTabCount =>
@@ -109,16 +119,28 @@ class ClaimableVM extends ChangeNotifier {
   /// Get received items grouped by status
   Map<String, List<ClaimableItem>> get receivedItemsByStatus {
     return {
-      'ready': _receivedItems.where((i) => i.canClaimNow).toList(),
-      'locked': _receivedItems.where((i) => i.unlockTime != null && !i.canClaimNow).toList(),
+      'ready': _receivedItems
+          .where((i) => i.canClaimNow && !i.isExpired)
+          .toList(),
+      'locked': _receivedItems
+          .where(
+              (i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
+          .toList(),
+      'expired': _receivedItems.where((i) => i.isExpired).toList(),
     };
   }
 
   /// Get sent items grouped by status
   Map<String, List<ClaimableItem>> get sentItemsByStatus {
     return {
-      'ready': _sentItems.where((i) => i.canClaimNow).toList(),
-      'locked': _sentItems.where((i) => i.unlockTime != null && !i.canClaimNow).toList(),
+      'ready': _sentItems
+          .where((i) => i.canClaimNow && !i.isExpired)
+          .toList(),
+      'locked': _sentItems
+          .where(
+              (i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
+          .toList(),
+      'reclaimable': _sentItems.where((i) => i.isExpired).toList(),
     };
   }
 
@@ -171,7 +193,7 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Initialize the view model and load balances
   Future<void> init() async {
-    if (_loading) return; // Prevent concurrent initialization
+    if (_loading) return;
 
     _loading = true;
     _error = null;
@@ -199,7 +221,7 @@ class ClaimableVM extends ChangeNotifier {
       return init();
     }
 
-    if (_loading) return; // Prevent concurrent refreshes
+    if (_loading) return;
 
     _error = null;
     _safeNotify();
@@ -223,7 +245,6 @@ class ClaimableVM extends ChangeNotifier {
       throw StateError('Account ID not set');
     }
 
-    // Fetch both received and sent balances in parallel
     final results = await Future.wait([
       _fetchReceivedBalances(aid),
       _fetchSentBalances(aid),
@@ -240,8 +261,13 @@ class ClaimableVM extends ChangeNotifier {
 
     final items = raw.map((r) => _parseResponse(r, accountId, now)).toList();
 
-    // Sort: claimable-now first, then by amount descending
+    // Sort: claimable-now first, then expired last, then by amount desc
     items.sort((a, b) {
+      // Expired items go to the bottom
+      if (a.isExpired != b.isExpired) {
+        return a.isExpired ? 1 : -1;
+      }
+      // Then claimable-now first
       if (a.canClaimNow != b.canClaimNow) {
         return a.canClaimNow ? -1 : 1;
       }
@@ -259,9 +285,8 @@ class ClaimableVM extends ChangeNotifier {
     final items = <ClaimableItem>[];
 
     for (final r in raw) {
-      // Parse each claimant to determine who can claim and when
       for (final claimant in r.claimants) {
-        // Skip if claimant is the sender (shouldn't happen, but just in case)
+        // Skip the sender's own claimant entry (used for reclaim after expiry)
         if (claimant.destination == accountId) continue;
 
         final parsed = _parsePredicate(claimant.predicate, now);
@@ -276,8 +301,13 @@ class ClaimableVM extends ChangeNotifier {
       }
     }
 
-    // Sort by amount descending
-    items.sort((a, b) => b.amount.compareTo(a.amount));
+    // Sort: reclaimable (expired) first, then by amount desc
+    items.sort((a, b) {
+      if (a.isExpired != b.isExpired) {
+        return a.isExpired ? -1 : 1;
+      }
+      return b.amount.compareTo(a.amount);
+    });
 
     return items;
   }
@@ -311,12 +341,14 @@ class ClaimableVM extends ChangeNotifier {
 
     // ── Claimant predicate ──────────────────────────────────────────────
     DateTime? unlockTime;
+    DateTime? expiryTime;
     bool canClaimNow = true;
 
     for (final c in r.claimants) {
       if (c.destination == myAccountId) {
         final parsed = _parsePredicate(c.predicate, now);
         unlockTime = parsed.unlockTime;
+        expiryTime = parsed.expiryTime;
         canClaimNow = parsed.canClaimNow;
         break;
       }
@@ -342,6 +374,7 @@ class ClaimableVM extends ChangeNotifier {
       sponsorId: sponsor,
       lastModified: lastMod,
       unlockTime: unlockTime,
+      expiryTime: expiryTime,
       canClaimNow: canClaimNow,
     );
   }
@@ -390,13 +423,21 @@ class ClaimableVM extends ChangeNotifier {
       sponsorId: recipientId, // For sent items, show recipient as "sponsor"
       lastModified: lastMod,
       unlockTime: predicateResult.unlockTime,
+      expiryTime: predicateResult.expiryTime,
       canClaimNow: predicateResult.canClaimNow,
     );
   }
 
   /// Recursively evaluate a ClaimantPredicateResponse to determine
-  /// whether the balance can be claimed right now and extract any
-  /// unlock/deadline timestamp.
+  /// whether the balance can be claimed right now, and extract any
+  /// unlock timestamp and/or expiry timestamp.
+  ///
+  /// Predicate patterns handled:
+  /// - `unconditional` → always claimable, no times
+  /// - `beforeAbsoluteTime(T)` → claimable before T (expiry = T)
+  /// - `NOT(beforeAbsoluteTime(T))` → claimable after T (unlock = T)
+  /// - `AND(NOT(before(unlock)), before(expiry))` → window between unlock & expiry
+  /// - `OR(...)` → at least one must be true
   _PredicateResult _parsePredicate(
       ClaimantPredicateResponse p,
       DateTime now,
@@ -406,7 +447,7 @@ class ClaimableVM extends ChangeNotifier {
       return const _PredicateResult(canClaimNow: true);
     }
 
-    // 2) NOT(beforeAbsoluteTime) → can claim AFTER that time
+    // 2) NOT(beforeAbsoluteTime) → can claim AFTER that time (unlock)
     if (p.not != null) {
       final inner = p.not!;
 
@@ -429,16 +470,17 @@ class ClaimableVM extends ChangeNotifier {
       return _PredicateResult(
         canClaimNow: !nested.canClaimNow,
         unlockTime: nested.unlockTime,
+        expiryTime: nested.expiryTime,
       );
     }
 
-    // 3) beforeAbsoluteTime → can claim BEFORE the deadline
+    // 3) beforeAbsoluteTime → can claim BEFORE the deadline (expiry)
     if (p.beforeAbsoluteTime != null) {
       try {
         final deadline = DateTime.parse(p.beforeAbsoluteTime!);
         return _PredicateResult(
           canClaimNow: now.isBefore(deadline),
-          unlockTime: deadline,
+          expiryTime: deadline,
         );
       } catch (e) {
         if (kDebugMode) {
@@ -454,22 +496,33 @@ class ClaimableVM extends ChangeNotifier {
     }
 
     // 5) AND — all sub-predicates must be true
+    //    Common pattern: AND(NOT(before(unlock)), before(expiry))
     if (p.and != null && p.and!.isNotEmpty) {
       bool allTrue = true;
-      DateTime? latestUnlock;
+      DateTime? unlock;
+      DateTime? expiry;
 
       for (final sub in p.and!) {
         final r = _parsePredicate(sub, now);
         if (!r.canClaimNow) allTrue = false;
+
+        // Collect unlock and expiry from sub-predicates
         if (r.unlockTime != null) {
-          if (latestUnlock == null || r.unlockTime!.isAfter(latestUnlock)) {
-            latestUnlock = r.unlockTime;
+          if (unlock == null || r.unlockTime!.isAfter(unlock)) {
+            unlock = r.unlockTime;
+          }
+        }
+        if (r.expiryTime != null) {
+          if (expiry == null || r.expiryTime!.isBefore(expiry)) {
+            expiry = r.expiryTime;
           }
         }
       }
+
       return _PredicateResult(
         canClaimNow: allTrue,
-        unlockTime: latestUnlock,
+        unlockTime: unlock,
+        expiryTime: expiry,
       );
     }
 
@@ -477,6 +530,7 @@ class ClaimableVM extends ChangeNotifier {
     if (p.or != null && p.or!.isNotEmpty) {
       bool anyTrue = false;
       DateTime? earliestUnlock;
+      DateTime? latestExpiry;
 
       for (final sub in p.or!) {
         final r = _parsePredicate(sub, now);
@@ -487,10 +541,16 @@ class ClaimableVM extends ChangeNotifier {
             earliestUnlock = r.unlockTime;
           }
         }
+        if (r.expiryTime != null) {
+          if (latestExpiry == null || r.expiryTime!.isAfter(latestExpiry)) {
+            latestExpiry = r.expiryTime;
+          }
+        }
       }
       return _PredicateResult(
         canClaimNow: anyTrue,
         unlockTime: earliestUnlock,
+        expiryTime: latestExpiry,
       );
     }
 
@@ -499,13 +559,12 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Claim
+  // Claim / Reclaim
   // ──────────────────────────────────────────────────────────────────────────
 
   /// Claim a claimable balance by ID
   ///
   /// Returns the transaction hash on success.
-  /// Throws an exception on failure.
   Future<String> claim(String balanceId) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
@@ -527,10 +586,13 @@ class ClaimableVM extends ChangeNotifier {
     }
   }
 
-  /// Reclaim a sent claimable balance (if allowed by predicate)
+  /// Reclaim an expired sent claimable balance.
   ///
-  /// Note: This requires the sender to be a claimant, which is not
-  /// typical but can be set up when creating the balance.
+  /// This works because when creating with expiry, the sender is added
+  /// as a claimant with NOT(beforeAbsoluteTime(expiry)) predicate,
+  /// allowing them to claim after the expiry time.
+  ///
+  /// Returns the transaction hash on success.
   Future<String> reclaim(String balanceId) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
@@ -556,14 +618,13 @@ class ClaimableVM extends ChangeNotifier {
   // Create
   // ──────────────────────────────────────────────────────────────────────────
 
+  /// Get the correct asset based on [isXlm] flag
+  Asset _asset(bool isXlm) => isXlm
+      ? Asset.NATIVE
+      : AssetTypeCreditAlphaNum4('USDC', _svc.usdcIssuer);
+
   /// Create an unconditional claimable balance (recipient can claim anytime).
-  ///
-  /// [isXlm] - true for XLM, false for USDC
-  /// [amount] - amount to send
-  /// [recipientId] - recipient's Stellar address
-  /// [memo] - optional memo text
-  ///
-  /// Returns the transaction hash on success.
+  /// No expiration — stays claimable forever.
   Future<String> createUnconditional({
     required bool isXlm,
     required double amount,
@@ -572,13 +633,9 @@ class ClaimableVM extends ChangeNotifier {
   }) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
-      final asset = isXlm
-          ? Asset.NATIVE
-          : AssetTypeCreditAlphaNum4('USDC', _svc.usdcIssuer);
-
       return await _svc.createUnconditionalClaimableBalance(
         keyPair: kp,
-        asset: asset,
+        asset: _asset(isXlm),
         amount: amount,
         recipientId: recipientId,
       );
@@ -590,15 +647,36 @@ class ClaimableVM extends ChangeNotifier {
     }
   }
 
+  /// Create an unconditional claimable balance **with expiration**.
+  ///
+  /// Recipient can claim immediately but must do so before [expiryTime].
+  /// After expiry, the sender can reclaim the funds.
+  Future<String> createUnconditionalWithExpiry({
+    required bool isXlm,
+    required double amount,
+    required String recipientId,
+    required DateTime expiryTime,
+    String? memo,
+  }) async {
+    try {
+      final kp = await _seedVM.deriveKeyPair();
+      return await _svc.createUnconditionalWithExpiry(
+        keyPair: kp,
+        asset: _asset(isXlm),
+        amount: amount,
+        recipientId: recipientId,
+        expiryTime: expiryTime,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('[ClaimableVM] Create unconditional with expiry error: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Create a time-locked claimable balance.
-  ///
-  /// [isXlm] - true for XLM, false for USDC
-  /// [amount] - amount to send
-  /// [recipientId] - recipient's Stellar address
-  /// [unlockTime] - when the recipient can claim
-  /// [memo] - optional memo text
-  ///
-  /// Returns the transaction hash on success.
+  /// No expiration — once unlocked, stays claimable forever.
   Future<String> createTimeLocked({
     required bool isXlm,
     required double amount,
@@ -608,13 +686,9 @@ class ClaimableVM extends ChangeNotifier {
   }) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
-      final asset = isXlm
-          ? Asset.NATIVE
-          : AssetTypeCreditAlphaNum4('USDC', _svc.usdcIssuer);
-
       return await _svc.createTimeLockedPayment(
         keyPair: kp,
-        asset: asset,
+        asset: _asset(isXlm),
         amount: amount,
         recipientId: recipientId,
         unlockTime: unlockTime,
@@ -622,6 +696,36 @@ class ClaimableVM extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) {
         print('[ClaimableVM] Create time-locked error: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Create a time-locked claimable balance **with expiration**.
+  ///
+  /// Recipient can only claim between [unlockTime] and [expiryTime].
+  /// After expiry, the sender can reclaim the funds.
+  Future<String> createTimeLockedWithExpiry({
+    required bool isXlm,
+    required double amount,
+    required String recipientId,
+    required DateTime unlockTime,
+    required DateTime expiryTime,
+    String? memo,
+  }) async {
+    try {
+      final kp = await _seedVM.deriveKeyPair();
+      return await _svc.createTimeLockedWithExpiry(
+        keyPair: kp,
+        asset: _asset(isXlm),
+        amount: amount,
+        recipientId: recipientId,
+        unlockTime: unlockTime,
+        expiryTime: expiryTime,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('[ClaimableVM] Create time-locked with expiry error: $e');
       }
       rethrow;
     }
@@ -660,13 +764,22 @@ class ClaimableVM extends ChangeNotifier {
   }
 }
 
-/// Internal result type for predicate parsing
+/// Internal result type for predicate parsing.
+///
+/// Now carries both [unlockTime] (NOT before = claim after) and
+/// [expiryTime] (before = claim before / deadline).
 class _PredicateResult {
   final bool canClaimNow;
+
+  /// The time after which claiming is allowed (from NOT(beforeAbsoluteTime))
   final DateTime? unlockTime;
+
+  /// The deadline before which claiming must happen (from beforeAbsoluteTime)
+  final DateTime? expiryTime;
 
   const _PredicateResult({
     required this.canClaimNow,
     this.unlockTime,
+    this.expiryTime,
   });
 }

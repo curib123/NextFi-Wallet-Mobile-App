@@ -1,10 +1,6 @@
 // lib/features/claimable/model/claimable_item.dart
 
 /// Parsed representation of a Stellar claimable balance for UI consumption.
-///
-/// This model represents a claimable balance in a user-friendly format,
-/// extracting the relevant information from Stellar's ClaimableBalanceResponse
-/// and making it easy to display in the UI.
 class ClaimableItem {
   /// Unique identifier for this claimable balance on the Stellar network
   final String balanceId;
@@ -29,6 +25,10 @@ class ClaimableItem {
   /// For before X predicates, this is the deadline BEFORE which claiming must happen.
   final DateTime? unlockTime;
 
+  /// Expiration time — after this, the recipient can no longer claim
+  /// and the sender can reclaim the funds. Null means no expiry.
+  final DateTime? expiryTime;
+
   /// Whether the current user can claim this balance right now.
   /// This takes into account both time-based predicates and other conditions.
   final bool canClaimNow;
@@ -41,6 +41,7 @@ class ClaimableItem {
     required this.sponsorId,
     this.lastModified,
     this.unlockTime,
+    this.expiryTime,
     required this.canClaimNow,
   });
 
@@ -64,6 +65,45 @@ class ClaimableItem {
     if (balanceId.length <= 16) return balanceId;
     return '${balanceId.substring(0, 8)}…${balanceId.substring(balanceId.length - 8)}';
   }
+
+  // ── Expiry helpers ─────────────────────────────────────────────────────
+
+  /// Whether this balance has an expiration date
+  bool get hasExpiry => expiryTime != null;
+
+  /// Whether this balance is past its expiration
+  bool get isExpired =>
+      expiryTime != null && DateTime.now().isAfter(expiryTime!);
+
+  /// Time remaining until expiry (null if no expiry or already expired)
+  Duration? get timeUntilExpiry {
+    if (expiryTime == null) return null;
+    final now = DateTime.now();
+    if (now.isAfter(expiryTime!)) return null;
+    return expiryTime!.difference(now);
+  }
+
+  /// Human-readable time remaining until expiry
+  String? get expiryTimeRemaining {
+    final duration = timeUntilExpiry;
+    if (duration == null) return null;
+
+    if (duration.inDays > 0) {
+      final days = duration.inDays;
+      final hours = duration.inHours % 24;
+      return '${days}d ${hours}h';
+    } else if (duration.inHours > 0) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      return '${hours}h ${minutes}m';
+    } else if (duration.inMinutes > 0) {
+      return '${duration.inMinutes}m';
+    } else {
+      return 'moments';
+    }
+  }
+
+  // ── Unlock helpers ─────────────────────────────────────────────────────
 
   /// Time remaining until unlock (null if not locked or already unlocked)
   Duration? get timeUntilUnlock {
@@ -93,8 +133,11 @@ class ClaimableItem {
     }
   }
 
+  // ── Status helpers ─────────────────────────────────────────────────────
+
   /// Status label for UI display
   String get statusLabel {
+    if (isExpired) return 'Expired';
     if (canClaimNow) return 'Ready';
     if (unlockTime != null && DateTime.now().isBefore(unlockTime!)) {
       return 'Locked';
@@ -111,6 +154,7 @@ class ClaimableItem {
     String? sponsorId,
     DateTime? lastModified,
     DateTime? unlockTime,
+    DateTime? expiryTime,
     bool? canClaimNow,
   }) {
     return ClaimableItem(
@@ -121,6 +165,7 @@ class ClaimableItem {
       sponsorId: sponsorId ?? this.sponsorId,
       lastModified: lastModified ?? this.lastModified,
       unlockTime: unlockTime ?? this.unlockTime,
+      expiryTime: expiryTime ?? this.expiryTime,
       canClaimNow: canClaimNow ?? this.canClaimNow,
     );
   }
@@ -132,7 +177,8 @@ class ClaimableItem {
         'asset: $displayAsset, '
         'amount: $amount, '
         'canClaim: $canClaimNow, '
-        'locked: ${unlockTime != null && !canClaimNow}'
+        'locked: ${unlockTime != null && !canClaimNow}, '
+        'expired: $isExpired'
         ')';
   }
 
@@ -181,20 +227,25 @@ extension ClaimableItemListExtension on List<ClaimableItem> {
   List<ClaimableItem> byAsset(String assetCode) {
     return where((item) =>
     item.assetCode.toUpperCase() == assetCode.toUpperCase() ||
-        (assetCode.toUpperCase() == 'XLM' && item.isNative)
-    ).toList();
+        (assetCode.toUpperCase() == 'XLM' && item.isNative))
+        .toList();
   }
 
   /// Get only claimable (ready) items
   List<ClaimableItem> get ready {
-    return where((item) => item.canClaimNow).toList();
+    return where((item) => item.canClaimNow && !item.isExpired).toList();
   }
 
   /// Get only locked items (has unlock time and cannot claim now)
   List<ClaimableItem> get locked {
     return where((item) =>
-    item.unlockTime != null && !item.canClaimNow
-    ).toList();
+    item.unlockTime != null && !item.canClaimNow && !item.isExpired)
+        .toList();
+  }
+
+  /// Get only expired items
+  List<ClaimableItem> get expired {
+    return where((item) => item.isExpired).toList();
   }
 
   /// Get total amount by asset
@@ -222,6 +273,18 @@ extension ClaimableItemListExtension on List<ClaimableItem> {
       if (a.unlockTime == null) return 1;
       if (b.unlockTime == null) return -1;
       return a.unlockTime!.compareTo(b.unlockTime!);
+    });
+    return sorted;
+  }
+
+  /// Sort by expiry time (soonest first)
+  List<ClaimableItem> sortByExpiryTime() {
+    final sorted = List<ClaimableItem>.from(this);
+    sorted.sort((a, b) {
+      if (a.expiryTime == null && b.expiryTime == null) return 0;
+      if (a.expiryTime == null) return 1;
+      if (b.expiryTime == null) return -1;
+      return a.expiryTime!.compareTo(b.expiryTime!);
     });
     return sorted;
   }

@@ -31,6 +31,9 @@ class ClaimableBalanceInfo {
   /// Optional unlock time (for time-locked balances)
   final DateTime? unlockTime;
 
+  /// Optional expiration time (balance becomes unclaimable for recipient)
+  final DateTime? expiryTime;
+
   /// Status of the claimable balance
   final ClaimableBalanceStatus status;
 
@@ -48,6 +51,7 @@ class ClaimableBalanceInfo {
     required this.isSent,
     this.lastModifiedTime,
     this.unlockTime,
+    this.expiryTime,
     required this.status,
     required this.clawbackEnabled,
   });
@@ -82,18 +86,48 @@ class ClaimableBalanceInfo {
       }
     }
 
-    // Try to extract unlock time from predicates
+    // Extract unlock time AND expiry time from predicates
     DateTime? unlockTime;
+    DateTime? expiryTime;
     for (final claimant in response.claimants) {
       if (claimant.destination == currentAccountId) {
-        unlockTime = _extractUnlockTime(claimant.predicate);
+        final parsed = _extractTimeBounds(claimant.predicate);
+        unlockTime = parsed.unlockTime;
+        expiryTime = parsed.expiryTime;
         break;
       }
     }
 
+    // If current account is the sender, also check recipient predicates
+    // to determine expiry for display purposes
+    if (isSent && expiryTime == null) {
+      for (final claimant in response.claimants) {
+        if (claimant.destination != currentAccountId) {
+          final parsed = _extractTimeBounds(claimant.predicate);
+          // The recipient's beforeAbsoluteTime IS the expiry
+          if (parsed.expiryTime != null) {
+            expiryTime = parsed.expiryTime;
+          }
+          if (parsed.unlockTime != null && unlockTime == null) {
+            unlockTime = parsed.unlockTime;
+          }
+          break;
+        }
+      }
+    }
+
     // Determine status
+    final now = DateTime.now();
     ClaimableBalanceStatus status;
-    if (unlockTime != null && DateTime.now().isBefore(unlockTime)) {
+
+    if (expiryTime != null && now.isAfter(expiryTime)) {
+      // Past expiry — expired for recipient, reclaimable by sender
+      if (isSent) {
+        status = ClaimableBalanceStatus.reclaimable;
+      } else {
+        status = ClaimableBalanceStatus.expired;
+      }
+    } else if (unlockTime != null && now.isBefore(unlockTime)) {
       status = ClaimableBalanceStatus.locked;
     } else if (canClaim) {
       status = ClaimableBalanceStatus.claimable;
@@ -114,64 +148,78 @@ class ClaimableBalanceInfo {
       isSent: isSent,
       lastModifiedTime: lastModified,
       unlockTime: unlockTime,
+      expiryTime: expiryTime,
       status: status,
       clawbackEnabled: response.flags.clawbackEnabled,
     );
   }
 
-  /// Extract unlock time from predicate response
-  static DateTime? _extractUnlockTime(ClaimantPredicateResponse? predicate) {
-    if (predicate == null) return null;
+  /// Parsed time bounds from a predicate
+  static _TimeBounds _extractTimeBounds(ClaimantPredicateResponse? predicate) {
+    if (predicate == null) return _TimeBounds();
 
-    // Handle unconditional - no unlock time
+    // Unconditional — no time bounds at all
     if (predicate.unconditional == true) {
-      return null;
+      return _TimeBounds();
     }
 
-    // Handle NOT predicate (common for time locks: NOT(before X) means "after X")
-    if (predicate.not != null) {
+    // Simple beforeAbsoluteTime → this is an expiry (claim BEFORE this time)
+    if (predicate.beforeAbsoluteTime != null &&
+        predicate.not == null &&
+        predicate.and == null &&
+        predicate.or == null) {
+      try {
+        final expiry = DateTime.parse(predicate.beforeAbsoluteTime!);
+        return _TimeBounds(expiryTime: expiry);
+      } catch (_) {}
+    }
+
+    // NOT(beforeAbsoluteTime) → this is an unlock (claim AFTER this time)
+    if (predicate.not != null &&
+        predicate.and == null &&
+        predicate.or == null) {
       final inner = predicate.not!;
       if (inner.beforeAbsoluteTime != null) {
-        // Parse ISO 8601 timestamp
         try {
-          return DateTime.parse(inner.beforeAbsoluteTime!);
-        } catch (e) {
-          return null;
+          final unlock = DateTime.parse(inner.beforeAbsoluteTime!);
+          return _TimeBounds(unlockTime: unlock);
+        } catch (_) {}
+      }
+    }
+
+    // AND predicates — combine unlock + expiry
+    // Typical pattern: AND(NOT(beforeAbsoluteTime(unlock)), beforeAbsoluteTime(expiry))
+    if (predicate.and != null && predicate.and!.isNotEmpty) {
+      DateTime? unlock;
+      DateTime? expiry;
+
+      for (final p in predicate.and!) {
+        final inner = _extractTimeBounds(p);
+        if (inner.unlockTime != null) unlock ??= inner.unlockTime;
+        if (inner.expiryTime != null) expiry ??= inner.expiryTime;
+      }
+
+      return _TimeBounds(unlockTime: unlock, expiryTime: expiry);
+    }
+
+    // OR predicates
+    if (predicate.or != null && predicate.or!.isNotEmpty) {
+      for (final p in predicate.or!) {
+        final inner = _extractTimeBounds(p);
+        if (inner.unlockTime != null || inner.expiryTime != null) {
+          return inner;
         }
       }
-      if (inner.beforeRelativeTime != null) {
-        // Relative time predicates need the creation time
-        // We don't have access to that here, so we can't calculate exact time
-        return null;
-      }
     }
 
-    // Handle direct absolute time predicate (can claim BEFORE this time)
-    if (predicate.beforeAbsoluteTime != null) {
-      try {
-        return DateTime.parse(predicate.beforeAbsoluteTime!);
-      } catch (e) {
-        return null;
-      }
-    }
+    return _TimeBounds();
+  }
 
-    // Handle AND predicates recursively
-    if (predicate.and != null) {
-      for (final p in predicate.and!) {
-        final time = _extractUnlockTime(p);
-        if (time != null) return time;
-      }
-    }
+  // ── Legacy helper (kept for backward compatibility) ────────────────────
 
-    // Handle OR predicates recursively
-    if (predicate.or != null) {
-      for (final p in predicate.or!) {
-        final time = _extractUnlockTime(p);
-        if (time != null) return time;
-      }
-    }
-
-    return null;
+  /// Extract unlock time from predicate response
+  static DateTime? _extractUnlockTime(ClaimantPredicateResponse? predicate) {
+    return _extractTimeBounds(predicate).unlockTime;
   }
 
   /// Get display name for the asset
@@ -192,8 +240,47 @@ class ClaimableBalanceInfo {
         return 'Locked';
       case ClaimableBalanceStatus.sent:
         return 'Sent';
+      case ClaimableBalanceStatus.expired:
+        return 'Expired';
+      case ClaimableBalanceStatus.reclaimable:
+        return 'Reclaimable';
       case ClaimableBalanceStatus.other:
         return 'Not Claimable';
+    }
+  }
+
+  /// Whether this balance has an expiration
+  bool get hasExpiry => expiryTime != null;
+
+  /// Whether this balance is expired
+  bool get isExpired =>
+      expiryTime != null && DateTime.now().isAfter(expiryTime!);
+
+  /// Get time until expiry
+  Duration? get timeUntilExpiry {
+    if (expiryTime == null) return null;
+    final now = DateTime.now();
+    if (now.isAfter(expiryTime!)) return null;
+    return expiryTime!.difference(now);
+  }
+
+  /// Get friendly expiry message
+  String? get expiryMessage {
+    if (expiryTime == null) return null;
+
+    if (isExpired) return 'Expired';
+
+    final duration = timeUntilExpiry;
+    if (duration == null) return 'Expired';
+
+    if (duration.inDays > 0) {
+      return 'Expires in ${duration.inDays} day${duration.inDays > 1 ? 's' : ''}';
+    } else if (duration.inHours > 0) {
+      return 'Expires in ${duration.inHours} hour${duration.inHours > 1 ? 's' : ''}';
+    } else if (duration.inMinutes > 0) {
+      return 'Expires in ${duration.inMinutes} minute${duration.inMinutes > 1 ? 's' : ''}';
+    } else {
+      return 'Expires in ${duration.inSeconds} second${duration.inSeconds > 1 ? 's' : ''}';
     }
   }
 
@@ -230,6 +317,13 @@ class ClaimableBalanceInfo {
   }
 }
 
+/// Internal helper to hold parsed time bounds
+class _TimeBounds {
+  final DateTime? unlockTime;
+  final DateTime? expiryTime;
+  _TimeBounds({this.unlockTime, this.expiryTime});
+}
+
 /// Status of a claimable balance
 enum ClaimableBalanceStatus {
   /// Can be claimed by current account
@@ -238,8 +332,14 @@ enum ClaimableBalanceStatus {
   /// Time-locked, not yet claimable
   locked,
 
-  /// Sent by current account
+  /// Sent by current account (still active)
   sent,
+
+  /// Past expiry — recipient can no longer claim
+  expired,
+
+  /// Past expiry — sender can reclaim the funds
+  reclaimable,
 
   /// Neither sent nor claimable by current account
   other,
@@ -256,10 +356,18 @@ class ClaimableBalanceCategories {
   /// Balances sent by this account
   final List<ClaimableBalanceInfo> sent;
 
+  /// Balances that have expired (recipient view)
+  final List<ClaimableBalanceInfo> expired;
+
+  /// Balances that are reclaimable (sender view)
+  final List<ClaimableBalanceInfo> reclaimable;
+
   ClaimableBalanceCategories({
     required this.readyToClaim,
     required this.locked,
     required this.sent,
+    required this.expired,
+    required this.reclaimable,
   });
 
   /// Organize a list of balances into categories
@@ -269,6 +377,8 @@ class ClaimableBalanceCategories {
     final readyToClaim = <ClaimableBalanceInfo>[];
     final locked = <ClaimableBalanceInfo>[];
     final sent = <ClaimableBalanceInfo>[];
+    final expired = <ClaimableBalanceInfo>[];
+    final reclaimable = <ClaimableBalanceInfo>[];
 
     for (final balance in balances) {
       switch (balance.status) {
@@ -281,6 +391,12 @@ class ClaimableBalanceCategories {
         case ClaimableBalanceStatus.sent:
           sent.add(balance);
           break;
+        case ClaimableBalanceStatus.expired:
+          expired.add(balance);
+          break;
+        case ClaimableBalanceStatus.reclaimable:
+          reclaimable.add(balance);
+          break;
         case ClaimableBalanceStatus.other:
         // Don't include in any category
           break;
@@ -291,11 +407,18 @@ class ClaimableBalanceCategories {
       readyToClaim: readyToClaim,
       locked: locked,
       sent: sent,
+      expired: expired,
+      reclaimable: reclaimable,
     );
   }
 
   /// Get total count across all categories
-  int get totalCount => readyToClaim.length + locked.length + sent.length;
+  int get totalCount =>
+      readyToClaim.length +
+          locked.length +
+          sent.length +
+          expired.length +
+          reclaimable.length;
 
   /// Check if there are any balances
   bool get hasAny => totalCount > 0;
@@ -308,13 +431,21 @@ class ClaimableBalanceCategories {
 
   /// Check if there are any sent
   bool get hasSent => sent.isNotEmpty;
+
+  /// Check if there are any expired
+  bool get hasExpired => expired.isNotEmpty;
+
+  /// Check if there are any reclaimable
+  bool get hasReclaimable => reclaimable.isNotEmpty;
 }
 
 /// Helper extension for ClaimableBalanceResponse list
 extension ClaimableBalanceListExtension on List<ClaimableBalanceResponse> {
   /// Convert to ClaimableBalanceInfo list
   List<ClaimableBalanceInfo> toInfoList(String currentAccountId) {
-    return map((r) => ClaimableBalanceInfo.fromResponse(r, currentAccountId)).toList();
+    return map(
+          (r) => ClaimableBalanceInfo.fromResponse(r, currentAccountId),
+    ).toList();
   }
 
   /// Organize into categories
@@ -360,7 +491,8 @@ class ClaimableBalanceSummary {
       totalByAsset[asset] = (totalByAsset[asset] ?? 0.0) + balance.amount;
 
       // Count by status
-      countByStatus[balance.status] = (countByStatus[balance.status] ?? 0) + 1;
+      countByStatus[balance.status] =
+          (countByStatus[balance.status] ?? 0) + 1;
 
       // Track XLM and USDC specifically
       if (asset == 'XLM') {
@@ -385,7 +517,8 @@ class ClaimableBalanceSummary {
   }
 
   /// Get total count
-  int get totalCount => countByStatus.values.fold(0, (sum, count) => sum + count);
+  int get totalCount =>
+      countByStatus.values.fold(0, (sum, count) => sum + count);
 }
 
 /// Helper functions for working with predicates
@@ -399,7 +532,7 @@ class PredicateHelper {
   static bool canClaimNow(ClaimantPredicateResponse predicate) {
     if (predicate.unconditional == true) return true;
 
-    // Check absolute time predicates
+    // Check absolute time predicates (must be BEFORE this time)
     if (predicate.beforeAbsoluteTime != null) {
       try {
         final deadline = DateTime.parse(predicate.beforeAbsoluteTime!);
@@ -442,9 +575,14 @@ class PredicateHelper {
       return 'Can claim immediately';
     }
 
-    if (predicate.beforeAbsoluteTime != null) {
+    if (predicate.beforeAbsoluteTime != null &&
+        predicate.not == null &&
+        predicate.and == null) {
       try {
         final deadline = DateTime.parse(predicate.beforeAbsoluteTime!);
+        if (DateTime.now().isAfter(deadline)) {
+          return 'Expired on ${deadline.toLocal()}';
+        }
         return 'Can claim before ${deadline.toLocal()}';
       } catch (e) {
         return 'Time-based claim condition';
