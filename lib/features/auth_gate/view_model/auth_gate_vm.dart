@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 
-import 'package:next_fi/Services/security_storage.dart';
 import '../model/auth_gate_state.dart';
 
 enum PinStatus {

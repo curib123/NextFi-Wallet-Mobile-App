@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 enum SnackBarType { info, success, warning, error }
 enum SnackBarPosition { bottom, top }
@@ -11,10 +13,8 @@ void showFloatingSnackBar(
     BuildContext context, {
       required String message,
       SnackBarType type = SnackBarType.info,
-      SnackBarPosition position = SnackBarPosition.top, // default TOP
-      Duration duration = const Duration(milliseconds: 2200),
-
-      // New (optional) goodies:
+      SnackBarPosition position = SnackBarPosition.top,
+      Duration duration = const Duration(milliseconds: 2500),
       String? actionLabel,
       VoidCallback? onAction,
       VoidCallback? onTap,
@@ -24,54 +24,33 @@ void showFloatingSnackBar(
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
 
-  messenger.clearSnackBars(); // clear bottom bars if any
+  messenger.clearSnackBars();
 
+  final colors = AppColor.of(context);
   final theme = Theme.of(context);
   final mq = MediaQuery.of(context);
-  final bottomSafe = (mq.viewInsets.bottom > 0 ? mq.viewInsets.bottom : mq.viewPadding.bottom);
+  final bottomSafe = (mq.viewInsets.bottom > 0
+      ? mq.viewInsets.bottom
+      : mq.viewPadding.bottom);
   final topSafe = mq.viewPadding.top;
 
-  final scheme = theme.colorScheme;
+  // Modern color scheme based on type
+  final (bg, fg, icon) = _getTypeStyles(colors, type);
 
-  final Color baseBg = switch (type) {
-    SnackBarType.success => _blend(scheme.secondaryContainer, scheme.onSecondaryContainer, .06),
-    SnackBarType.warning => _blend(const Color(0xFFFFF4E5), const Color(0xFF8A6D3B), .06),
-    SnackBarType.error   => _blend(scheme.errorContainer, scheme.onErrorContainer, .08),
-    SnackBarType.info    => _blend(scheme.surfaceVariant, scheme.onSurfaceVariant, .04),
-  };
-  final Color baseFg = switch (type) {
-    SnackBarType.success => scheme.onSecondaryContainer,
-    SnackBarType.warning => const Color(0xFF5F4B1A),
-    SnackBarType.error   => scheme.onErrorContainer,
-    SnackBarType.info    => scheme.onSurfaceVariant,
-  };
-
-  // Nudge contrast slightly in very light/dark modes
-  final bool isDark = theme.brightness == Brightness.dark;
-  final Color bg = isDark ? _blend(baseBg, Colors.black, .06) : _blend(baseBg, Colors.white, .06);
-  final Color fg = baseFg;
-
-  final IconData icon = switch (type) {
-    SnackBarType.success => Icons.check_circle_rounded,
-    SnackBarType.warning => Icons.warning_rounded,
-    SnackBarType.error   => Icons.error_rounded,
-    SnackBarType.info    => Icons.info_rounded,
-  };
-
-  // Gentle haptics
+  // Haptic feedback
   if (haptics) {
     switch (type) {
       case SnackBarType.success:
-        HapticFeedback.lightImpact();
+        HapticFeedback.mediumImpact();
         break;
       case SnackBarType.warning:
         HapticFeedback.selectionClick();
         break;
       case SnackBarType.error:
-        HapticFeedback.mediumImpact();
+        HapticFeedback.heavyImpact();
         break;
       case SnackBarType.info:
-      // no-op
+        HapticFeedback.lightImpact();
         break;
     }
   }
@@ -82,12 +61,14 @@ void showFloatingSnackBar(
       top: topSafe + 16,
       left: 16,
       right: 16,
+      colors: colors,
       bg: bg,
       fg: fg,
       icon: icon,
       message: message,
       textStyle: theme.textTheme.bodyMedium,
       duration: duration,
+      type: type,
       onTap: onTap,
       actionLabel: actionLabel,
       onAction: onAction,
@@ -96,44 +77,165 @@ void showFloatingSnackBar(
     return;
   }
 
-  // Bottom snack (native SnackBar) – keeps your original look
+  // Bottom snack
   messenger.showSnackBar(
     SnackBar(
       behavior: SnackBarBehavior.floating,
       margin: EdgeInsets.fromLTRB(16, 0, 16, 20 + bottomSafe),
-      elevation: 2,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      backgroundColor: bg,
+      elevation: 0,
+      padding: const EdgeInsets.all(0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: Colors.transparent,
       duration: duration,
       dismissDirection: DismissDirection.horizontal,
-      content: Row(
+      content: _SnackContent(
+        colors: colors,
+        bg: bg,
+        fg: fg,
+        icon: icon,
+        message: message,
+        textStyle: theme.textTheme.bodyMedium,
+        actionLabel: actionLabel,
+        onAction: onAction,
+        semanticsLabel: semanticsLabel,
+        type: type,
+      ),
+    ),
+  );
+}
+
+(Color, Color, IconData) _getTypeStyles(AppColor colors, SnackBarType type) {
+  return switch (type) {
+    SnackBarType.success => (
+    colors.success,
+    Colors.white,
+    LucideIcons.checkCircle2,
+    ),
+    SnackBarType.warning => (
+    colors.warning,
+    Colors.white,
+    LucideIcons.alertTriangle,
+    ),
+    SnackBarType.error => (
+    colors.error,
+    Colors.white,
+    LucideIcons.xCircle,
+    ),
+    SnackBarType.info => (
+    colors.primary,
+    Colors.white,
+    LucideIcons.info,
+    ),
+  };
+}
+
+class _SnackContent extends StatelessWidget {
+  const _SnackContent({
+    required this.colors,
+    required this.bg,
+    required this.fg,
+    required this.icon,
+    required this.message,
+    required this.textStyle,
+    required this.type,
+    this.actionLabel,
+    this.onAction,
+    this.semanticsLabel,
+  });
+
+  final AppColor colors;
+  final Color bg, fg;
+  final IconData icon;
+  final String message;
+  final TextStyle? textStyle;
+  final SnackBarType type;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final String? semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [bg, bg.withOpacity(0.9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: bg.withOpacity(0.4),
+            blurRadius: 16,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: fg),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: fg),
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: (theme.textTheme.bodyMedium ?? const TextStyle()).copyWith(color: fg),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              softWrap: true,
-              semanticsLabel: semanticsLabel,
+            child: Semantics(
+              label: semanticsLabel,
+              child: Text(
+                message,
+                style: (textStyle ?? const TextStyle()).copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(width: 8),
             TextButton(
               onPressed: onAction,
-              style: TextButton.styleFrom(foregroundColor: fg),
-              child: Text(actionLabel),
+              style: TextButton.styleFrom(
+                foregroundColor: fg,
+                backgroundColor: Colors.white.withOpacity(0.2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                actionLabel!,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: fg,
+                ),
+              ),
             ),
           ],
         ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 void _showTopOverlayToast(
@@ -141,12 +243,14 @@ void _showTopOverlayToast(
       required double top,
       required double left,
       required double right,
+      required AppColor colors,
       required Color bg,
       required Color fg,
       required IconData icon,
       required String message,
       required TextStyle? textStyle,
       required Duration duration,
+      required SnackBarType type,
       VoidCallback? onTap,
       String? actionLabel,
       VoidCallback? onAction,
@@ -155,8 +259,7 @@ void _showTopOverlayToast(
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
 
-  // Remove any existing top toast
-  _currentTopSnack?..remove();
+  _currentTopSnack?.remove();
   _currentTopSnack = null;
 
   final entry = OverlayEntry(
@@ -164,17 +267,19 @@ void _showTopOverlayToast(
       top: top,
       left: left,
       right: right,
+      colors: colors,
       bg: bg,
       fg: fg,
       icon: icon,
       message: message,
       textStyle: textStyle,
       duration: duration,
-      onTap: onTap,
+      type: type,
       onClose: () {
-        _currentTopSnack?..remove();
+        _currentTopSnack?.remove();
         _currentTopSnack = null;
       },
+      onTap: onTap,
       actionLabel: actionLabel,
       onAction: onAction,
       semanticsLabel: semanticsLabel,
@@ -185,18 +290,19 @@ void _showTopOverlayToast(
   _currentTopSnack = entry;
 }
 
-/// Animated container for the top toast
 class _TopSnackAnimated extends StatefulWidget {
   const _TopSnackAnimated({
     required this.top,
     required this.left,
     required this.right,
+    required this.colors,
     required this.bg,
     required this.fg,
     required this.icon,
     required this.message,
     required this.textStyle,
     required this.duration,
+    required this.type,
     required this.onClose,
     this.onTap,
     this.actionLabel,
@@ -205,11 +311,13 @@ class _TopSnackAnimated extends StatefulWidget {
   });
 
   final double top, left, right;
+  final AppColor colors;
   final Color bg, fg;
   final IconData icon;
   final String message;
   final TextStyle? textStyle;
   final Duration duration;
+  final SnackBarType type;
   final VoidCallback onClose;
   final VoidCallback? onTap;
   final String? actionLabel;
@@ -222,18 +330,33 @@ class _TopSnackAnimated extends StatefulWidget {
 
 class _TopSnackAnimatedState extends State<_TopSnackAnimated>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ac =
-  AnimationController(vsync: this, duration: const Duration(milliseconds: 180));
-  late final Animation<double> _fade = CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic);
-  late final Animation<Offset> _slide =
-  Tween(begin: const Offset(0, -0.12), end: Offset.zero).animate(_fade);
+  late final AnimationController _ac = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 400),
+  );
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _ac,
+    curve: Curves.easeOutCubic,
+  );
+  late final Animation<Offset> _slide = Tween(
+    begin: const Offset(0, -1),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(
+    parent: _ac,
+    curve: Curves.easeOutCubic,
+  ));
+  late final Animation<double> _scale = Tween(
+    begin: 0.95,
+    end: 1.0,
+  ).animate(CurvedAnimation(
+    parent: _ac,
+    curve: Curves.easeOutCubic,
+  ));
 
   @override
   void initState() {
     super.initState();
     _ac.forward();
-
-    // Auto-dismiss
     Future.delayed(widget.duration, _dismiss);
   }
 
@@ -251,67 +374,7 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
 
   @override
   Widget build(BuildContext context) {
-    // Make wide layouts look nice by capping max width
     const double maxCardWidth = 640;
-
-    final card = Dismissible(
-      key: const ValueKey('top_snack'),
-      direction: DismissDirection.horizontal,
-      onDismissed: (_) => widget.onClose(),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap ?? _dismiss,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: maxCardWidth),
-            decoration: BoxDecoration(
-              color: widget.bg,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 12,
-                  spreadRadius: 0,
-                  offset: Offset(0, 4),
-                  color: Color(0x33000000),
-                )
-              ],
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(widget.icon, size: 20, color: widget.fg),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Semantics(
-                    label: widget.semanticsLabel,
-                    child: Text(
-                      widget.message,
-                      style: (widget.textStyle ?? const TextStyle()).copyWith(color: widget.fg),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: true,
-                    ),
-                  ),
-                ),
-                if (widget.actionLabel != null && widget.onAction != null) ...[
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () {
-                      widget.onAction!.call();
-                      _dismiss();
-                    },
-                    style: TextButton.styleFrom(foregroundColor: widget.fg),
-                    child: Text(widget.actionLabel!),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
 
     return Positioned(
       top: widget.top,
@@ -323,20 +386,121 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
           opacity: _fade,
           child: SlideTransition(
             position: _slide,
-            child: card,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Dismissible(
+                key: const ValueKey('top_snack'),
+                direction: DismissDirection.horizontal,
+                onDismissed: (_) => widget.onClose(),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: widget.onTap ?? _dismiss,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        maxWidth: maxCardWidth,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [widget.bg, widget.bg.withOpacity(0.9)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: widget.bg.withOpacity(0.4),
+                            blurRadius: 20,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              widget.icon,
+                              size: 18,
+                              color: widget.fg,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Semantics(
+                              label: widget.semanticsLabel,
+                              child: Text(
+                                widget.message,
+                                style: (widget.textStyle ?? const TextStyle())
+                                    .copyWith(
+                                  color: widget.fg,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          if (widget.actionLabel != null &&
+                              widget.onAction != null) ...[
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: () {
+                                widget.onAction!.call();
+                                _dismiss();
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: widget.fg,
+                                backgroundColor:
+                                Colors.white.withOpacity(0.2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                widget.actionLabel!,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  color: widget.fg,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
-}
-
-/// tiny utility to keep colors subtle
-Color _blend(Color a, Color b, double t) {
-  return Color.fromARGB(
-    (a.alpha * (1 - t) + b.alpha * t).round(),
-    (a.red   * (1 - t) + b.red   * t).round(),
-    (a.green * (1 - t) + b.green * t).round(),
-    (a.blue  * (1 - t) + b.blue  * t).round(),
-  );
 }

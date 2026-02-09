@@ -1,9 +1,10 @@
-// lib/features/wallet_settings/view/widgets/phrase_card_hold_reveal.dart
+// lib/features/wallet_settings/view/widgets/phrase_card_refined.dart
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'dart:ui';
 
-class PhraseCardHoldReveal extends StatelessWidget {
+class PhraseCardHoldReveal extends StatefulWidget {
   const PhraseCardHoldReveal({
     super.key,
     required this.words,
@@ -16,94 +17,365 @@ class PhraseCardHoldReveal extends StatelessWidget {
   final VoidCallback onRevealHold;
 
   @override
+  State<PhraseCardHoldReveal> createState() => _PhraseCardHoldRevealState();
+}
+
+class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border.withOpacity(0.22)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 10, offset: const Offset(0, 6))],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.surface,
+            colors.surface.withOpacity(0.9),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colors.border.withOpacity(0.15),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: obscured
-            ? _blurredPlaceholder(colors)
-            : Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-          child: _seedGrid(colors),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                ),
+                child: child,
+              ),
+            );
+          },
+          child: widget.obscured
+              ? _buildBlurredPlaceholder(colors)
+              : _buildSeedGrid(colors),
         ),
       ),
     );
   }
 
-  Widget _blurredPlaceholder(AppColor colors) {
-    return InkWell(
-      onLongPress: onRevealHold,
-      borderRadius: BorderRadius.circular(14),
+  Widget _buildBlurredPlaceholder(AppColor colors) {
+    return GestureDetector(
+      key: const ValueKey('blurred'),
+      onLongPress: widget.onRevealHold,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(14, 24, 14, 24),
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
         decoration: BoxDecoration(
-          color: colors.background.withOpacity(.72),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border.withOpacity(.25)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colors.background.withOpacity(0.8),
+              colors.background.withOpacity(0.6),
+            ],
+          ),
         ),
-        child: Column(
+        child: Stack(
           children: [
-            Icon(LucideIcons.eye, size: 24, color: colors.textSecondary),
-            const SizedBox(height: 10),
-            Text("Press & hold to reveal your recovery phrase",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14, height: 1.35)),
-            const SizedBox(height: 6),
-            Text("Authentication required",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: colors.textSecondary.withOpacity(.85), fontSize: 12.5)),
+            // Animated shimmer effect
+            AnimatedBuilder(
+              animation: _shimmerController,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        colors.primary.withOpacity(0),
+                        colors.primary.withOpacity(0.05),
+                        colors.primary.withOpacity(0),
+                      ],
+                      stops: [
+                        _shimmerController.value - 0.3,
+                        _shimmerController.value,
+                        _shimmerController.value + 0.3,
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Content
+            Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        colors.primary.withOpacity(0.12),
+                        colors.primary.withOpacity(0.06),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colors.primary.withOpacity(0.2),
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    LucideIcons.lock,
+                    size: 32,
+                    color: colors.primary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  "Press & hold to reveal",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    height: 1.4,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Your recovery phrase is secured",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textSecondary.withOpacity(0.8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.warning.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: colors.warning.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.shield,
+                            size: 14,
+                            color: colors.warning,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "Authentication required",
+                            style: TextStyle(
+                              color: colors.warning,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _seedGrid(AppColor colors) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8, childAspectRatio: 2.6,
+  Widget _buildSeedGrid(AppColor colors) {
+    return Padding(
+      key: const ValueKey('revealed'),
+      padding: const EdgeInsets.all(16),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 2.4,
+        ),
+        itemCount: widget.words.length,
+        itemBuilder: (context, index) {
+          return _WordChip(
+            index: index + 1,
+            word: widget.words[index],
+            colors: colors,
+            delay: Duration(milliseconds: index * 30),
+          );
+        },
       ),
-      itemCount: words.length,
-      itemBuilder: (context, index) {
-        final idx = index + 1;
-        final word = words[index];
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    );
+  }
+}
+
+class _WordChip extends StatefulWidget {
+  const _WordChip({
+    required this.index,
+    required this.word,
+    required this.colors,
+    required this.delay,
+  });
+
+  final int index;
+  final String word;
+  final AppColor colors;
+  final Duration delay;
+
+  @override
+  State<_WordChip> createState() => _WordChipState();
+}
+
+class _WordChipState extends State<_WordChip>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: FadeTransition(
+        opacity: _opacityAnimation,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: colors.background,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                widget.colors.background.withOpacity(0.9),
+                widget.colors.background.withOpacity(0.7),
+              ],
+            ),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border.withOpacity(0.25)),
+            border: Border.all(
+              color: widget.colors.border.withOpacity(0.2),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: 22,
-                child: Text('$idx.', style: TextStyle(color: colors.textSecondary, fontWeight: FontWeight.w700, fontSize: 12)),
+              Container(
+                width: 24,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${widget.index}.',
+                  style: TextStyle(
+                    color: widget.colors.textSecondary.withOpacity(0.6),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    letterSpacing: 0.1,
+                  ),
+                ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  word,
+                  widget.word,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 12.5, letterSpacing: .2),
+                  style: TextStyle(
+                    color: widget.colors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    letterSpacing: 0.2,
+                  ),
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

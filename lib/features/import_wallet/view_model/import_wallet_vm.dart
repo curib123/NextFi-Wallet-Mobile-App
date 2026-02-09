@@ -7,7 +7,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 // mnemonic generation / validation, keeping autocomplete consistent.
 import 'package:stellar_flutter_sdk/src/sep/0005/word_list.dart';
 
-import 'package:next_fi/services/seed_storage.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/features/import_wallet/model/import_wallet_state.dart';
 
 class ImportWalletVM extends ChangeNotifier {

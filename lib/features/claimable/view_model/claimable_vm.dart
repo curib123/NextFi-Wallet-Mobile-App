@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/features/claimable/model/claimable_item.dart';
+import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 
@@ -13,15 +14,24 @@ import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 /// Handles fetching, parsing, and claiming of Stellar claimable balances.
 /// Supports both received (claimable by user) and sent (created by user) balances.
 /// Supports expiration predicates for both instant and time-locked modes.
+///
+/// **Best Practice**: Uses WalletHomeVM for balance retrieval to ensure
+/// consistency and avoid redundant API calls.
 class ClaimableVM extends ChangeNotifier {
   ClaimableVM({
     required StellarWalletServices service,
     required SeedKeypairVM seedVM,
+    required WalletHomeVM walletHomeVM,
   })  : _svc = service,
-        _seedVM = seedVM;
+        _seedVM = seedVM,
+        _walletHomeVM = walletHomeVM {
+    // Listen to wallet home state changes for balance updates
+    _walletHomeVM.addListener(_onWalletHomeStateChanged);
+  }
 
   final StellarWalletServices _svc;
   final SeedKeypairVM _seedVM;
+  final WalletHomeVM _walletHomeVM;
 
   // ──────────────────────────────────────────────────────────────────────────
   // State
@@ -66,6 +76,55 @@ class ClaimableVM extends ChangeNotifier {
   /// Get items for current tab
   List<ClaimableItem> get items {
     return _currentTab == 0 ? _receivedItems : _sentItems;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Balance access via WalletHomeVM (best practice)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Get current XLM balance from WalletHomeVM
+  double get xlmBalance => _walletHomeVM.state.xlm;
+
+  /// Get current USDC balance from WalletHomeVM
+  double get usdcBalance => _walletHomeVM.state.usdc;
+
+  /// Get balance for specific asset (true = XLM, false = USDC)
+  double getBalanceForAsset(bool isXlm) => isXlm ? xlmBalance : usdcBalance;
+
+  /// Whether wallet has sufficient balance for amount
+  bool hasSufficientBalance(bool isXlm, double amount) {
+    final balance = getBalanceForAsset(isXlm);
+    // Reserve 1 XLM for network fees if sending XLM
+    final reserve = isXlm ? 1.0 : 0.0;
+    return balance >= (amount + reserve);
+  }
+
+  /// Get available balance after reserves
+  double getAvailableBalance(bool isXlm) {
+    final balance = getBalanceForAsset(isXlm);
+    // Reserve 1 XLM for network fees if XLM
+    return isXlm ? (balance - 1.0).clamp(0.0, double.infinity) : balance;
+  }
+
+  /// Listen to wallet home state changes
+  void _onWalletHomeStateChanged() {
+    if (_disposed) return;
+
+    // Update account ID if it changed
+    final newAccountId = _walletHomeVM.state.address;
+    if (newAccountId != _accountId) {
+      _accountId = newAccountId;
+
+      // Refresh claimable balances when account changes
+      if (_accountId != null && _accountId!.isNotEmpty) {
+        refresh();
+      } else {
+        // Clear items if no account
+        _receivedItems = [];
+        _sentItems = [];
+        _safeNotify();
+      }
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -184,6 +243,7 @@ class ClaimableVM extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _walletHomeVM.removeListener(_onWalletHomeStateChanged);
     super.dispose();
   }
 
@@ -200,8 +260,15 @@ class ClaimableVM extends ChangeNotifier {
     _safeNotify();
 
     try {
-      final kp = await _seedVM.deriveKeyPair();
-      _accountId = kp.accountId;
+      // Get account ID from WalletHomeVM first (preferred)
+      _accountId = _walletHomeVM.state.address;
+
+      // Fallback to deriving from seed if not available
+      if (_accountId == null || _accountId!.isEmpty) {
+        final kp = await _seedVM.deriveKeyPair();
+        _accountId = kp.accountId;
+      }
+
       await _fetchAllBalances();
       _lastRefresh = DateTime.now();
     } catch (e) {
@@ -217,7 +284,7 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Refresh the claimable balances list
   Future<void> refresh() async {
-    if (_accountId == null) {
+    if (_accountId == null || _accountId!.isEmpty) {
       return init();
     }
 
@@ -565,6 +632,7 @@ class ClaimableVM extends ChangeNotifier {
   /// Claim a claimable balance by ID
   ///
   /// Returns the transaction hash on success.
+  /// Automatically refreshes wallet balances after claiming.
   Future<String> claim(String balanceId) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
@@ -576,6 +644,9 @@ class ClaimableVM extends ChangeNotifier {
       // Remove from local list immediately for responsive UI
       _receivedItems.removeWhere((i) => i.balanceId == balanceId);
       _safeNotify();
+
+      // Refresh wallet balances in background (best practice)
+      _walletHomeVM.refresh(force: true);
 
       return txHash;
     } catch (e) {
@@ -593,6 +664,7 @@ class ClaimableVM extends ChangeNotifier {
   /// allowing them to claim after the expiry time.
   ///
   /// Returns the transaction hash on success.
+  /// Automatically refreshes wallet balances after reclaiming.
   Future<String> reclaim(String balanceId) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
@@ -604,6 +676,9 @@ class ClaimableVM extends ChangeNotifier {
       // Remove from local list immediately for responsive UI
       _sentItems.removeWhere((i) => i.balanceId == balanceId);
       _safeNotify();
+
+      // Refresh wallet balances in background (best practice)
+      _walletHomeVM.refresh(force: true);
 
       return txHash;
     } catch (e) {
@@ -625,6 +700,7 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Create an unconditional claimable balance (recipient can claim anytime).
   /// No expiration — stays claimable forever.
+  /// Automatically refreshes wallet balances after creation.
   Future<String> createUnconditional({
     required bool isXlm,
     required double amount,
@@ -633,12 +709,18 @@ class ClaimableVM extends ChangeNotifier {
   }) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
-      return await _svc.createUnconditionalClaimableBalance(
+      final txHash = await _svc.createUnconditionalClaimableBalance(
         keyPair: kp,
         asset: _asset(isXlm),
         amount: amount,
         recipientId: recipientId,
       );
+
+      // Refresh wallet balances and claimable list in background
+      _walletHomeVM.refresh(force: true);
+      refresh();
+
+      return txHash;
     } catch (e) {
       if (kDebugMode) {
         print('[ClaimableVM] Create unconditional error: $e');
@@ -651,6 +733,7 @@ class ClaimableVM extends ChangeNotifier {
   ///
   /// Recipient can claim immediately but must do so before [expiryTime].
   /// After expiry, the sender can reclaim the funds.
+  /// Automatically refreshes wallet balances after creation.
   Future<String> createUnconditionalWithExpiry({
     required bool isXlm,
     required double amount,
@@ -660,13 +743,19 @@ class ClaimableVM extends ChangeNotifier {
   }) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
-      return await _svc.createUnconditionalWithExpiry(
+      final txHash = await _svc.createUnconditionalWithExpiry(
         keyPair: kp,
         asset: _asset(isXlm),
         amount: amount,
         recipientId: recipientId,
         expiryTime: expiryTime,
       );
+
+      // Refresh wallet balances and claimable list in background
+      _walletHomeVM.refresh(force: true);
+      refresh();
+
+      return txHash;
     } catch (e) {
       if (kDebugMode) {
         print('[ClaimableVM] Create unconditional with expiry error: $e');
@@ -677,6 +766,7 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Create a time-locked claimable balance.
   /// No expiration — once unlocked, stays claimable forever.
+  /// Automatically refreshes wallet balances after creation.
   Future<String> createTimeLocked({
     required bool isXlm,
     required double amount,
@@ -686,13 +776,19 @@ class ClaimableVM extends ChangeNotifier {
   }) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
-      return await _svc.createTimeLockedPayment(
+      final txHash = await _svc.createTimeLockedPayment(
         keyPair: kp,
         asset: _asset(isXlm),
         amount: amount,
         recipientId: recipientId,
         unlockTime: unlockTime,
       );
+
+      // Refresh wallet balances and claimable list in background
+      _walletHomeVM.refresh(force: true);
+      refresh();
+
+      return txHash;
     } catch (e) {
       if (kDebugMode) {
         print('[ClaimableVM] Create time-locked error: $e');
@@ -705,6 +801,7 @@ class ClaimableVM extends ChangeNotifier {
   ///
   /// Recipient can only claim between [unlockTime] and [expiryTime].
   /// After expiry, the sender can reclaim the funds.
+  /// Automatically refreshes wallet balances after creation.
   Future<String> createTimeLockedWithExpiry({
     required bool isXlm,
     required double amount,
@@ -715,7 +812,7 @@ class ClaimableVM extends ChangeNotifier {
   }) async {
     try {
       final kp = await _seedVM.deriveKeyPair();
-      return await _svc.createTimeLockedWithExpiry(
+      final txHash = await _svc.createTimeLockedWithExpiry(
         keyPair: kp,
         asset: _asset(isXlm),
         amount: amount,
@@ -723,6 +820,12 @@ class ClaimableVM extends ChangeNotifier {
         unlockTime: unlockTime,
         expiryTime: expiryTime,
       );
+
+      // Refresh wallet balances and claimable list in background
+      _walletHomeVM.refresh(force: true);
+      refresh();
+
+      return txHash;
     } catch (e) {
       if (kDebugMode) {
         print('[ClaimableVM] Create time-locked with expiry error: $e');
@@ -732,28 +835,15 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Helpers for create screen
+  // USDC Trustline Check
   // ──────────────────────────────────────────────────────────────────────────
-
-  /// Get the current balance for XLM or USDC
-  Future<double> getBalance(bool isXlm) async {
-    try {
-      final aid = _accountId ?? (await _seedVM.deriveKeyPair()).accountId;
-      return isXlm
-          ? await _svc.getXlmBalance(aid)
-          : await _svc.getUsdcBalance(aid);
-    } catch (e) {
-      if (kDebugMode) {
-        print('[ClaimableVM] Get balance error: $e');
-      }
-      return 0.0;
-    }
-  }
 
   /// Check if the account has a USDC trustline
   Future<bool> hasUsdcTrustline() async {
     try {
-      final aid = _accountId ?? (await _seedVM.deriveKeyPair()).accountId;
+      final aid = _accountId ?? _walletHomeVM.state.address;
+      if (aid == null || aid.isEmpty) return false;
+
       return await _svc.hasUsdcTrustline(aid);
     } catch (e) {
       if (kDebugMode) {

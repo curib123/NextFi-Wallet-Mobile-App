@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -27,7 +28,6 @@ import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart'
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
 import 'package:next_fi/features/seed_phrases/view_model/seed_phrase_vm.dart';
 import 'package:next_fi/features/send/view_model/send_vm.dart';
-import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 import 'package:next_fi/features/swap/view_model/swap_vm.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/wallet_creation/view_model/wallet_creation_vm.dart';
@@ -209,15 +209,21 @@ List<SingleChildWidget> _buildProviders() {
       },
     ),
 
-    // 13) Claimable balances depends on Stellar + SeedKeypair
-    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
-        ClaimableVM>(
+    // 13) Claimable balances depends on Stellar + SeedKeypair + WalletHomeVM
+    ChangeNotifierProxyProvider3<StellarWalletServices, SeedKeypairVM,
+        WalletHomeVM, ClaimableVM>(
       create: (ctx) => ClaimableVM(
         service: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
+        walletHomeVM: ctx.read<WalletHomeVM>(),
       ),
-      update: (ctx, stellar, seedVM, prev) =>
-      prev ?? ClaimableVM(service: stellar, seedVM: seedVM),
+      update: (ctx, stellar, seedVM, walletHomeVM, prev) =>
+      prev ??
+          ClaimableVM(
+            service: stellar,
+            seedVM: seedVM,
+            walletHomeVM: walletHomeVM,
+          ),
     ),
   ];
 }

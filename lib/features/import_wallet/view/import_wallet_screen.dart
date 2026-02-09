@@ -23,12 +23,28 @@ class ImportWalletScreen extends StatefulWidget {
   State<ImportWalletScreen> createState() => _ImportWalletScreenState();
 }
 
-class _ImportWalletScreenState extends State<ImportWalletScreen> {
+class _ImportWalletScreenState extends State<ImportWalletScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
+  late AnimationController _fabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _fabController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fabController.forward();
+    });
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _fabController.dispose();
     super.dispose();
   }
 
@@ -45,7 +61,14 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
         TextPosition(offset: _controller.text.length),
       );
       vm.updateText(_controller.text);
-      HapticFeedback.selectionClick();
+      HapticFeedback.mediumImpact();
+
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: "Recovery phrase pasted",
+        type: SnackBarType.success,
+      );
     }
   }
 
@@ -56,6 +79,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
       TextPosition(offset: newText.length),
     );
     vm.updateText(newText);
+    HapticFeedback.selectionClick();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -83,48 +107,20 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: colors.surface,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
           final ready = ackPrivate && ackCorrect;
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 8,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _sheetHeader(colors, s),
-                const SizedBox(height: 12),
-                ConfirmTile(
-                  title: "I'm in a private place and trust this device.",
-                  icon: LucideIcons.eyeOff,
-                  value: ackPrivate,
-                  onChanged: (v) => setS(() => ackPrivate = v),
-                  accent: colors.primary,
-                ),
-                const SizedBox(height: 10),
-                ConfirmTile(
-                  title: "The phrase is complete, in order, and typed correctly.",
-                  icon: LucideIcons.checkSquare,
-                  value: ackCorrect,
-                  onChanged: (v) => setS(() => ackCorrect = v),
-                  accent: colors.success,
-                ),
-                const SizedBox(height: 16),
-                _sheetActions(
-                  colors: colors,
-                  confirmLabel: 'Confirm & Import',
-                  confirmEnabled: ready,
-                  onCancel: () => Navigator.pop(ctx, false),
-                  onConfirm: () => Navigator.pop(ctx, true),
-                ),
-              ],
-            ),
+          return _SecurityChecklistSheet(
+            colors: colors,
+            state: s,
+            ackPrivate: ackPrivate,
+            ackCorrect: ackCorrect,
+            confirmEnabled: ready,
+            onPrivateToggle: (v) => setS(() => ackPrivate = v),
+            onCorrectToggle: (v) => setS(() => ackCorrect = v),
+            onCancel: () => Navigator.pop(ctx, false),
+            onConfirm: () => Navigator.pop(ctx, true),
           );
         },
       ),
@@ -136,7 +132,6 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   }
 
   Future<void> _startImportFlow(BuildContext context, ImportWalletVM vm) async {
-    // Validate before opening AuthGate (async in SDK v3).
     final valid = await vm.validatePhrase();
     if (!valid) {
       if (!context.mounted) return;
@@ -155,7 +150,6 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
         builder: (_) => AuthGateScreen(
           goNext: () async {
             if (!mounted) return;
-            bool restarted = false;
             try {
               final ok = await vm.saveImported();
               if (!ok) {
@@ -171,17 +165,13 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
               }
 
               if (!mounted) return;
-
-              // Move to Wallet tab before clean restart.
               context.read<TabVM>().setTab(1);
 
-              // Close auth screen before hard restart.
               if (Navigator.of(context).canPop()) {
                 Navigator.of(context).pop();
               }
 
               Phoenix.rebirth(context);
-              restarted = true;
             } catch (e) {
               if (mounted) {
                 showFloatingSnackBar(
@@ -204,113 +194,62 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+
     return Consumer<ImportWalletVM>(
       builder: (_, vm, __) {
         final s = vm.state;
 
         return Scaffold(
-          backgroundColor: colors.surface,
+          backgroundColor: colors.background,
+          extendBodyBehindAppBar: true,
           appBar: _buildAppBar(colors, vm),
-          body: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        FadeInUp(
-                          duration: const Duration(milliseconds: 600),
-                          child: const WarningBox(),
-                        ),
-                        const SizedBox(height: 10),
-                        FadeInUp(
-                          duration: const Duration(milliseconds: 700),
-                          delay: const Duration(milliseconds: 200),
-                          child: _buildTextField(colors, vm),
-                        ),
-                        if (s.suggestions.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            children: s.suggestions.map((w) {
-                              return ActionChip(
-                                label: Text(w),
-                                backgroundColor: colors.background,
-                                onPressed: () => _onSuggestionTap(vm, w),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        GestureDetector(
-                          onTap: () => _pasteFromClipboard(context, vm),
-                          child: FadeInUp(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Icon(LucideIcons.clipboardPaste,
-                                    size: 16, color: colors.textSecondary),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Paste from Clipboard',
-                                  style: TextStyle(
-                                    color: colors.textSecondary,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (s.error != null && s.error!.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(s.error!,
-                              style: const TextStyle(color: Colors.red)),
-                        ],
-                      ],
-                    ),
+          body: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    MediaQuery.of(context).padding.top + 80,
+                    20,
+                    20,
                   ),
-                ),
-                Divider(
-                    color: colors.border.withValues(alpha: 0.2), height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SlideInUp(
-                        delay: const Duration(milliseconds: 300),
-                        child: CustomButton(
-                          text: s.importing ? "Importing..." : "Import Wallet",
-                          icon: LucideIcons.download,
-                          type: ButtonType.filled,
-                          onPressed: s.importing
-                              ? () {}
-                              : () => _openImportChecklistModal(context, vm, s),
-                        ),
+                      FadeInDown(
+                        duration: const Duration(milliseconds: 300),
+                        child: const WarningBox(),
                       ),
-                      const SizedBox(height: 10),
-                      SlideInUp(
-                        delay: const Duration(milliseconds: 450),
-                        child: Text(
-                          "💡 Tip: Keep this phrase safe! Store it offline "
-                              "or in a secure place. Never share it.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: colors.textSecondary,
-                            fontSize: 13,
-                            height: 1.5,
-                          ),
-                        ),
+                      const SizedBox(height: 20),
+                      FadeInDown(
+                        duration: const Duration(milliseconds: 350),
+                        child: _buildTextField(colors, vm, s),
                       ),
+                      if (s.suggestions.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        FadeInUp(
+                          duration: const Duration(milliseconds: 300),
+                          child: _buildSuggestionChips(colors, vm, s),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        child: _buildPasteButton(context, colors, vm),
+                      ),
+                      if (s.error != null && s.error!.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        _buildErrorMessage(s.error!, colors),
+                      ],
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          floatingActionButton: _buildFloatingActions(context, vm, s, colors),
+          floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         );
       },
     );
@@ -323,108 +262,790 @@ class _ImportWalletScreenState extends State<ImportWalletScreen> {
   PreferredSizeWidget _buildAppBar(AppColor colors, ImportWalletVM vm) {
     return AppBar(
       elevation: 0,
-      backgroundColor: colors.surface,
-      leading: IconButton(
-        icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
-        onPressed: () => Navigator.pop(context),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      leading: Container(
+        margin: const EdgeInsets.only(left: 8),
+        child: IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: colors.surface.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colors.border.withOpacity(0.15),
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              LucideIcons.arrowLeft,
+              color: colors.textPrimary,
+              size: 20,
+            ),
+          ),
+          onPressed: () => Navigator.pop(context),
+          splashRadius: 24,
+        ),
       ),
-      title: Text(
-        'Import Wallet',
-        style: TextStyle(
-            color: colors.textPrimary, fontWeight: FontWeight.w600),
+      title: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.surface.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: colors.border.withOpacity(0.15),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              LucideIcons.download,
+              size: 18,
+              color: colors.primary,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Import Wallet',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
       ),
+      centerTitle: false,
       actions: [
-        IconButton(
-          tooltip: 'Paste',
-          onPressed: () => _pasteFromClipboard(context, vm),
-          icon:
-          Icon(LucideIcons.clipboardPaste, color: colors.textPrimary),
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          child: IconButton(
+            tooltip: 'Paste',
+            onPressed: () => _pasteFromClipboard(context, vm),
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colors.primary.withOpacity(0.12),
+                    colors.primary.withOpacity(0.06),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colors.primary.withOpacity(0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                LucideIcons.clipboardPaste,
+                color: colors.primary,
+                size: 18,
+              ),
+            ),
+            splashRadius: 24,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildTextField(AppColor colors, ImportWalletVM vm) {
-    return TextField(
-      controller: _controller,
-      onChanged: vm.updateText,
-      maxLines: 3,
-      autocorrect: false,
-      enableSuggestions: false,
-      textInputAction: TextInputAction.done,
-      decoration: InputDecoration(
-        hintText: "Enter your 12 or 24 word recovery phrase",
-        filled: true,
-        fillColor: colors.background,
-        suffixIcon: (_controller.text.isNotEmpty)
-            ? IconButton(
-          tooltip: 'Clear',
-          onPressed: () {
-            _controller.clear();
-            vm.updateText('');
-          },
-          icon: Icon(LucideIcons.x, color: colors.textSecondary),
-        )
-            : null,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: colors.border.withValues(alpha: 0.2)),
+  Widget _buildTextField(AppColor colors, ImportWalletVM vm, ImportWalletState s) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.surface,
+            colors.surface.withOpacity(0.95),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.border.withOpacity(0.15),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.keyRound,
+                  size: 16,
+                  color: colors.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Recovery Phrase',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+                const Spacer(),
+                WordBadge(count: s.wordCount),
+              ],
+            ),
+          ),
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colors.border.withOpacity(0),
+                  colors.border.withOpacity(0.2),
+                  colors.border.withOpacity(0),
+                ],
+              ),
+            ),
+          ),
+          TextField(
+            controller: _controller,
+            onChanged: vm.updateText,
+            maxLines: 4,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.done,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              height: 1.6,
+            ),
+            decoration: InputDecoration(
+              hintText: "Enter your 12 or 24 word recovery phrase...",
+              hintStyle: TextStyle(
+                color: colors.textSecondary.withOpacity(0.5),
+                fontWeight: FontWeight.w500,
+              ),
+              filled: false,
+              contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              suffixIcon: (_controller.text.isNotEmpty)
+                  ? IconButton(
+                tooltip: 'Clear',
+                onPressed: () {
+                  _controller.clear();
+                  vm.updateText('');
+                  HapticFeedback.lightImpact();
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: colors.background.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    LucideIcons.x,
+                    color: colors.textSecondary,
+                    size: 14,
+                  ),
+                ),
+              )
+                  : null,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionChips(AppColor colors, ImportWalletVM vm, ImportWalletState s) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              LucideIcons.sparkles,
+              size: 14,
+              color: colors.primary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Suggestions',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: s.suggestions.map((word) {
+            return _SuggestionChip(
+              word: word,
+              colors: colors,
+              onTap: () => _onSuggestionTap(vm, word),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPasteButton(BuildContext context, AppColor colors, ImportWalletVM vm) {
+    return GestureDetector(
+      onTap: () => _pasteFromClipboard(context, vm),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colors.primary.withOpacity(0.08),
+              colors.primary.withOpacity(0.04),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: colors.primary.withOpacity(0.15),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.clipboardPaste,
+              size: 18,
+              color: colors.primary,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Paste from Clipboard',
+              style: TextStyle(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Bottom-sheet helpers
-  // ──────────────────────────────────────────────────────────────────────────
-
-  Widget _sheetHeader(AppColor colors, ImportWalletState s) {
-    return Row(children: [
-      Icon(LucideIcons.shieldCheck, color: colors.textPrimary, size: 20),
-      const SizedBox(width: 8),
-      Text(
-        "Security checklist",
-        style: TextStyle(
-            color: colors.textPrimary, fontWeight: FontWeight.w700),
+  Widget _buildErrorMessage(String error, AppColor colors) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.error.withOpacity(0.12),
+            colors.error.withOpacity(0.06),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: colors.error.withOpacity(0.3),
+          width: 1.5,
+        ),
       ),
-      const Spacer(),
-      WordBadge(count: s.wordCount),
-    ]);
+      child: Row(
+        children: [
+          Icon(
+            LucideIcons.alertCircle,
+            color: colors.error,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              error,
+              style: TextStyle(
+                color: colors.error,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _sheetActions({
-    required AppColor colors,
-    required String confirmLabel,
-    required VoidCallback onCancel,
-    required VoidCallback onConfirm,
-    bool confirmEnabled = true,
-  }) {
-    return Row(children: [
-      Expanded(
-        child: OutlinedButton(
-          onPressed: onCancel,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colors.textSecondary,
-            side: BorderSide(color: colors.border.withValues(alpha: 0.8)),
-          ),
-          child: const Text('Cancel'),
-        ),
+  Widget _buildFloatingActions(
+      BuildContext context,
+      ImportWalletVM vm,
+      ImportWalletState s,
+      AppColor colors,
+      ) {
+    return ScaleTransition(
+      scale: CurvedAnimation(
+        parent: _fabController,
+        curve: Curves.easeOut,
       ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: FilledButton(
-          onPressed: confirmEnabled ? onConfirm : null,
-          style: ButtonStyle(
-            backgroundColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.disabled)
-                  ? colors.primary.withValues(alpha: 0.45)
-                  : colors.primary,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colors.surface,
+              colors.surface.withOpacity(0.95),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: colors.border.withOpacity(0.15),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+              spreadRadius: -4,
             ),
-            foregroundColor: const WidgetStatePropertyAll(Colors.white),
-          ),
-          child: Text(confirmLabel),
+            BoxShadow(
+              color: colors.primary.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ModernImportButton(
+              text: s.importing ? "Importing..." : "Import Wallet",
+              colors: colors,
+              enabled: !s.importing,
+              onPressed: s.importing
+                  ? () {}
+                  : () => _openImportChecklistModal(context, vm, s),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  LucideIcons.lightbulb,
+                  size: 16,
+                  color: colors.textSecondary.withOpacity(0.7),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Store offline & never share your recovery phrase",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    ]);
+    );
+  }
+}
+
+// ── Helper Widgets ──────────────────────────────────────────────────────────
+
+class _SuggestionChip extends StatefulWidget {
+  const _SuggestionChip({
+    required this.word,
+    required this.colors,
+    required this.onTap,
+  });
+
+  final String word;
+  final AppColor colors;
+  final VoidCallback onTap;
+
+  @override
+  State<_SuggestionChip> createState() => _SuggestionChipState();
+}
+
+class _SuggestionChipState extends State<_SuggestionChip> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: _isPressed
+              ? widget.colors.primary.withOpacity(0.15)
+              : widget.colors.background.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _isPressed
+                ? widget.colors.primary.withOpacity(0.3)
+                : widget.colors.border.withOpacity(0.2),
+            width: 1.5,
+          ),
+          boxShadow: _isPressed
+              ? []
+              : [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          widget.word,
+          style: TextStyle(
+            color: widget.colors.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            letterSpacing: 0.1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModernImportButton extends StatefulWidget {
+  const _ModernImportButton({
+    required this.text,
+    required this.colors,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String text;
+  final AppColor colors;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  State<_ModernImportButton> createState() => _ModernImportButtonState();
+}
+
+class _ModernImportButtonState extends State<_ModernImportButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.enabled ? (_) => setState(() => _isPressed = true) : null,
+      onTapUp: widget.enabled
+          ? (_) {
+        setState(() => _isPressed = false);
+        widget.onPressed();
+      }
+          : null,
+      onTapCancel: widget.enabled ? () => setState(() => _isPressed = false) : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          gradient: widget.enabled
+              ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: _isPressed
+                ? [
+              widget.colors.primary.withOpacity(0.9),
+              widget.colors.primary.withOpacity(0.8),
+            ]
+                : [
+              widget.colors.primary,
+              widget.colors.primary.withOpacity(0.9),
+            ],
+          )
+              : LinearGradient(
+            colors: [
+              widget.colors.primary.withOpacity(0.5),
+              widget.colors.primary.withOpacity(0.45),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: _isPressed || !widget.enabled
+              ? []
+              : [
+            BoxShadow(
+              color: widget.colors.primary.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.download,
+              size: 18,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              widget.text,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontSize: 15,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Security Checklist Sheet ────────────────────────────────────────────────
+
+class _SecurityChecklistSheet extends StatelessWidget {
+  const _SecurityChecklistSheet({
+    required this.colors,
+    required this.state,
+    required this.ackPrivate,
+    required this.ackCorrect,
+    required this.confirmEnabled,
+    required this.onPrivateToggle,
+    required this.onCorrectToggle,
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final AppColor colors;
+  final ImportWalletState state;
+  final bool ackPrivate;
+  final bool ackCorrect;
+  final bool confirmEnabled;
+  final ValueChanged<bool> onPrivateToggle;
+  final ValueChanged<bool> onCorrectToggle;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              colors.surface,
+              colors.surface.withOpacity(0.98),
+            ],
+          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(
+            color: colors.border.withOpacity(0.15),
+            width: 1.5,
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      colors.border.withOpacity(0.5),
+                      colors.border.withOpacity(0.3),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          colors.warning.withOpacity(0.15),
+                          colors.warning.withOpacity(0.08),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colors.warning.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(
+                      LucideIcons.shieldCheck,
+                      color: colors.warning,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Security Checklist",
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                  WordBadge(count: state.wordCount),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // Checklist items
+              ConfirmTile(
+                title: "I'm in a private place and trust this device.",
+                icon: LucideIcons.eyeOff,
+                value: ackPrivate,
+                onChanged: onPrivateToggle,
+                accent: colors.primary,
+              ),
+              const SizedBox(height: 12),
+              ConfirmTile(
+                title: "The phrase is complete, in order, and typed correctly.",
+                icon: LucideIcons.checkSquare,
+                value: ackCorrect,
+                onChanged: onCorrectToggle,
+                accent: colors.success,
+              ),
+              const SizedBox(height: 20),
+              // Actions
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetButton(
+                      icon: LucideIcons.x,
+                      label: 'Cancel',
+                      onPressed: onCancel,
+                      colors: colors,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _SheetButton(
+                      icon: LucideIcons.check,
+                      label: 'Confirm & Import',
+                      onPressed: confirmEnabled ? onConfirm : () {},
+                      colors: colors,
+                      isPrimary: true,
+                      enabled: confirmEnabled,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetButton extends StatelessWidget {
+  const _SheetButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    required this.colors,
+    this.isPrimary = false,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final AppColor colors;
+  final bool isPrimary;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isPrimary
+            ? (enabled ? colors.primary : colors.primary.withOpacity(0.5))
+            : colors.background.withOpacity(0.6),
+        foregroundColor: isPrimary ? Colors.white : colors.textPrimary,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: isPrimary
+              ? BorderSide.none
+              : BorderSide(
+            color: colors.border.withOpacity(0.25),
+            width: 1.5,
+          ),
+        ),
+      ),
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
   }
 }

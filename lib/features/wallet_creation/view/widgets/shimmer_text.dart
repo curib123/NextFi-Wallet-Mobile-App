@@ -8,11 +8,17 @@ class ShimmerText extends StatefulWidget {
         super.key,
         required this.baseColor,
         required this.highlightColor,
+        this.fontSize = 32,
+        this.fontWeight = FontWeight.w800,
+        this.letterSpacing = 0.5,
       });
 
   final String text;
   final Color baseColor;
   final Color highlightColor;
+  final double fontSize;
+  final FontWeight fontWeight;
+  final double letterSpacing;
 
   @override
   State<ShimmerText> createState() => _ShimmerTextState();
@@ -20,9 +26,10 @@ class ShimmerText extends StatefulWidget {
 
 class _ShimmerTextState extends State<ShimmerText>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl =
-  AnimationController(vsync: this, duration: const Duration(seconds: 3))
-    ..repeat();
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2500),
+  )..repeat();
 
   @override
   void dispose() {
@@ -36,7 +43,8 @@ class _ShimmerTextState extends State<ShimmerText>
       animation: _ctrl,
       builder: (_, __) {
         final w = MediaQuery.of(context).size.width;
-        final dx = (w * 2) * _ctrl.value - w;
+        final dx = (w * 2.5) * _ctrl.value - w * 1.25;
+
         return ShaderMask(
           shaderCallback: (rect) {
             return LinearGradient(
@@ -44,10 +52,12 @@ class _ShimmerTextState extends State<ShimmerText>
               end: Alignment.centerRight,
               colors: [
                 widget.baseColor,
-                widget.highlightColor.withOpacity(.95),
+                widget.highlightColor.withOpacity(.98),
+                widget.highlightColor,
+                widget.highlightColor.withOpacity(.98),
                 widget.baseColor,
               ],
-              stops: const [0.35, 0.5, 0.65],
+              stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
               transform: _GradientTranslation(dx),
             ).createShader(rect);
           },
@@ -55,10 +65,16 @@ class _ShimmerTextState extends State<ShimmerText>
           child: Text(
             widget.text,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: .3,
+            style: TextStyle(
+              fontSize: widget.fontSize,
+              fontWeight: widget.fontWeight,
+              letterSpacing: widget.letterSpacing,
+              shadows: [
+                Shadow(
+                  color: widget.highlightColor.withOpacity(.3),
+                  blurRadius: 12,
+                ),
+              ],
             ),
           ),
         );

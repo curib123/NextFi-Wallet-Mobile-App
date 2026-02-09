@@ -15,8 +15,11 @@ class LiveCountingBalance extends StatefulWidget {
     this.loading = false,
     this.pulse,
     this.animate = true,
-    this.showTrendIcon = true, // allow parent to hide the built-in icon
-    this.forceBaseColor = false, // lock text color to baseColor (ignore _dir)
+    this.showTrendIcon = true,
+    this.forceBaseColor = false,
+    this.fontSize = 22,
+    this.enableGlow = true,
+    this.enableHaptic = false,
   });
 
   final double targetValue;
@@ -25,35 +28,83 @@ class LiveCountingBalance extends StatefulWidget {
   final Color upColor;
   final Color downColor;
   final bool hidden;
-
   final bool loading;
   final AnimationController? pulse;
-
-  /// When false, no counting/trending animation; value is shown directly.
   final bool animate;
-
-  /// Show/hide the internal ↑/↓ icon that follows the ticker direction.
   final bool showTrendIcon;
-
-  /// If true, always use baseColor for text (don’t recolor by _dir).
   final bool forceBaseColor;
+  final double fontSize;
+  final bool enableGlow;
+  final bool enableHaptic;
 
   @override
   State<LiveCountingBalance> createState() => _LiveCountingBalanceState();
 }
 
-class _LiveCountingBalanceState extends State<LiveCountingBalance> {
+class _LiveCountingBalanceState extends State<LiveCountingBalance>
+    with TickerProviderStateMixin {
   late double _display;
-  int _dir = 0; // -1 down, 0 flat, 1 up
+  int _dir = 0;
   Timer? _ticker;
 
-  static const _tick = Duration(milliseconds: 250);
+  late AnimationController _scaleController;
+  late AnimationController _glowController;
+  late AnimationController _iconBounceController;
+
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
+  late Animation<double> _iconBounceAnimation;
+
+  static const _tick = Duration(milliseconds: 150);
   static const _minStep = 0.01;
 
   @override
   void initState() {
     super.initState();
     _display = widget.targetValue.isFinite ? widget.targetValue : 0.0;
+
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.08)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.08, end: 0.98)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.98, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 40,
+      ),
+    ]).animate(_scaleController);
+
+    _glowController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+    _glowAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _glowController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _iconBounceController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    _iconBounceAnimation = CurvedAnimation(
+      parent: _iconBounceController,
+      curve: Curves.elasticOut,
+    );
+
     if (widget.animate) _startTicker();
   }
 
@@ -61,7 +112,6 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
   void didUpdateWidget(covariant LiveCountingBalance old) {
     super.didUpdateWidget(old);
 
-    // Handle animate flag transitions
     if (old.animate != widget.animate) {
       if (widget.animate) {
         _startTicker();
@@ -86,7 +136,24 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
 
     if (old.targetValue != widget.targetValue && widget.animate) {
       _restartTicker();
+      _triggerAnimations();
     }
+  }
+
+  void _triggerAnimations() {
+    _scaleController.forward(from: 0.0);
+
+    if (widget.enableGlow) {
+      _glowController.repeat(reverse: true);
+      Future.delayed(const Duration(milliseconds: 2000), () {
+        if (mounted) {
+          _glowController.stop();
+          _glowController.value = 0.0;
+        }
+      });
+    }
+
+    _iconBounceController.forward(from: 0.0);
   }
 
   void _startTicker() {
@@ -114,8 +181,9 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
         return;
       }
 
-      // Dynamic easing: bigger gap -> bigger step
-      final dynamicStep = (delta.abs() / 4).clamp(_minStep, double.infinity);
+      final progress = 1 - (delta.abs() / (widget.targetValue.abs() + 1));
+      final easing = Curves.easeOutCubic.transform(progress.clamp(0.0, 1.0));
+      final dynamicStep = (delta.abs() / 3.5).clamp(_minStep, double.infinity) * (1 - easing * 0.7);
       final step = delta.isNegative ? -dynamicStep : dynamicStep;
 
       setState(() {
@@ -133,6 +201,9 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _scaleController.dispose();
+    _glowController.dispose();
+    _iconBounceController.dispose();
     super.dispose();
   }
 
@@ -140,54 +211,141 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance> {
   Widget build(BuildContext context) {
     final color = widget.forceBaseColor
         ? widget.baseColor
-        : (_dir == 0 ? widget.baseColor : (_dir > 0 ? widget.upColor : widget.downColor));
+        : (_dir == 0
+        ? widget.baseColor
+        : (_dir > 0 ? widget.upColor : widget.downColor));
 
-    return Row(
-      children: [
-        // Trending icon hidden when not allowed or when steady
-        if (widget.showTrendIcon)
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-            child: (!widget.animate || _dir == 0)
-                ? const SizedBox(width: 0, key: ValueKey('eq'))
-                : Icon(
-              _dir > 0 ? LucideIcons.trendingUp : LucideIcons.trendingDown,
-              key: ValueKey(_dir > 0 ? 'up' : 'down'),
-              size: 18,
-              color: color,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (widget.showTrendIcon)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeInBack,
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -0.3),
+                        end: Offset.zero,
+                      ).animate(CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      )),
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              child: (!widget.animate || _dir == 0)
+                  ? const SizedBox(width: 0, key: ValueKey('eq'))
+                  : ScaleTransition(
+                scale: _iconBounceAnimation,
+                child: Icon(
+                  _dir > 0
+                      ? LucideIcons.trendingUp
+                      : LucideIcons.trendingDown,
+                  key: ValueKey(_dir > 0 ? 'up' : 'down'),
+                  size: 20,
+                  color: color,
+                ),
+              ),
             ),
-          ),
-        if (widget.showTrendIcon) const SizedBox(width: 6),
+          if (widget.showTrendIcon && _dir != 0) const SizedBox(width: 8),
 
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 180),
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-          child: Text(widget.hidden ? '••••' : widget.fmt.format(_display)),
-        ),
-
-        if (widget.loading && widget.pulse != null) ...[
-          const SizedBox(width: 8),
-          ScaleTransition(
-            scale: Tween<double>(begin: 0.85, end: 1.15).animate(widget.pulse!),
-            child: FadeTransition(
-              opacity: Tween<double>(begin: 0.35, end: 1.0).animate(widget.pulse!),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.85),
-                  shape: BoxShape.circle,
+          Flexible(
+            fit: FlexFit.loose,
+            child: ScaleTransition(
+              scale: _scaleAnimation,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                decoration: widget.enableGlow && _dir != 0
+                    ? BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withOpacity(0.3 * _glowAnimation.value),
+                      blurRadius: 16 * _glowAnimation.value,
+                      spreadRadius: 2 * _glowAnimation.value,
+                    ),
+                  ],
+                )
+                    : null,
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  style: TextStyle(
+                    fontSize: widget.fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                    letterSpacing: 0.5,
+                    height: 1.2,
+                  ),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return Opacity(
+                        opacity: value,
+                        child: child,
+                      );
+                    },
+                    child: Text(
+                      widget.hidden ? '••••' : widget.fmt.format(_display),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      softWrap: false,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
+
+          if (widget.loading && widget.pulse != null) ...[
+            const SizedBox(width: 10),
+            ScaleTransition(
+              scale: Tween<double>(begin: 0.8, end: 1.2).animate(
+                CurvedAnimation(
+                  parent: widget.pulse!,
+                  curve: Curves.easeInOut,
+                ),
+              ),
+              child: FadeTransition(
+                opacity: Tween<double>(begin: 0.4, end: 1.0).animate(
+                  CurvedAnimation(
+                    parent: widget.pulse!,
+                    curve: Curves.easeInOut,
+                  ),
+                ),
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.5),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

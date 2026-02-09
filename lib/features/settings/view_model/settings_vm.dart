@@ -10,7 +10,7 @@ import 'package:next_fi/features/settings/model/settings_model.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
 import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
 import 'package:next_fi/common/components/modal/showPinChangeBottomSheet.dart';
-import 'package:next_fi/Services/security_storage.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 
 /// Optional bridge the app can hook to actually apply ThemeMode at root.
 /// In your app bootstrap (near MaterialApp), set once:

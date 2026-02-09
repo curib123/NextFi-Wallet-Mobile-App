@@ -1,7 +1,7 @@
 // lib/Screen/home.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/features/settings/view_model/settings_vm.dart';
-import 'package:next_fi/services/profit_address_vault_secure_storage.dart';
+import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
+import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
@@ -10,7 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/services/seed_storage.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
