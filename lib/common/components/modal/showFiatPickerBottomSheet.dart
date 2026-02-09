@@ -11,140 +11,490 @@ Future<String?> showFiatPickerBottomSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    backgroundColor: Colors.transparent,
     builder: (_) => const _FiatPickerSheet(),
   );
 }
 
 class _FiatPickerSheet extends StatefulWidget {
-  const _FiatPickerSheet({super.key});
+  const _FiatPickerSheet();
+
   @override
   State<_FiatPickerSheet> createState() => _FiatPickerSheetState();
 }
 
-class _FiatPickerSheetState extends State<_FiatPickerSheet> {
+class _FiatPickerSheetState extends State<_FiatPickerSheet>
+    with SingleTickerProviderStateMixin {
   late String _selected;
+  String _searchQuery = '';
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     final current = context.read<CurrencyVM>().fiat.toLowerCase();
     _selected = _kFiats.any((f) => f.code == current) ? current : 'usd';
+
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  List<_Fiat> get _filteredFiats {
+    if (_searchQuery.isEmpty) return _kFiats;
+    final query = _searchQuery.toLowerCase();
+    return _kFiats.where((f) {
+      return f.code.toLowerCase().contains(query) ||
+          f.name.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  Future<void> _close([String? result]) async {
+    await _animController.reverse();
+    if (!mounted) return;
+    Navigator.pop(context, result);
+  }
+
+  void _selectCurrency(String code) {
+    context.read<CurrencyVM>().setFiat(code);
+    _close(code);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final colors = (AppColor.of(context)); // fallback to your app’s primary tint
+    final colors = AppColor.of(context);
+    final filteredFiats = _filteredFiats;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(LucideIcons.badgeDollarSign, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  "Select Fiat Currency",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(LucideIcons.x),
-                onPressed: () => Navigator.pop(context),
-                tooltip: "Close",
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          decoration: BoxDecoration(
+            color: colors.background,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 24,
+                offset: const Offset(0, -4),
               ),
             ],
           ),
-
-          const SizedBox(height: 12),
-
-          // Dropdown
-          DropdownButtonFormField<String>(
-            value: _selected,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: "Fiat",
-              hintText: "Choose a currency",
-              filled: true,
-              fillColor: cs.surfaceContainerLowest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 20),
+                decoration: BoxDecoration(
+                  color: colors.border.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(100),
+                ),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: colors.primaryGradient,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.primary.withOpacity(0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        LucideIcons.badgeDollarSign,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Select Currency',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                              color: colors.textPrimary,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_kFiats.length} currencies available',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _close(null),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            LucideIcons.x,
+                            color: colors.textSecondary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: colors.border.withOpacity(0.3),
+                    ),
+                  ),
+                  child: TextField(
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: colors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search currencies...',
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        color: colors.textSecondary.withOpacity(0.5),
+                      ),
+                      prefixIcon: Icon(
+                        LucideIcons.search,
+                        size: 18,
+                        color: colors.textSecondary,
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                        icon: Icon(
+                          LucideIcons.x,
+                          size: 18,
+                          color: colors.textSecondary,
+                        ),
+                        onPressed: () =>
+                            setState(() => _searchQuery = ''),
+                      )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Currently selected indicator
+              if (_searchQuery.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: colors.primary.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.checkCircle2,
+                          size: 14,
+                          color: colors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Current: ${_kFiats.firstWhere((f) => f.code == _selected).name}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 12),
+
+              // Currency list
+              if (filteredFiats.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(40),
+                  child: Column(
+                    children: [
+                      Icon(
+                        LucideIcons.searchX,
+                        size: 48,
+                        color: colors.textSecondary.withOpacity(0.3),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No currencies found',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Try a different search term',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.textSecondary.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    shrinkWrap: true,
+                    itemCount: filteredFiats.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final fiat = filteredFiats[i];
+                      final isSelected = fiat.code == _selected;
+                      return _CurrencyTile(
+                        colors: colors,
+                        fiat: fiat,
+                        isSelected: isSelected,
+                        onTap: () => _selectCurrency(fiat.code),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrencyTile extends StatefulWidget {
+  const _CurrencyTile({
+    required this.colors,
+    required this.fiat,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final AppColor colors;
+  final _Fiat fiat;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  State<_CurrencyTile> createState() => _CurrencyTileState();
+}
+
+class _CurrencyTileState extends State<_CurrencyTile> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: widget.isSelected
+              ? widget.colors.primary.withOpacity(0.08)
+              : widget.colors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: widget.isSelected
+                ? widget.colors.primary.withOpacity(0.4)
+                : _isPressed
+                ? widget.colors.primary.withOpacity(0.3)
+                : widget.colors.border.withOpacity(0.2),
+            width: widget.isSelected ? 2 : 1,
+          ),
+          boxShadow: widget.isSelected
+              ? [
+            BoxShadow(
+              color: widget.colors.primary.withOpacity(0.15),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            items: _kFiats
-                .map((f) => DropdownMenuItem<String>(
-              value: f.code,
-              child: Row(
+          ]
+              : _isPressed
+              ? [
+            BoxShadow(
+              color: widget.colors.primary.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            // Flag
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: widget.colors.border.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                widget.fiat.flag,
+                style: const TextStyle(fontSize: 24),
+              ),
+            ),
+            const SizedBox(width: 14),
+
+            // Currency info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(f.flag, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 10),
-                  Text("${f.code.toUpperCase()} • ${f.name}"),
+                  Row(
+                    children: [
+                      Text(
+                        widget.fiat.code.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: widget.isSelected
+                              ? widget.colors.primary
+                              : widget.colors.textPrimary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      if (widget.isSelected) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: widget.colors.primaryGradient,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Active',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.fiat.name,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: widget.colors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
-            ))
-                .toList(),
-            onChanged: (val) {
-              if (val != null) setState(() => _selected = val);
-            },
-          ),
+            ),
 
-          const SizedBox(height: 16),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: const Text("Cancel"),
-                ),
+            // Selection indicator
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: widget.isSelected
+                    ? widget.colors.primary
+                    : widget.colors.border.withOpacity(0.2),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    context.read<CurrencyVM>().setFiat(_selected);
-                    Navigator.pop(context, _selected);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: const Text("Apply"),
-                ),
-              ),
-            ],
-          ),
-        ],
+              child: widget.isSelected
+                  ? const Icon(
+                LucideIcons.check,
+                size: 16,
+                color: Colors.white,
+              )
+                  : null,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -194,4 +544,3 @@ const List<_Fiat> _kFiats = [
   _Fiat('ngn', 'Nigerian Naira', '🇳🇬'),
   _Fiat('zar', 'South African Rand', '🇿🇦'),
 ];
-

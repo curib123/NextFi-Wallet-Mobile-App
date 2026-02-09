@@ -3,9 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/Services/security_storage.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 
 /// Open the modal. Returns true if changed/created, false/null if cancelled.
 ///
@@ -22,16 +21,11 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => const _VerifyCurrentPinSheet(),
     );
 
     if (verified != true) {
-      // User cancelled or failed verification.
       return verified;
     }
     preAuthed = true;
@@ -41,25 +35,23 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
+    backgroundColor: Colors.transparent,
     builder: (_) => _PinChangeSheet(preAuthed: preAuthed),
   );
 }
 
-/// ─────────────────────────────────────────────────────────────────────────────
+/// ═══════════════════════════════════════════════════════════════════════════
 /// VERIFY CURRENT PIN (single-field gate)
-/// ─────────────────────────────────────────────────────────────────────────────
+/// ═══════════════════════════════════════════════════════════════════════════
 class _VerifyCurrentPinSheet extends StatefulWidget {
-  const _VerifyCurrentPinSheet({super.key});
+  const _VerifyCurrentPinSheet();
+
   @override
   State<_VerifyCurrentPinSheet> createState() => _VerifyCurrentPinSheetState();
 }
 
-class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet> {
+class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
+    with SingleTickerProviderStateMixin {
   static const int _requiredLen = 6;
 
   final _pinC = TextEditingController();
@@ -69,14 +61,36 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet> {
   Duration? _lockoutRemaining;
   Timer? _lockoutTimer;
 
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+
   @override
   void initState() {
     super.initState();
     _initLockout();
+
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animController.forward();
   }
 
   @override
   void dispose() {
+    _animController.dispose();
     _pinC.dispose();
     _lockoutTimer?.cancel();
     super.dispose();
@@ -105,202 +119,188 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet> {
     });
   }
 
+  Future<void> _close([bool? result]) async {
+    await _animController.reverse();
+    if (!mounted) return;
+    Navigator.pop(context, result);
+  }
+
   Future<void> _submit() async {
     if (_submitting) return;
     final pin = _pinC.text.trim();
 
-    final lockedOut = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
+    final lockedOut =
+        _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
     if (lockedOut) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.')),
-      );
+      _showError(
+          'Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.');
+      HapticFeedback.heavyImpact();
       return;
     }
 
     if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PIN must be exactly 6 digits')),
-      );
+      _showError('PIN must be exactly 6 digits');
+      HapticFeedback.heavyImpact();
       return;
     }
 
     setState(() => _submitting = true);
+    HapticFeedback.selectionClick();
+
     try {
       final ok = await SecurityStorage.verifyPin(pin);
       if (ok) {
         _pinC.clear();
+        HapticFeedback.mediumImpact();
         if (!mounted) return;
-        // Success → Close this sheet and allow opening the change sheet.
-        Navigator.pop(context, true);
+        await _close(true);
       } else {
         final rem = await SecurityStorage.lockoutRemaining();
         if (mounted) {
           setState(() => _lockoutRemaining = rem);
           _startOrStopLockoutTimer(rem);
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(rem != null && rem > Duration.zero
-                ? 'Too many attempts. Try again in ${rem.inSeconds}s.'
-                : 'Invalid PIN'),
-          ),
-        );
+        _showError(rem != null && rem > Duration.zero
+            ? 'Too many attempts. Try again in ${rem.inSeconds}s.'
+            : 'Invalid PIN');
+        HapticFeedback.heavyImpact();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      _showError('Error: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColor.of(context).error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final cs = Theme.of(context).colorScheme;
+    final colors = AppColor.of(context);
+    final isLockedOut =
+        _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
 
-    final isLockedOut = _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(LucideIcons.badgeCheck, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Verify Current PIN',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(LucideIcons.x),
-                onPressed: () => Navigator.pop(context, false),
-                tooltip: 'Close',
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.background,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 24,
+                offset: const Offset(0, -4),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Enter your 6-digit PIN to continue.',
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-            ),
-          ),
-          if (isLockedOut) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.red.withOpacity(0.2)),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 12,
+                bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
               ),
-              child: Text(
-                "Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.",
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle
+                  _buildHandle(colors),
+                  const SizedBox(height: 8),
 
-          // PIN field
-          TextField(
-            controller: _pinC,
-            enabled: !_submitting && !isLockedOut,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            obscureText: _obscure,
-            maxLength: _requiredLen,
-            decoration: InputDecoration(
-              counterText: '',
-              labelText: 'Current PIN',
-              filled: true,
-              fillColor: cs.surfaceContainerLowest,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              suffixIcon: IconButton(
-                icon: Icon(_obscure ? LucideIcons.eyeOff : LucideIcons.eye),
-                onPressed: () => setState(() => _obscure = !_obscure),
-                tooltip: _obscure ? 'Show' : 'Hide',
+                  // Header
+                  _buildHeader(
+                    colors,
+                    icon: LucideIcons.shieldCheck,
+                    title: 'Verify PIN',
+                    subtitle: 'Enter your 6-digit PIN to continue',
+                    onClose: () => _close(false),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Lockout warning
+                  if (isLockedOut)
+                    _buildLockoutWarning(colors, _lockoutRemaining!),
+
+                  if (isLockedOut) const SizedBox(height: 16),
+
+                  // PIN input
+                  _buildPinInput(
+                    colors,
+                    controller: _pinC,
+                    label: 'Current PIN',
+                    obscure: _obscure,
+                    enabled: !_submitting && !isLockedOut,
+                    onToggleObscure: () => setState(() => _obscure = !_obscure),
+                    onSubmit: _submit,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Actions
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildButton(
+                          colors,
+                          label: 'Cancel',
+                          icon: LucideIcons.x,
+                          outlined: true,
+                          onPressed: _submitting ? null : () => _close(false),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: _buildButton(
+                          colors,
+                          label: _submitting ? 'Verifying...' : 'Verify',
+                          icon: _submitting
+                              ? LucideIcons.loader2
+                              : LucideIcons.checkCircle2,
+                          loading: _submitting,
+                          onPressed:
+                          (_submitting || isLockedOut) ? null : _submit,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            onSubmitted: (_) => _submit(),
           ),
-          const SizedBox(height: 16),
-
-          // Actions
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _submitting ? null : () => Navigator.pop(context, false),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: (_submitting || isLockedOut) ? null : () { _submit(); },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: c.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: _submitting
-                      ? const SizedBox(
-                    height: 18, width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                      : const Text('Verify'),
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// ─────────────────────────────────────────────────────────────────────────────
-/// CHANGE / CREATE PIN (no "old PIN" field — we already pre-auth’d)
-/// ─────────────────────────────────────────────────────────────────────────────
+/// ═══════════════════════════════════════════════════════════════════════════
+/// CHANGE / CREATE PIN
+/// ═══════════════════════════════════════════════════════════════════════════
 class _PinChangeSheet extends StatefulWidget {
-  const _PinChangeSheet({super.key, this.preAuthed = false});
+  const _PinChangeSheet({this.preAuthed = false});
   final bool preAuthed;
 
   @override
   State<_PinChangeSheet> createState() => _PinChangeSheetState();
 }
 
-class _PinChangeSheetState extends State<_PinChangeSheet> {
+class _PinChangeSheetState extends State<_PinChangeSheet>
+    with SingleTickerProviderStateMixin {
   static const int _requiredLen = 6;
 
   final _formKey = GlobalKey<FormState>();
@@ -314,14 +314,36 @@ class _PinChangeSheetState extends State<_PinChangeSheet> {
   bool _submitting = false;
   bool _obNew = true, _obConfirm = true;
 
+  late final AnimationController _animController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+
   @override
   void initState() {
     super.initState();
     _init();
+
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animController.forward();
   }
 
   @override
   void dispose() {
+    _animController.dispose();
     _newC.dispose();
     _confirmC.dispose();
     _newF.dispose();
@@ -343,222 +365,503 @@ class _PinChangeSheetState extends State<_PinChangeSheet> {
     return null;
   }
 
+  Future<void> _close([bool? result]) async {
+    await _animController.reverse();
+    if (!mounted) return;
+    Navigator.pop(context, result);
+  }
+
   Future<void> _submit() async {
     if (_submitting) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      HapticFeedback.heavyImpact();
+      return;
+    }
 
     setState(() => _submitting = true);
+    HapticFeedback.selectionClick();
+
     try {
       final newPin = _newC.text.trim();
       final confirm = _confirmC.text.trim();
 
       if (newPin != confirm) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('New PIN and confirmation do not match')),
-        );
+        _showError('New PIN and confirmation do not match');
+        HapticFeedback.heavyImpact();
         return;
       }
 
       if (_hasExisting) {
         if (widget.preAuthed) {
-          // We already verified the old PIN → directly set the new PIN.
           await SecurityStorage.setPin(newPin);
         } else {
-          // Fallback path if someone opens this sheet directly.
-          // This will ask SecurityStorage to verify old, but we have no old value here,
-          // so better to block and instruct to use the proper entrypoint.
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please verify your current PIN first.')),
-          );
+          _showError('Please verify your current PIN first.');
           return;
         }
       } else {
-        // CREATE flow
         await SecurityStorage.setPin(newPin);
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_hasExisting ? 'PIN updated successfully' : 'PIN created successfully')),
-      );
-      Navigator.pop(context, true);
+      HapticFeedback.mediumImpact();
+      _showSuccess(
+          _hasExisting ? 'PIN updated successfully' : 'PIN created successfully');
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _close(true);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      _showError('Error: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColor.of(context).error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColor.of(context).success,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final cs = Theme.of(context).colorScheme;
+    final colors = AppColor.of(context);
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(LucideIcons.shield, size: 20),
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: Container(
+          decoration: BoxDecoration(
+            color: colors.background,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 24,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 12,
+                bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle
+                    _buildHandle(colors),
+                    const SizedBox(height: 8),
+
+                    // Header
+                    _buildHeader(
+                      colors,
+                      icon: LucideIcons.shield,
+                      title: _hasExisting ? 'Change PIN' : 'Create PIN',
+                      subtitle: _hasExisting
+                          ? 'Set your new 6-digit PIN'
+                          : 'Secure your wallet with a PIN',
+                      onClose: () => _close(false),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Security tips
+                    _buildSecurityTips(colors),
+                    const SizedBox(height: 20),
+
+                    // New PIN
+                    _buildPinInput(
+                      colors,
+                      controller: _newC,
+                      focusNode: _newF,
+                      label: 'New PIN',
+                      obscure: _obNew,
+                      validator: _validatePin,
+                      onToggleObscure: () => setState(() => _obNew = !_obNew),
+                      onFieldSubmitted: (_) => _confirmF.requestFocus(),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Confirm PIN
+                    _buildPinInput(
+                      colors,
+                      controller: _confirmC,
+                      focusNode: _confirmF,
+                      label: 'Confirm New PIN',
+                      obscure: _obConfirm,
+                      validator: _validatePin,
+                      onToggleObscure: () =>
+                          setState(() => _obConfirm = !_obConfirm),
+                      onFieldSubmitted: (_) => _submit(),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Actions
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildButton(
+                            colors,
+                            label: 'Cancel',
+                            icon: LucideIcons.x,
+                            outlined: true,
+                            onPressed: _submitting ? null : () => _close(false),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: _buildButton(
+                            colors,
+                            label: _submitting
+                                ? 'Saving...'
+                                : (_hasExisting ? 'Save PIN' : 'Create PIN'),
+                            icon: _submitting
+                                ? LucideIcons.loader2
+                                : LucideIcons.checkCircle2,
+                            loading: _submitting,
+                            onPressed: _submitting ? null : _submit,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _hasExisting ? 'Change Security PIN' : 'Create Security PIN',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(LucideIcons.x),
-                  onPressed: () => Navigator.pop(context, false),
-                  tooltip: 'Close',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _hasExisting
-                    ? 'Set your new 6-digit PIN.'
-                    : 'Create a new 6-digit PIN.',
-                style: TextStyle(color: c.textSecondary, fontSize: 12.5),
               ),
             ),
-            const SizedBox(height: 12),
-
-            // New PIN
-            _PinField(
-              controller: _newC,
-              focusNode: _newF,
-              label: 'New PIN',
-              obscure: _obNew,
-              onToggleObscure: () => setState(() => _obNew = !_obNew),
-              validator: _validatePin,
-              onFieldSubmitted: (_) => _confirmF.requestFocus(),
-            ),
-            const SizedBox(height: 10),
-
-            // Confirm
-            _PinField(
-              controller: _confirmC,
-              focusNode: _confirmF,
-              label: 'Confirm New PIN',
-              obscure: _obConfirm,
-              onToggleObscure: () => setState(() => _obConfirm = !_obConfirm),
-              validator: _validatePin,
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-
-            // Actions
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _submitting ? null : () => Navigator.pop(context, false),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _submitting ? null : () { _submit(); },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: c.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                    child: _submitting
-                        ? const SizedBox(
-                      height: 18, width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                        : Text(_hasExisting ? 'Save' : 'Create'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Reusable PIN field used in both sheets.
-class _PinField extends StatelessWidget {
-  const _PinField({
-    required this.controller,
-    required this.focusNode,
-    required this.label,
-    required this.obscure,
-    required this.onToggleObscure,
-    this.validator,
-    this.onFieldSubmitted,
-    this.enabled = true,
-  });
+/// ═══════════════════════════════════════════════════════════════════════════
+/// Reusable UI Components
+/// ═══════════════════════════════════════════════════════════════════════════
 
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String label;
-  final bool obscure;
-  final bool enabled;
-  final VoidCallback onToggleObscure;
-  final String? Function(String?)? validator;
-  final void Function(String)? onFieldSubmitted;
+Widget _buildHandle(AppColor colors) {
+  return Container(
+    width: 40,
+    height: 4,
+    decoration: BoxDecoration(
+      color: colors.border.withOpacity(0.5),
+      borderRadius: BorderRadius.circular(100),
+    ),
+  );
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      enabled: enabled,
-      keyboardType: TextInputType.number,
-      textInputAction: TextInputAction.next,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      obscureText: obscure,
-      maxLength: 6, // enforce 6-digit UI
-      decoration: InputDecoration(
-        counterText: '',
-        labelText: label,
-        filled: true,
-        fillColor: cs.surfaceContainerLowest,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        suffixIcon: IconButton(
-          icon: Icon(obscure ? LucideIcons.eyeOff : LucideIcons.eye),
-          onPressed: onToggleObscure,
-          tooltip: obscure ? 'Show' : 'Hide',
+Widget _buildHeader(
+    AppColor colors, {
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onClose,
+    }) {
+  return Row(
+    children: [
+      Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          gradient: colors.primaryGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: colors.primary.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white, size: 22),
+      ),
+      const SizedBox(width: 14),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                color: colors.textPrimary,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 13,
+                color: colors.textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
-      validator: validator,
-      onFieldSubmitted: onFieldSubmitted,
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onClose,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            child: Icon(
+              LucideIcons.x,
+              color: colors.textSecondary,
+              size: 20,
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildLockoutWarning(AppColor colors, Duration remaining) {
+  return Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.error.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: colors.error.withOpacity(0.3),
+        width: 1,
+      ),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          LucideIcons.shieldAlert,
+          color: colors.error,
+          size: 20,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Too many attempts',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: colors.error,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Try again in ${remaining.inSeconds}s',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colors.error.withOpacity(0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildSecurityTips(AppColor colors) {
+  return Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.primary.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: colors.primary.withOpacity(0.2),
+        width: 1,
+      ),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          LucideIcons.lightbulb,
+          color: colors.primary,
+          size: 18,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'Choose a PIN that\'s easy to remember but hard to guess',
+            style: TextStyle(
+              fontSize: 12,
+              color: colors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildPinInput(
+    AppColor colors, {
+      required TextEditingController controller,
+      FocusNode? focusNode,
+      required String label,
+      required bool obscure,
+      bool enabled = true,
+      required VoidCallback onToggleObscure,
+      String? Function(String?)? validator,
+      void Function(String)? onFieldSubmitted,
+      VoidCallback? onSubmit,
+    }) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: colors.textSecondary,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: colors.border.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: enabled,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.next,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          obscureText: obscure,
+          maxLength: 6,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: colors.textPrimary,
+            letterSpacing: 8,
+          ),
+          decoration: InputDecoration(
+            counterText: '',
+            hintText: '● ● ● ● ● ●',
+            hintStyle: TextStyle(
+              color: colors.textSecondary.withOpacity(0.3),
+              letterSpacing: 8,
+            ),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscure ? LucideIcons.eyeOff : LucideIcons.eye,
+                size: 18,
+                color: colors.textSecondary,
+              ),
+              onPressed: onToggleObscure,
+            ),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+          ),
+          validator: validator,
+          onFieldSubmitted: onFieldSubmitted ?? (_) => onSubmit?.call(),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildButton(
+    AppColor colors, {
+      required String label,
+      required IconData icon,
+      bool outlined = false,
+      bool loading = false,
+      VoidCallback? onPressed,
+    }) {
+  if (outlined) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        side: BorderSide(
+          color: colors.border.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 8),
+          Text(label),
+        ],
+      ),
     );
   }
+
+  return ElevatedButton(
+    onPressed: onPressed,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: colors.primary,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+      elevation: 0,
+      disabledBackgroundColor: colors.textSecondary.withOpacity(0.2),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (loading)
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(Colors.white),
+            ),
+          )
+        else
+          Icon(icon, size: 16),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
+    ),
+  );
 }

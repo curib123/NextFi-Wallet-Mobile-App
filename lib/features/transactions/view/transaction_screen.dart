@@ -123,7 +123,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
         // Auto-close after 5s if still mounted
         Timer(const Duration(seconds: 5), () {
-          if (mounted) ctl.close();
+          if (mounted) ctl;
         });
       });
     });

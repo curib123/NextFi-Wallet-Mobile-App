@@ -9,26 +9,80 @@ class WordBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+
     String label = "$count words";
-    Color tint = colors.background;
-    Color text = colors.textSecondary;
+    Color primaryColor = colors.textSecondary;
+    LinearGradient gradient;
 
     if (count == 12 || count == 24) {
-      tint = colors.success.withOpacity(.12);
-      text = colors.success;
+      primaryColor = colors.success;
+      gradient = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colors.success.withOpacity(0.15),
+          colors.success.withOpacity(0.08),
+        ],
+      );
     } else if (count > 0) {
-      tint = colors.warning.withOpacity(.12);
-      text = colors.warning;
+      primaryColor = colors.warning;
+      gradient = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colors.warning.withOpacity(0.15),
+          colors.warning.withOpacity(0.08),
+        ],
+      );
+    } else {
+      gradient = LinearGradient(
+        colors: [
+          colors.background,
+          colors.background.withOpacity(0.9),
+        ],
+      );
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: tint,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: text.withOpacity(.35)),
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: primaryColor.withOpacity(0.35),
+          width: 1.5,
+        ),
+        boxShadow: (count == 12 || count == 24)
+            ? [
+          BoxShadow(
+            color: primaryColor.withOpacity(0.15),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ]
+            : null,
       ),
-      child: Text(label, style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 12)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (count == 12 || count == 24)
+            Icon(
+              Icons.check_circle_rounded,
+              size: 14,
+              color: primaryColor,
+            ),
+          if (count == 12 || count == 24) const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: primaryColor,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

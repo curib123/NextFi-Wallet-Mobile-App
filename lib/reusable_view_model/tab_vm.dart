@@ -15,10 +15,10 @@ class TabVM extends ChangeNotifier {
   bool get isFirstTime => _isFirstTime;
 
   final List<Widget> screens = const [
-    WalletHomeScreen(),        // 0 – Wallet
-    SwapScreen(),              // 1 – Swap
-    ClaimableListScreen(),     // 2 – Claimable
-    TransactionScreen(),       // 3 – Activity
+    WalletHomeScreen(),
+    SwapScreen(),
+    ClaimableListScreen(),
+    TransactionScreen(),
   ];
 
   TabVM() {

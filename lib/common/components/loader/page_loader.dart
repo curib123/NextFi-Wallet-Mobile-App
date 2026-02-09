@@ -7,9 +7,9 @@ class PageLoader extends StatelessWidget {
   const PageLoader({
     super.key,
     this.label,
-    this.size = 25, // smaller by default
+    this.size = 25,
     this.speed = const Duration(milliseconds: 1400),
-    this.color, // single color; defaults to AppColor.textSecondary
+    this.color,
   });
 
   final String? label;
@@ -20,7 +20,7 @@ class PageLoader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final c = color ?? colors.textSecondary;
+    final c = color ?? colors.primary;
 
     return Center(
       child: Padding(
@@ -28,19 +28,19 @@ class PageLoader extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RubiksCubeLoader(
+            ModernFintechLoader(
               size: size,
               speed: speed,
               color: c,
             ),
             if (label != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               Text(
                 label!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: colors.textSecondary),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ],
@@ -50,6 +50,122 @@ class PageLoader extends StatelessWidget {
   }
 }
 
+// Modern fintech loader with smooth animations
+class ModernFintechLoader extends StatefulWidget {
+  const ModernFintechLoader({
+    super.key,
+    this.size = 48,
+    this.speed = const Duration(milliseconds: 1400),
+    required this.color,
+  });
+
+  final double size;
+  final Duration speed;
+  final Color color;
+
+  @override
+  State<ModernFintechLoader> createState() => _ModernFintechLoaderState();
+}
+
+class _ModernFintechLoaderState extends State<ModernFintechLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: widget.speed)..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: SizedBox.square(
+        dimension: widget.size,
+        child: CustomPaint(
+          painter: _FintechLoaderPainter(
+            repaint: _ctrl,
+            tProvider: () => _ctrl.value,
+            color: widget.color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FintechLoaderPainter extends CustomPainter {
+  _FintechLoaderPainter({
+    required Listenable repaint,
+    required this.tProvider,
+    required this.color,
+  }) : super(repaint: repaint);
+
+  final double Function() tProvider;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = tProvider();
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.shortestSide * 0.35;
+
+    // Draw 3 orbiting dots with smooth trails
+    for (int i = 0; i < 3; i++) {
+      final angle = (t * math.pi * 2) + (i * math.pi * 2 / 3);
+      final x = center.dx + math.cos(angle) * radius;
+      final y = center.dy + math.sin(angle) * radius;
+
+      // Dot with soft gradient effect
+      final dotRadius = size.shortestSide * 0.08;
+      final opacity = 0.3 + (math.sin(t * math.pi * 2 + i) * 0.7).abs();
+
+      final paint = Paint()
+        ..color = color.withOpacity(opacity)
+        ..style = PaintingStyle.fill
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dotRadius * 0.5);
+
+      canvas.drawCircle(Offset(x, y), dotRadius, paint);
+
+      // Outer glow
+      final glowPaint = Paint()
+        ..color = color.withOpacity(opacity * 0.3)
+        ..style = PaintingStyle.fill
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dotRadius * 1.5);
+
+      canvas.drawCircle(Offset(x, y), dotRadius * 1.5, glowPaint);
+    }
+
+    // Center pulse circle
+    final pulseRadius = radius * (0.15 + math.sin(t * math.pi * 2) * 0.1);
+    final pulsePaint = Paint()
+      ..color = color.withOpacity(0.15)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, pulseRadius, pulsePaint);
+
+    // Outer ring
+    final ringPaint = Paint()
+      ..color = color.withOpacity(0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.shortestSide * 0.02;
+
+    canvas.drawCircle(center, radius, ringPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FintechLoaderPainter oldDelegate) {
+    return oldDelegate.color.value != color.value;
+  }
+}
+
+// Legacy Rubiks Cube loader for backward compatibility
 class RubiksCubeLoader extends StatefulWidget {
   const RubiksCubeLoader({
     super.key,
@@ -106,14 +222,9 @@ class _RubiksPainter extends CustomPainter {
     required this.color,
   }) : super(repaint: repaint);
 
-  // ── 2×2 grid ────────────────────────────────────────────────────────────────
-  static const int _grid = 2; // 2×2
+  static const int _grid = 2;
   static const List<List<int>> _moves = [
-    // Ring clockwise on 2×2: indices (row-major): 0 1
-    //                                       2 3
-    // cycle: 0→1→3→2 (face turn)
     [0, 1, 3, 2],
-    // then reverse (back) 0→2→3→1 for a smooth ping-pong feel
     [0, 2, 3, 1],
   ];
 
@@ -124,20 +235,18 @@ class _RubiksPainter extends CustomPainter {
     ..isAntiAlias = true
     ..style = PaintingStyle.stroke;
 
-  // layout
-  final double _gapRatio = 0.10;      // a touch more space looks nicer on 2×2
-  final double _cornerRatio = 0.12;   // slightly rounder corners
-  double _strokeFor(Size size) => size.shortestSide * 0.08; // a bit thicker on 2×2
+  final double _gapRatio = 0.12;
+  final double _cornerRatio = 0.20; // More rounded for softer look
+  double _strokeFor(Size size) => size.shortestSide * 0.06; // Thinner stroke
 
   double _ease(double x) => Curves.easeInOutCubic.transform(x.clamp(0.0, 1.0));
 
   @override
   void paint(Canvas canvas, Size size) {
-    final t = tProvider(); // 0..1 over whole cycle
+    final t = tProvider();
     const n = _grid;
     final slots = n * n;
 
-    // geometry
     final gap = size.shortestSide * _gapRatio;
     final totalGaps = gap * (n - 1);
     final tile = (size.shortestSide - totalGaps) / n;
@@ -147,7 +256,6 @@ class _RubiksPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = _strokeFor(size);
 
-    // Precompute grid centers
     final List<Offset> slotCenters = List.generate(slots, (i) {
       final row = i ~/ n;
       final col = i % n;
@@ -156,25 +264,21 @@ class _RubiksPainter extends CustomPainter {
       return Offset(dx, dy);
     });
 
-    // Phased moves
     final totalMoves = _moves.length;
     final phaseF = t * totalMoves;
     final completedMoves = phaseF.floor();
-    final local = _ease(phaseF - completedMoves); // 0..1 within current move
+    final local = _ease(phaseF - completedMoves);
     final currentMove = _moves[completedMoves % totalMoves];
 
-    // slot->tile mapping after fully applying completed moves
     List<int> s2t = List.generate(slots, (i) => i);
     for (int m = 0; m < completedMoves; m++) {
       final cyc = _moves[m % totalMoves];
       _applyCycleInPlace(s2t, cyc);
     }
 
-    // tileId -> current position
     final Map<int, Offset> tilePos = {};
     final movingSet = currentMove.toSet();
 
-    // Fixed tiles
     for (int slot = 0; slot < slots; slot++) {
       final tileId = s2t[slot];
       if (!movingSet.contains(slot)) {
@@ -182,7 +286,6 @@ class _RubiksPainter extends CustomPainter {
       }
     }
 
-    // Moving tiles (quadratic bezier arc for a subtle turn feel)
     for (int j = 0; j < currentMove.length; j++) {
       final fromSlot = currentMove[j];
       final toSlot = currentMove[(j + 1) % currentMove.length];
@@ -193,39 +296,37 @@ class _RubiksPainter extends CustomPainter {
 
       final mid = Offset.lerp(p0, p1, 0.5)!;
       final dir = (p1 - p0);
-      final norm =
-      Offset(-dir.dy, dir.dx).scale(1 / (dir.distance + 1e-6), 1 / (dir.distance + 1e-6));
-      final arcBump = tile * 0.14; // slightly stronger bump on 2×2
+      final norm = Offset(-dir.dy, dir.dx)
+          .scale(1 / (dir.distance + 1e-6), 1 / (dir.distance + 1e-6));
+      final arcBump = tile * 0.12;
       final control = mid + norm * arcBump;
 
       final pos = _quadBezier(p0, control, p1, local);
       tilePos[tileId] = pos;
     }
 
-    // Draw outlines; moving tiles get a tiny twist
     for (int tileId = 0; tileId < slots; tileId++) {
       final center = tilePos[tileId]!;
       final isMoving = _isTileMoving(tileId, s2t, currentMove);
-      final twist = isMoving ? (math.sin(local * math.pi) * 0.16) : 0.0;
+      final twist = isMoving ? (math.sin(local * math.pi) * 0.10) : 0.0;
 
       canvas.save();
       canvas.translate(center.dx, center.dy);
       if (twist != 0) canvas.rotate(twist);
 
-      final rect = Rect.fromCenter(center: Offset.zero, width: tile, height: tile);
+      final rect =
+      Rect.fromCenter(center: Offset.zero, width: tile, height: tile);
       final rr = RRect.fromRectAndRadius(rect, r);
 
-      // main outline
-      canvas.drawRRect(rr, _paint);
+      // Soft shadow effect
+      final shadowPaint = Paint()
+        ..color = color.withOpacity(0.1)
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      canvas.drawRRect(rr, shadowPaint);
 
-      // subtle inner border (comment out for super-clean look)
-      final innerInset = tile * 0.12;
-      final innerRect = Rect.fromCenter(
-        center: Offset.zero,
-        width: tile - innerInset,
-        height: tile - innerInset,
-      );
-      canvas.drawRRect(RRect.fromRectAndRadius(innerRect, r), _paint);
+      // Main outline with gradient effect
+      canvas.drawRRect(rr, _paint);
 
       canvas.restore();
     }

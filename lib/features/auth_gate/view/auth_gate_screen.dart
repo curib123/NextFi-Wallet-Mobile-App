@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/features/auth_gate/model/auth_gate_state.dart';
@@ -8,8 +9,8 @@ import 'package:next_fi/features/auth_gate/view/widgets/lock_badge.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/lock_out_banner.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/pin_field.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/primary_action.dart';
-import 'package:next_fi/features/auth_gate/view/widgets/tob_bar.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
+import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
@@ -23,20 +24,39 @@ class AuthGateScreen extends StatefulWidget {
 }
 
 class _AuthGateScreenState extends State<AuthGateScreen>
-    with WidgetsBindingObserver {
-  static const double _kFormWidth = 360;
+    with WidgetsBindingObserver, TickerProviderStateMixin {
+  static const double _kFormWidth = 380;
 
   final TextEditingController _pinController = TextEditingController();
   final FocusNode _pinFocus = FocusNode();
   final ScrollController _scroll = ScrollController();
   Timer? _smallVisualDelay;
 
-  late AuthGateVM _vm; // cache VM to avoid using context in dispose()
+  late AuthGateVM _vm;
+
+  // Animation controllers
+  late final AnimationController _bgCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 24),
+  )..repeat();
+
+  late final AnimationController _pulseCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2000),
+  )..repeat(reverse: true);
+
+  late final AnimationController _scaleCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+  );
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Entrance animation
+    _scaleCtrl.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _vm.init();
@@ -59,7 +79,6 @@ class _AuthGateScreenState extends State<AuthGateScreen>
       }
     });
 
-    // When the PIN field gains focus, nudge to ensure visibility.
     _pinFocus.addListener(() {
       if (_pinFocus.hasFocus) {
         Future.delayed(const Duration(milliseconds: 150), () {
@@ -88,6 +107,9 @@ class _AuthGateScreenState extends State<AuthGateScreen>
     _pinFocus.dispose();
     _scroll.dispose();
     _smallVisualDelay?.cancel();
+    _bgCtrl.dispose();
+    _pulseCtrl.dispose();
+    _scaleCtrl.dispose();
     super.dispose();
   }
 
@@ -117,6 +139,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
     final colors = AppColor.of(context);
     final vm = context.watch<AuthGateVM>();
     final s = vm.state;
+    final dpr = MediaQuery.of(context).devicePixelRatio;
 
     final isLockedOut = vm.isLockedOut;
     final headline = s.isNewUser
@@ -138,71 +161,93 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         child: Scaffold(
           backgroundColor: colors.background,
           resizeToAvoidBottomInset: true,
-          appBar: TopBar(colors: colors),
-          body: DecoratedBox(
-            // Subtle background polish without clashing with your theme
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colors.background.withOpacity(.98),
-                  colors.background.withOpacity(.94),
-                ],
+          body: Stack(
+            children: [
+              // Animated fintech background
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _bgCtrl,
+                    builder: (_, __) => FintechBackground(
+                      progress: _bgCtrl.value,
+                      colors: colors,
+                      devicePixelRatio: dpr,
+                      topBandFraction: .55,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, viewport) {
-                  return Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: SingleChildScrollView(
-                        controller: _scroll,
-                        padding: EdgeInsets.fromLTRB(24, 16, 24, 16 + kb),
-                        keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
+
+              // Main content
+              Positioned.fill(
+                child: SafeArea(
+                  child: LayoutBuilder(
+                    builder: (context, viewport) {
+                      return Center(
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            // Make content at least viewport height minus keyboard
-                            minHeight: viewport.maxHeight - kb,
-                          ),
-                          child: Center(
-                            // True vertical centering when space allows
-                            child: _AuthCard(
-                              formWidth: _kFormWidth,
-                              colors: colors,
-                              state: s,
-                              isLockedOut: isLockedOut,
-                              onSubmit: () => _submit(vm),
-                              onToggleObscure: vm.toggleObscurePin,
-                              onBiometricPressed: () async {
-                                final res = await _vm.authenticateWithBiometrics();
-                                if (!mounted) return;
-                                if (res.message != null) {
-                                  showFloatingSnackBar(
-                                    context,
-                                    message: res.message!,
-                                    type: res.success
-                                        ? SnackBarType.success
-                                        : SnackBarType.error,
-                                  );
-                                }
-                                if (res.success) _onSuccessNavigate();
-                              },
-                              pinController: _pinController,
-                              pinFocus: _pinFocus,
-                              headline: headline,
-                              subhead: subhead,
+                          constraints: const BoxConstraints(maxWidth: 540),
+                          child: SingleChildScrollView(
+                            controller: _scroll,
+                            padding: EdgeInsets.fromLTRB(24, 20, 24, 20 + kb),
+                            keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: viewport.maxHeight - kb - 40,
+                              ),
+                              child: Center(
+                                child: ScaleTransition(
+                                  scale: CurvedAnimation(
+                                    parent: _scaleCtrl,
+                                    curve: Curves.easeOutBack,
+                                  ),
+                                  child: AnimatedBuilder(
+                                    animation: _pulseCtrl,
+                                    builder: (_, child) {
+                                      final pulseScale = 1.0 + (_pulseCtrl.value * 0.008);
+                                      return Transform.scale(
+                                        scale: pulseScale,
+                                        child: child,
+                                      );
+                                    },
+                                    child: _AuthCard(
+                                      formWidth: _kFormWidth,
+                                      colors: colors,
+                                      state: s,
+                                      isLockedOut: isLockedOut,
+                                      onSubmit: () => _submit(vm),
+                                      onToggleObscure: vm.toggleObscurePin,
+                                      onBiometricPressed: () async {
+                                        final res = await _vm.authenticateWithBiometrics();
+                                        if (!mounted) return;
+                                        if (res.message != null) {
+                                          showFloatingSnackBar(
+                                            context,
+                                            message: res.message!,
+                                            type: res.success
+                                                ? SnackBarType.success
+                                                : SnackBarType.error,
+                                          );
+                                        }
+                                        if (res.success) _onSuccessNavigate();
+                                      },
+                                      pinController: _pinController,
+                                      pinFocus: _pinFocus,
+                                      headline: headline,
+                                      subhead: subhead,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  );
-                },
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -256,7 +301,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   }
 }
 
-/// Extracted for clarity. Simple, elegant card with soft elevation.
+/// Premium glass card with enhanced glassmorphism and depth
 class _AuthCard extends StatelessWidget {
   const _AuthCard({
     required this.formWidth,
@@ -291,82 +336,217 @@ class _AuthCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = state;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+    return Container(
       constraints: BoxConstraints(maxWidth: formWidth),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Lock badge
-          AnimatedOpacity(
-            opacity: 1.0,
-            duration: const Duration(milliseconds: 250),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: LockBadge(
-                unlocked: s.unlockedVisual,
-                colors: colors,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.surface.withOpacity(.7),
+            colors.surface.withOpacity(.5),
+          ],
+        ),
+        border: Border.all(
+          color: colors.primary.withOpacity(.2),
+          width: 1.5,
+        ),
+        boxShadow: [
+          // Primary glow
+          BoxShadow(
+            color: colors.primary.withOpacity(.12),
+            blurRadius: 40,
+            spreadRadius: 2,
+            offset: const Offset(0, 20),
+          ),
+          // Depth shadow
+          BoxShadow(
+            color: Colors.black.withOpacity(.08),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
+          // Top highlight
+          BoxShadow(
+            color: Colors.white.withOpacity(.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colors.surface.withOpacity(.9),
+                  colors.surface.withOpacity(.8),
+                ],
               ),
             ),
-          ),
+            padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Lock badge with glow
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: s.unlockedVisual
+                            ? Colors.green.withOpacity(.2)
+                            : colors.primary.withOpacity(.15),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: AnimatedOpacity(
+                    opacity: 1.0,
+                    duration: const Duration(milliseconds: 250),
+                    child: LockBadge(
+                      unlocked: s.unlockedVisual,
+                      colors: colors,
+                    ),
+                  ),
+                ),
 
-          const SizedBox(height: 18),
+                const SizedBox(height: 24),
 
-          // Headings
-          Headings(headline: headline, subhead: subhead, colors: colors),
+                // Headings
+                Headings(headline: headline, subhead: subhead, colors: colors),
 
-          if (isLockedOut) ...[
-            const SizedBox(height: 10),
-            LockoutBanner(remaining: s.lockoutRemaining!, colors: colors),
-          ],
+                if (isLockedOut) ...[
+                  const SizedBox(height: 16),
+                  LockoutBanner(remaining: s.lockoutRemaining!, colors: colors),
+                ],
 
-          const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-          // PIN input
-          PinField(
-            maxWidth: formWidth,
-            controller: pinController,
-            focusNode: pinFocus,
-            enabled: !isLockedOut && !s.submitting,
-            obscure: s.obscurePin,
-            colors: colors,
-            onSubmit: onSubmit,
-            onToggleObscure: onToggleObscure,
-          ),
+                // PIN input with enhanced styling
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: colors.background.withOpacity(.3),
+                    border: Border.all(
+                      color: colors.primary.withOpacity(.1),
+                      width: 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: PinField(
+                    maxWidth: formWidth,
+                    controller: pinController,
+                    focusNode: pinFocus,
+                    enabled: !isLockedOut && !s.submitting,
+                    obscure: s.obscurePin,
+                    colors: colors,
+                    onSubmit: onSubmit,
+                    onToggleObscure: onToggleObscure,
+                  ),
+                ),
 
-          const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-          // Primary action
-          PrimaryAction(
-            maxWidth: formWidth,
-            colors: colors,
-            text: s.isNewUser
-                ? (s.firstPinEntry == null ? "Continue" : "Save PIN")
-                : "Unlock",
-            icon: s.unlockedVisual
-                ? Icons.lock_open_rounded
-                : (s.isNewUser
-                ? (s.firstPinEntry == null
-                ? Icons.arrow_forward
-                : Icons.save_rounded)
-                : Icons.lock_rounded),
-            enabled: !s.submitting && !isLockedOut,
-            onPressed: onSubmit,
-          ),
+                // Primary action with enhanced styling
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.primary.withOpacity(.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: PrimaryAction(
+                    maxWidth: formWidth,
+                    colors: colors,
+                    text: s.isNewUser
+                        ? (s.firstPinEntry == null ? "Continue" : "Save PIN")
+                        : "Unlock",
+                    icon: s.unlockedVisual
+                        ? Icons.lock_open_rounded
+                        : (s.isNewUser
+                        ? (s.firstPinEntry == null
+                        ? Icons.arrow_forward
+                        : Icons.save_rounded)
+                        : Icons.lock_rounded),
+                    enabled: !s.submitting && !isLockedOut,
+                    onPressed: onSubmit,
+                  ),
+                ),
 
-          // 🔑 Biometrics quick-unlock button (only if enabled via Settings)
-          if (!s.isNewUser &&
-              s.deviceSupportsBiometrics &&
-              s.biometricsEnabled) ...[
-            const SizedBox(height: 8),
-            BiometricsButton(
-              maxWidth: formWidth,
-              colors: colors,
-              onPressed: onBiometricPressed,
+                // Biometrics button with enhanced styling
+                if (!s.isNewUser &&
+                    s.deviceSupportsBiometrics &&
+                    s.biometricsEnabled) ...[
+                  const SizedBox(height: 16),
+                  BiometricsButton(
+                    maxWidth: formWidth,
+                    colors: colors,
+                    onPressed: onBiometricPressed,
+                  ),
+                ],
+
+                // Security indicator
+                if (!s.isNewUser) ...[
+                  const SizedBox(height: 20),
+                  _SecurityIndicator(colors: colors),
+                ],
+              ],
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Security indicator widget
+class _SecurityIndicator extends StatelessWidget {
+  const _SecurityIndicator({required this.colors});
+
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.primary.withOpacity(.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colors.primary.withOpacity(.12),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.verified_user,
+            size: 16,
+            color: colors.primary.withOpacity(.8),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Your keys are encrypted locally',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: colors.textSecondary,
+              letterSpacing: 0.2,
+            ),
+          ),
         ],
       ),
     );

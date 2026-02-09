@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-import 'package:next_fi/services/seed_storage.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/reusable_model/wallet_meta_model.dart';
 
 /// Helper for deterministic derivation using the SDK's built-in SEP-0005 Wallet.

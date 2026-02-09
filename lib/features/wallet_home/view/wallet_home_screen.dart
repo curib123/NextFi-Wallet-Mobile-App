@@ -357,7 +357,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       onPrimary: () => vm.ackHint(h.id),
       barrierDismissible: true,
     );
-    _hintAlertCtrls[h.id] = ctl;
   }
 
   String _short(String addr) {

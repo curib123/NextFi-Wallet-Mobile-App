@@ -1,6 +1,6 @@
 // lib/features/wallet_settings/viewmodel/wallet_settings_vm.dart
 import 'package:flutter/foundation.dart';
-import 'package:next_fi/services/seed_storage.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import '../model/wallet_settings_state.dart';
 
 class WalletSettingsVM extends ChangeNotifier {

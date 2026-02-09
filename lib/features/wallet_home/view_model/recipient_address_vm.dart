@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
-import 'package:next_fi/services/recipient_address_storage.dart';
+import 'package:next_fi/services/secure_storage/recipient_address_storage.dart';
 
 /// Recipient addresses reusable_view_model (ChangeNotifier-based)
 /// - Persists via RecipientAddressStorage (no direct secure-storage refs here)

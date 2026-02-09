@@ -31,7 +31,7 @@ class AssetWidget extends StatelessWidget {
     this.loading = false,
     this.onRefresh,
     this.window = PriceWindow.h24,
-    this.onItemTap, // optional override for LIST TILE taps only
+    this.onItemTap,
   });
 
   final AppColor colors;
@@ -39,20 +39,13 @@ class AssetWidget extends StatelessWidget {
   final Map<String, String> logos;
   final double xlmBalance;
   final double usdcBalance;
-  final String address; // wallet public address
+  final String address;
   final bool loading;
   final Future<void> Function()? onRefresh;
   final PriceWindow window;
   final Object? hasUsdcTrustline;
-
-  /// Optional override if you want to handle **list item taps** yourself.
-  /// Receives the token string ('XLM' or 'USDC') that was tapped.
-  /// NOTE: The FAB ignores this and always goes to **Send**.
   final void Function(String token)? onItemTap;
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Live balance taps (reactive for UI; non-reactive for event handlers)
-  // ────────────────────────────────────────────────────────────────────────────
   double _liveBalance(
       BuildContext ctx,
       String symbolUpper, {
@@ -62,7 +55,7 @@ class AssetWidget extends StatelessWidget {
     try {
       vm = Provider.of<WalletHomeVM?>(ctx, listen: reactive);
     } catch (_) {
-      vm = null; // Provider may not be in tree; use props fallback
+      vm = null;
     }
 
     if (vm != null) {
@@ -82,9 +75,6 @@ class AssetWidget extends StatelessWidget {
         : (symbolUpper == 'USDC' ? usdcBalance : 0.0);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Price & percent helpers
-  // ────────────────────────────────────────────────────────────────────────────
   double _fiatFor(CurrencyVM cur, String symbolUpper, double balance) {
     switch (symbolUpper) {
       case 'XLM':
@@ -96,7 +86,6 @@ class AssetWidget extends StatelessWidget {
     }
   }
 
-  // Price per coin in selected fiat
   double _coinPriceFor(CurrencyVM cur, String symbolUpper) {
     switch (symbolUpper) {
       case 'XLM':
@@ -121,23 +110,17 @@ class AssetWidget extends StatelessWidget {
     }
   }
 
-  /// Absolute **price** change PER COIN (in fiat) for the selected window.
-  /// Uses current price and % change to infer the previous price:
-  /// prev = now / (1 + pct/100), delta = now - prev
   double _priceDeltaPerCoin({
     required double coinPriceNow,
     required double pct,
   }) {
     if (!pct.isFinite || !coinPriceNow.isFinite) return 0.0;
-    final denom = 1 + (pct / 100.0); // guard -100%
+    final denom = 1 + (pct / 100.0);
     if (denom <= 0) return 0.0;
     final prev = coinPriceNow / denom;
-    return coinPriceNow - prev; // signed
+    return coinPriceNow - prev;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Formatting helpers
-  // ────────────────────────────────────────────────────────────────────────────
   String formatTokenAmount(
       double v, {
         int bigMaxDecimals = 4,
@@ -168,11 +151,6 @@ class AssetWidget extends StatelessWidget {
     return v >= 0 ? '+$s' : '-$s';
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Navigation
-  // ────────────────────────────────────────────────────────────────────────────
-
-  // List-tile tap → Receive (unless overridden)
   void _openReceive(BuildContext context, AssetModel a) {
     final t = a.symbol.toUpperCase();
     final token = (t == 'USDC') ? 'USDC' : 'XLM';
@@ -187,15 +165,14 @@ class AssetWidget extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: address,
-          xlmBalance: _liveBalance(context, 'XLM'), // non-reactive
-          usdcBalance: _liveBalance(context, 'USDC'), // non-reactive
+          xlmBalance: _liveBalance(context, 'XLM'),
+          usdcBalance: _liveBalance(context, 'USDC'),
           initialToken: token,
         ),
       ),
     );
   }
 
-  // FAB tap → Send (always). Intentionally ignores onItemTap.
   Future<void> _openSendSelector(BuildContext context, AssetModel a) async {
     final addr = address.trim();
     if (addr.isEmpty) {
@@ -207,7 +184,6 @@ class AssetWidget extends StatelessWidget {
       return;
     }
 
-    // Capture provider (nullable) BEFORE opening any sheets.
     WalletHomeVM? homeVm;
     try {
       homeVm = context.read<WalletHomeVM?>();
@@ -215,14 +191,12 @@ class AssetWidget extends StatelessWidget {
       homeVm = null;
     }
 
-    // Defaults / balances (non-reactive reads)
     final sym = a.symbol.toUpperCase();
     final defaultToken = (sym == 'USDC') ? 'USDC' : 'XLM';
     final xlmBal = _liveBalance(context, 'XLM');
     final usdcBal = _liveBalance(context, 'USDC');
 
     try {
-      // Try the token chooser first
       await showTokenSelector(
         context,
         addr,
@@ -237,7 +211,6 @@ class AssetWidget extends StatelessWidget {
         ),
       );
     } catch (e) {
-      // Fallback: push SendScreen directly via root navigator so it always shows
       await Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute(
           builder: (_) => SendScreen(
@@ -249,16 +222,14 @@ class AssetWidget extends StatelessWidget {
         ),
       );
     } finally {
-      // Refresh if the VM exists; don’t assume it’s provided.
       try {
         await homeVm?.refresh(force: true);
-      } catch (_) {/* ignore */}
+      } catch (_) {}
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // PRICE real-time: watch CurrencyVM (notifies on price/fiat changes)
     final cur = context.watch<CurrencyVM>();
     final currencyCode = cur.fiat.toUpperCase();
     final money = NumberFormat.simpleCurrency(name: currencyCode);
@@ -267,116 +238,39 @@ class AssetWidget extends StatelessWidget {
       return ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: 5,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
-        itemBuilder: (ctx, __) => _shimmerTile(ctx), // pass context for responsive widths
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (ctx, __) => _shimmerTile(ctx),
       );
     }
 
     final listView = ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 96),
+      padding: const EdgeInsets.only(top: 8, bottom: 120),
       itemCount: assets.length + 1,
-      separatorBuilder: (_, __) => const SizedBox(height: 0),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         if (index < assets.length) {
           final a = assets[index];
-          final sym = a.symbol.toUpperCase();
-
-          // BALANCE real-time: listen for rebuilds in UI
-          final bal = _liveBalance(context, sym, reactive: true);
-
-          // Compute fiat & per-coin price delta using **current** price and % change
-          final pct = _pctFor(a);
-          final coinPriceNow = _coinPriceFor(cur, sym);
-          final fiatNow = _fiatFor(cur, sym, bal);
-
-          // Price delta per coin (NOT multiplied by holdings)
-          final priceDelta = _priceDeltaPerCoin(
-            coinPriceNow: coinPriceNow,
-            pct: pct,
-          );
-          final isUp = priceDelta >= 0;
-          final logoUrl = logos[a.id];
-
-          // ── Tile with subtle shadow + rounded corners ──
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Material(
-              color: Theme.of(context).cardColor,
-              elevation: 2, // subtle lift
-              shadowColor: Colors.black.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(16),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => _openReceive(context, a),
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                   padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  child: Row(
-                    children: [
-                      _logo(logoUrl),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              a.name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: colors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "${formatTokenAmount(bal)} ${a.symbol}",
-                              style: TextStyle(color: colors.textSecondary),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "${money.format(coinPriceNow)} / ${a.symbol}",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colors.textSecondary.withOpacity(.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            money.format(fiatNow),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: colors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          _pctBadge(pct),
-                          const SizedBox(height: 2),
-                          // Real-time **price delta per coin** (NOT multiplied by holdings)
-                          Text(
-                            _formatSignedMoney(money, priceDelta),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isUp ? Colors.green : Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+          return _AssetTile(
+            asset: a,
+            colors: colors,
+            logoUrl: logos[a.id],
+            balance: _liveBalance(context, a.symbol.toUpperCase(), reactive: true),
+            pct: _pctFor(a),
+            coinPriceNow: _coinPriceFor(cur, a.symbol.toUpperCase()),
+            fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), _liveBalance(context, a.symbol.toUpperCase(), reactive: true)),
+            priceDelta: _priceDeltaPerCoin(
+              coinPriceNow: _coinPriceFor(cur, a.symbol.toUpperCase()),
+              pct: _pctFor(a),
             ),
+            money: money,
+            onTap: () => _openReceive(context, a),
+            formatTokenAmount: formatTokenAmount,
+            formatSignedMoney: _formatSignedMoney,
           );
         } else {
-          // ---- Guide footer (single, after all tiles) ----
           return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: AssetGuideFooter(
               colors: AppColor.of(context),
               xlmBalance: _liveBalance(context, 'XLM', reactive: true),
@@ -391,6 +285,8 @@ class AssetWidget extends StatelessWidget {
         ? RefreshIndicator(
       onRefresh: onRefresh!,
       color: colors.primary,
+      strokeWidth: 2.5,
+      displacement: 50,
       child: listView,
     )
         : listView;
@@ -401,12 +297,10 @@ class AssetWidget extends StatelessWidget {
       children: [
         Positioned.fill(child: scrollable),
         Positioned(
-          right: 16,
-          bottom: 16 + bottomInset,
-          child: FloatingActionButton(
-            heroTag: 'assets_scan_fab',
-            tooltip: 'Scan to send',
-            shape: const CircleBorder(),
+          right: 20,
+          bottom: 20 + bottomInset,
+          child: _AnimatedFAB(
+            colors: colors,
             onPressed: () async {
               if (assets.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -414,94 +308,20 @@ class AssetWidget extends StatelessWidget {
                 );
                 return;
               }
-
-              // Prefer XLM; fallback to the first asset
               final a = assets.firstWhere(
                     (x) => x.symbol.toUpperCase() == 'XLM',
                 orElse: () => assets.first,
               );
-
-              await _openSendSelector(context, a); // non-reactive use
+              await _openSendSelector(context, a);
             },
-            child: const Icon(LucideIcons.scanLine),
           ),
         )
       ],
     );
   }
 
-  // --- small UI helpers ---
-
-  Widget _logo(String? url, {double size = 36}) {
-    if (url == null || url.isEmpty) return _logoFallback(size);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        url,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _logoFallback(size),
-        loadingBuilder: (ctx, child, progress) => progress == null
-            ? child
-            : SizedBox(
-          width: size,
-          height: size,
-          child: const Center(
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _logoFallback(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: colors.border.withOpacity(.18),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(
-        Icons.image_not_supported,
-        size: size * 0.6,
-        color: colors.textSecondary.withOpacity(.6),
-      ),
-    );
-  }
-
-  Widget _pctBadge(double pct) {
-    final positive = pct >= 0;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          positive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-          color: positive ? Colors.green : Colors.red,
-          size: 18,
-        ),
-        Text(
-          "${pct.abs().toStringAsFixed(2)}%",
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: positive ? Colors.green : Colors.red,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Redesigned shimmer that mirrors the real tile layout to minimize layout shift
   Widget _shimmerTile(BuildContext context) {
-    // Helper to draw a rounded block
-    Widget block(double w, double h, {double r = 6}) => Container(
+    Widget block(double w, double h, {double r = 8}) => Container(
       width: w,
       height: h,
       decoration: BoxDecoration(
@@ -510,96 +330,471 @@ class AssetWidget extends StatelessWidget {
       ),
     );
 
-    // Responsive content width (keeps stubs proportional)
     final sw = MediaQuery.of(context).size.width;
-    // Account for: 16 (outer pad) + 24 (inner pad) + 36 (logo) + 12 (gap) + 24 (inner pad) + 16 (outer pad) ≈ 128
-    final contentW = (sw - 128).clamp(180.0, sw);
+    final contentW = (sw - 140).clamp(180.0, sw);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: DecoratedBox(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: colors.border.withOpacity(isDark ? 0.1 : 0.08),
+            width: 1,
+          ),
         ),
         child: Shimmer.fromColors(
-          baseColor: colors.border.withOpacity(.28),
-          highlightColor: colors.border.withOpacity(.12),
+          baseColor: colors.border.withOpacity(isDark ? 0.15 : 0.12),
+          highlightColor: colors.border.withOpacity(isDark ? 0.08 : 0.04),
+          period: const Duration(milliseconds: 1500),
           child: Padding(
-            // Match real tile inner padding
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                // Logo (36, r=8)
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                const SizedBox(width: 12),
-
-                // Left texts (name, balance, price per coin)
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Name line (bold in real)
-                      block(contentW * 0.38, 14, r: 4),
+                      block(contentW * 0.35, 16, r: 6),
+                      const SizedBox(height: 8),
+                      block(contentW * 0.25, 14, r: 5),
                       const SizedBox(height: 6),
-                      // Balance amount + symbol
-                      block(contentW * 0.28, 12, r: 4),
-                      const SizedBox(height: 6),
-                      // Price per coin line
-                      block(contentW * 0.30, 12, r: 4),
+                      block(contentW * 0.28, 12, r: 5),
                     ],
                   ),
                 ),
-
-                const SizedBox(width: 12),
-
-                // Right column (fiat total, % badge, price delta)
+                const SizedBox(width: 16),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Fiat total (bold in real)
-                    block(72, 16, r: 4),
-                    const SizedBox(height: 6),
-
-                    // % badge pill (icon + number in real)
+                    block(80, 16, r: 6),
+                    const SizedBox(height: 8),
                     Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // tiny icon stub
-                          block(10, 10, r: 3),
-                          const SizedBox(width: 6),
-                          block(36, 10, r: 3),
-                        ],
-                      ),
+                      child: block(48, 12, r: 4),
                     ),
-
                     const SizedBox(height: 6),
-                    // Price delta per coin
-                    block(64, 12, r: 4),
+                    block(60, 12, r: 5),
                   ],
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssetTile extends StatefulWidget {
+  final AssetModel asset;
+  final AppColor colors;
+  final String? logoUrl;
+  final double balance;
+  final double pct;
+  final double coinPriceNow;
+  final double fiatNow;
+  final double priceDelta;
+  final NumberFormat money;
+  final VoidCallback onTap;
+  final String Function(double) formatTokenAmount;
+  final String Function(NumberFormat, double) formatSignedMoney;
+
+  const _AssetTile({
+    required this.asset,
+    required this.colors,
+    required this.logoUrl,
+    required this.balance,
+    required this.pct,
+    required this.coinPriceNow,
+    required this.fiatNow,
+    required this.priceDelta,
+    required this.money,
+    required this.onTap,
+    required this.formatTokenAmount,
+    required this.formatSignedMoney,
+  });
+
+  @override
+  State<_AssetTile> createState() => _AssetTileState();
+}
+
+class _AssetTileState extends State<_AssetTile> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _isPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTapDown(TapDownDetails details) {
+    setState(() => _isPressed = true);
+    _controller.forward();
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    setState(() => _isPressed = false);
+    _controller.reverse();
+  }
+
+  void _handleTapCancel() {
+    setState(() => _isPressed = false);
+    _controller.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isUp = widget.priceDelta >= 0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: GestureDetector(
+          onTapDown: _handleTapDown,
+          onTapUp: _handleTapUp,
+          onTapCancel: _handleTapCancel,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _isPressed
+                    ? widget.colors.primary.withOpacity(0.3)
+                    : widget.colors.border.withOpacity(isDark ? 0.1 : 0.08),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _isPressed
+                      ? widget.colors.primary.withOpacity(0.1)
+                      : Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+                  blurRadius: _isPressed ? 12 : 8,
+                  offset: Offset(0, _isPressed ? 2 : 4),
+                  spreadRadius: _isPressed ? 1 : 0,
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  _buildLogo(widget.logoUrl),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.asset.name,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: widget.colors.textPrimary,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "${widget.formatTokenAmount(widget.balance)} ${widget.asset.symbol}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: widget.colors.textSecondary,
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "${widget.money.format(widget.coinPriceNow)} / ${widget.asset.symbol}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: widget.colors.textSecondary.withOpacity(0.7),
+                            letterSpacing: -0.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        widget.money.format(widget.fiatNow),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: widget.colors.textPrimary,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildPctBadge(widget.pct, isDark),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.formatSignedMoney(widget.money, widget.priceDelta),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isUp
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFEF4444),
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogo(String? url) {
+    if (url == null || url.isEmpty) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              widget.colors.primary.withOpacity(0.15),
+              widget.colors.primary.withOpacity(0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          LucideIcons.coins,
+          size: 24,
+          color: widget.colors.primary.withOpacity(0.5),
+        ),
+      );
+    }
+
+    return Hero(
+      tag: 'asset_logo_${widget.asset.id}',
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: widget.colors.primary.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    widget.colors.primary.withOpacity(0.15),
+                    widget.colors.primary.withOpacity(0.05),
+                  ],
+                ),
+              ),
+              child: Icon(
+                LucideIcons.coins,
+                size: 24,
+                color: widget.colors.primary.withOpacity(0.5),
+              ),
+            ),
+            loadingBuilder: (ctx, child, progress) {
+              if (progress == null) return child;
+              return Container(
+                color: widget.colors.border.withOpacity(0.1),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: widget.colors.primary.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPctBadge(double pct, bool isDark) {
+    final positive = pct >= 0;
+    final bgColor = positive
+        ? const Color(0xFF10B981).withOpacity(isDark ? 0.15 : 0.12)
+        : const Color(0xFFEF4444).withOpacity(isDark ? 0.15 : 0.12);
+    final textColor = positive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            positive ? LucideIcons.trendingUp : LucideIcons.trendingDown,
+            color: textColor,
+            size: 14,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            "${pct.abs().toStringAsFixed(2)}%",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnimatedFAB extends StatefulWidget {
+  final AppColor colors;
+  final VoidCallback onPressed;
+
+  const _AnimatedFAB({
+    required this.colors,
+    required this.onPressed,
+  });
+
+  @override
+  State<_AnimatedFAB> createState() => _AnimatedFABState();
+}
+
+class _AnimatedFABState extends State<_AnimatedFAB> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _rotationAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _rotationAnimation = Tween<double>(begin: 0.0, end: 0.1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onPressed();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: RotationTransition(
+          turns: _rotationAnimation,
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  widget.colors.primary,
+                  widget.colors.primary.withOpacity(0.85),
+                ],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.colors.primary.withOpacity(isDark ? 0.4 : 0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                  spreadRadius: 0,
+                ),
+                BoxShadow(
+                  color: widget.colors.primary.withOpacity(0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: const Icon(
+              LucideIcons.scanLine,
+              color: Colors.white,
+              size: 26,
             ),
           ),
         ),

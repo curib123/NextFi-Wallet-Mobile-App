@@ -8,7 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 // ⬇️ Pulls the active wallet mnemonic / publicAddress
-import 'package:next_fi/services/seed_storage.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 // ⬇️ NEW: Import CurrencyVM to get live USDC price
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
