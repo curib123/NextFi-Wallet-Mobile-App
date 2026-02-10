@@ -10,12 +10,9 @@ class PercentChipsRow extends StatelessWidget {
   });
 
   final void Function(double pct) onPick;
-
-  /// Currently-selected percentage (e.g. 0.25). `null` = none highlighted.
   final double? activePct;
 
   static const _presets = [
-    ('10%', 0.10),
     ('25%', 0.25),
     ('50%', 0.50),
     ('75%', 0.75),
@@ -39,34 +36,28 @@ class PercentChipsRow extends StatelessWidget {
   Widget _chip(AppColor c, String label, double pct) {
     final isActive = activePct != null && (activePct! - pct).abs() < 0.001;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onPick(pct),
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+    return GestureDetector(
+      onTap: () => onPick(pct),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive ? c.primary.withValues(alpha: 0.12) : c.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
             color: isActive
-                ? c.primary.withValues(alpha: 0.12)
-                : c.surface,
-            border: Border.all(
-              color: isActive
-                  ? c.primary.withValues(alpha: 0.5)
-                  : c.border.withValues(alpha: 0.35),
-            ),
+                ? c.primary.withValues(alpha: 0.3)
+                : c.border.withValues(alpha: 0.3),
+            width: 1,
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isActive ? c.primary : c.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isActive ? c.primary : c.textSecondary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
             ),
           ),
         ),

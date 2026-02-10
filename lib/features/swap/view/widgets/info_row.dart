@@ -12,20 +12,31 @@ class InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
           if (icon != null) ...[
             Icon(icon, size: 14, color: c.textSecondary),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
           ],
-          Text(label,
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+            ),
+          ),
           const Spacer(),
-          Text(value,
-              style: TextStyle(
-                  color: c.textPrimary, fontWeight: FontWeight.w600)),
+          Text(
+            value,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
         ],
       ),
     );
