@@ -79,7 +79,7 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Balance access via WalletHomeVM (best practice)
+  // Balance access via WalletHomeVM
   // ──────────────────────────────────────────────────────────────────────────
 
   /// Get current XLM balance from WalletHomeVM
@@ -88,22 +88,21 @@ class ClaimableVM extends ChangeNotifier {
   /// Get current USDC balance from WalletHomeVM
   double get usdcBalance => _walletHomeVM.state.usdc;
 
-  /// Get balance for specific asset (true = XLM, false = USDC)
-  double getBalanceForAsset(bool isXlm) => isXlm ? xlmBalance : usdcBalance;
-
-  /// Whether wallet has sufficient balance for amount
-  bool hasSufficientBalance(bool isXlm, double amount) {
-    final balance = getBalanceForAsset(isXlm);
-    // Reserve 1 XLM for network fees if sending XLM
-    final reserve = isXlm ? 1.0 : 0.0;
-    return balance >= (amount + reserve);
+  /// Get balance for a given asset symbol
+  double getBalanceForSymbol(String symbol) {
+    switch (symbol.toUpperCase()) {
+      case 'XLM':
+        return xlmBalance;
+      case 'USDC':
+        return usdcBalance;
+      default:
+        return 0.0;
+    }
   }
 
-  /// Get available balance after reserves
-  double getAvailableBalance(bool isXlm) {
-    final balance = getBalanceForAsset(isXlm);
-    // Reserve 1 XLM for network fees if XLM
-    return isXlm ? (balance - 1.0).clamp(0.0, double.infinity) : balance;
+  /// Whether wallet has sufficient balance for amount (no reserve deduction)
+  bool hasSufficientBalance(String symbol, double amount) {
+    return getBalanceForSymbol(symbol) >= amount;
   }
 
   /// Listen to wallet home state changes
@@ -693,16 +692,20 @@ class ClaimableVM extends ChangeNotifier {
   // Create
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Get the correct asset based on [isXlm] flag
-  Asset _asset(bool isXlm) => isXlm
-      ? Asset.NATIVE
-      : AssetTypeCreditAlphaNum4('USDC', _svc.usdcIssuer);
+  /// Get the correct asset based on symbol
+  Asset _assetFromSymbol(String symbol) {
+    if (symbol.toUpperCase() == 'XLM') return Asset.NATIVE;
+    if (symbol.toUpperCase() == 'USDC') {
+      return AssetTypeCreditAlphaNum4('USDC', _svc.usdcIssuer);
+    }
+    return Asset.NATIVE;
+  }
 
   /// Create an unconditional claimable balance (recipient can claim anytime).
   /// No expiration — stays claimable forever.
   /// Automatically refreshes wallet balances after creation.
   Future<String> createUnconditional({
-    required bool isXlm,
+    required String assetSymbol,
     required double amount,
     required String recipientId,
     String? memo,
@@ -711,7 +714,7 @@ class ClaimableVM extends ChangeNotifier {
       final kp = await _seedVM.deriveKeyPair();
       final txHash = await _svc.createUnconditionalClaimableBalance(
         keyPair: kp,
-        asset: _asset(isXlm),
+        asset: _assetFromSymbol(assetSymbol),
         amount: amount,
         recipientId: recipientId,
       );
@@ -735,7 +738,7 @@ class ClaimableVM extends ChangeNotifier {
   /// After expiry, the sender can reclaim the funds.
   /// Automatically refreshes wallet balances after creation.
   Future<String> createUnconditionalWithExpiry({
-    required bool isXlm,
+    required String assetSymbol,
     required double amount,
     required String recipientId,
     required DateTime expiryTime,
@@ -745,7 +748,7 @@ class ClaimableVM extends ChangeNotifier {
       final kp = await _seedVM.deriveKeyPair();
       final txHash = await _svc.createUnconditionalWithExpiry(
         keyPair: kp,
-        asset: _asset(isXlm),
+        asset: _assetFromSymbol(assetSymbol),
         amount: amount,
         recipientId: recipientId,
         expiryTime: expiryTime,
@@ -768,7 +771,7 @@ class ClaimableVM extends ChangeNotifier {
   /// No expiration — once unlocked, stays claimable forever.
   /// Automatically refreshes wallet balances after creation.
   Future<String> createTimeLocked({
-    required bool isXlm,
+    required String assetSymbol,
     required double amount,
     required String recipientId,
     required DateTime unlockTime,
@@ -778,7 +781,7 @@ class ClaimableVM extends ChangeNotifier {
       final kp = await _seedVM.deriveKeyPair();
       final txHash = await _svc.createTimeLockedPayment(
         keyPair: kp,
-        asset: _asset(isXlm),
+        asset: _assetFromSymbol(assetSymbol),
         amount: amount,
         recipientId: recipientId,
         unlockTime: unlockTime,
@@ -803,7 +806,7 @@ class ClaimableVM extends ChangeNotifier {
   /// After expiry, the sender can reclaim the funds.
   /// Automatically refreshes wallet balances after creation.
   Future<String> createTimeLockedWithExpiry({
-    required bool isXlm,
+    required String assetSymbol,
     required double amount,
     required String recipientId,
     required DateTime unlockTime,
@@ -814,7 +817,7 @@ class ClaimableVM extends ChangeNotifier {
       final kp = await _seedVM.deriveKeyPair();
       final txHash = await _svc.createTimeLockedWithExpiry(
         keyPair: kp,
-        asset: _asset(isXlm),
+        asset: _assetFromSymbol(assetSymbol),
         amount: amount,
         recipientId: recipientId,
         unlockTime: unlockTime,
