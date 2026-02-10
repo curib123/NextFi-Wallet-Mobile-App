@@ -215,7 +215,7 @@ class CurrencyVM extends ChangeNotifier {
               : 0.0;
 
           final cacheAge = _getCacheAge(cache);
-          debugPrint('CurrencyVM: Loaded cached rates (age: ${cacheAge?.inMinutes ?? "unknown"}m)');
+          debugPrint('CurrencyVM: Loaded cached rates (age: ${cacheAge?.inMinutes ?? "unknown"}m, XLM: $_xlmRate $_fiat, USDC per XLM: $_lastUsdcPerXlm)');
         }
       }
     } catch (e) {
@@ -227,12 +227,17 @@ class CurrencyVM extends ChangeNotifier {
           (p) {
         if (_disposed) return;
         if (p.usdcPerXlm > 0 && p.usdcPerXlm.isFinite) {
+          final oldPrice = _lastUsdcPerXlm;
           _lastUsdcPerXlm = p.usdcPerXlm;
           _recomputeXlmFiat();
           _consecutiveErrors = 0; // Reset error counter on success
 
-          // Update cache with latest stream price
-          _updateCacheWithLatestPrice();
+          // CRITICAL FIX: Save to cache IMMEDIATELY on every stream update
+          _saveLatestPricesToCache();
+
+          if ((oldPrice - p.usdcPerXlm).abs() > 0.0001) {
+            debugPrint('CurrencyVM: Stream price updated: ${p.usdcPerXlm} USDC/XLM → ${_xlmRate.toStringAsFixed(4)} $_fiat/XLM');
+          }
         }
       },
       onError: (e) {
@@ -285,10 +290,10 @@ class CurrencyVM extends ChangeNotifier {
         _recomputeXlmFiat();
         _consecutiveErrors = 0;
 
-        // Save to cache
-        await _saveRatesToCache();
+        // CRITICAL FIX: Save to cache immediately after successful fetch
+        await _saveLatestPricesToCache();
 
-        debugPrint('CurrencyVM: Refreshed rates - USDC: $_usdcRate, XLM: $_xlmRate');
+        debugPrint('CurrencyVM: Refreshed rates - USDC: $_usdcRate $_fiat, XLM: ${_xlmRate.toStringAsFixed(4)} $_fiat (USDC per XLM: $_lastUsdcPerXlm)');
       } else {
         throw Exception('Invalid exchange rate: $fx');
       }
@@ -420,6 +425,35 @@ class CurrencyVM extends ChangeNotifier {
 
   // ── Fallback & Cache Helpers ──────────────────────────────────────────────
 
+  /// CRITICAL FIX: New method to save latest prices to cache immediately
+  /// This ensures cache always has the most recent successful data
+  Future<void> _saveLatestPricesToCache() async {
+    if (_usdcRate <= 0 || _xlmRate <= 0 || _lastUsdcPerXlm <= 0) {
+      return; // Don't save invalid data
+    }
+
+    try {
+      final cacheData = {
+        'fiat': _fiat,
+        'usdcRate': _usdcRate,
+        'xlmRate': _xlmRate,
+        'lastUsdcPerXlm': _lastUsdcPerXlm,
+        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      };
+
+      // Update in-memory cache
+      _lastGoodRatesCache = cacheData;
+
+      // Persist to secure storage
+      await CurrencySecureStorage.saveLastGoodRates(cacheData);
+
+      // Update timestamp
+      _lastRateRefresh = DateTime.now();
+    } catch (e) {
+      debugPrint('CurrencyVM: Error saving latest prices to cache: $e');
+    }
+  }
+
   /// Use cached rates as fallback when fetch fails
   Future<void> _useCachedRatesAsFallback() async {
     if (_lastGoodRatesCache != null) {
@@ -428,24 +462,32 @@ class CurrencyVM extends ChangeNotifier {
       // Use cache even if fiat doesn't match - better than nothing
       final cachedUsdcRate = (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
       final cachedXlmRate = (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
+      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)?.toDouble();
 
       if (cachedUsdcRate > 0) {
         _usdcRate = cachedUsdcRate;
-        debugPrint('CurrencyVM: Using cached USDC rate: $_usdcRate (fiat: $cachedFiat)');
+        debugPrint('CurrencyVM: ✓ Using cached USDC rate: $_usdcRate $_fiat (from fiat: $cachedFiat)');
       } else if (_usdcRate == 0) {
         _usdcRate = 1.0; // Ultimate fallback
-        debugPrint('CurrencyVM: Using default USDC rate: 1.0');
+        debugPrint('CurrencyVM: ⚠ Using default USDC rate: 1.0');
       }
 
       if (cachedXlmRate > 0) {
         _xlmRate = cachedXlmRate;
-        _lastUsdcPerXlm = _xlmRate / _usdcRate;
-        debugPrint('CurrencyVM: Using cached XLM rate: $_xlmRate');
+
+        // Use cached USDC per XLM if available
+        if (cachedUsdcPerXlm != null && cachedUsdcPerXlm > 0) {
+          _lastUsdcPerXlm = cachedUsdcPerXlm;
+        } else {
+          _lastUsdcPerXlm = _xlmRate / _usdcRate;
+        }
+
+        debugPrint('CurrencyVM: ✓ Using cached XLM rate: ${_xlmRate.toStringAsFixed(4)} $_fiat (USDC per XLM: $_lastUsdcPerXlm)');
       }
     } else if (_usdcRate == 0) {
       // No cache available, use default
       _usdcRate = 1.0;
-      debugPrint('CurrencyVM: No cache available, using default rate');
+      debugPrint('CurrencyVM: ⚠ No cache available, using default rate');
     }
 
     if (!_disposed) notifyListeners();
@@ -456,11 +498,16 @@ class CurrencyVM extends ChangeNotifier {
     if (_lastGoodRatesCache != null) {
       final cachedXlmRate = (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
       final cachedUsdcRate = (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
+      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)?.toDouble();
 
-      if (cachedXlmRate > 0 && cachedUsdcRate > 0) {
+      if (cachedUsdcPerXlm != null && cachedUsdcPerXlm > 0) {
+        _lastUsdcPerXlm = cachedUsdcPerXlm;
+        _recomputeXlmFiat();
+        debugPrint('CurrencyVM: ✓ Using cached stream price as fallback: $cachedUsdcPerXlm USDC/XLM');
+      } else if (cachedXlmRate > 0 && cachedUsdcRate > 0) {
         _lastUsdcPerXlm = cachedXlmRate / cachedUsdcRate;
         _recomputeXlmFiat();
-        debugPrint('CurrencyVM: Using cached stream price as fallback');
+        debugPrint('CurrencyVM: ✓ Computed stream price from cached rates: $_lastUsdcPerXlm USDC/XLM');
       }
     }
   }
@@ -480,34 +527,6 @@ class CurrencyVM extends ChangeNotifier {
       } else {
         debugPrint('CurrencyVM: No cached history available');
       }
-    }
-  }
-
-  /// Update cache with latest price from stream
-  Future<void> _updateCacheWithLatestPrice() async {
-    if (_lastUsdcPerXlm > 0 && _usdcRate > 0) {
-      _lastGoodRatesCache = {
-        'fiat': _fiat,
-        'usdcRate': _usdcRate,
-        'xlmRate': _xlmRate,
-        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      };
-
-      await _saveRatesToCache();
-    }
-  }
-
-  /// Save rates to cache
-  Future<void> _saveRatesToCache() async {
-    try {
-      await CurrencySecureStorage.saveLastGoodRates({
-        'fiat': _fiat,
-        'usdcRate': _usdcRate,
-        'xlmRate': _xlmRate,
-        'ts': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      });
-    } catch (e) {
-      debugPrint('CurrencyVM: Error saving rates to cache: $e');
     }
   }
 

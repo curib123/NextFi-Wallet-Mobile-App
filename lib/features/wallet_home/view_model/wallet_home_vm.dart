@@ -268,6 +268,9 @@ class WalletHomeVM extends ChangeNotifier {
         usdc: results[1],
         lastBalancesAt: now,
       ));
+
+      // Fetch reserves
+      await _fetchReserves(addr);
     } catch (e) {
       debugPrint('WalletHomeVM.refresh error: $e');
       // Don't show error toast for background refreshes
@@ -277,6 +280,34 @@ class WalletHomeVM extends ChangeNotifier {
     } finally {
       _balancesInFlight = false;
       _set(_state.copyWith(loadingBalances: false));
+    }
+  }
+
+  Future<void> _fetchReserves(String addr) async {
+    if (!_state.hasWallet) return;
+
+    _set(_state.copyWith(loadingReserves: true));
+
+    try {
+      final breakdown = await _stellar.getReserveBreakdown(addr);
+
+      _set(_state.copyWith(
+        xlmBaseReserve: breakdown['baseReserve'] ?? 2.0,
+        xlmTrustlineReserve: breakdown['trustlineReserve'] ?? 0.0,
+        xlmTotalReserve: breakdown['totalMinimumBalance'] ?? 2.0,
+        trustlineCount: (breakdown['trustlineCount'] as num?)?.toInt() ?? 0,
+        lastReservesAt: DateTime.now(),
+      ));
+    } catch (e) {
+      debugPrint('Error fetching reserves: $e');
+      _set(_state.copyWith(
+        xlmBaseReserve: 2.0,
+        xlmTrustlineReserve: 0.0,
+        xlmTotalReserve: 2.0,
+        trustlineCount: 0,
+      ));
+    } finally {
+      _set(_state.copyWith(loadingReserves: false));
     }
   }
 
@@ -414,6 +445,13 @@ class WalletHomeVM extends ChangeNotifier {
       debugPrint('Error renaming wallet: $e');
       return false;
     }
+  }
+
+  // ─────────────── Price Window Selection ───────────────
+
+  void setPriceWindow(PriceWindow window) {
+    if (_state.selectedWindow == window) return;
+    _set(_state.copyWith(selectedWindow: window));
   }
 
   // ─────────────── UI-intent API (called by View) ───────────────

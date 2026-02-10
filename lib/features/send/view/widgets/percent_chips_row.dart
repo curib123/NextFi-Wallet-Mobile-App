@@ -1,5 +1,6 @@
 // lib/features/send/view/widgets/percent_chips_row.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class PercentChipsRow extends StatelessWidget {
@@ -13,7 +14,6 @@ class PercentChipsRow extends StatelessWidget {
   final double? activePct;
 
   static const _presets = [
-    ('10%', 0.10),
     ('25%', 0.25),
     ('50%', 0.50),
     ('75%', 0.75),
@@ -27,44 +27,66 @@ class PercentChipsRow extends StatelessWidget {
       children: [
         for (int i = 0; i < _presets.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
-          Expanded(child: _chip(c, _presets[i].$1, _presets[i].$2)),
+          Expanded(
+            child: _Chip(
+              c: c,
+              label: _presets[i].$1,
+              pct: _presets[i].$2,
+              isActive: activePct != null &&
+                  (activePct! - _presets[i].$2).abs() < 0.001,
+              onTap: () => onPick(_presets[i].$2),
+            ),
+          ),
         ],
       ],
     );
   }
+}
 
-  Widget _chip(AppColor c, String label, double pct) {
-    final isActive =
-        activePct != null && (activePct! - pct).abs() < 0.001;
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.c,
+    required this.label,
+    required this.pct,
+    required this.isActive,
+    required this.onTap,
+  });
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onPick(pct),
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+  final AppColor c;
+  final String label;
+  final double pct;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isActive
+              ? c.primary.withValues(alpha: 0.12)
+              : c.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
             color: isActive
-                ? c.primary.withValues(alpha: 0.1)
-                : c.primary.withValues(alpha: 0.04),
-            border: Border.all(
-              color: isActive
-                  ? c.primary.withValues(alpha: 0.4)
-                  : c.primary.withValues(alpha: 0.12),
-            ),
+                ? c.primary.withValues(alpha: 0.3)
+                : c.border.withValues(alpha: 0.3),
+            width: 1,
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isActive ? c.primary : c.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isActive ? c.primary : c.textSecondary,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+              fontSize: 13,
             ),
           ),
         ),

@@ -148,25 +148,10 @@ class _SendScreenState extends State<SendScreen> {
     return s.contains('.') ? s.replaceFirst(RegExp(r'\.?0+$'), '') : s;
   }
 
+  /// Balance is already expendable (reserve subtracted by the service).
+  /// Just apply the percentage directly — no reserve subtraction needed.
   void _applyPercent(SendVM vm, double percent) {
-    double base = vm.senderBalanceToken;
-
-    if (vm.isXlm && percent == 1.0 && vm.selfHasUsdcTrustline) {
-      if (base > 1.0) {
-        base = base - 1.0;
-      } else {
-        base = 0.0;
-      }
-      showFloatingSnackBar(
-        context,
-        message: 'Kept 1 XLM for network fees so USDC stays usable.',
-        type: SnackBarType.info,
-      );
-    } else {
-      base = base * percent;
-    }
-
-    final v = _floorTo(base, 7);
+    final v = _floorTo(vm.senderBalanceToken * percent, 7);
     HapticFeedback.selectionClick();
     _amtCtl.text = _fmtAmount(v);
     _amtCtl.selection = TextSelection.fromPosition(
@@ -197,7 +182,7 @@ class _SendScreenState extends State<SendScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => FlatSheet(
-        maxHeightFactor: 0.50,
+        maxHeightFactor: 0.55,
         child: SlimReviewSheet(
           tokenStr: tokenStr,
           sender: vm.senderAddress,
@@ -210,6 +195,8 @@ class _SendScreenState extends State<SendScreen> {
           extraValue: vm.isXlm
               ? '${_numFmt.format(vm.typedAmount)} XLM'
               : '${vm.needsXlmForFeesIfUsdcSend.toStringAsFixed(7)} XLM',
+          remainingExpendable:
+          '${_fmtAmount(vm.remainingExpendable)} $tokenStr',
           onCancel: () => Navigator.pop(context),
           onConfirm: () async {
             Navigator.pop(context);
@@ -405,9 +392,8 @@ class _SendScreenState extends State<SendScreen> {
         onRefresh: _refresh,
         color: c.primary,
         displacement: 24,
-        child: _buildBody(
-            c, vm, recipients, tokenStr, recipientGets,
-            typedAddr, saved),
+        child: _buildBody(c, vm, recipients, tokenStr,
+            recipientGets, typedAddr, saved),
       ),
       bottomNavigationBar: (vm.loading || vm.error != null)
           ? null
@@ -448,13 +434,12 @@ class _SendScreenState extends State<SendScreen> {
           parent: BouncingScrollPhysics()),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
       children: [
-        // Balance
+        // Balance — shows expendable (already minus reserve)
         BalanceLine(token: tokenStr, balance: vm.senderBalanceToken),
         const SizedBox(height: 14),
 
         // Recipient context card
-        _buildRecipientContext(
-            c, vm, recipients, typedAddr, saved),
+        _buildRecipientContext(c, vm, recipients, typedAddr, saved),
         const SizedBox(height: 4),
 
         // Form
@@ -470,13 +455,6 @@ class _SendScreenState extends State<SendScreen> {
 
               // Amount input
               _buildAmountField(c, vm, tokenStr),
-
-              // XLM reserve tip
-              if (vm.isXlm && vm.selfHasUsdcTrustline) ...[
-                const SizedBox(height: 8),
-                _buildReserveTip(c),
-              ],
-
               const SizedBox(height: 12),
 
               // Percent chips
@@ -494,16 +472,18 @@ class _SendScreenState extends State<SendScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Preview card
+        // Preview card — now with remaining expendable
         SlimPreviewCard(
           isXLM: vm.isXlm,
           token: tokenStr,
           recipientGets: recipientGets,
           estNetworkFeeXlm: vm.estNetworkFeeXlm ?? 0,
           txFeeXlm: vm.txFeeXlm ?? 0,
-          totalBudgetXlm: vm.isXlm ? vm.totalDeductXlmIfXlmSend : null,
-          needsXlmForFeesIfUsdc:
+          totalDeductedXlm: vm.isXlm ? vm.totalDeductXlmIfXlmSend : null,
+          xlmNeededForFees:
           vm.isXlm ? null : vm.needsXlmForFeesIfUsdcSend,
+          remainingExpendable:
+          vm.typedAmount > 0 ? vm.remainingExpendable : null,
         ),
       ],
     );
@@ -531,11 +511,11 @@ class _SendScreenState extends State<SendScreen> {
           colorValue: saved.color,
           address: saved.address,
           onEdit: () async {
-            final ok = await showRecipientUpsertSheet(context,
-                initial: saved,
-                address: typedAddr,
+            final ok = await showRecipientUpsertSheet(
+              context,
+              initial: saved,
+              address: typedAddr,
             );
-
             if (ok == true && mounted) setState(() {});
           },
         ),
@@ -677,29 +657,6 @@ class _SendScreenState extends State<SendScreen> {
         return (bytes.length <= 28) ? null : 'Memo too long (max 28 bytes)';
       },
       onTapOutside: (_) => FocusScope.of(context).unfocus(),
-    );
-  }
-
-  Widget _buildReserveTip(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: c.primary.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(LucideIcons.info, size: 14,
-              color: c.textSecondary.withValues(alpha: 0.7)),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              'MAX keeps 1 XLM so USDC stays usable (fees need XLM).',
-              style: TextStyle(fontSize: 12, color: c.textSecondary),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

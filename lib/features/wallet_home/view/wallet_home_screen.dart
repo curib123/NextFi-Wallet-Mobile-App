@@ -160,6 +160,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                             .toList(),
                         onAcknowledge: (tx) =>
                             context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
+                        walletState: s, // NEW: Pass wallet state for reserve impact calculation
                       )
                           : const SizedBox.shrink(),
                       animateTotal: _animateTotal,
@@ -211,7 +212,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
-  // ───────────────────── Event handling (UI side effects) ─────────────────────
+  // ──────────────────────── Event handling (UI side effects) ────────────────────────
   void _onUiEvent(WalletHomeUiEvent e) async {
     if (!mounted) return;
 

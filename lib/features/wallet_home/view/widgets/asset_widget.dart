@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/modal/price_window.dart';
+import 'package:next_fi/common/components/modal/reserve_balance.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/modern_asset_tile.dart';
 import 'package:next_fi/reusable_model/asset_model.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -14,9 +17,9 @@ import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
+import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
-enum PriceWindow { h24, d7, d30, y1 }
 
 class AssetWidget extends StatelessWidget {
   const AssetWidget({
@@ -30,7 +33,6 @@ class AssetWidget extends StatelessWidget {
     required this.hasUsdcTrustline,
     this.loading = false,
     this.onRefresh,
-    this.window = PriceWindow.h24,
     this.onItemTap,
   });
 
@@ -42,7 +44,6 @@ class AssetWidget extends StatelessWidget {
   final String address;
   final bool loading;
   final Future<void> Function()? onRefresh;
-  final PriceWindow window;
   final Object? hasUsdcTrustline;
   final void Function(String token)? onItemTap;
 
@@ -97,7 +98,7 @@ class AssetWidget extends StatelessWidget {
     }
   }
 
-  double _pctFor(AssetModel a) {
+  double _pctFor(AssetModel a, PriceWindow window) {
     switch (window) {
       case PriceWindow.h24:
         return a.priceChangePercent24h;
@@ -149,6 +150,19 @@ class AssetWidget extends StatelessWidget {
   String _formatSignedMoney(NumberFormat money, double v) {
     final s = money.format(v.abs());
     return v >= 0 ? '+$s' : '-$s';
+  }
+
+  String _windowShortLabel(PriceWindow w) {
+    switch (w) {
+      case PriceWindow.h24:
+        return '24H';
+      case PriceWindow.d7:
+        return '7D';
+      case PriceWindow.d30:
+        return '30D';
+      case PriceWindow.y1:
+        return '1Y';
+    }
   }
 
   void _openReceive(BuildContext context, AssetModel a) {
@@ -234,39 +248,80 @@ class AssetWidget extends StatelessWidget {
     final currencyCode = cur.fiat.toUpperCase();
     final money = NumberFormat.simpleCurrency(name: currencyCode);
 
+    // Get price window from WalletHomeVM
+    final homeVM = context.watch<WalletHomeVM?>();
+    final window = homeVM?.state.selectedWindow ?? PriceWindow.h24;
+
     if (loading) {
       return ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: 5,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, __) => const SizedBox(height: 16),
         itemBuilder: (ctx, __) => _shimmerTile(ctx),
       );
     }
 
-    final listView = ListView.separated(
+    final listView = ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8, bottom: 120),
-      itemCount: assets.length + 1,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemCount: assets.length + 2, // +2 for horizontal controls row and footer
       itemBuilder: (context, index) {
-        if (index < assets.length) {
-          final a = assets[index];
-          return _AssetTile(
-            asset: a,
-            colors: colors,
-            logoUrl: logos[a.id],
-            balance: _liveBalance(context, a.symbol.toUpperCase(), reactive: true),
-            pct: _pctFor(a),
-            coinPriceNow: _coinPriceFor(cur, a.symbol.toUpperCase()),
-            fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), _liveBalance(context, a.symbol.toUpperCase(), reactive: true)),
-            priceDelta: _priceDeltaPerCoin(
-              coinPriceNow: _coinPriceFor(cur, a.symbol.toUpperCase()),
-              pct: _pctFor(a),
+        if (index == 0) {
+          // Horizontal row with Price Window (left) and Reserve Balance (right)
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  // Price Window Selector - Left side
+                  Expanded(
+                    child: _PriceWindowSelector(
+                      colors: colors,
+                      selectedWindow: window,
+                      windowLabel: _windowShortLabel(window),
+                      onWindowChanged: (newWindow) {
+                        homeVM?.setPriceWindow(newWindow);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Reserve Balance Card - Right side
+                  Expanded(
+                    child: _ReserveBalanceCard(
+                      colors: colors,
+                      money: money,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            money: money,
-            onTap: () => _openReceive(context, a),
-            formatTokenAmount: formatTokenAmount,
-            formatSignedMoney: _formatSignedMoney,
+          );
+        } else if (index <= assets.length) {
+          final a = assets[index - 1];
+          final balance = _liveBalance(context, a.symbol.toUpperCase(), reactive: true);
+          final pct = _pctFor(a, window);
+          final coinPrice = _coinPriceFor(cur, a.symbol.toUpperCase());
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ModernAssetTile(
+              asset: a,
+              colors: colors,
+              logoUrl: logos[a.id],
+              balance: balance,
+              pct: pct,
+              coinPriceNow: coinPrice,
+              fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), balance),
+              priceDelta: _priceDeltaPerCoin(
+                coinPriceNow: coinPrice,
+                pct: pct,
+              ),
+              money: money,
+              onTap: () => _openReceive(context, a),
+              formatTokenAmount: formatTokenAmount,
+              formatSignedMoney: _formatSignedMoney,
+            ),
           );
         } else {
           return Padding(
@@ -299,7 +354,7 @@ class AssetWidget extends StatelessWidget {
         Positioned(
           right: 20,
           bottom: 20 + bottomInset,
-          child: _AnimatedFAB(
+          child: _ModernFAB(
             colors: colors,
             onPressed: () async {
               if (assets.isEmpty) {
@@ -339,11 +394,18 @@ class AssetWidget extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: colors.border.withOpacity(isDark ? 0.1 : 0.08),
+            color: colors.border.withOpacity(isDark ? 0.12 : 0.08),
             width: 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Shimmer.fromColors(
           baseColor: colors.border.withOpacity(isDark ? 0.15 : 0.12),
@@ -354,11 +416,11 @@ class AssetWidget extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -366,11 +428,18 @@ class AssetWidget extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      block(contentW * 0.35, 16, r: 6),
+                      block(contentW * 0.35, 17, r: 6),
                       const SizedBox(height: 8),
                       block(contentW * 0.25, 14, r: 5),
                       const SizedBox(height: 6),
-                      block(contentW * 0.28, 12, r: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: block(contentW * 0.28, 11, r: 4),
+                      ),
                     ],
                   ),
                 ),
@@ -378,18 +447,25 @@ class AssetWidget extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    block(80, 16, r: 6),
+                    block(90, 18, r: 6),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: block(48, 12, r: 4),
+                      child: block(56, 13, r: 4),
                     ),
                     const SizedBox(height: 6),
-                    block(60, 12, r: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: block(50, 12, r: 4),
+                    ),
                   ],
                 ),
               ],
@@ -401,43 +477,314 @@ class AssetWidget extends StatelessWidget {
   }
 }
 
-class _AssetTile extends StatefulWidget {
-  final AssetModel asset;
+// Price Window Selector Widget - with visible horizontal wave shimmer
+class _PriceWindowSelector extends StatefulWidget {
   final AppColor colors;
-  final String? logoUrl;
-  final double balance;
-  final double pct;
-  final double coinPriceNow;
-  final double fiatNow;
-  final double priceDelta;
-  final NumberFormat money;
-  final VoidCallback onTap;
-  final String Function(double) formatTokenAmount;
-  final String Function(NumberFormat, double) formatSignedMoney;
+  final PriceWindow selectedWindow;
+  final String windowLabel;
+  final void Function(PriceWindow)? onWindowChanged;
 
-  const _AssetTile({
-    required this.asset,
+  const _PriceWindowSelector({
     required this.colors,
-    required this.logoUrl,
-    required this.balance,
-    required this.pct,
-    required this.coinPriceNow,
-    required this.fiatNow,
-    required this.priceDelta,
-    required this.money,
-    required this.onTap,
-    required this.formatTokenAmount,
-    required this.formatSignedMoney,
+    required this.selectedWindow,
+    required this.windowLabel,
+    this.onWindowChanged,
   });
 
   @override
-  State<_AssetTile> createState() => _AssetTileState();
+  State<_PriceWindowSelector> createState() => _PriceWindowSelectorState();
 }
 
-class _AssetTileState extends State<_AssetTile> with SingleTickerProviderStateMixin {
+class _PriceWindowSelectorState extends State<_PriceWindowSelector>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerPosition;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+
+    _shimmerPosition = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: InkWell(
+        onTap: () {
+          showPriceWindowModal(
+            context,
+            colors: widget.colors,
+            selectedWindow: widget.selectedWindow,
+            onWindowChanged: widget.onWindowChanged,
+          );
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _isHovered
+                  ? widget.colors.primary.withOpacity(0.3)
+                  : widget.colors.border.withOpacity(isDark ? 0.1 : 0.08),
+              width: 1,
+            ),
+            boxShadow: _isHovered
+                ? [
+              BoxShadow(
+                color: widget.colors.primary.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+                : null,
+          ),
+          child: Stack(
+            children: [
+              // Horizontal wave shimmer effect - always visible
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedBuilder(
+                    animation: _shimmerPosition,
+                    builder: (context, child) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Colors.transparent,
+                              widget.colors.primary.withOpacity(_isHovered ? 0.2 : 0.12),
+                              Colors.transparent,
+                            ],
+                            stops: [
+                              (_shimmerPosition.value - 0.3).clamp(0.0, 1.0),
+                              _shimmerPosition.value.clamp(0.0, 1.0),
+                              (_shimmerPosition.value + 0.3).clamp(0.0, 1.0),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              // Content
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.trendingUp,
+                      size: 16,
+                      color: widget.colors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Price Window ${widget.windowLabel}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: widget.colors.textPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Reserve Balance Card Widget with horizontal wave shimmer
+class _ReserveBalanceCard extends StatefulWidget {
+  final AppColor colors;
+  final NumberFormat money;
+
+  const _ReserveBalanceCard({
+    required this.colors,
+    required this.money,
+  });
+
+  @override
+  State<_ReserveBalanceCard> createState() => _ReserveBalanceCardState();
+}
+
+class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerPosition;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+
+    _shimmerPosition = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<WalletHomeVM?>();
+    if (vm == null) return const SizedBox.shrink();
+
+    final state = vm.state;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: InkWell(
+        onTap: () {
+          showReserveBalanceModal(
+            context,
+            colors: widget.colors,
+            money: widget.money,
+          );
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _isHovered
+                  ? widget.colors.primary.withOpacity(0.3)
+                  : widget.colors.border.withOpacity(isDark ? 0.1 : 0.08),
+              width: 1,
+            ),
+            boxShadow: _isHovered
+                ? [
+              BoxShadow(
+                color: widget.colors.primary.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ]
+                : null,
+          ),
+          child: Stack(
+            children: [
+              // Horizontal wave shimmer effect - always visible
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedBuilder(
+                    animation: _shimmerPosition,
+                    builder: (context, child) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Colors.transparent,
+                              widget.colors.textSecondary.withOpacity(_isHovered ? 0.15 : 0.08),
+                              Colors.transparent,
+                            ],
+                            stops: [
+                              (_shimmerPosition.value - 0.3).clamp(0.0, 1.0),
+                              _shimmerPosition.value.clamp(0.0, 1.0),
+                              (_shimmerPosition.value + 0.3).clamp(0.0, 1.0),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              // Content
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.lock,
+                      color: widget.colors.textSecondary,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Reserve ${state.xlmTotalReserve.toStringAsFixed(1)} XLM',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: widget.colors.textPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Modern FAB with cleaner design
+class _ModernFAB extends StatefulWidget {
+  final AppColor colors;
+  final VoidCallback onPressed;
+
+  const _ModernFAB({
+    required this.colors,
+    required this.onPressed,
+  });
+
+  @override
+  State<_ModernFAB> createState() => _ModernFABState();
+}
+
+class _ModernFABState extends State<_ModernFAB> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
-  bool _isPressed = false;
 
   @override
   void initState() {
@@ -446,298 +793,7 @@ class _AssetTileState extends State<_AssetTile> with SingleTickerProviderStateMi
       vsync: this,
       duration: const Duration(milliseconds: 150),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.97).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _handleTapDown(TapDownDetails details) {
-    setState(() => _isPressed = true);
-    _controller.forward();
-  }
-
-  void _handleTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
-    _controller.reverse();
-  }
-
-  void _handleTapCancel() {
-    setState(() => _isPressed = false);
-    _controller.reverse();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isUp = widget.priceDelta >= 0;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return ScaleTransition(
-      scale: _scaleAnimation,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: GestureDetector(
-          onTapDown: _handleTapDown,
-          onTapUp: _handleTapUp,
-          onTapCancel: _handleTapCancel,
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _isPressed
-                    ? widget.colors.primary.withOpacity(0.3)
-                    : widget.colors.border.withOpacity(isDark ? 0.1 : 0.08),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _isPressed
-                      ? widget.colors.primary.withOpacity(0.1)
-                      : Colors.black.withOpacity(isDark ? 0.2 : 0.04),
-                  blurRadius: _isPressed ? 12 : 8,
-                  offset: Offset(0, _isPressed ? 2 : 4),
-                  spreadRadius: _isPressed ? 1 : 0,
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  _buildLogo(widget.logoUrl),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.asset.name,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: widget.colors.textPrimary,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "${widget.formatTokenAmount(widget.balance)} ${widget.asset.symbol}",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: widget.colors.textSecondary,
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "${widget.money.format(widget.coinPriceNow)} / ${widget.asset.symbol}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: widget.colors.textSecondary.withOpacity(0.7),
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        widget.money.format(widget.fiatNow),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: widget.colors.textPrimary,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _buildPctBadge(widget.pct, isDark),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.formatSignedMoney(widget.money, widget.priceDelta),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isUp
-                              ? const Color(0xFF10B981)
-                              : const Color(0xFFEF4444),
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogo(String? url) {
-    if (url == null || url.isEmpty) {
-      return Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              widget.colors.primary.withOpacity(0.15),
-              widget.colors.primary.withOpacity(0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          LucideIcons.coins,
-          size: 24,
-          color: widget.colors.primary.withOpacity(0.5),
-        ),
-      );
-    }
-
-    return Hero(
-      tag: 'asset_logo_${widget.asset.id}',
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: widget.colors.primary.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.network(
-            url,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-            errorBuilder: (_, __, ___) => Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    widget.colors.primary.withOpacity(0.15),
-                    widget.colors.primary.withOpacity(0.05),
-                  ],
-                ),
-              ),
-              child: Icon(
-                LucideIcons.coins,
-                size: 24,
-                color: widget.colors.primary.withOpacity(0.5),
-              ),
-            ),
-            loadingBuilder: (ctx, child, progress) {
-              if (progress == null) return child;
-              return Container(
-                color: widget.colors.border.withOpacity(0.1),
-                child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: widget.colors.primary.withOpacity(0.3),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPctBadge(double pct, bool isDark) {
-    final positive = pct >= 0;
-    final bgColor = positive
-        ? const Color(0xFF10B981).withOpacity(isDark ? 0.15 : 0.12)
-        : const Color(0xFFEF4444).withOpacity(isDark ? 0.15 : 0.12);
-    final textColor = positive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            positive ? LucideIcons.trendingUp : LucideIcons.trendingDown,
-            color: textColor,
-            size: 14,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            "${pct.abs().toStringAsFixed(2)}%",
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnimatedFAB extends StatefulWidget {
-  final AppColor colors;
-  final VoidCallback onPressed;
-
-  const _AnimatedFAB({
-    required this.colors,
-    required this.onPressed,
-  });
-
-  @override
-  State<_AnimatedFAB> createState() => _AnimatedFABState();
-}
-
-class _AnimatedFABState extends State<_AnimatedFAB> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _rotationAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _rotationAnimation = Tween<double>(begin: 0.0, end: 0.1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
@@ -761,41 +817,38 @@ class _AnimatedFABState extends State<_AnimatedFAB> with SingleTickerProviderSta
       onTapCancel: () => _controller.reverse(),
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: RotationTransition(
-          turns: _rotationAnimation,
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  widget.colors.primary,
-                  widget.colors.primary.withOpacity(0.85),
-                ],
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: widget.colors.primary.withOpacity(isDark ? 0.4 : 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                  spreadRadius: 0,
-                ),
-                BoxShadow(
-                  color: widget.colors.primary.withOpacity(0.15),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                  spreadRadius: 4,
-                ),
+        child: Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                widget.colors.primary,
+                widget.colors.primary.withOpacity(0.85),
               ],
             ),
-            child: const Icon(
-              LucideIcons.scanLine,
-              color: Colors.white,
-              size: 26,
-            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: widget.colors.primary.withOpacity(isDark ? 0.35 : 0.25),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: widget.colors.primary.withOpacity(0.12),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: const Icon(
+            LucideIcons.scanLine,
+            color: Colors.white,
+            size: 26,
           ),
         ),
       ),

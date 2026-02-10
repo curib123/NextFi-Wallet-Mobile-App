@@ -8,20 +8,24 @@ class RecipientLoadingLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+
     return Container(
-      height: 52,
+      height: 56,
       decoration: BoxDecoration(
-        color: c.primary.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.primary.withValues(alpha: 0.08)),
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: c.border.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: Center(
         child: SizedBox(
-          height: 16,
-          width: 16,
+          height: 18,
+          width: 18,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: c.primary.withValues(alpha: 0.4),
+            color: c.primary.withValues(alpha: 0.6),
           ),
         ),
       ),

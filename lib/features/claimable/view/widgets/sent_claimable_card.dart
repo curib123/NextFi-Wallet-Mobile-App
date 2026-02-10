@@ -1,4 +1,4 @@
-// lib/features/claimable/view/widgets/claimable_card.dart
+// lib/features/claimable/view/widgets/sent_claimable_card.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -10,14 +10,14 @@ import 'package:next_fi/features/claimable/model/claimable_item.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 
-/// A slim card widget for RECEIVED claimable balances.
-/// Shows sponsor info and claim functionality.
-class ClaimableCard extends StatefulWidget {
+/// A slim card widget for SENT claimable balances.
+/// Shows recipient info and reclaim functionality for expired balances.
+class SentClaimableCard extends StatefulWidget {
   final ClaimableItem item;
   final bool claiming;
   final VoidCallback onClaim;
 
-  const ClaimableCard({
+  const SentClaimableCard({
     super.key,
     required this.item,
     required this.claiming,
@@ -25,10 +25,10 @@ class ClaimableCard extends StatefulWidget {
   });
 
   @override
-  State<ClaimableCard> createState() => _ClaimableCardState();
+  State<SentClaimableCard> createState() => _SentClaimableCardState();
 }
 
-class _ClaimableCardState extends State<ClaimableCard> {
+class _SentClaimableCardState extends State<SentClaimableCard> {
   static final _dateFmt = DateFormat('MMM d, yyyy · h:mm a');
   static final _amtFmt = NumberFormat('#,##0.######');
 
@@ -45,7 +45,7 @@ class _ClaimableCardState extends State<ClaimableCard> {
   }
 
   @override
-  void didUpdateWidget(ClaimableCard oldWidget) {
+  void didUpdateWidget(SentClaimableCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.sponsorId != widget.item.sponsorId) {
       _looked = false;
@@ -80,9 +80,9 @@ class _ClaimableCardState extends State<ClaimableCard> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: widget.item.canClaimNow
-                ? c.primary.withOpacity(0.06)
-                : Colors.black.withOpacity(0.02),
+            color: isExpired
+                ? c.warning.withOpacity(0.06)
+                : c.primary.withOpacity(0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
             spreadRadius: -2,
@@ -105,10 +105,8 @@ class _ClaimableCardState extends State<ClaimableCard> {
               ),
               border: Border.all(
                 color: isExpired
-                    ? c.error.withOpacity(0.15)
-                    : widget.item.canClaimNow
-                    ? c.primary.withOpacity(0.15)
-                    : c.border.withOpacity(0.1),
+                    ? c.warning.withOpacity(0.15)
+                    : c.primary.withOpacity(0.1),
                 width: 1,
               ),
               borderRadius: BorderRadius.circular(16),
@@ -122,15 +120,15 @@ class _ClaimableCardState extends State<ClaimableCard> {
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: widget.item.canClaimNow
-                            ? [c.primary.withOpacity(0.1), c.primary.withOpacity(0.05)]
-                            : [c.border.withOpacity(0.08), c.border.withOpacity(0.04)],
+                        colors: isExpired
+                            ? [c.warning.withOpacity(0.1), c.warning.withOpacity(0.05)]
+                            : [c.primary.withOpacity(0.08), c.primary.withOpacity(0.04)],
                       ),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: widget.item.canClaimNow
-                            ? c.primary.withOpacity(0.15)
-                            : c.border.withOpacity(0.08),
+                        color: isExpired
+                            ? c.warning.withOpacity(0.15)
+                            : c.primary.withOpacity(0.1),
                         width: 1,
                       ),
                     ),
@@ -153,13 +151,10 @@ class _ClaimableCardState extends State<ClaimableCard> {
                               child: Text(
                                 '${_amtFmt.format(widget.item.amount)} ${widget.item.displayAsset}',
                                 style: TextStyle(
-                                  color: isExpired ? c.textSecondary : c.textPrimary,
+                                  color: c.textPrimary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                   letterSpacing: -0.2,
-                                  decoration: isExpired
-                                      ? TextDecoration.lineThrough
-                                      : null,
                                 ),
                               ),
                             ),
@@ -169,17 +164,17 @@ class _ClaimableCardState extends State<ClaimableCard> {
                         ),
                         const SizedBox(height: 6),
 
-                        // Sponsor info
+                        // Recipient info
                         Row(
                           children: [
                             Icon(
-                              LucideIcons.arrowDownLeft,
+                              LucideIcons.arrowUpRight,
                               size: 11,
                               color: c.textSecondary,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'From',
+                              'To',
                               style: TextStyle(
                                 color: c.textSecondary,
                                 fontSize: 10,
@@ -264,16 +259,16 @@ class _ClaimableCardState extends State<ClaimableCard> {
     late final IconData icon;
 
     if (isExpired) {
-      color = c.error;
-      label = 'Expired';
-      icon = LucideIcons.xCircle;
+      color = c.warning;
+      label = 'Reclaimable';
+      icon = LucideIcons.undo2;
     } else if (isLocked) {
       color = c.warning;
       label = 'Locked';
       icon = LucideIcons.lock;
     } else {
-      color = c.success;
-      label = 'Ready';
+      color = c.primary;
+      label = 'Active';
       icon = LucideIcons.checkCircle;
     }
 
@@ -393,22 +388,17 @@ class _ClaimableCardState extends State<ClaimableCard> {
       );
     }
 
-    // Expired - no action
+    // Reclaimable after expiry
     if (isExpired) {
-      return const SizedBox.shrink();
-    }
-
-    // Ready to claim
-    if (widget.item.canClaimNow) {
       return Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [c.primary, c.primary.withOpacity(0.85)],
+            colors: [c.warning, c.warning.withOpacity(0.85)],
           ),
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: c.primary.withOpacity(0.2),
+              color: c.warning.withOpacity(0.2),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -424,10 +414,10 @@ class _ClaimableCardState extends State<ClaimableCard> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Icon(LucideIcons.download, size: 16, color: Colors.white),
+                  Icon(LucideIcons.undo2, size: 16, color: Colors.white),
                   SizedBox(width: 6),
                   Text(
-                    'Claim',
+                    'Reclaim',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -442,7 +432,7 @@ class _ClaimableCardState extends State<ClaimableCard> {
       );
     }
 
-    // Locked - no button
+    // Active - no action needed
     return const SizedBox.shrink();
   }
 }

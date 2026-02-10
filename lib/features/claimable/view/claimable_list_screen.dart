@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
+import 'package:next_fi/common/components/modal/token_chooser.dart';
 
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/claimable/view/claimable_create_screen.dart';
 import 'package:next_fi/features/claimable/view/widgets/claimable_card.dart';
+import 'package:next_fi/features/claimable/view/widgets/sent_claimable_card.dart';
 import 'package:next_fi/features/claimable/view/widgets/claimable_empty.dart';
 
 /// Screen displaying all claimable balances for the current account.
@@ -20,7 +22,7 @@ import 'package:next_fi/features/claimable/view/widgets/claimable_empty.dart';
 /// - List of all claimable balances (ready and locked)
 /// - Pull-to-refresh functionality
 /// - Summary chips showing counts
-/// - Floating action button to create new claimable balance
+/// - FAB opens token chooser → then navigates to create screen with selected asset
 class ClaimableListScreen extends StatefulWidget {
   const ClaimableListScreen({super.key});
 
@@ -56,7 +58,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     super.didChangeDependencies();
     if (_booted) return;
 
-    // Initialize on first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ClaimableVM>().init();
@@ -108,13 +109,18 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     }
   }
 
-  /// Navigate to create claimable balance screen
+  /// Open token chooser, then navigate to create screen with selected asset
   void _openCreate() {
-    Navigator.push(
+    final vm = context.read<ClaimableVM>();
+    showTokenSelector(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ClaimableCreateScreen(),
-      ),
+      vm.accountId ?? '',
+      vm.xlmBalance,
+      vm.usdcBalance,
+      title: 'Select Asset to Lock',
+      screenBuilder: (address, token, balance) {
+        return ClaimableCreateScreen(initialAsset: token.toUpperCase());
+      },
     ).then((_) {
       // Refresh list when returning from create screen
       if (mounted) {
@@ -142,7 +148,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
           ),
         ),
         actions: [
-          // Refresh button
           IconButton(
             tooltip: 'Refresh',
             icon: Icon(
@@ -179,7 +184,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
                 children: [
                   const Icon(LucideIcons.inbox, size: 16),
                   const SizedBox(width: 6),
-                  Text('Received'),
+                  const Text('Received'),
                   if (vm.receivedTotalCount > 0) ...[
                     const SizedBox(width: 6),
                     Container(
@@ -210,7 +215,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
                 children: [
                   const Icon(LucideIcons.send, size: 16),
                   const SizedBox(width: 6),
-                  Text('Sent'),
+                  const Text('Sent'),
                   if (vm.sentUnclaimedCount > 0) ...[
                     const SizedBox(width: 6),
                     Container(
@@ -243,7 +248,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build the main body based on current state
   Widget _buildBody(AppColor c, ClaimableVM vm) {
     if (vm.loading) {
       return const PageLoader();
@@ -262,7 +266,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build received tab content
   Widget _buildReceivedTab(AppColor c, ClaimableVM vm) {
     if (vm.receivedItems.isEmpty) {
       return ClaimableEmpty(
@@ -280,7 +283,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build sent tab content
   Widget _buildSentTab(AppColor c, ClaimableVM vm) {
     if (vm.sentItems.isEmpty) {
       return ClaimableEmpty(
@@ -299,7 +301,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build error state
   Widget _buildError(AppColor c, ClaimableVM vm) {
     return Center(
       child: Padding(
@@ -338,17 +339,14 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build the list of claimable balances
   Widget _buildList(
       AppColor c,
       List<dynamic> items, {
         required bool isReceived,
       }) {
-    final vm = context.watch<ClaimableVM>();
     final readyCount = items.where((i) => i.canClaimNow).length;
-    final lockedCount = items.where((i) =>
-    i.unlockTime != null && !i.canClaimNow
-    ).length;
+    final lockedCount =
+        items.where((i) => i.unlockTime != null && !i.canClaimNow).length;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(
@@ -356,27 +354,29 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       ),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       children: [
-        // Summary chips
         if (items.isNotEmpty) ...[
           _buildSummary(c, readyCount, lockedCount, isReceived),
           const SizedBox(height: 14),
         ],
-
-        // Cards
         for (int i = 0; i < items.length; i++) ...[
           if (i > 0) const SizedBox(height: 12),
-          ClaimableCard(
-            item: items[i],
-            claiming: _claimingId == items[i].balanceId,
-            onClaim: () => _claim(items[i].balanceId),
-            isSent: !isReceived,
-          ),
+          if (isReceived)
+            ClaimableCard(
+              item: items[i],
+              claiming: _claimingId == items[i].balanceId,
+              onClaim: () => _claim(items[i].balanceId),
+            )
+          else
+            SentClaimableCard(
+              item: items[i],
+              claiming: _claimingId == items[i].balanceId,
+              onClaim: () => _claim(items[i].balanceId),
+            ),
         ],
       ],
     );
   }
 
-  /// Build summary chips showing counts
   Widget _buildSummary(
       AppColor c,
       int readyCount,
@@ -407,7 +407,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build a single summary chip
   Widget _summaryChip(
       AppColor c,
       String label,
@@ -438,7 +437,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     );
   }
 
-  /// Build floating action button
   Widget? _buildFAB(AppColor c, ClaimableVM vm) {
     if (vm.loading || vm.error != null) {
       return null;

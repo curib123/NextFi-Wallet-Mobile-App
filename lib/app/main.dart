@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
+import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
 // ─────────────────────────── App core ─────────────────────────
 import 'package:next_fi/app/home.dart';
-import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart' hide ThemeBridge;
 
 // ─────────────────────────── Services ─────────────────────────
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
@@ -194,16 +194,20 @@ List<SingleChildWidget> _buildProviders() {
       vm ?? SeedPhraseVM(service: stellar),
     ),
 
-    // 12) Swap depends on Stellar + SeedKeypair
-    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
+    // 12) Swap depends on Stellar + SeedKeypair + WalletHome
+    ChangeNotifierProxyProvider3<StellarWalletServices, SeedKeypairVM, WalletHomeVM,
         SwapVM>(
       create: (ctx) => SwapVM(
         svc: ctx.read<StellarWalletServices>(),
         keypairVM: ctx.read<SeedKeypairVM>(),
+        walletHomeVM: ctx.read<WalletHomeVM>(),
       )..bindToActiveWallet(),
-      update: (ctx, stellar, seedVM, existing) {
-        final vm =
-            existing ?? SwapVM(svc: stellar, keypairVM: seedVM);
+      update: (ctx, stellar, seedVM, walletHomeVM, existing) {
+        final vm = existing ?? SwapVM(
+          svc: stellar,
+          keypairVM: seedVM,
+          walletHomeVM: walletHomeVM,
+        );
         vm.bindToAddress(seedVM.accountId);
         return vm;
       },

@@ -1,28 +1,34 @@
 // lib/features/claimable/view/claimable_create_screen.dart
-import 'dart:convert' show utf8;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/asset/asset_logo.dart';
-import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
-import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 
 import 'package:next_fi/features/claimable/model/claimable_item.dart';
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
 
+import 'package:next_fi/features/send/view/widgets/recipient_badge.dart';
+import 'package:next_fi/features/send/view/widgets/recipient_add_template.dart';
+import 'package:next_fi/features/send/view/widgets/recipient_loading_line.dart';
+
 class ClaimableCreateScreen extends StatefulWidget {
-  const ClaimableCreateScreen({super.key});
+  final String initialAsset;
+
+  const ClaimableCreateScreen({
+    super.key,
+    this.initialAsset = 'XLM',
+  });
 
   @override
   State<ClaimableCreateScreen> createState() => _ClaimableCreateScreenState();
@@ -37,62 +43,91 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
 
-  bool _isXlm = true;
+  late String _selectedAsset;
+
   ClaimableMode _mode = ClaimableMode.unconditional;
 
-  // ── Unlock (time-locked mode) ──────────────────────────────────────────
   DateTime? _unlockDate;
   TimeOfDay? _unlockTime;
 
-  // ── Expiration (both modes) ────────────────────────────────────────────
   bool _hasExpiry = false;
   DateTime? _expiryDate;
   TimeOfDay? _expiryTime;
 
-  bool _submitting = false;
+  bool _recipientLoading = false;
+  RecipientAddressModel? _resolvedRecipient;
 
   static final _dateFmt = DateFormat('MMM d, yyyy');
-  static final _timeFmt = DateFormat('h:mm a');
 
   @override
   void initState() {
     super.initState();
+    _selectedAsset = widget.initialAsset;
+
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 400),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animController,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeOut,
     );
     _animController.forward();
+
+    _recipientCtl.addListener(_onRecipientChanged);
   }
 
   @override
   void dispose() {
+    _recipientCtl.removeListener(_onRecipientChanged);
     _animController.dispose();
     _recipientCtl.dispose();
     _amountCtl.dispose();
     super.dispose();
   }
 
-  // ── Balance access via ClaimableVM (which uses WalletHomeVM) ───────────
-  double get _currentBal {
-    final vm = context.watch<ClaimableVM>();
-    return vm.getBalanceForAsset(_isXlm);
-  }
-
-  double get _availableBal {
-    final vm = context.watch<ClaimableVM>();
-    return vm.getAvailableBalance(_isXlm);
-  }
-
-  String get _tokenStr => _isXlm ? 'XLM' : 'USDC';
-
   bool _looksLikeStellarPk(String x) =>
       RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
 
-  // ── Unlock pickers ─────────────────────────────────────────────────────
+  void _onRecipientChanged() {
+    final addr = _recipientCtl.text.trim();
+
+    if (!_looksLikeStellarPk(addr)) {
+      if (_resolvedRecipient != null || _recipientLoading) {
+        setState(() {
+          _resolvedRecipient = null;
+          _recipientLoading = false;
+        });
+      }
+      return;
+    }
+
+    _lookupRecipient(addr);
+  }
+
+  Future<void> _lookupRecipient(String address) async {
+    setState(() {
+      _recipientLoading = true;
+      _resolvedRecipient = null;
+    });
+
+    try {
+      final recipientVM = context.read<RecipientAddressVM>();
+      await recipientVM.ready;
+      final match = recipientVM.byAddress(address);
+
+      if (mounted) {
+        setState(() {
+          _resolvedRecipient = match;
+          _recipientLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _recipientLoading = false);
+      }
+    }
+  }
 
   Future<void> _pickUnlockDate() async {
     final now = DateTime.now();
@@ -102,9 +137,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
       firstDate: now,
       lastDate: now.add(const Duration(days: 365 * 5)),
     );
-    if (date != null && mounted) {
-      setState(() => _unlockDate = date);
-    }
+    if (date != null && mounted) setState(() => _unlockDate = date);
   }
 
   Future<void> _pickUnlockTime() async {
@@ -112,40 +145,27 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
       context: context,
       initialTime: _unlockTime ?? TimeOfDay.now(),
     );
-    if (time != null && mounted) {
-      setState(() => _unlockTime = time);
-    }
+    if (time != null && mounted) setState(() => _unlockTime = time);
   }
 
   DateTime? get _combinedUnlockDateTime {
     if (_unlockDate == null) return null;
     final t = _unlockTime ?? const TimeOfDay(hour: 0, minute: 0);
-    return DateTime(
-      _unlockDate!.year,
-      _unlockDate!.month,
-      _unlockDate!.day,
-      t.hour,
-      t.minute,
-    );
+    return DateTime(_unlockDate!.year, _unlockDate!.month, _unlockDate!.day, t.hour, t.minute);
   }
-
-  // ── Expiry pickers ─────────────────────────────────────────────────────
 
   Future<void> _pickExpiryDate() async {
     final now = DateTime.now();
     final earliest = _mode == ClaimableMode.timeLocked && _unlockDate != null
         ? _unlockDate!.add(const Duration(days: 1))
         : now.add(const Duration(hours: 1));
-
     final date = await showDatePicker(
       context: context,
       initialDate: _expiryDate ?? earliest,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365 * 5)),
     );
-    if (date != null && mounted) {
-      setState(() => _expiryDate = date);
-    }
+    if (date != null && mounted) setState(() => _expiryDate = date);
   }
 
   Future<void> _pickExpiryTime() async {
@@ -153,24 +173,14 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
       context: context,
       initialTime: _expiryTime ?? TimeOfDay.now(),
     );
-    if (time != null && mounted) {
-      setState(() => _expiryTime = time);
-    }
+    if (time != null && mounted) setState(() => _expiryTime = time);
   }
 
   DateTime? get _combinedExpiryDateTime {
     if (_expiryDate == null) return null;
     final t = _expiryTime ?? const TimeOfDay(hour: 23, minute: 59);
-    return DateTime(
-      _expiryDate!.year,
-      _expiryDate!.month,
-      _expiryDate!.day,
-      t.hour,
-      t.minute,
-    );
+    return DateTime(_expiryDate!.year, _expiryDate!.month, _expiryDate!.day, t.hour, t.minute);
   }
-
-  // ── Validation ─────────────────────────────────────────────────────────
 
   String? _validate() {
     final addr = _recipientCtl.text.trim();
@@ -180,8 +190,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
     if (amt <= 0) return 'Enter a valid amount';
 
     final vm = context.read<ClaimableVM>();
-    if (!vm.hasSufficientBalance(_isXlm, amt)) {
-      return 'Insufficient $_tokenStr balance (${_isXlm ? "reserve 1 XLM for fees" : "no funds"})';
+    if (!vm.hasSufficientBalance(_selectedAsset, amt)) {
+      return 'Insufficient $_selectedAsset balance';
     }
 
     if (_mode == ClaimableMode.timeLocked) {
@@ -191,14 +201,14 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
     }
 
     if (_hasExpiry) {
-      final exp = _combinedExpiryDateTime;
-      if (exp == null) return 'Pick an expiration date';
-      if (exp.isBefore(DateTime.now())) return 'Expiration must be in the future';
+      final dt = _combinedExpiryDateTime;
+      if (dt == null) return 'Pick an expiry date';
+      if (dt.isBefore(DateTime.now())) return 'Expiry time must be in the future';
 
       if (_mode == ClaimableMode.timeLocked) {
         final unlock = _combinedUnlockDateTime;
-        if (unlock != null && exp.isBefore(unlock)) {
-          return 'Expiration must be after unlock time';
+        if (unlock != null && !dt.isAfter(unlock)) {
+          return 'Expiry must be after unlock time';
         }
       }
     }
@@ -206,126 +216,89 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
     return null;
   }
 
-  Future<void> _saveRecipientIfNeeded(String address) async {
-    if (!mounted) return;
-
-    final recipientVM = context.read<RecipientAddressVM>();
-    await recipientVM.ready;
-
-    final existing = recipientVM.byAddress(address);
-    if (existing != null) {
-      return;
-    }
-
-    final saved = await showRecipientUpsertSheet(
-      context,
-      address: address,
-    );
-
-    if (saved == true && mounted) {
-      showFloatingSnackBar(
-        context,
-        message: 'Recipient saved',
-        type: SnackBarType.info,
-      );
-    }
-  }
-
   Future<void> _submit() async {
-    if (!_form.currentState!.validate()) return;
-    final reason = _validate();
-    if (reason != null) {
-      showFloatingSnackBar(context,
-          message: reason, type: SnackBarType.warning);
+    final err = _validate();
+    if (err != null) {
+      showAppAlert(
+        context,
+        type: AppAlertType.error,
+        title: 'Validation Error',
+        subtitle: err,
+      );
       return;
     }
 
-    setState(() => _submitting = true);
-    HapticFeedback.mediumImpact();
-
-    final vm = context.read<ClaimableVM>();
-    final addr = _recipientCtl.text.trim();
-    final amt = double.parse(_amountCtl.text.trim());
-
-    late final AppAlertController ctl;
-    ctl = showAppAlert(
+    final ctl = showAppAlert(
       context,
       type: AppAlertType.loading,
-      title: 'Creating claimable balance…',
-      subtitle: 'Broadcasting transaction.',
-      primaryText: 'Hide',
+      title: 'Creating Balance',
+      subtitle: 'Please wait while we process your transaction...',
+      barrierDismissible: false,
     );
 
     try {
+      final vm = context.read<ClaimableVM>();
+      final addr = _recipientCtl.text.trim();
+      final amt = double.parse(_amountCtl.text.trim());
+
       String txHash;
 
-      if (_mode == ClaimableMode.unconditional && !_hasExpiry) {
-        txHash = await vm.createUnconditional(
-          isXlm: _isXlm,
-          amount: amt,
-          recipientId: addr,
-        );
-      } else if (_mode == ClaimableMode.unconditional && _hasExpiry) {
-        txHash = await vm.createUnconditionalWithExpiry(
-          isXlm: _isXlm,
-          amount: amt,
-          recipientId: addr,
-          expiryTime: _combinedExpiryDateTime!,
-        );
-      } else if (_mode == ClaimableMode.timeLocked && !_hasExpiry) {
-        txHash = await vm.createTimeLocked(
-          isXlm: _isXlm,
+      if (_mode == ClaimableMode.timeLocked && _hasExpiry) {
+        txHash = await vm.createTimeLockedWithExpiry(
+          assetSymbol: _selectedAsset,
           amount: amt,
           recipientId: addr,
           unlockTime: _combinedUnlockDateTime!,
+          expiryTime: _combinedExpiryDateTime!,
+        );
+      } else if (_mode == ClaimableMode.timeLocked) {
+        txHash = await vm.createTimeLocked(
+          assetSymbol: _selectedAsset,
+          amount: amt,
+          recipientId: addr,
+          unlockTime: _combinedUnlockDateTime!,
+        );
+      } else if (_hasExpiry) {
+        txHash = await vm.createUnconditionalWithExpiry(
+          assetSymbol: _selectedAsset,
+          amount: amt,
+          recipientId: addr,
+          expiryTime: _combinedExpiryDateTime!,
         );
       } else {
-        txHash = await vm.createTimeLockedWithExpiry(
-          isXlm: _isXlm,
+        txHash = await vm.createUnconditional(
+          assetSymbol: _selectedAsset,
           amount: amt,
           recipientId: addr,
-          unlockTime: _combinedUnlockDateTime!,
-          expiryTime: _combinedExpiryDateTime!,
         );
       }
 
       if (!mounted) return;
-      HapticFeedback.heavyImpact();
 
       ctl.update(
         AppAlertType.success,
-        title: 'Created successfully',
-        subtitle: 'Transaction: $txHash',
-        primaryText: 'Copy TxID',
-        onPrimary: () async {
-          await Clipboard.setData(ClipboardData(text: txHash));
-          ctl.close();
-        },
+        title: 'Balance Created',
+        subtitle: 'Claimable balance created successfully',
+        onPrimary: () => Navigator.pop(context, true),
       );
-
-      await _saveRecipientIfNeeded(addr);
-
-      _amountCtl.clear();
-      _recipientCtl.clear();
-      setState(() {
-        _unlockDate = null;
-        _unlockTime = null;
-        _expiryDate = null;
-        _expiryTime = null;
-        _hasExpiry = false;
-      });
     } catch (e) {
       if (!mounted) return;
-      HapticFeedback.vibrate();
       ctl.update(
         AppAlertType.error,
-        title: 'Failed to create',
-        subtitle: '$e',
-        primaryText: 'Dismiss',
-        onPrimary: ctl.close,
+        title: 'Error',
+        subtitle: e.toString(),
       );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _scanQR() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (result != null && mounted) {
+      _recipientCtl.text = result;
+      _lookupRecipient(result);
     }
   }
 
@@ -334,7 +307,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
     final selected = await Navigator.push<RecipientAddressModel>(
       context,
       MaterialPageRoute(
-        builder: (context) => RecipientListWidget(
+        builder: (_) => RecipientListWidget(
           colors: c,
           onSelect: (recipient) {
             Navigator.pop(context, recipient);
@@ -344,1113 +317,719 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
     );
     if (selected != null && mounted) {
       _recipientCtl.text = selected.address;
-      setState(() {});
+      setState(() => _resolvedRecipient = selected);
     }
   }
 
-  Future<void> _scanQR() async {
-    final result = await Navigator.push<String>(
+  Future<void> _editRecipient() async {
+    if (_resolvedRecipient == null) return;
+    final saved = await showRecipientUpsertSheet(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ScannerScreen(),
-      ),
+      initial: _resolvedRecipient,
     );
-
-    if (result != null && mounted) {
-      _recipientCtl.text = result.trim();
-      setState(() {});
+    if (saved == true && mounted) {
+      _lookupRecipient(_recipientCtl.text.trim());
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // BUILD
-  // ══════════════════════════════════════════════════════════════════════════
+  String _shortenAddress(String addr) {
+    if (addr.length <= 16) return addr;
+    return '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final vm = context.watch<ClaimableVM>();
+    final currentBal = vm.getBalanceForSymbol(_selectedAsset);
+    final addr = _recipientCtl.text.trim();
+    final hasValidAddr = _looksLikeStellarPk(addr);
+    final isTimeLocked = _mode == ClaimableMode.timeLocked;
+
+    String infoBody;
+    if (isTimeLocked && _hasExpiry) {
+      infoBody = 'Funds locked until unlock time. Recipient can claim between unlock and expiry. You can reclaim after expiry if unclaimed.';
+    } else if (isTimeLocked) {
+      infoBody = 'Funds locked until unlock time. Recipient can claim anytime after that with no expiration.';
+    } else if (_hasExpiry) {
+      infoBody = 'Recipient can claim immediately but must claim before expiry. You can reclaim after expiry if unclaimed.';
+    } else {
+      infoBody = 'Recipient can claim anytime. Balance held on Stellar network until claimed. No time limits.';
+    }
 
     return Scaffold(
       backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Text(
-          'Create Claimable Balance',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: c.textPrimary,
-            fontSize: 20,
-            letterSpacing: -0.5,
-          ),
-        ),
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          children: [
-            _buildAssetToggle(c),
-            const SizedBox(height: 16),
-            _buildBalanceCard(c),
-            const SizedBox(height: 16),
-            _buildModeToggle(c),
-            const SizedBox(height: 20),
-            Form(
-              key: _form,
-              child: Column(
-                children: [
-                  _buildRecipientField(c),
-                  const SizedBox(height: 16),
-                  _buildAmountField(c),
-
-                  // ── Unlock picker (time-locked only) ─────────────────────
-                  if (_mode == ClaimableMode.timeLocked) ...[
-                    const SizedBox(height: 20),
-                    _buildUnlockPicker(c),
-                  ],
-
-                  // ── Expiration toggle + picker (both modes) ──────────────
-                  const SizedBox(height: 20),
-                  _buildExpirySection(c),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            _buildInfoCard(c),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _buildBottomBar(c),
-    );
-  }
-
-  // ── Asset toggle ───────────────────────────────────────────────────────
-
-  Widget _buildAssetToggle(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.surface.withOpacity(0.8),
-            c.surface.withOpacity(0.6),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.border.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _assetChip(c, 'XLM', true)),
-          const SizedBox(width: 6),
-          Expanded(child: _assetChip(c, 'USDC', false)),
-        ],
-      ),
-    );
-  }
-
-  Widget _assetChip(AppColor c, String label, bool isXlm) {
-    final active = _isXlm == isXlm;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _isXlm = isXlm);
-        },
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            gradient: active
-                ? LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                c.primary,
-                c.primary.withOpacity(0.85),
-              ],
-            )
-                : null,
-            color: active ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: active
-                ? [
-              BoxShadow(
-                color: c.primary.withOpacity(0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AssetLogo(
-                keyOrSymbol: label,
-                size: 22,
-              ),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? Colors.white : c.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Balance card ───────────────────────────────────────────────────────
-
-  Widget _buildBalanceCard(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            c.primary.withOpacity(0.08),
-            c.primary.withOpacity(0.04),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.primary.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: c.primary.withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
+      body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 20,
+              right: 20,
+              bottom: 16,
+            ),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  c.primary.withOpacity(0.15),
-                  c.primary.withOpacity(0.08),
-                ],
+              color: c.background,
+              border: Border(
+                bottom: BorderSide(color: c.border.withOpacity(0.06), width: 1),
               ),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: AssetLogo(keyOrSymbol: _tokenStr, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  'Available Balance',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_availableBal.toStringAsFixed(_availableBal >= 100 ? 2 : 4)} $_tokenStr',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_isXlm)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: c.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    LucideIcons.info,
-                    size: 12,
-                    color: c.warning,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '1 XLM fee',
-                    style: TextStyle(
-                      color: c.warning,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── Mode toggle ────────────────────────────────────────────────────────
-
-  Widget _buildModeToggle(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.surface.withOpacity(0.8),
-            c.surface.withOpacity(0.6),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.border.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _modeChip(
-              c,
-              'Instant',
-              ClaimableMode.unconditional,
-              LucideIcons.zap,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _modeChip(
-              c,
-              'Time-locked',
-              ClaimableMode.timeLocked,
-              LucideIcons.clock,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _modeChip(
-      AppColor c,
-      String label,
-      ClaimableMode mode,
-      IconData icon,
-      ) {
-    final active = _mode == mode;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _mode = mode);
-        },
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            gradient: active
-                ? LinearGradient(
-              colors: [
-                c.primary.withOpacity(0.15),
-                c.primary.withOpacity(0.08),
-              ],
-            )
-                : null,
-            borderRadius: BorderRadius.circular(14),
-            border: active
-                ? Border.all(
-              color: c.primary.withOpacity(0.25),
-              width: 1.5,
-            )
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: active ? c.primary : c.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? c.primary : c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Recipient field ────────────────────────────────────────────────────
-
-  Widget _buildRecipientField(AppColor c) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.surface.withOpacity(0.95),
-            c.surface.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.border.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _recipientCtl,
-        textInputAction: TextInputAction.next,
-        keyboardType: TextInputType.multiline,
-        minLines: 1,
-        maxLines: null,
-        style: const TextStyle(
-          fontSize: 13,
-          height: 1.3,
-          letterSpacing: 0.1,
-          fontWeight: FontWeight.w500,
-          fontFeatures: [ui.FontFeature.tabularFigures()],
-        ),
-        decoration: InputDecoration(
-          hintText: 'Recipient Address (G… 56 chars)',
-          hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.5),
-            fontSize: 13,
-          ),
-          prefixIcon: Container(
-            padding: const EdgeInsets.all(12),
-            child: Icon(
-              LucideIcons.wallet,
-              color: c.primary,
-              size: 20,
-            ),
-          ),
-          suffixIcon: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                onPressed: _scanQR,
-                icon: Icon(LucideIcons.qrCode, size: 18, color: c.primary),
-                tooltip: 'Scan QR code',
-              ),
-              IconButton(
-                onPressed: _selectRecipient,
-                icon: Icon(LucideIcons.contact, size: 18, color: c.primary),
-                tooltip: 'Select recipient',
-              ),
-              if (_recipientCtl.text.trim().isNotEmpty)
                 IconButton(
-                  onPressed: () {
-                    _recipientCtl.clear();
-                    setState(() {});
-                  },
-                  icon: Icon(LucideIcons.x, size: 16, color: c.textSecondary),
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-            ],
+                const SizedBox(width: 16),
+                Text('Create Claimable Balance', style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                )),
+              ],
+            ),
           ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-        ),
-        validator: (_) {
-          final addr = _recipientCtl.text.trim();
-          if (addr.isEmpty) return 'Required';
-          if (!_looksLikeStellarPk(addr)) return 'Invalid Stellar address';
-          return null;
-        },
-        onChanged: (_) => setState(() {}),
-        onTapOutside: (_) => FocusScope.of(context).unfocus(),
-      ),
-    );
-  }
-
-  // ── Amount field ───────────────────────────────────────────────────────
-
-  Widget _buildAmountField(AppColor c) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.surface.withOpacity(0.95),
-            c.surface.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.border.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: _amountCtl,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
-        ],
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Amount ($_tokenStr)',
-          hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.5),
-            fontSize: 15,
-          ),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.all(12),
-            child: AssetLogo(keyOrSymbol: _tokenStr, size: 24),
-          ),
-          suffixIcon: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                final v = _availableBal;
-                _amountCtl.text = v > 0
-                    ? v.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
-                    : '';
-                _amountCtl.selection = TextSelection.fromPosition(
-                  TextPosition(offset: _amountCtl.text.length),
-                );
-              },
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      c.primary.withOpacity(0.12),
-                      c.primary.withOpacity(0.06),
+          Expanded(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Form(
+                key: _form,
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: c.surface.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: c.border.withOpacity(0.08), width: 1),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => setState(() => _mode = ClaimableMode.unconditional),
+                                borderRadius: BorderRadius.circular(12),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: _mode == ClaimableMode.unconditional ? c.background : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: _mode == ClaimableMode.unconditional ? [
+                                      BoxShadow(
+                                        color: c.primary.withOpacity(0.06),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ] : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(LucideIcons.zap, size: 16, color: _mode == ClaimableMode.unconditional ? c.primary : c.textSecondary),
+                                      const SizedBox(width: 8),
+                                      Text('Instant', style: TextStyle(
+                                        color: _mode == ClaimableMode.unconditional ? c.textPrimary : c.textSecondary,
+                                        fontWeight: _mode == ClaimableMode.unconditional ? FontWeight.w700 : FontWeight.w500,
+                                        fontSize: 13,
+                                        letterSpacing: -0.1,
+                                      )),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => setState(() => _mode = ClaimableMode.timeLocked),
+                                borderRadius: BorderRadius.circular(12),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: _mode == ClaimableMode.timeLocked ? c.background : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: _mode == ClaimableMode.timeLocked ? [
+                                      BoxShadow(
+                                        color: c.primary.withOpacity(0.06),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ] : null,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(LucideIcons.clock, size: 16, color: _mode == ClaimableMode.timeLocked ? c.primary : c.textSecondary),
+                                      const SizedBox(width: 8),
+                                      Text('Time-Locked', style: TextStyle(
+                                        color: _mode == ClaimableMode.timeLocked ? c.textPrimary : c.textSecondary,
+                                        fontWeight: _mode == ClaimableMode.timeLocked ? FontWeight.w700 : FontWeight.w500,
+                                        fontSize: 13,
+                                        letterSpacing: -0.1,
+                                      )),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 10),
+                          child: Text('Recipient', style: TextStyle(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            letterSpacing: -0.1,
+                          )),
+                        ),
+                        if (_recipientLoading)
+                          const RecipientLoadingLine()
+                        else if (hasValidAddr && _resolvedRecipient != null)
+                          RecipientBadge(
+                            name: _resolvedRecipient!.name,
+                            colorValue: _resolvedRecipient!.color,
+                            address: _shortenAddress(addr),
+                            onEdit: _editRecipient,
+                          )
+                        else if (hasValidAddr && _resolvedRecipient == null)
+                            RecipientAddTemplate(
+                              address: _shortenAddress(addr),
+                              onAdd: () async {
+                                final saved = await showRecipientUpsertSheet(context, address: addr);
+                                if (saved == true && mounted) _lookupRecipient(addr);
+                              },
+                            )
+                          else
+                            Container(
+                              decoration: BoxDecoration(
+                                color: c.surface.withOpacity(0.4),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: c.border.withOpacity(0.08), width: 1),
+                              ),
+                              child: TextFormField(
+                                controller: _recipientCtl,
+                                textInputAction: TextInputAction.next,
+                                keyboardType: TextInputType.multiline,
+                                minLines: 1,
+                                maxLines: null,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.3,
+                                  letterSpacing: 0.1,
+                                  fontWeight: FontWeight.w500,
+                                  color: c.textPrimary,
+                                  fontFeatures: const [ui.FontFeature.tabularFigures()],
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Stellar address (G… 56 chars)',
+                                  hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.4), fontSize: 13),
+                                  prefixIcon: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Icon(LucideIcons.user, color: c.primary, size: 18),
+                                  ),
+                                  suffixIcon: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        onPressed: _scanQR,
+                                        icon: Icon(LucideIcons.qrCode, size: 18, color: c.primary.withOpacity(0.7)),
+                                        tooltip: 'Scan QR',
+                                      ),
+                                      IconButton(
+                                        onPressed: _selectRecipient,
+                                        icon: Icon(LucideIcons.contact, size: 18, color: c.primary.withOpacity(0.7)),
+                                        tooltip: 'Select',
+                                      ),
+                                      if (_recipientCtl.text.trim().isNotEmpty)
+                                        IconButton(
+                                          onPressed: () {
+                                            _recipientCtl.clear();
+                                            setState(() => _resolvedRecipient = null);
+                                          },
+                                          icon: Icon(LucideIcons.x, size: 16, color: c.textSecondary.withOpacity(0.5)),
+                                        ),
+                                    ],
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                ),
+                                onChanged: (_) => setState(() {}),
+                                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                              ),
+                            ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 10),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Amount', style: TextStyle(
+                                color: c.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                letterSpacing: -0.1,
+                              )),
+                              Text('Balance: ${currentBal.toStringAsFixed(2)} $_selectedAsset',
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  )),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: c.surface.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: c.border.withOpacity(0.08), width: 1),
+                          ),
+                          child: TextFormField(
+                            controller: _amountCtl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                            ],
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                              color: c.textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '0.00',
+                              hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.3), fontSize: 16),
+                              prefixIcon: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: AssetLogo(keyOrSymbol: _selectedAsset, size: 22),
+                              ),
+                              suffixIcon: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    _amountCtl.text = currentBal > 0
+                                        ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
+                                        : '';
+                                    _amountCtl.selection = TextSelection.fromPosition(
+                                      TextPosition(offset: _amountCtl.text.length),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    margin: const EdgeInsets.only(right: 10, top: 10, bottom: 10),
+                                    decoration: BoxDecoration(
+                                      color: c.primary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: c.primary.withOpacity(0.2), width: 1),
+                                    ),
+                                    child: Text('MAX', style: TextStyle(
+                                      color: c.primary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                      letterSpacing: 0.5,
+                                    )),
+                                  ),
+                                ),
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            ),
+                            onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_mode == ClaimableMode.timeLocked) ...[
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: c.surface.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: c.border.withOpacity(0.08), width: 1),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: c.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(LucideIcons.lock, size: 14, color: c.primary),
+                                ),
+                                const SizedBox(width: 10),
+                                Text('Unlock Schedule', style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  letterSpacing: -0.1,
+                                )),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _pickUnlockDate,
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: c.background.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(LucideIcons.calendar, size: 14, color: c.primary),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(_unlockDate != null ? _dateFmt.format(_unlockDate!) : 'Select date', style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: -0.1,
+                                            ), overflow: TextOverflow.ellipsis)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _pickUnlockTime,
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: c.background.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(LucideIcons.clock, size: 14, color: c.primary),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(_unlockTime != null ? _unlockTime!.format(context) : 'Select time', style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: -0.1,
+                                            ), overflow: TextOverflow.ellipsis)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_combinedUnlockDateTime != null) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: c.primary.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(LucideIcons.info, size: 12, color: c.primary),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(
+                                      'Unlocks on ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
+                                      style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.4),
+                                    )),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  'MAX',
-                  style: TextStyle(
-                    color: c.primary,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                    letterSpacing: 0.5,
-                  ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: c.surface.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: c.border.withOpacity(0.08), width: 1),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: c.warning.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(LucideIcons.clock3, size: 14, color: c.warning),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text('Expiration', style: TextStyle(
+                                      color: c.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                      letterSpacing: -0.1,
+                                    )),
+                                  ],
+                                ),
+                              ),
+                              Transform.scale(
+                                scale: 0.85,
+                                child: Switch(
+                                  value: _hasExpiry,
+                                  activeColor: c.warning,
+                                  onChanged: (v) {
+                                    setState(() {
+                                      _hasExpiry = v;
+                                      if (!v) { _expiryDate = null; _expiryTime = null; }
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!_hasExpiry) ...[
+                            const SizedBox(height: 10),
+                            Text('No expiration - claimable indefinitely',
+                                style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.4)),
+                          ],
+                          if (_hasExpiry) ...[
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _pickExpiryDate,
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: c.background.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(LucideIcons.calendar, size: 14, color: c.warning),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(_expiryDate != null ? _dateFmt.format(_expiryDate!) : 'Select date', style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: -0.1,
+                                            ), overflow: TextOverflow.ellipsis)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _pickExpiryTime,
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: c.background.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(LucideIcons.clock, size: 14, color: c.warning),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(_expiryTime != null ? _expiryTime!.format(context) : 'Select time', style: TextStyle(
+                                              color: c.textPrimary,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: -0.1,
+                                            ), overflow: TextOverflow.ellipsis)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_combinedExpiryDateTime != null) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: c.warning.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(LucideIcons.alertCircle, size: 12, color: c.warning),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(
+                                      'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
+                                      style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.4),
+                                    )),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: c.primary.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: c.primary.withOpacity(0.08), width: 1),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: c.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              isTimeLocked ? LucideIcons.shieldCheck : LucideIcons.info,
+                              size: 14,
+                              color: c.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('How it works', style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  letterSpacing: -0.1,
+                                )),
+                                const SizedBox(height: 6),
+                                Text(infoBody, style: TextStyle(
+                                  color: c.textSecondary,
+                                  fontSize: 11.5,
+                                  height: 1.5,
+                                )),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 100),
+                  ],
                 ),
               ),
             ),
           ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 18,
-          ),
-        ),
-        validator: (_) {
-          final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
-          if (amt <= 0) return 'Enter amount';
-          final vm = context.read<ClaimableVM>();
-          if (!vm.hasSufficientBalance(_isXlm, amt)) {
-            return 'Insufficient balance';
-          }
-          return null;
-        },
-        onTapOutside: (_) => FocusScope.of(context).unfocus(),
-      ),
-    );
-  }
-
-  // ── Unlock picker (time-locked mode) ───────────────────────────────────
-
-  Widget _buildUnlockPicker(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.surface.withOpacity(0.95),
-            c.surface.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.border.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      c.primary.withOpacity(0.15),
-                      c.primary.withOpacity(0.08),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  LucideIcons.calendarClock,
-                  size: 18,
-                  color: c.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Unlock Schedule',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: c.background,
+            border: Border(
+              top: BorderSide(color: c.border.withOpacity(0.06), width: 1),
+            ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _pickerButton(
-                  c,
-                  icon: LucideIcons.calendar,
-                  label: _unlockDate != null
-                      ? _dateFmt.format(_unlockDate!)
-                      : 'Pick date',
-                  onTap: _pickUnlockDate,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _pickerButton(
-                  c,
-                  icon: LucideIcons.clock,
-                  label: _unlockTime != null
-                      ? _unlockTime!.format(context)
-                      : 'Pick time',
-                  onTap: _pickUnlockTime,
-                ),
-              ),
-            ],
-          ),
-          if (_combinedUnlockDateTime != null) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    c.primary.withOpacity(0.08),
-                    c.primary.withOpacity(0.04),
-                  ],
+                  colors: [c.primary, c.primary.withOpacity(0.9)],
                 ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(LucideIcons.info, size: 14, color: c.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Claimable after ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
-                    ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.primary.withOpacity(0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── Expiration section (both modes) ────────────────────────────────────
-
-  Widget _buildExpirySection(AppColor c) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: _hasExpiry
-              ? [
-            c.warning.withOpacity(0.08),
-            c.warning.withOpacity(0.04),
-          ]
-              : [
-            c.surface.withOpacity(0.95),
-            c.surface.withOpacity(0.85),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: _hasExpiry
-              ? c.warning.withOpacity(0.2)
-              : c.border.withOpacity(0.15),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _hasExpiry
-                ? c.warning.withOpacity(0.06)
-                : Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Toggle row
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: _hasExpiry
-                        ? [
-                      c.warning.withOpacity(0.15),
-                      c.warning.withOpacity(0.08),
-                    ]
-                        : [
-                      c.textSecondary.withOpacity(0.12),
-                      c.textSecondary.withOpacity(0.06),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  LucideIcons.timerOff,
-                  size: 18,
-                  color: _hasExpiry ? c.warning : c.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Set Expiration',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 32,
-                child: Switch.adaptive(
-                  value: _hasExpiry,
-                  activeColor: c.warning,
-                  onChanged: (v) {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      _hasExpiry = v;
-                      if (!v) {
-                        _expiryDate = null;
-                        _expiryTime = null;
-                      }
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
-
-          if (!_hasExpiry) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Balance stays claimable indefinitely without expiration.',
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ],
-
-          if (_hasExpiry) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _pickerButton(
-                    c,
-                    icon: LucideIcons.calendar,
-                    label: _expiryDate != null
-                        ? _dateFmt.format(_expiryDate!)
-                        : 'Expiry date',
-                    onTap: _pickExpiryDate,
-                    accentColor: c.warning,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _pickerButton(
-                    c,
-                    icon: LucideIcons.clock,
-                    label: _expiryTime != null
-                        ? _expiryTime!.format(context)
-                        : 'Expiry time',
-                    onTap: _pickExpiryTime,
-                    accentColor: c.warning,
-                  ),
-                ),
-              ],
-            ),
-            if (_combinedExpiryDateTime != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      c.warning.withOpacity(0.1),
-                      c.warning.withOpacity(0.05),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.alertTriangle,
-                      size: 14,
-                      color: c.warning,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Unclaimed funds can be reclaimed after ${_dateFmt.format(_combinedExpiryDateTime!)} at '
-                            '${_expiryTime?.format(context) ?? '11:59 PM'}',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12,
-                          height: 1.4,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _submit,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(LucideIcons.send, size: 16, color: Colors.white),
+                        const SizedBox(width: 10),
+                        Text(
+                          _mode == ClaimableMode.timeLocked
+                              ? 'Create Time-Locked Balance'
+                              : 'Create Claimable Balance',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            fontSize: 14,
+                            letterSpacing: -0.1,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── Shared picker button ───────────────────────────────────────────────
-
-  Widget _pickerButton(
-      AppColor c, {
-        required IconData icon,
-        required String label,
-        required VoidCallback onTap,
-        Color? accentColor,
-      }) {
-    final color = accentColor ?? c.primary;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: c.background.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: c.border.withOpacity(0.2),
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.1,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Info card ──────────────────────────────────────────────────────────
-
-  Widget _buildInfoCard(AppColor c) {
-    final isTimeLocked = _mode == ClaimableMode.timeLocked;
-
-    String body;
-    if (isTimeLocked && _hasExpiry) {
-      body = 'Funds are locked until unlock time. Recipient can claim between '
-          'unlock and expiration. After expiry, you can reclaim unclaimed funds.';
-    } else if (isTimeLocked) {
-      body = 'Funds are locked until unlock time. Recipient can claim after '
-          'that point. Balance stays claimable indefinitely once unlocked.';
-    } else if (_hasExpiry) {
-      body = 'Recipient can claim immediately but must do so before expiration. '
-          'After expiry, you can reclaim unclaimed funds.';
-    } else {
-      body = 'Recipient can claim anytime. Balance is held on Stellar network '
-          'until claimed. No expiration limit.';
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            c.primary.withOpacity(0.06),
-            c.primary.withOpacity(0.03),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: c.primary.withOpacity(0.12),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      c.primary.withOpacity(0.15),
-                      c.primary.withOpacity(0.08),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  isTimeLocked
-                      ? LucideIcons.shieldQuestion
-                      : LucideIcons.info,
-                  size: 16,
-                  color: c.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'How It Works',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            body,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.5,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Bottom bar ─────────────────────────────────────────────────────────
-
-  Widget _buildBottomBar(AppColor c) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              c.background.withOpacity(0.0),
-              c.background,
-            ],
-          ),
-          border: Border(
-            top: BorderSide(
-              color: c.border.withOpacity(0.1),
-              width: 1.5,
-            ),
-          ),
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: _submitting
-                    ? [
-                  c.primary.withOpacity(0.5),
-                  c.primary.withOpacity(0.4),
-                ]
-                    : [
-                  c.primary,
-                  c.primary.withOpacity(0.85),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: _submitting
-                  ? null
-                  : [
-                BoxShadow(
-                  color: c.primary.withOpacity(0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _submitting ? null : _submit,
-                borderRadius: BorderRadius.circular(16),
-                child: Center(
-                  child: _submitting
-                      ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                      : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        LucideIcons.send,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        _mode == ClaimableMode.timeLocked
-                            ? 'Create Time-Locked Balance'
-                            : 'Create Claimable Balance',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          fontSize: 15,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),

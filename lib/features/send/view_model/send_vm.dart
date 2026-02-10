@@ -8,6 +8,12 @@ import 'package:next_fi/features/send/model/send_token.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 
+/// ViewModel for the Send screen.
+///
+/// **Expendable balance**: [StellarAccountService.getXlmBalance] already
+/// returns the *spendable* amount (total − reserve − selling‑liabilities).
+/// The VM therefore treats balances as the ceiling the user can spend and
+/// does **not** subtract any reserve or trustline overhead itself.
 class SendVM extends ChangeNotifier {
   SendVM({
     required StellarWalletServices service,
@@ -29,8 +35,8 @@ class SendVM extends ChangeNotifier {
   bool _configured = false;
   late SendToken _token;
   late String _senderAddr;
-  late double _senderBalToken;
-  double? _senderBalXlm;
+  late double _senderBalToken;  // expendable balance (reserve already out)
+  double? _senderBalXlm;       // expendable XLM (for USDC fee checks)
   String? _prefillName;
 
   SendToken get token => _token;
@@ -38,9 +44,6 @@ class SendVM extends ChangeNotifier {
   double get senderBalanceToken => _senderBalToken;
   double? get senderBalanceXlm => _senderBalXlm;
   String? get prefillName => _prefillName;
-
-  bool _selfHasUsdcTL = false;
-  bool get selfHasUsdcTrustline => _selfHasUsdcTL;
 
   // ──────────────────────────────────────────────────────────────────────────
   // Input
@@ -72,7 +75,7 @@ class SendVM extends ChangeNotifier {
   int get _opCount => ((_txFeeXlm ?? 0) > 0) ? 2 : 1;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Trustline check (dest USDC)
+  // Trustline check (dest USDC only — sender handled by service)
   // ──────────────────────────────────────────────────────────────────────────
 
   bool _checking = false;
@@ -140,7 +143,6 @@ class SendVM extends ChangeNotifier {
 
     _txFeeXlm = null;
     _estNetworkFeeXlm = null;
-    _selfHasUsdcTL = false;
 
     _start();
   }
@@ -150,18 +152,14 @@ class SendVM extends ChangeNotifier {
       final KeyPair kp = await _seedVM.deriveKeyPair();
       _accountId = kp.accountId;
 
-      // Sender balances / trustlines
+      // For USDC sends we need the sender's expendable XLM to validate fees.
+      // getXlmBalance already returns spendable (reserve subtracted).
       if (!isXlm) {
         try {
           _senderBalXlm = await _svc.getXlmBalance(_accountId!);
         } catch (_) {
           _senderBalXlm = null;
         }
-      }
-      try {
-        _selfHasUsdcTL = await _svc.hasUsdcTrustline(_accountId!);
-      } catch (_) {
-        _selfHasUsdcTL = false;
       }
 
       // Fees
@@ -268,20 +266,20 @@ class SendVM extends ChangeNotifier {
         _senderBalXlm = await _svc.getXlmBalance(_accountId!);
       } catch (_) {}
     }
-    try {
-      if (_accountId != null) {
-        _selfHasUsdcTL = await _svc.hasUsdcTrustline(_accountId!);
-      }
-    } catch (_) {}
     _safeNotify();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Budget math
+  // Budget math — no reserve logic, balances are already expendable
   // ──────────────────────────────────────────────────────────────────────────
 
   double _floor7(double v) => (v * 1e7).floor() / 1e7;
 
+  double get _estTotalFee =>
+      _floor7((_txFeeXlm ?? 0) + (_estNetworkFeeXlm ?? 0));
+
+  /// What the recipient will actually receive for XLM sends.
+  /// Budget model: user types a total "budget" that includes fees.
   double get recipientWillReceiveXlmFromBudget {
     if (!isXlm) return 0;
     final fee = _txFeeXlm ?? 0;
@@ -296,11 +294,31 @@ class SendVM extends ChangeNotifier {
     return recv > 0 ? recv : 0;
   }
 
+  /// Total XLM deducted from expendable balance for an XLM send.
   double get totalDeductXlmIfXlmSend =>
       isXlm ? (_typedAmount > 0 ? _typedAmount : 0) : 0;
 
-  double get needsXlmForFeesIfUsdcSend =>
-      isXlm ? 0 : _floor7((_txFeeXlm ?? 0) + (_estNetworkFeeXlm ?? 0));
+  /// XLM needed from expendable balance for fees when sending USDC.
+  double get needsXlmForFeesIfUsdcSend => isXlm ? 0 : _estTotalFee;
+
+  /// Remaining expendable balance after this transaction.
+  double get remainingExpendable {
+    if (isXlm) {
+      return (_senderBalToken - _typedAmount).clamp(0, double.infinity);
+    } else {
+      return (_senderBalToken - _typedAmount).clamp(0, double.infinity);
+    }
+  }
+
+  /// Remaining expendable XLM after fees (relevant for USDC sends).
+  double get remainingXlmExpendable {
+    if (isXlm) {
+      return (_senderBalToken - _typedAmount).clamp(0, double.infinity);
+    } else {
+      return ((_senderBalXlm ?? 0) - needsXlmForFeesIfUsdcSend)
+          .clamp(0, double.infinity);
+    }
+  }
 
   // ──────────────────────────────────────────────────────────────────────────
   // Validation
@@ -386,6 +404,7 @@ class SendVM extends ChangeNotifier {
       );
       return txids.first;
     } else {
+      // Re-check expendable XLM for fee coverage
       try {
         _senderBalXlm = await _svc.getXlmBalance(keyPair.accountId);
       } catch (_) {}
