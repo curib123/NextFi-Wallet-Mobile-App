@@ -34,141 +34,196 @@ class SlimPreviewCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            c.surface,
-            c.primary.withValues(alpha: 0.02),
-          ],
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.border.withValues(alpha: 0.3),
+          width: 1,
         ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.primary.withValues(alpha: 0.06)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: c.primary.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: Icon(LucideIcons.receipt,
-                    size: 12, color: c.primary.withValues(alpha: 0.6)),
+              Icon(
+                LucideIcons.fileText,
+                size: 16,
+                color: c.textSecondary,
               ),
               const SizedBox(width: 8),
               Text(
-                'Preview',
+                'Summary',
                 style: TextStyle(
-                  color: c.textSecondary.withValues(alpha: 0.7),
-                  fontSize: 12,
+                  color: c.textPrimary,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
                 ),
               ),
               const Spacer(),
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: c.primary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AssetLogo(keyOrSymbol: token, size: 12),
-                    const SizedBox(width: 4),
-                    Text(
-                      token,
-                      style: TextStyle(
-                        color: c.textSecondary.withValues(alpha: 0.7),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10.5,
-                      ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AssetLogo(keyOrSymbol: token, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    token,
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Divider(
-                height: 1, color: c.border.withValues(alpha: 0.08)),
+          const SizedBox(height: 16),
+
+          // Recipient receives (highlighted)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: c.primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: c.primary.withValues(alpha: 0.15),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.arrowUpRight,
+                  size: 15,
+                  color: c.primary,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Recipient receives',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${recipientGets.toStringAsFixed(6)} $token',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
 
-          // Rows
-          _row(c, 'Recipient receives',
-              '${recipientGets.toStringAsFixed(6)} $token'),
-          const SizedBox(height: 8),
-          _row(c, 'Est. fee', '${estFee.toStringAsFixed(7)} XLM'),
+          const SizedBox(height: 12),
+
+          // Network fee
+          _DetailRow(
+            c: c,
+            icon: LucideIcons.coins,
+            label: 'Network fee',
+            value: '${estFee.toStringAsFixed(7)} XLM',
+          ),
 
           if (isXLM && (totalDeductedXlm ?? 0) > 0) ...[
             const SizedBox(height: 8),
-            _row(c, 'Total deducted',
-                '${totalDeductedXlm!.toStringAsFixed(6)} XLM',
-                bold: true),
+            _DetailRow(
+              c: c,
+              icon: LucideIcons.minusCircle,
+              label: 'Total deducted',
+              value: '${totalDeductedXlm!.toStringAsFixed(6)} XLM',
+            ),
           ],
 
           if (!isXLM) ...[
             const SizedBox(height: 8),
-            _row(c, 'XLM for fees',
-                '${(xlmNeededForFees ?? 0).toStringAsFixed(7)} XLM'),
+            _DetailRow(
+              c: c,
+              icon: LucideIcons.wallet,
+              label: 'XLM for fees',
+              value: '${(xlmNeededForFees ?? 0).toStringAsFixed(7)} XLM',
+            ),
           ],
 
           // Remaining balance
           if (remainingExpendable != null) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               child: Divider(
-                  height: 1, color: c.border.withValues(alpha: 0.06)),
+                color: c.border.withValues(alpha: 0.2),
+                height: 1,
+              ),
             ),
-            _row(
-              c,
-              'Remaining',
-              '${remainingExpendable!.toStringAsFixed(isXLM ? 6 : 4)} $token',
-              muted: true,
+            _DetailRow(
+              c: c,
+              icon: LucideIcons.piggyBank,
+              label: 'Remaining balance',
+              value: '${remainingExpendable!.toStringAsFixed(isXLM ? 6 : 4)} $token',
+              isMuted: true,
             ),
           ],
         ],
       ),
     );
   }
+}
 
-  Widget _row(AppColor c, String label, String value,
-      {bool bold = false, bool muted = false}) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: muted
-                  ? c.textSecondary.withValues(alpha: 0.5)
-                  : c.textSecondary.withValues(alpha: 0.7),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.c,
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.isMuted = false,
+  });
+
+  final AppColor c;
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool isMuted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: isMuted
+                ? c.textSecondary.withValues(alpha: 0.4)
+                : c.textSecondary.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: c.textSecondary.withValues(alpha: isMuted ? 0.5 : 0.7),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          value,
-          style: TextStyle(
-            color: muted
-                ? c.textSecondary.withValues(alpha: 0.6)
-                : c.textPrimary,
-            fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
-            fontSize: 12.5,
-            letterSpacing: -0.2,
+          Text(
+            value,
+            style: TextStyle(
+              color: isMuted ? c.textSecondary : c.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

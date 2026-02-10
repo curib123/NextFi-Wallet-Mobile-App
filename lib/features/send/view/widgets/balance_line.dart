@@ -16,75 +16,40 @@ class BalanceLine extends StatelessWidget {
     String amt(double v) => v.toStringAsFixed(v >= 100 ? 2 : 4);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            c.primary.withValues(alpha: 0.06),
-            c.primary.withValues(alpha: 0.02),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.primary.withValues(alpha: 0.08)),
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          // Asset icon with soft glow
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: AssetLogo(keyOrSymbol: token, size: 20),
-          ),
+          AssetLogo(keyOrSymbol: token, size: 22),
           const SizedBox(width: 12),
-
-          // Label
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Spendable',
-                style: TextStyle(
-                  color: c.textSecondary.withValues(alpha: 0.7),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                token,
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          Text(
+            'Balance',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const Spacer(),
-
-          // Balance amount
           Text(
             amt(balance),
             style: TextStyle(
               color: c.textPrimary,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               fontSize: 16,
-              letterSpacing: -0.3,
             ),
           ),
           const SizedBox(width: 4),
           Text(
             token,
             style: TextStyle(
-              color: c.textSecondary.withValues(alpha: 0.6),
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
+              color: c.textSecondary,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
             ),
           ),
         ],
