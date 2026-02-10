@@ -101,7 +101,6 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
   late final AnimationController _animController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
-  String _searchQuery = '';
 
   @override
   void initState() {
@@ -128,16 +127,6 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
   void dispose() {
     _animController.dispose();
     super.dispose();
-  }
-
-  List<AssetModel> get _filteredAssets {
-    if (_searchQuery.isEmpty) return widget.assets;
-    final query = _searchQuery.toLowerCase();
-    return widget.assets.where((a) {
-      return a.symbol.toLowerCase().contains(query) ||
-          a.name.toLowerCase().contains(query) ||
-          (a.assetCode?.toLowerCase().contains(query) ?? false);
-    }).toList();
   }
 
   Widget _buildHandle() {
@@ -207,59 +196,8 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: widget.colors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: widget.colors.border.withOpacity(0.3),
-          ),
-        ),
-        child: TextField(
-          onChanged: (value) => setState(() => _searchQuery = value),
-          style: TextStyle(
-            fontSize: 14,
-            color: widget.colors.textPrimary,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Search assets...',
-            hintStyle: TextStyle(
-              fontSize: 14,
-              color: widget.colors.textSecondary.withOpacity(0.5),
-            ),
-            prefixIcon: Icon(
-              LucideIcons.search,
-              size: 18,
-              color: widget.colors.textSecondary,
-            ),
-            suffixIcon: _searchQuery.isNotEmpty
-                ? IconButton(
-              icon: Icon(
-                LucideIcons.x,
-                size: 18,
-                color: widget.colors.textSecondary,
-              ),
-              onPressed: () => setState(() => _searchQuery = ''),
-            )
-                : null,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final filteredAssets = _filteredAssets;
-
     return FadeTransition(
       opacity: _fadeAnimation,
       child: SlideTransition(
@@ -285,59 +223,26 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
               _buildHandle(),
               _buildHeader(),
               const SizedBox(height: 16),
-              _buildSearchBar(),
-              const SizedBox(height: 16),
-              if (filteredAssets.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(40),
-                  child: Column(
-                    children: [
-                      Icon(
-                        LucideIcons.searchX,
-                        size: 48,
-                        color: widget.colors.textSecondary.withOpacity(0.3),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No assets found',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: widget.colors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Try a different search term',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: widget.colors.textSecondary.withOpacity(0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Flexible(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                    shrinkWrap: true,
-                    itemCount: filteredAssets.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final asset = filteredAssets[i];
-                      final balance = widget.balanceFor(asset);
-                      return _TokenTile(
-                        colors: widget.colors,
-                        asset: asset,
-                        balance: balance,
-                        subtitle: widget.subtitleFor(asset),
-                        logoUrl: widget.logoFor(asset),
-                        onTap: () => widget.onSelect(asset),
-                      );
-                    },
-                  ),
+              Flexible(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  shrinkWrap: true,
+                  itemCount: widget.assets.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) {
+                    final asset = widget.assets[i];
+                    final balance = widget.balanceFor(asset);
+                    return _TokenTile(
+                      colors: widget.colors,
+                      asset: asset,
+                      balance: balance,
+                      subtitle: widget.subtitleFor(asset),
+                      logoUrl: widget.logoFor(asset),
+                      onTap: () => widget.onSelect(asset),
+                    );
+                  },
                 ),
+              ),
             ],
           ),
         ),

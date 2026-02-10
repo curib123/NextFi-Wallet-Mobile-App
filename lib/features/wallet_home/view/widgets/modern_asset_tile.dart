@@ -218,7 +218,7 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
                     ),
                     // Content
                     Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(15),
                       child: Row(
                         children: [
                           _buildEnhancedLogo(widget.logoUrl, isDark, trendColor),
@@ -227,12 +227,12 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Asset name with badge
+                                // Balance amount (now first)
                                 Row(
                                   children: [
                                     Flexible(
                                       child: Text(
-                                        widget.asset.name,
+                                        "${widget.formatTokenAmount(widget.balance)} ${widget.asset.symbol}",
                                         style: TextStyle(
                                           fontSize: 17,
                                           fontWeight: FontWeight.w800,
@@ -247,29 +247,17 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                // Balance amount
-                                Row(
-                                  children: [
-                                    Icon(
-                                      LucideIcons.coins,
-                                      size: 14,
-                                      color: widget.colors.textSecondary.withOpacity(0.6),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        "${widget.formatTokenAmount(widget.balance)} ${widget.asset.symbol}",
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: widget.colors.textSecondary,
-                                          letterSpacing: -0.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                                // Asset name (now second)
+                                Text(
+                                  widget.asset.name,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.colors.textSecondary,
+                                    letterSpacing: -0.2,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 6),
                                 // Price per coin with indicator
