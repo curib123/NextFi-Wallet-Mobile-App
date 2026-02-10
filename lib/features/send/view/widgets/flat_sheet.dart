@@ -18,7 +18,8 @@ class FlatSheet extends StatelessWidget {
     final h = MediaQuery.of(context).size.height;
 
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       padding:
       EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Align(
@@ -26,9 +27,10 @@ class FlatSheet extends StatelessWidget {
         child: Material(
           color: c.surface,
           shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           elevation: 0,
+          clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: h * maxHeightFactor),
             child: SafeArea(top: false, child: child),

@@ -17,16 +17,19 @@ class SlimReviewSheet extends StatelessWidget {
     required this.extraValue,
     required this.onCancel,
     required this.onConfirm,
+    this.remainingExpendable,
+    this.sending = false,
   });
 
   final String tokenStr, sender, to, recipientGets;
   final String txFeeXlm, netFeeXlm, extraLabel, extraValue;
   final VoidCallback onCancel, onConfirm;
+  final String? remainingExpendable;
+  final bool sending;
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-
     final double tx = double.tryParse(txFeeXlm) ?? 0.0;
     final double net = double.tryParse(netFeeXlm) ?? 0.0;
     final String estCombinedStr = (tx + net).toStringAsFixed(7);
@@ -35,45 +38,52 @@ class SlimReviewSheet extends StatelessWidget {
       children: [
         // Drag handle
         Container(
-          width: 40,
+          width: 36,
           height: 4,
-          margin: const EdgeInsets.only(top: 10, bottom: 12),
+          margin: const EdgeInsets.only(top: 10, bottom: 14),
           decoration: BoxDecoration(
-            color: c.border.withValues(alpha: 0.4),
+            color: c.border.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
 
         // Header
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Row(
             children: [
-              Text('Review',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      color: c.textPrimary)),
+              Text(
+                'Review',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  color: c.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+              ),
               const Spacer(),
               Container(
                 padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: c.primary.withValues(alpha: 0.06),
+                  color: c.primary.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(20),
                   border:
-                  Border.all(color: c.primary.withValues(alpha: 0.12)),
+                  Border.all(color: c.primary.withValues(alpha: 0.08)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     AssetLogo(keyOrSymbol: tokenStr, size: 14),
                     const SizedBox(width: 6),
-                    Text(tokenStr,
-                        style: TextStyle(
-                            color: c.textSecondary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12)),
+                    Text(
+                      tokenStr,
+                      style: TextStyle(
+                        color: c.textSecondary.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -81,28 +91,47 @@ class SlimReviewSheet extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
 
-        // Recipient receives (highlighted)
+        // Recipient receives — hero card
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Container(
             padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(14),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  c.primary.withValues(alpha: 0.07),
+                  c.primary.withValues(alpha: 0.03),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: c.primary.withValues(alpha: 0.1)),
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.arrowUpRight,
-                    size: 16, color: c.primary),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: c.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(LucideIcons.arrowUpRight,
+                      size: 14, color: c.primary),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Recipient receives',
-                      style: TextStyle(
-                          color: c.textSecondary, fontSize: 12)),
+                  child: Text(
+                    'Recipient receives',
+                    style: TextStyle(
+                      color: c.textSecondary.withValues(alpha: 0.7),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
                 Text(
                   '$recipientGets $tokenStr',
@@ -110,7 +139,8 @@ class SlimReviewSheet extends StatelessWidget {
                     color: c.textPrimary,
                     fontWeight: FontWeight.w800,
                     fontFamily: 'monospace',
-                    fontSize: 13,
+                    fontSize: 14,
+                    letterSpacing: -0.3,
                   ),
                 ),
               ],
@@ -118,21 +148,28 @@ class SlimReviewSheet extends StatelessWidget {
           ),
         ),
 
-        // Details
+        // Detail rows
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
             children: [
               _detailCard(c, [
                 _kvRow(c, 'From', sender, mono: true),
-                Divider(height: 1, color: c.border.withValues(alpha: 0.1)),
+                Divider(height: 1, color: c.border.withValues(alpha: 0.06)),
                 _kvRow(c, 'To', to, mono: true),
               ]),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               _detailCard(c, [
-                _kvRow(c, 'Est. transaction fee', '$estCombinedStr XLM'),
-                Divider(height: 1, color: c.border.withValues(alpha: 0.1)),
+                _kvRow(c, 'Est. fee', '$estCombinedStr XLM'),
+                Divider(height: 1, color: c.border.withValues(alpha: 0.06)),
                 _kvRow(c, extraLabel, extraValue),
+                if (remainingExpendable != null) ...[
+                  Divider(
+                      height: 1,
+                      color: c.border.withValues(alpha: 0.06)),
+                  _kvRow(c, 'Remaining balance', remainingExpendable!,
+                      muted: true),
+                ],
               ]),
             ],
           ),
@@ -140,19 +177,19 @@ class SlimReviewSheet extends StatelessWidget {
 
         // Actions
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
           child: Row(
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: onCancel,
+                  onPressed: sending ? null : onCancel,
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(14)),
                     foregroundColor: c.textSecondary,
                     side: BorderSide(
-                        color: c.border.withValues(alpha: 0.4)),
+                        color: c.border.withValues(alpha: 0.25)),
                   ),
                   child: const Text('Cancel',
                       style: TextStyle(fontWeight: FontWeight.w600)),
@@ -160,19 +197,36 @@ class SlimReviewSheet extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: onConfirm,
-                  icon: const Icon(LucideIcons.check,
-                      size: 16, color: Colors.white),
-                  label: const Text('Confirm',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    backgroundColor: c.primary,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  child: FilledButton.icon(
+                    onPressed: sending ? null : onConfirm,
+                    icon: sending
+                        ? SizedBox(
+                      height: 14,
+                      width: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.8,
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    )
+                        : const Icon(LucideIcons.check,
+                        size: 15, color: Colors.white),
+                    label: Text(
+                      sending ? 'Sending\u2026' : 'Confirm',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      backgroundColor: sending
+                          ? c.primary.withValues(alpha: 0.6)
+                          : c.primary,
+                    ),
                   ),
                 ),
               ),
@@ -189,21 +243,29 @@ class SlimReviewSheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border.withValues(alpha: 0.15)),
+        border: Border.all(color: c.border.withValues(alpha: 0.08)),
       ),
       child: Column(children: children),
     );
   }
 
   Widget _kvRow(AppColor c, String label, String value,
-      {bool mono = false}) {
+      {bool mono = false, bool muted = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: TextStyle(color: c.textSecondary, fontSize: 12)),
+          Text(
+            label,
+            style: TextStyle(
+              color: muted
+                  ? c.textSecondary.withValues(alpha: 0.5)
+                  : c.textSecondary.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: SelectableText(
@@ -211,11 +273,14 @@ class SlimReviewSheet extends StatelessWidget {
               textAlign: TextAlign.right,
               maxLines: 2,
               style: TextStyle(
-                color: c.textPrimary,
-                fontWeight: FontWeight.w700,
+                color: muted
+                    ? c.textSecondary.withValues(alpha: 0.6)
+                    : c.textPrimary,
+                fontWeight: muted ? FontWeight.w600 : FontWeight.w700,
                 fontFamily: mono ? 'monospace' : null,
                 fontSize: 12.5,
-                height: 1.2,
+                height: 1.25,
+                letterSpacing: -0.1,
               ),
             ),
           ),

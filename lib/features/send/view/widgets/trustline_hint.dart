@@ -16,68 +16,138 @@ class TrustlineHint extends StatelessWidget {
     if (vm.isXlm) return const SizedBox.shrink();
     if (vm.to.trim().isEmpty) return const SizedBox.shrink();
 
+    // Checking state
     if (vm.checking) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: c.primary.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(10),
-        ),
+      return _HintContainer(
+        gradient: [
+          c.primary.withValues(alpha: 0.05),
+          c.primary.withValues(alpha: 0.02),
+        ],
+        borderColor: c.primary.withValues(alpha: 0.08),
         child: Row(
           children: [
             SizedBox(
               height: 14,
               width: 14,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: c.primary),
+                strokeWidth: 1.8,
+                color: c.primary.withValues(alpha: 0.5),
+              ),
             ),
-            const SizedBox(width: 8),
-            Text('Checking USDC trustline…',
-                style: TextStyle(color: c.textSecondary, fontSize: 12)),
+            const SizedBox(width: 10),
+            Text(
+              'Checking USDC trustline\u2026',
+              style: TextStyle(
+                color: c.textSecondary.withValues(alpha: 0.7),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       );
     }
 
+    // No trustline
     if (vm.destHasUsdcTL == false) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: c.error.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-        ),
+      return _HintContainer(
+        gradient: [
+          c.error.withValues(alpha: 0.06),
+          c.error.withValues(alpha: 0.02),
+        ],
+        borderColor: c.error.withValues(alpha: 0.1),
         child: Row(
           children: [
-            Icon(LucideIcons.alertTriangle, size: 14, color: c.error),
-            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: c.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(LucideIcons.alertTriangle,
+                  size: 12, color: c.error.withValues(alpha: 0.8)),
+            ),
+            const SizedBox(width: 10),
             Expanded(
-              child: Text('This address has no USDC trustline.',
-                  style: TextStyle(color: c.error, fontSize: 12),
-                  overflow: TextOverflow.ellipsis),
+              child: Text(
+                'This address has no USDC trustline.',
+                style: TextStyle(
+                  color: c.error.withValues(alpha: 0.85),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
       );
     }
 
+    // Trustline verified
     if (vm.destHasUsdcTL == true) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: c.success.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-        ),
+      return _HintContainer(
+        gradient: [
+          c.success.withValues(alpha: 0.06),
+          c.success.withValues(alpha: 0.02),
+        ],
+        borderColor: c.success.withValues(alpha: 0.1),
         child: Row(
           children: [
-            Icon(LucideIcons.checkCircle, size: 14, color: c.success),
-            const SizedBox(width: 6),
-            Text('USDC trustline verified',
-                style: TextStyle(color: c.textSecondary, fontSize: 12)),
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: c.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(LucideIcons.checkCircle,
+                  size: 12, color: c.success.withValues(alpha: 0.8)),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'USDC trustline verified',
+              style: TextStyle(
+                color: c.textSecondary.withValues(alpha: 0.7),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       );
     }
 
     return const SizedBox.shrink();
+  }
+}
+
+class _HintContainer extends StatelessWidget {
+  const _HintContainer({
+    required this.gradient,
+    required this.borderColor,
+    required this.child,
+  });
+
+  final List<Color> gradient;
+  final Color borderColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradient,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: child,
+    );
   }
 }

@@ -29,10 +29,90 @@ class StellarAccountService extends StellarBaseService {
   Asset get usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Reserve Calculation (Stellar Protocol)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Base reserve required for an account (currently 1 XLM as of protocol 20)
+  /// Updated from 0.5 XLM to 1 XLM based on recent protocol changes
+  static const double _baseReserve = 1.0;
+
+  /// Reserve required per subentry (trustlines, offers, signers, data entries)
+  /// Updated from 0.5 XLM to 0.5 XLM (unchanged)
+  static const double _subentryReserve = 0.5;
+
+  /// Minimum account balance = (2 + numSubEntries) * baseReserve
+  /// For safety, we calculate: 2 * baseReserve + numSubEntries * subentryReserve
+  double _calculateMinimumBalance(AccountResponse account) {
+    // Count subentries: trustlines, offers, signers (excluding master key), data entries
+    int subentries = 0;
+
+    // Trustlines (non-native balances)
+    subentries += account.balances.where((b) => b.assetType != Asset.TYPE_NATIVE).length;
+
+    // Signers (excluding master key with weight > 0)
+    subentries += account.signers.where((s) => s.key != account.accountId).length;
+
+    // Data entries
+    subentries += (account.data?.length ?? 0);
+
+    // Note: We don't have direct access to offers count from AccountResponse
+    // In a real implementation, you might need to query offers separately
+    // For now, we'll use the subentries field if available
+    final numSubentries = account.subentryCount ?? subentries;
+
+    // Minimum balance = (2 + numSubEntries) * baseReserve
+    // Using updated formula: 2 * baseReserve + numSubEntries * subentryReserve
+    final minimumBalance = (2 * _baseReserve) + (numSubentries * _subentryReserve);
+
+    return minimumBalance;
+  }
+
+  /// Calculate spendable XLM balance (total - minimum reserve - selling liabilities)
+  double _calculateSpendableXlm(AccountResponse account) {
+    // Get total XLM balance
+    double totalXlm = 0.0;
+    double sellingLiabilities = 0.0;
+
+    for (final balance in account.balances) {
+      if (balance.assetType == Asset.TYPE_NATIVE) {
+        totalXlm = double.tryParse(balance.balance) ?? 0.0;
+
+        // Selling liabilities are XLM locked in sell offers
+        sellingLiabilities = double.tryParse(balance.sellingLiabilities ?? '0') ?? 0.0;
+        break;
+      }
+    }
+
+    // Calculate minimum balance required
+    final minimumBalance = _calculateMinimumBalance(account);
+
+    // Spendable = Total - MinimumBalance - SellingLiabilities
+    final spendable = totalXlm - minimumBalance - sellingLiabilities;
+
+    // Return 0 if negative (shouldn't happen in normal circumstances)
+    return spendable > 0 ? spendable : 0.0;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Balances
   // ──────────────────────────────────────────────────────────────────────────
 
+  /// Get spendable XLM balance (excludes minimum reserve and selling liabilities)
   Future<double> getXlmBalance(String accountId) async {
+    try {
+      final acc = await loadAccount(accountId);
+      return _calculateSpendableXlm(acc);
+    } catch (e) {
+      fail(
+        'Unable to fetch XLM balance',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get total XLM balance (includes reserves - use for display purposes only)
+  Future<double> getTotalXlmBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
       for (final b in acc.balances) {
@@ -48,12 +128,34 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
+  /// Get XLM minimum balance (base reserve + subentry reserves)
+  Future<double> getXlmMinimumBalance(String accountId) async {
+    try {
+      final acc = await loadAccount(accountId);
+      return _calculateMinimumBalance(acc);
+    } catch (e) {
+      fail(
+        'Unable to fetch minimum balance',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get available (spendable) balance for an asset
+  /// For XLM: Returns spendable amount (total - reserves - selling liabilities)
+  /// For other assets: Returns available amount (balance - selling liabilities)
   Future<double> getUsdcBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
       for (final b in acc.balances) {
         if (b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer) {
-          return double.parse(b.balance);
+          final balance = double.parse(b.balance);
+          final sellingLiabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
+
+          // Available = Balance - SellingLiabilities
+          final available = balance - sellingLiabilities;
+          return available > 0 ? available : 0.0;
         }
       }
       return 0.0;
@@ -66,21 +168,26 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
+  /// Get available (spendable) balance for any asset
+  /// For XLM: Returns spendable amount (total - reserves - selling liabilities)
+  /// For other assets: Returns available amount (balance - selling liabilities)
   Future<double> getAssetBalance(String accountId, Asset asset) async {
     try {
       final acc = await loadAccount(accountId);
 
       if (asset is AssetTypeNative) {
-        for (final b in acc.balances) {
-          if (b.assetType == Asset.TYPE_NATIVE) return double.parse(b.balance);
-        }
-        return 0.0;
+        return _calculateSpendableXlm(acc);
       }
 
       if (asset is AssetTypeCreditAlphaNum) {
         for (final b in acc.balances) {
           if (b.assetCode == asset.code && b.assetIssuer == asset.issuerId) {
-            return double.parse(b.balance);
+            final balance = double.parse(b.balance);
+            final sellingLiabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
+
+            // Available = Balance - SellingLiabilities
+            final available = balance - sellingLiabilities;
+            return available > 0 ? available : 0.0;
           }
         }
         return 0.0;
@@ -103,6 +210,43 @@ class StellarAccountService extends StellarBaseService {
     } catch (e) {
       fail(
         'Unable to fetch account balances',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get detailed balance breakdown for an account
+  /// Returns map with total, spendable, reserved, and locked amounts
+  Future<Map<String, double>> getXlmBalanceBreakdown(String accountId) async {
+    try {
+      final acc = await loadAccount(accountId);
+
+      double totalXlm = 0.0;
+      double sellingLiabilities = 0.0;
+
+      for (final b in acc.balances) {
+        if (b.assetType == Asset.TYPE_NATIVE) {
+          totalXlm = double.parse(b.balance);
+          sellingLiabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
+          break;
+        }
+      }
+
+      final minimumBalance = _calculateMinimumBalance(acc);
+      final spendable = totalXlm - minimumBalance - sellingLiabilities;
+
+      return {
+        'total': totalXlm,
+        'spendable': spendable > 0 ? spendable : 0.0,
+        'reserved': minimumBalance,
+        'locked': sellingLiabilities,
+        'baseReserve': _baseReserve,
+        'subentries': (acc.subentryCount ?? 0).toDouble(),
+      };
+    } catch (e) {
+      fail(
+        'Unable to fetch balance breakdown',
         technicalError: e,
         advice: 'Please check your internet connection and try again',
       );

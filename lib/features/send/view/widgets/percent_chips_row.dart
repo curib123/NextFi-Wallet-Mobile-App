@@ -27,43 +27,74 @@ class PercentChipsRow extends StatelessWidget {
       children: [
         for (int i = 0; i < _presets.length; i++) ...[
           if (i > 0) const SizedBox(width: 8),
-          Expanded(child: _chip(c, _presets[i].$1, _presets[i].$2)),
+          Expanded(child: _Chip(
+            c: c,
+            label: _presets[i].$1,
+            pct: _presets[i].$2,
+            isActive: activePct != null &&
+                (activePct! - _presets[i].$2).abs() < 0.001,
+            onTap: () => onPick(_presets[i].$2),
+          )),
         ],
       ],
     );
   }
+}
 
-  Widget _chip(AppColor c, String label, double pct) {
-    final isActive =
-        activePct != null && (activePct! - pct).abs() < 0.001;
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.c,
+    required this.label,
+    required this.pct,
+    required this.isActive,
+    required this.onTap,
+  });
 
+  final AppColor c;
+  final String label;
+  final double pct;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => onPick(pct),
-        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: isActive
-                ? c.primary.withValues(alpha: 0.1)
-                : c.primary.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(12),
+            gradient: isActive
+                ? LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                c.primary.withValues(alpha: 0.14),
+                c.primary.withValues(alpha: 0.08),
+              ],
+            )
+                : null,
+            color: isActive ? null : c.primary.withValues(alpha: 0.03),
             border: Border.all(
               color: isActive
-                  ? c.primary.withValues(alpha: 0.4)
-                  : c.primary.withValues(alpha: 0.12),
+                  ? c.primary.withValues(alpha: 0.35)
+                  : c.primary.withValues(alpha: 0.08),
+              width: isActive ? 1.2 : 1,
             ),
           ),
           child: Center(
             child: Text(
               label,
               style: TextStyle(
-                color: isActive ? c.primary : c.textPrimary,
-                fontWeight: FontWeight.w700,
+                color: isActive ? c.primary : c.textSecondary,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
                 fontSize: 12,
+                letterSpacing: 0.2,
               ),
             ),
           ),
