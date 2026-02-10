@@ -670,4 +670,128 @@ class StellarAccountService extends StellarBaseService {
       );
     }
   }
+
+
+  // Add these new methods to your StellarAccountService class
+// Insert them after the getXlmMinimumBalance method
+
+  /// Get the base reserve amount (2 * baseReserve)
+  /// This is the minimum balance required for an account with no subentries
+  Future<double> getBaseReserve(String accountId) async {
+    try {
+      // Base reserve is always 2 * baseReserve for any account
+      return 2 * _baseReserve;
+    } catch (e) {
+      fail(
+        'Unable to fetch base reserve',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get the trustline reserve amount (number of trustlines * subentryReserve)
+  /// This is the reserve locked up by trustlines only
+  Future<double> getTrustlineReserve(String accountId) async {
+    try {
+      final acc = await loadAccount(accountId);
+
+      // Count trustlines (non-native balances)
+      int trustlineCount = acc.balances
+          .where((b) => b.assetType != Asset.TYPE_NATIVE)
+          .length;
+
+      return trustlineCount * _subentryReserve;
+    } catch (e) {
+      fail(
+        'Unable to fetch trustline reserve',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get the total subentry reserve (all subentries * subentryReserve)
+  /// Includes trustlines, signers, data entries, and offers
+  Future<double> getSubentryReserve(String accountId) async {
+    try {
+      final acc = await loadAccount(accountId);
+
+      // Count all subentries
+      int subentries = 0;
+
+      // Trustlines
+      subentries += acc.balances.where((b) => b.assetType != Asset.TYPE_NATIVE).length;
+
+      // Signers (excluding master key)
+      subentries += acc.signers.where((s) => s.key != acc.accountId).length;
+
+      // Data entries
+      subentries += (acc.data?.length ?? 0);
+
+      // Use subentryCount if available (includes offers)
+      final numSubentries = acc.subentryCount ?? subentries;
+
+      return numSubentries * _subentryReserve;
+    } catch (e) {
+      fail(
+        'Unable to fetch subentry reserve',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
+  /// Get detailed reserve breakdown
+  /// Returns map with base, trustline, and other subentry reserves
+  Future<Map<String, double>> getReserveBreakdown(String accountId) async {
+    try {
+      final acc = await loadAccount(accountId);
+
+      // Count each type of subentry
+      int trustlineCount = acc.balances
+          .where((b) => b.assetType != Asset.TYPE_NATIVE)
+          .length;
+
+      int signerCount = acc.signers
+          .where((s) => s.key != acc.accountId)
+          .length;
+
+      int dataEntryCount = acc.data?.length ?? 0;
+
+      // Total subentries (may include offers not directly visible)
+      final totalSubentries = acc.subentryCount ??
+          (trustlineCount + signerCount + dataEntryCount);
+
+      // Calculate reserves
+      final baseReserve = 2 * _baseReserve;
+      final trustlineReserve = trustlineCount * _subentryReserve;
+      final signerReserve = signerCount * _subentryReserve;
+      final dataReserve = dataEntryCount * _subentryReserve;
+      final totalSubentryReserve = totalSubentries * _subentryReserve;
+      final totalMinimumBalance = baseReserve + totalSubentryReserve;
+
+      return {
+        'baseReserve': baseReserve,
+        'trustlineReserve': trustlineReserve,
+        'signerReserve': signerReserve,
+        'dataReserve': dataReserve,
+        'otherReserve': totalSubentryReserve - trustlineReserve - signerReserve - dataReserve,
+        'totalSubentryReserve': totalSubentryReserve,
+        'totalMinimumBalance': totalMinimumBalance,
+        'trustlineCount': trustlineCount.toDouble(),
+        'signerCount': signerCount.toDouble(),
+        'dataEntryCount': dataEntryCount.toDouble(),
+        'totalSubentries': totalSubentries.toDouble(),
+      };
+    } catch (e) {
+      fail(
+        'Unable to fetch reserve breakdown',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again',
+      );
+    }
+  }
+
 }
+

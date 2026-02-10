@@ -341,6 +341,42 @@ class StellarWalletServices {
         sponsoredOperations: sponsoredOperations,
       );
 
+  // Add these methods to your StellarWalletServices class
+// Insert them in the "BALANCES & TRUSTLINES" section after getAssetBalance
+
+  /// Get the base reserve amount (2 * baseReserve)
+  /// This is the minimum balance required for an account with no subentries
+  Future<double> getBaseReserve(String accountId) =>
+      accountService.getBaseReserve(accountId);
+
+  /// Get the trustline reserve amount (number of trustlines * subentryReserve)
+  /// This is the reserve locked up by trustlines only
+  Future<double> getTrustlineReserve(String accountId) =>
+      accountService.getTrustlineReserve(accountId);
+
+  /// Get the total subentry reserve (all subentries * subentryReserve)
+  /// Includes trustlines, signers, data entries, and offers
+  Future<double> getSubentryReserve(String accountId) =>
+      accountService.getSubentryReserve(accountId);
+
+  /// Get detailed reserve breakdown
+  /// Returns map with base, trustline, and other subentry reserves
+  Future<Map<String, double>> getReserveBreakdown(String accountId) =>
+      accountService.getReserveBreakdown(accountId);
+
+  /// Get XLM minimum balance (base reserve + subentry reserves)
+  Future<double> getXlmMinimumBalance(String accountId) =>
+      accountService.getXlmMinimumBalance(accountId);
+
+  /// Get total XLM balance (includes reserves - use for display purposes only)
+  Future<double> getTotalXlmBalance(String accountId) =>
+      accountService.getTotalXlmBalance(accountId);
+
+  /// Get detailed balance breakdown for an account
+  /// Returns map with total, spendable, reserved, and locked amounts
+  Future<Map<String, double>> getXlmBalanceBreakdown(String accountId) =>
+      accountService.getXlmBalanceBreakdown(accountId);
+
   // ══════════════════════════════════════════════════════════════════════════
   // PAYMENTS - Delegated to StellarPaymentService
   // ══════════════════════════════════════════════════════════════════════════
