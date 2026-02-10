@@ -15,14 +15,6 @@ import 'package:next_fi/features/claimable/view/widgets/claimable_card.dart';
 import 'package:next_fi/features/claimable/view/widgets/sent_claimable_card.dart';
 import 'package:next_fi/features/claimable/view/widgets/claimable_empty.dart';
 
-/// Screen displaying all claimable balances for the current account.
-///
-/// Features:
-/// - Two tabs: Received (can claim) and Sent (created by user)
-/// - List of all claimable balances (ready and locked)
-/// - Pull-to-refresh functionality
-/// - Summary chips showing counts
-/// - FAB opens token chooser → then navigates to create screen with selected asset
 class ClaimableListScreen extends StatefulWidget {
   const ClaimableListScreen({super.key});
 
@@ -66,13 +58,11 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     _booted = true;
   }
 
-  /// Refresh the claimable balances list
   Future<void> _refresh() async {
     if (!mounted) return;
     await context.read<ClaimableVM>().refresh();
   }
 
-  /// Claim a specific balance by ID
   Future<void> _claim(String balanceId) async {
     setState(() => _claimingId = balanceId);
 
@@ -109,7 +99,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     }
   }
 
-  /// Open token chooser, then navigate to create screen with selected asset
   void _openCreate() {
     final vm = context.read<ClaimableVM>();
     showTokenSelector(
@@ -122,7 +111,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
         return ClaimableCreateScreen(initialAsset: token.toUpperCase());
       },
     ).then((_) {
-      // Refresh list when returning from create screen
       if (mounted) {
         context.read<ClaimableVM>().refresh();
       }
@@ -136,115 +124,146 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
 
     return Scaffold(
       backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title: Text(
-          'Claimable Balances',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: c.textPrimary,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildAppBar(c, vm),
+            if (!vm.loading && vm.error == null) _buildTabBar(c, vm),
+            Expanded(child: _buildBody(c, vm)),
+          ],
+        ),
+      ),
+      floatingActionButton: _buildFAB(c, vm),
+    );
+  }
+
+  Widget _buildAppBar(AppColor c, ClaimableVM vm) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.background,
+        border: Border(
+          bottom: BorderSide(
+            color: c.border.withOpacity(0.1),
+            width: 1,
           ),
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            icon: Icon(
-              LucideIcons.refreshCcw,
-              size: 20,
-              color: c.textPrimary,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Claimable Balances',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.3,
+              ),
             ),
+          ),
+          IconButton(
             onPressed: () {
               HapticFeedback.selectionClick();
               _refresh();
             },
+            icon: Icon(LucideIcons.refreshCcw, color: c.textPrimary),
+            iconSize: 20,
           ),
         ],
-        bottom: vm.loading || vm.error != null
-            ? null
-            : TabBar(
-          controller: _tabController,
-          labelColor: c.primary,
-          unselectedLabelColor: c.textSecondary,
-          indicatorColor: c.primary,
-          indicatorWeight: 3,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
+      ),
+    );
+  }
+
+  Widget _buildTabBar(AppColor c, ClaimableVM vm) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: c.border.withOpacity(0.1),
+            width: 1,
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(LucideIcons.inbox, size: 16),
-                  const SizedBox(width: 6),
-                  const Text('Received'),
-                  if (vm.receivedTotalCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${vm.receivedTotalCount}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: c.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(LucideIcons.send, size: 16),
-                  const SizedBox(width: 6),
-                  const Text('Sent'),
-                  if (vm.sentUnclaimedCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${vm.sentUnclaimedCount}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: c.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
         ),
       ),
-      body: _buildBody(c, vm),
-      floatingActionButton: _buildFAB(c, vm),
+      child: TabBar(
+        controller: _tabController,
+        labelColor: c.primary,
+        unselectedLabelColor: c.textSecondary,
+        indicatorColor: c.primary,
+        indicatorWeight: 2,
+        labelStyle: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        tabs: [
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(LucideIcons.inbox, size: 16),
+                const SizedBox(width: 8),
+                const Text('Received'),
+                if (vm.receivedTotalCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${vm.receivedTotalCount}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: c.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(LucideIcons.send, size: 16),
+                const SizedBox(width: 8),
+                const Text('Sent'),
+                if (vm.sentUnclaimedCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${vm.sentUnclaimedCount}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: c.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -311,7 +330,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
             Icon(
               LucideIcons.alertTriangle,
               size: 32,
-              color: c.error.withValues(alpha: 0.6),
+              color: c.error.withOpacity(0.6),
             ),
             const SizedBox(height: 12),
             Text(
@@ -319,7 +338,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: c.error,
-                fontSize: 13,
+                fontSize: 14,
               ),
             ),
             const SizedBox(height: 16),
@@ -327,6 +346,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
               onPressed: _refresh,
               style: OutlinedButton.styleFrom(
                 foregroundColor: c.primary,
+                side: BorderSide(color: c.border.withOpacity(0.2)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -390,9 +410,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
         if (readyCount > 0)
           _summaryChip(
             c,
-            isReceived
-                ? '$readyCount ready to claim'
-                : '$readyCount unlocked',
+            isReceived ? '$readyCount ready to claim' : '$readyCount unlocked',
             c.success,
             LucideIcons.checkCircle,
           ),
@@ -414,22 +432,26 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       IconData icon,
       ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(0.15),
+          width: 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
               color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
         ],

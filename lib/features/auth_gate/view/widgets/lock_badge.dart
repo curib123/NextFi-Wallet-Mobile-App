@@ -12,8 +12,8 @@ class LockBadge extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
-      width: 112,
-      height: 112,
+      width: 96,
+      height: 96,
       decoration: BoxDecoration(
         color: colors.primary.withOpacity(0.1),
         shape: BoxShape.circle,
@@ -28,7 +28,7 @@ class LockBadge extends StatelessWidget {
         child: Icon(
           unlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
           key: ValueKey<bool>(unlocked),
-          size: 80,
+          size: 56,
           color: colors.primary,
         ),
       ),

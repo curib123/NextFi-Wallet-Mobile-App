@@ -20,9 +20,10 @@ class SectionCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: c.border.withValues(alpha: 0.2),
+          color: c.border.withOpacity(0.1),
+          width: 1,
         ),
       ),
       child: child,

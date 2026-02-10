@@ -10,9 +10,7 @@ import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-
-import '../features/settings/view_model/settings_vm.dart' hide ThemeBridge;
-
+import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -64,7 +62,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   Future<void> _boot() async {
-    // initialize your signed fee config using the active wallet
+    // Initialize your signed fee config using the active wallet
     await TransactionFeeVaultSecureStorage().initSignedConfigFromActiveWallet();
 
     // Show splash for at least this long while we check storage.

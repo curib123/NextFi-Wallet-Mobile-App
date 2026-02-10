@@ -21,15 +21,20 @@ class Headings extends StatelessWidget {
         Text(
           headline,
           style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
             color: colors.textPrimary,
+            letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           subhead,
-          style: TextStyle(fontSize: 14, color: colors.textSecondary),
+          style: TextStyle(
+            fontSize: 15,
+            color: colors.textSecondary,
+            height: 1.4,
+          ),
           textAlign: TextAlign.center,
         ),
       ],

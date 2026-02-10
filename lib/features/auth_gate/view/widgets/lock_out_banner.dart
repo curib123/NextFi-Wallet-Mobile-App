@@ -10,15 +10,23 @@ class LockoutBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.08),
+        color: colors.error.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.red.withOpacity(0.2)),
+        border: Border.all(
+          color: colors.error.withOpacity(0.15),
+          width: 1,
+        ),
       ),
       child: Text(
         "Too many attempts. Try again in ${_fmt(remaining)}.",
-        style: TextStyle(color: Colors.red.shade700),
+        style: TextStyle(
+          color: colors.error,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }

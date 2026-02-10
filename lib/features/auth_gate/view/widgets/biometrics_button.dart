@@ -16,21 +16,31 @@ class BiometricsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: SizedBox(
-          width: double.infinity,
-          child: TextButton.icon(
-            onPressed: onPressed,
-            icon: Icon(Icons.fingerprint_rounded, color: colors.primary),
-            label: const Text("Use Biometrics"),
-            style: TextButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              textStyle: const TextStyle(fontWeight: FontWeight.w500),
-            ),
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: colors.border.withOpacity(0.2)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.fingerprint_rounded, color: colors.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              "Use Biometrics",
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );

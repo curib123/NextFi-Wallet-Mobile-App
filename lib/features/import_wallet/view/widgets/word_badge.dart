@@ -12,55 +12,27 @@ class WordBadge extends StatelessWidget {
 
     String label = "$count words";
     Color primaryColor = colors.textSecondary;
-    LinearGradient gradient;
+    Color bgColor;
 
     if (count == 12 || count == 24) {
       primaryColor = colors.success;
-      gradient = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          colors.success.withOpacity(0.15),
-          colors.success.withOpacity(0.08),
-        ],
-      );
+      bgColor = colors.success.withOpacity(0.1);
     } else if (count > 0) {
       primaryColor = colors.warning;
-      gradient = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          colors.warning.withOpacity(0.15),
-          colors.warning.withOpacity(0.08),
-        ],
-      );
+      bgColor = colors.warning.withOpacity(0.1);
     } else {
-      gradient = LinearGradient(
-        colors: [
-          colors.background,
-          colors.background.withOpacity(0.9),
-        ],
-      );
+      bgColor = colors.surface;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        gradient: gradient,
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: primaryColor.withOpacity(0.35),
-          width: 1.5,
+          color: primaryColor.withOpacity(0.2),
+          width: 1,
         ),
-        boxShadow: (count == 12 || count == 24)
-            ? [
-          BoxShadow(
-            color: primaryColor.withOpacity(0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ]
-            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -76,9 +48,8 @@ class WordBadge extends StatelessWidget {
             label,
             style: TextStyle(
               color: primaryColor,
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
-              letterSpacing: 0.3,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
             ),
           ),
         ],
