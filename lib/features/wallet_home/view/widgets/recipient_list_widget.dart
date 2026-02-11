@@ -47,7 +47,6 @@ class RecipientListWidget extends StatelessWidget {
     );
 
     return Scaffold(
-      backgroundColor: colors.surface,
       appBar: canPop
           ? AppBar(
         title: const Text('Recipients'),
