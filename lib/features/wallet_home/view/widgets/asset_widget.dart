@@ -310,6 +310,7 @@ class AssetWidget extends StatelessWidget {
               colors: colors,
               logoUrl: logos[a.id],
               balance: balance,
+              isNative: a.isNative,
               pct: pct,
               coinPriceNow: coinPrice,
               fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), balance),

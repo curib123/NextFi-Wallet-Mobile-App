@@ -17,6 +17,7 @@ class ModernAssetTile extends StatefulWidget {
   final VoidCallback onTap;
   final String Function(double) formatTokenAmount;
   final String Function(NumberFormat, double) formatSignedMoney;
+  final bool isNative;
 
   const ModernAssetTile({
     super.key,
@@ -32,6 +33,7 @@ class ModernAssetTile extends StatefulWidget {
     required this.onTap,
     required this.formatTokenAmount,
     required this.formatSignedMoney,
+    this.isNative = false,
   });
 
   @override
@@ -227,27 +229,37 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Balance amount (now first)
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        "${widget.formatTokenAmount(widget.balance)} ${widget.asset.symbol}",
-                                        style: TextStyle(
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w800,
-                                          color: widget.colors.textPrimary,
-                                          letterSpacing: -0.4,
-                                          height: 1.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                // Balance amount - responsive sizing
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final balanceText = "${widget.formatTokenAmount(widget.balance)} ${widget.asset.symbol}";
+
+                                    // Calculate responsive font size based on text length
+                                    double fontSize = 17;
+                                    if (balanceText.length > 25) {
+                                      fontSize = 13;
+                                    } else if (balanceText.length > 20) {
+                                      fontSize = 14;
+                                    } else if (balanceText.length > 15) {
+                                      fontSize = 15.5;
+                                    }
+
+                                    return Text(
+                                      balanceText,
+                                      style: TextStyle(
+                                        fontSize: fontSize,
+                                        fontWeight: FontWeight.w800,
+                                        color: widget.colors.textPrimary,
+                                        letterSpacing: -0.4,
+                                        height: 1.2,
                                       ),
-                                    ),
-                                  ],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    );
+                                  },
                                 ),
                                 const SizedBox(height: 8),
-                                // Asset name (now second)
+                                // Asset name
                                 Text(
                                   widget.asset.name,
                                   style: TextStyle(
@@ -260,41 +272,65 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 6),
-                                // Price per coin with indicator
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: widget.colors.textSecondary.withOpacity(isDark ? 0.08 : 0.05),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    "${widget.money.format(widget.coinPriceNow)} / ${widget.asset.symbol}",
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: widget.colors.textSecondary.withOpacity(0.8),
-                                      letterSpacing: -0.1,
+                                // Price per coin with badge
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: widget.colors.textSecondary.withOpacity(isDark ? 0.08 : 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        "${widget.money.format(widget.coinPriceNow)} / ${widget.asset.symbol}",
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: widget.colors.textSecondary.withOpacity(0.8),
+                                          letterSpacing: -0.1,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 6),
+                                    _buildAssetTypeBadge(isDark),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 16),
-                          // Right side - Values
+                          // Right side - Values (also made responsive)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              // Fiat value
-                              Text(
-                                widget.money.format(widget.fiatNow),
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  color: widget.colors.textPrimary,
-                                  letterSpacing: -0.5,
-                                  height: 1.2,
-                                ),
+                              // Fiat value - responsive
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final fiatText = widget.money.format(widget.fiatNow);
+
+                                  // Calculate responsive font size for fiat value
+                                  double fontSize = 18;
+                                  if (fiatText.length > 12) {
+                                    fontSize = 14;
+                                  } else if (fiatText.length > 10) {
+                                    fontSize = 15.5;
+                                  } else if (fiatText.length > 8) {
+                                    fontSize = 16.5;
+                                  }
+
+                                  return Text(
+                                    fiatText,
+                                    style: TextStyle(
+                                      fontSize: fontSize,
+                                      fontWeight: FontWeight.w800,
+                                      color: widget.colors.textPrimary,
+                                      letterSpacing: -0.5,
+                                      height: 1.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  );
+                                },
                               ),
                               const SizedBox(height: 8),
                               // Percentage badge
@@ -315,6 +351,8 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
                                     color: trendColor,
                                     letterSpacing: -0.2,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -327,6 +365,31 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssetTypeBadge(bool isDark) {
+    final badgeColor = widget.isNative
+        ? AppColor.of(context).primary   // Volatile (native XLM)
+        : AppColor.of(context).primary; // Stable (USDC, etc.)
+
+    final label = widget.isNative ? 'VOLATILE' : 'STABLE';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        color: badgeColor,
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w800,
+          color: Colors.white, // White text
+          letterSpacing: 0.5,
         ),
       ),
     );
