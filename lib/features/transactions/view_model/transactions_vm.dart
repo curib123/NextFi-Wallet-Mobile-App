@@ -1,6 +1,7 @@
 // lib/features/transactions/viewmodel/transactions_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar;
 
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
@@ -14,7 +15,11 @@ class TransactionsVM extends ChangeNotifier {
 
   TransactionsState _state = const TransactionsState();
   TransactionsState get state => _state;
-  void _set(TransactionsState s) { _state = s; notifyListeners(); }
+
+  void _set(TransactionsState s) {
+    _state = s;
+    _safeNotify();
+  }
 
   // Paging + guards
   final int _limit = 20;
@@ -28,7 +33,113 @@ class TransactionsVM extends ChangeNotifier {
   final StreamController<Tx> _incomingController = StreamController<Tx>.broadcast();
   Stream<Tx> get incomingStream => _incomingController.stream;
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Notification Badge Support
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Number of unread incoming transactions
+  int _unreadCount = 0;
+  int get unreadCount => _unreadCount;
+
+  /// Number of pending transactions (transactions not yet confirmed)
+  int _pendingCount = 0;
+  int get pendingCount => _pendingCount;
+
+  /// Total notification count (unread + pending)
+  int get notificationCount => _unreadCount + _pendingCount;
+
+  /// Whether there are any notifications
+  bool get hasNotifications => notificationCount > 0;
+
+  /// Mark all transactions as read (clears unread count)
+  void markAllAsRead() {
+    if (_unreadCount > 0) {
+      _unreadCount = 0;
+      _safeNotify();
+    }
+  }
+
+  /// Mark a specific transaction as read by ID
+  void markAsRead(String txId) {
+    if (txId.isEmpty) return;
+
+    // Check if this transaction was unread
+    final tx = _state.txs.firstWhere(
+          (t) => (t['id'] ?? '').toString() == txId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    if (tx.isNotEmpty && tx['unread'] == true) {
+      // Update the transaction
+      final updatedTxs = _state.txs.map((t) {
+        if ((t['id'] ?? '').toString() == txId) {
+          final updated = Map<String, dynamic>.from(t);
+          updated['unread'] = false;
+          return updated;
+        }
+        return t;
+      }).toList();
+
+      _unreadCount = updatedTxs.where((t) => t['unread'] == true).length;
+      _set(_state.copyWith(txs: updatedTxs));
+    }
+  }
+
+  /// Update pending transaction count (can be called by external services)
+  void updatePendingCount(int count) {
+    if (_pendingCount != count) {
+      _pendingCount = count;
+      _safeNotify();
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Computed Properties for Filtering
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Get only unread transactions
+  List<Tx> get unreadTransactions {
+    return _state.txs.where((tx) => tx['unread'] == true).toList();
+  }
+
+  /// Get only incoming transactions
+  List<Tx> get incomingTransactions {
+    return _state.txs.where((tx) => tx['direction'] == 'in').toList();
+  }
+
+  /// Get only outgoing transactions
+  List<Tx> get outgoingTransactions {
+    return _state.txs.where((tx) => tx['direction'] == 'out').toList();
+  }
+
+  /// Get transactions by asset
+  List<Tx> getTransactionsByAsset(String asset) {
+    return _state.txs.where((tx) => tx['asset'] == asset).toList();
+  }
+
+  /// Get recent transactions (last N)
+  List<Tx> getRecentTransactions([int count = 5]) {
+    return _state.txs.take(count).toList();
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+
   bool get isTestnet => _stellar.isTestnet ?? identical(_stellar.sdk, stellar.StellarSDK.TESTNET);
+
+  bool _disposed = false;
+
+  /// Safely notify listeners, avoiding errors during build phase
+  void _safeNotify() {
+    if (_disposed) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle) {
+      notifyListeners();
+    } else {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!_disposed) notifyListeners();
+      });
+    }
+  }
 
   // ───────── Bind to wallet address ─────────
   void bindToAddress(String? newAddr) {
@@ -46,6 +157,8 @@ class TransactionsVM extends ChangeNotifier {
           accountMissing: false,
         ));
         _seenIds.clear();
+        _unreadCount = 0;
+        _pendingCount = 0;
         stop();
       }
       return;
@@ -58,6 +171,8 @@ class TransactionsVM extends ChangeNotifier {
   void _restartForNewAddress(String addr) {
     stop();
     _seenIds.clear();
+    _unreadCount = 0;
+    _pendingCount = 0;
     _set(_state.copyWith(
       address: addr,
       loading: true,
@@ -139,6 +254,11 @@ class TransactionsVM extends ChangeNotifier {
         ..clear()
         ..addAll(nextSeen);
 
+      // Calculate unread count (only for initial load, not pagination)
+      if (!loadMore) {
+        _unreadCount = 0; // Reset on fresh load
+      }
+
       _set(_state.copyWith(
         txs: nextList,
         cursor: ops.isNotEmpty ? ops.last.pagingToken : _state.cursor,
@@ -170,6 +290,7 @@ class TransactionsVM extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     stop();
     _incomingController.close();
     super.dispose();
@@ -182,20 +303,26 @@ class TransactionsVM extends ChangeNotifier {
 
     _incomingSub?.cancel();
     _incomingSub = _stellar.paymentsStream(addr).listen((op) {
-      final tx = _opToTx(op, addr);
+      final tx = _opToTx(op, addr, markAsUnread: true);
       if (tx == null) return;
 
       final id = (tx['id'] ?? '').toString();
       if (id.isEmpty || _seenIds.contains(id)) return;
 
       _seenIds.add(id);
+
+      // Mark new incoming transactions as unread
+      if (tx['direction'] == 'in' && tx['unread'] == true) {
+        _unreadCount++;
+      }
+
       final updated = [tx, ..._state.txs];
       _set(_state.copyWith(txs: updated));
       _incomingController.add(tx);
     }, onError: (_) {/* silent; pull-to-refresh available */});
   }
 
-  Tx? _opToTx(stellar.OperationResponse op, String myAddr) {
+  Tx? _opToTx(stellar.OperationResponse op, String myAddr, {bool markAsUnread = false}) {
     String? assetCode;
     double? amount;
     String? from;
@@ -242,6 +369,7 @@ class TransactionsVM extends ChangeNotifier {
       'direction': isIncoming ? 'in' : 'out',
       'recName': null,
       'recColor': null,
+      'unread': markAsUnread && isIncoming, // Only mark incoming as unread
     };
   }
 

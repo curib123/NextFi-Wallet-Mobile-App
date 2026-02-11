@@ -1,14 +1,13 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// A modern scanner overlay with a rounded square cutout and animated scan line.
 class ScanOverlay extends StatefulWidget {
   const ScanOverlay({
     super.key,
-    this.borderRadius = 20,
-    this.strokeWidth = 3,
-    this.cornerLength = 28,
-    this.cutOutSizeFraction = 0.65, // fraction of the shortest side
+    this.borderRadius = 24,
+    this.strokeWidth = 4,
+    this.cornerLength = 32,
+    this.cutOutSizeFraction = 0.7,
   });
 
   final double borderRadius;
@@ -20,116 +19,165 @@ class ScanOverlay extends StatefulWidget {
   State<ScanOverlay> createState() => _ScanOverlayState();
 }
 
-class _ScanOverlayState extends State<ScanOverlay> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
+class _ScanOverlayState extends State<ScanOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (ctx, box) {
-      final shortest = math.min(box.maxWidth, box.maxHeight);
-      final cut = shortest * widget.cutOutSizeFraction;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shortest = math.min(constraints.maxWidth, constraints.maxHeight);
+        final cutOutSize = shortest * widget.cutOutSizeFraction;
 
-      return Stack(
-        children: [
-          // Dim background with cutout
-          CustomPaint(
-            size: Size(box.maxWidth, box.maxHeight),
-            painter: _OverlayPainter(
-              cutOut: Size.square(cut),
-              borderRadius: widget.borderRadius,
-              strokeWidth: widget.strokeWidth,
-              cornerLength: widget.cornerLength,
+        return Stack(
+          children: [
+            CustomPaint(
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+              painter: _OverlayPainter(
+                cutOutSize: cutOutSize,
+                borderRadius: widget.borderRadius,
+                strokeWidth: widget.strokeWidth,
+                cornerLength: widget.cornerLength,
+              ),
             ),
-          ),
-          // Animated scan line
-          AnimatedBuilder(
-            animation: _ctrl,
-            builder: (ctx, _) {
-              final lineY = (box.maxHeight - cut) / 2 + _ctrl.value * cut;
-              return Positioned(
-                left: (box.maxWidth - cut) / 2 + 8,
-                right: (box.maxWidth - cut) / 2 + 8,
-                top: lineY,
-                child: Container(
-                  height: 2,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.85),
-                    boxShadow: const [BoxShadow(blurRadius: 6, color: Colors.black38)],
+            AnimatedBuilder(
+              animation: _animation,
+              builder: (context, child) {
+                final top = (constraints.maxHeight - cutOutSize) / 2;
+                final left = (constraints.maxWidth - cutOutSize) / 2;
+                final scanLineY = top + (_animation.value * cutOutSize);
+
+                return Positioned(
+                  left: left + 16,
+                  right: left + 16,
+                  top: scanLineY,
+                  child: Container(
+                    height: 3,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withOpacity(0.8),
+                          Colors.white,
+                          Colors.white.withOpacity(0.8),
+                          Colors.transparent,
+                        ],
+                        stops: const [0, 0.2, 0.5, 0.8, 1],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.5),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
-        ],
-      );
-    });
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
 class _OverlayPainter extends CustomPainter {
   _OverlayPainter({
-    required this.cutOut,
+    required this.cutOutSize,
     required this.borderRadius,
     required this.strokeWidth,
     required this.cornerLength,
   });
 
-  final Size cutOut;
+  final double cutOutSize;
   final double borderRadius;
   final double strokeWidth;
   final double cornerLength;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final overlayPaint = Paint()..color = Colors.black.withOpacity(0.55);
-    final cutRect = Rect.fromLTWH(
-      (size.width - cutOut.width) / 2,
-      (size.height - cutOut.height) / 2,
-      cutOut.width,
-      cutOut.height,
+    final dimPaint = Paint()..color = Colors.black.withOpacity(0.65);
+
+    final left = (size.width - cutOutSize) / 2;
+    final top = (size.height - cutOutSize) / 2;
+    final cutOutRect = Rect.fromLTWH(left, top, cutOutSize, cutOutSize);
+    final cutOutRRect = RRect.fromRectAndRadius(
+      cutOutRect,
+      Radius.circular(borderRadius),
     );
 
-    // Draw dim
-    final r = RRect.fromRectAndRadius(cutRect, Radius.circular(borderRadius));
-    final path = Path()..addRect(Offset.zero & size)..addRRect(r);
-    canvas.saveLayer(Offset.zero & size, Paint());
-    canvas.drawPath(path, overlayPaint);
-    // Clear the cutout
-    final clear = Paint()..blendMode = BlendMode.clear;
-    canvas.drawRRect(r, clear);
-    canvas.restore();
+    final path = Path()
+      ..addRect(Offset.zero & size)
+      ..addRRect(cutOutRRect)
+      ..fillType = PathFillType.evenOdd;
 
-    // Corners
+    canvas.drawPath(path, dimPaint);
+
     final cornerPaint = Paint()
       ..color = Colors.white
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    // Top-left
-    canvas.drawLine(cutRect.topLeft, cutRect.topLeft + Offset(cornerLength, 0), cornerPaint);
-    canvas.drawLine(cutRect.topLeft, cutRect.topLeft + Offset(0, cornerLength), cornerPaint);
-    // Top-right
-    canvas.drawLine(cutRect.topRight, cutRect.topRight + Offset(-cornerLength, 0), cornerPaint);
-    canvas.drawLine(cutRect.topRight, cutRect.topRight + Offset(0, cornerLength), cornerPaint);
-    // Bottom-left
-    canvas.drawLine(cutRect.bottomLeft, cutRect.bottomLeft + Offset(cornerLength, 0), cornerPaint);
-    canvas.drawLine(cutRect.bottomLeft, cutRect.bottomLeft + Offset(0, -cornerLength), cornerPaint);
-    // Bottom-right
-    canvas.drawLine(cutRect.bottomRight, cutRect.bottomRight + Offset(-cornerLength, 0), cornerPaint);
-    canvas.drawLine(cutRect.bottomRight, cutRect.bottomRight + Offset(0, -cornerLength), cornerPaint);
+    final glowPaint = Paint()
+      ..color = Colors.white.withOpacity(0.3)
+      ..strokeWidth = strokeWidth + 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    void drawCorner(Offset corner, double xSign, double ySign) {
+      canvas.drawLine(
+        corner,
+        corner + Offset(cornerLength * xSign, 0),
+        glowPaint,
+      );
+      canvas.drawLine(
+        corner,
+        corner + Offset(0, cornerLength * ySign),
+        glowPaint,
+      );
+      canvas.drawLine(
+        corner,
+        corner + Offset(cornerLength * xSign, 0),
+        cornerPaint,
+      );
+      canvas.drawLine(
+        corner,
+        corner + Offset(0, cornerLength * ySign),
+        cornerPaint,
+      );
+    }
+
+    final offset = borderRadius / 2;
+    drawCorner(cutOutRect.topLeft + Offset(offset, offset), 1, 1);
+    drawCorner(cutOutRect.topRight + Offset(-offset, offset), -1, 1);
+    drawCorner(cutOutRect.bottomLeft + Offset(offset, -offset), 1, -1);
+    drawCorner(cutOutRect.bottomRight + Offset(-offset, -offset), -1, -1);
   }
 
   @override

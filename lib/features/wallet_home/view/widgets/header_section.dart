@@ -105,18 +105,6 @@ class _HeaderSectionState extends State<HeaderSection> {
     return _deltaFiat! >= 0 ? _upColor : _downColor;
   }
 
-  Color _swapButtonColor() {
-    if (_shouldColorize()) return _deltaFiat! >= 0 ? _upColor : _downColor;
-    return widget.colors.primary;
-  }
-
-  // Slight background tint based on delta
-  List<Color> _cardGradient() {
-    final base = widget.colors.surface;
-    if (!_shouldColorize()) return [base, base];
-    final tone = _deltaFiat! >= 0 ? _upColor : _downColor;
-    return [base, tone.withOpacity(0.06)];
-  }
 
   // Up/Down icon beside the balance text
   Widget _trendIconForDelta() {
@@ -143,13 +131,25 @@ class _HeaderSectionState extends State<HeaderSection> {
           padding: const EdgeInsets.all(18),
           margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
           decoration: BoxDecoration(
-            color: widget.colors.surface,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                widget.colors.surface.withOpacity(0.4),
+                widget.colors.surface.withOpacity(0.2),
+              ],
+            ),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.colors.primary.withOpacity(0.08),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.10),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+                spreadRadius: 0,
               ),
             ],
           ),

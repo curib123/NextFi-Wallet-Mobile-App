@@ -19,6 +19,8 @@ class FintechBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Stack(
       children: [
         // Animated gradient background
@@ -29,6 +31,7 @@ class FintechBackground extends StatelessWidget {
               colors: colors,
               devicePixelRatio: devicePixelRatio,
               topBandFraction: topBandFraction,
+              isDark: isDark,
             ),
           ),
         ),
@@ -53,18 +56,21 @@ class _FintechBackgroundPainter extends CustomPainter {
     required this.colors,
     required this.devicePixelRatio,
     required this.topBandFraction,
+    required this.isDark,
   });
 
   final double progress;
   final AppColor colors;
   final double devicePixelRatio;
   final double topBandFraction;
+  final bool isDark;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final double topH = (size.height * topBandFraction).clamp(0.0, size.height);
+    // Use full height for all elements - no clipping
+    final double topH = size.height;
 
-    // 1) Base radial gradient
+    // 1) Base radial gradient - full screen
     final radialRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final radialGradient = RadialGradient(
       center: const Alignment(0.3, -0.4),
@@ -77,7 +83,7 @@ class _FintechBackgroundPainter extends CustomPainter {
     );
     canvas.drawRect(radialRect, Paint()..shader = radialGradient.createShader(radialRect));
 
-    // 2) Animated subtle grid texture
+    // 2) Animated subtle grid texture - full screen
     final hiDpi = devicePixelRatio >= 2.75;
     const step = 35.0;
     final drift = progress * step;
@@ -108,11 +114,8 @@ class _FintechBackgroundPainter extends CustomPainter {
       }
     }
 
-    // 3) Top band with diagonal gradient
-    canvas.save();
-    final topRect = Rect.fromLTWH(0, 0, size.width, topH);
-    canvas.clipRect(topRect);
-
+    // 3) Top to bottom diagonal gradient overlay - no clipping
+    final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final diag = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
@@ -123,29 +126,31 @@ class _FintechBackgroundPainter extends CustomPainter {
           Colors.transparent
         ],
         stops: const [0.0, 0.5, 1.0],
-      ).createShader(topRect);
-    canvas.drawRect(topRect, diag);
+      ).createShader(fullRect);
+    canvas.drawRect(fullRect, diag);
 
-    // 4) Multiple flowing waves
+    // 4) Multiple flowing waves - positioned in upper portion
     final ph = progress * 2 * math.pi;
-    final base = topH * .58;
+    final waveTopArea = size.height * topBandFraction;
+    final base = waveTopArea * .58;
 
     // Wave 1 (main)
     final wave1Path = _createWavePath(
       size: size,
-      topH: topH,
+      topH: waveTopArea,
       base: base,
       phase: ph,
-      amp1: topH * .15,
-      amp2: topH * .07,
+      amp1: waveTopArea * .15,
+      amp2: waveTopArea * .07,
       wavelength: size.width * .9,
     );
 
     final wave1Area = Path.from(wave1Path)
-      ..lineTo(size.width, topH)
-      ..lineTo(0, topH)
+      ..lineTo(size.width, waveTopArea)
+      ..lineTo(0, waveTopArea)
       ..close();
 
+    final waveRect = Rect.fromLTWH(0, 0, size.width, waveTopArea);
     final area1Paint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
@@ -156,7 +161,7 @@ class _FintechBackgroundPainter extends CustomPainter {
           Colors.transparent
         ],
         stops: const [0.0, 0.5, 1.0],
-      ).createShader(topRect);
+      ).createShader(waveRect);
     canvas.drawPath(wave1Area, area1Paint);
 
     // Wave 1 stroke
@@ -169,11 +174,11 @@ class _FintechBackgroundPainter extends CustomPainter {
     // Wave 2 (secondary, offset)
     final wave2Path = _createWavePath(
       size: size,
-      topH: topH,
-      base: base + topH * .08,
+      topH: waveTopArea,
+      base: base + waveTopArea * .08,
       phase: ph * 1.3,
-      amp1: topH * .10,
-      amp2: topH * .05,
+      amp1: waveTopArea * .10,
+      amp2: waveTopArea * .05,
       wavelength: size.width * 1.1,
     );
 
@@ -186,11 +191,11 @@ class _FintechBackgroundPainter extends CustomPainter {
     // 5) Animated nodes on main wave
     final wave1Points = _getWavePoints(
       size: size,
-      topH: topH,
+      topH: waveTopArea,
       base: base,
       phase: ph,
-      amp1: topH * .15,
-      amp2: topH * .07,
+      amp1: waveTopArea * .15,
+      amp2: waveTopArea * .07,
       wavelength: size.width * .9,
     );
 
@@ -209,19 +214,28 @@ class _FintechBackgroundPainter extends CustomPainter {
       canvas.drawCircle(wave1Points[i], 1.8, nodePaint);
     }
 
-    canvas.restore();
-
-    // 6) Bottom accent glow
-    final bottomRect = Rect.fromLTWH(0, size.height * .7, size.width, size.height * .3);
+    // 6) Bottom gradient - adaptive for light and dark modes
+    final bottomRect = Rect.fromLTWH(0, size.height * .3, size.width, size.height * .7);
     final bottomGlow = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
+        colors: isDark
+            ? [
+          // Dark mode - use black overlay
+          Colors.transparent,
+          Colors.black.withOpacity(.15),
+          Colors.black.withOpacity(.35),
+          Colors.black.withOpacity(.50),
+        ]
+            : [
+          // Light mode - use subtle primary color overlay
           Colors.transparent,
           colors.primary.withOpacity(.03),
+          colors.primary.withOpacity(.06),
+          colors.primary.withOpacity(.10),
         ],
-        stops: const [0.0, 1.0],
+        stops: const [0.0, 0.3, 0.6, 1.0],
       ).createShader(bottomRect);
     canvas.drawRect(bottomRect, bottomGlow);
   }
@@ -269,7 +283,8 @@ class _FintechBackgroundPainter extends CustomPainter {
       old.progress != progress ||
           old.colors != colors ||
           old.topBandFraction != topBandFraction ||
-          old.devicePixelRatio != devicePixelRatio;
+          old.devicePixelRatio != devicePixelRatio ||
+          old.isDark != isDark;
 }
 
 class _CryptoElementsPainter extends CustomPainter {
@@ -285,32 +300,39 @@ class _CryptoElementsPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final ph = progress * 2 * math.pi;
 
-    // Floating hexagons
+    // Floating hexagons - spread across full screen
     _drawFloatingHexagon(canvas, size,
       x: size.width * 0.15,
-      y: size.height * 0.25 + math.sin(ph * 0.7) * 15,
+      y: size.height * 0.20 + math.sin(ph * 0.7) * 15,
       hexSize: 40,
       rotation: progress * math.pi * 0.5,
     );
 
     _drawFloatingHexagon(canvas, size,
       x: size.width * 0.85,
-      y: size.height * 0.35 + math.cos(ph * 0.5) * 20,
+      y: size.height * 0.30 + math.cos(ph * 0.5) * 20,
       hexSize: 30,
       rotation: -progress * math.pi * 0.3,
     );
 
     _drawFloatingHexagon(canvas, size,
       x: size.width * 0.1,
-      y: size.height * 0.65 + math.sin(ph * 0.6) * 10,
+      y: size.height * 0.50 + math.sin(ph * 0.6) * 10,
       hexSize: 25,
       rotation: progress * math.pi * 0.4,
+    );
+
+    _drawFloatingHexagon(canvas, size,
+      x: size.width * 0.9,
+      y: size.height * 0.65 + math.cos(ph * 0.8) * 12,
+      hexSize: 35,
+      rotation: progress * math.pi * 0.6,
     );
 
     // Connection lines between elements
     _drawConnectionLines(canvas, size, ph);
 
-    // Floating circular elements (like blockchain nodes)
+    // Floating circular elements (like blockchain nodes) - spread throughout
     _drawBlockchainNodes(canvas, size, ph);
   }
 
@@ -359,19 +381,16 @@ class _CryptoElementsPainter extends CustomPainter {
   }
 
   void _drawConnectionLines(Canvas canvas, Size size, double phase) {
-    final linePaint = Paint()
-      ..color = colors.primary.withOpacity(.04)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-
     final dashedPaint = Paint()
       ..color = colors.primary.withOpacity(.06)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
-    // Diagonal connections
-    final y1 = size.height * 0.25 + math.sin(phase * 0.7) * 15;
-    final y2 = size.height * 0.35 + math.cos(phase * 0.5) * 20;
+    // Multiple diagonal connections across the screen
+    final y1 = size.height * 0.20 + math.sin(phase * 0.7) * 15;
+    final y2 = size.height * 0.30 + math.cos(phase * 0.5) * 20;
+    final y3 = size.height * 0.50 + math.sin(phase * 0.6) * 10;
+    final y4 = size.height * 0.65 + math.cos(phase * 0.8) * 12;
 
     _drawDashedLine(
       canvas,
@@ -379,6 +398,15 @@ class _CryptoElementsPainter extends CustomPainter {
       Offset(size.width * 0.85 - 15, y2),
       dashedPaint,
       dashWidth: 5,
+      dashSpace: 3,
+    );
+
+    _drawDashedLine(
+      canvas,
+      Offset(size.width * 0.1 + 12, y3),
+      Offset(size.width * 0.9 - 17, y4),
+      dashedPaint,
+      dashWidth: 4,
       dashSpace: 3,
     );
   }
@@ -413,10 +441,13 @@ class _CryptoElementsPainter extends CustomPainter {
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
+    // Nodes distributed throughout the screen
     final nodes = [
-      Offset(size.width * 0.25, size.height * 0.72 + math.sin(phase * 0.8) * 8),
-      Offset(size.width * 0.75, size.height * 0.68 + math.cos(phase * 0.9) * 12),
-      Offset(size.width * 0.5, size.height * 0.8 + math.sin(phase * 0.6) * 6),
+      Offset(size.width * 0.25, size.height * 0.45 + math.sin(phase * 0.8) * 8),
+      Offset(size.width * 0.75, size.height * 0.55 + math.cos(phase * 0.9) * 12),
+      Offset(size.width * 0.5, size.height * 0.70 + math.sin(phase * 0.6) * 6),
+      Offset(size.width * 0.35, size.height * 0.85 + math.cos(phase * 0.7) * 10),
+      Offset(size.width * 0.65, size.height * 0.90 + math.sin(phase * 0.5) * 8),
     ];
 
     for (final node in nodes) {

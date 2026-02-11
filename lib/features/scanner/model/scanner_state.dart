@@ -6,7 +6,7 @@ class ScannerState {
   final ScannerStatus status;
   final bool torchOn;
   final CameraFacing facing;
-  final bool isBusy; // prevents double-handling rapid scans
+  final bool isBusy;
   final String? lastRawValue;
   final String? errorMessage;
 
@@ -42,7 +42,7 @@ class ScannerState {
       facing: facing ?? this.facing,
       isBusy: isBusy ?? this.isBusy,
       lastRawValue: lastRawValue ?? this.lastRawValue,
-      errorMessage: errorMessage,
+      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 }

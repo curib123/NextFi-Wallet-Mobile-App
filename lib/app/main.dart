@@ -22,6 +22,7 @@ import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 
+import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
@@ -154,7 +155,12 @@ List<SingleChildWidget> _buildProviders() {
       update: (ctx, currency, prev) => prev ?? PriceChartVM(currency),
     ),
 
-    // 8) Base VMs (independent)
+    // 8) Activity Log VM (independent - initialize on create)
+    ChangeNotifierProvider<ActivityLogVM>(
+      create: (_) => ActivityLogVM()..init(),
+    ),
+
+    // 9) Base VMs (independent)
     ChangeNotifierProvider<ImportWalletVM>(create: (_) => ImportWalletVM()),
     ChangeNotifierProvider<RecipientAddressVM>(
         create: (_) => RecipientAddressVM()),
@@ -167,7 +173,7 @@ List<SingleChildWidget> _buildProviders() {
     ChangeNotifierProvider<SettingsVM>(
         create: (_) => SettingsVM()..initDefaults()),
 
-    // 9) Transactions depends on Stellar
+    // 10) Transactions depends on Stellar
     ChangeNotifierProxyProvider<StellarWalletServices, TransactionsVM>(
       create: (ctx) => TransactionsVM(
           stellarSvc: ctx.read<StellarWalletServices>()),
@@ -175,7 +181,7 @@ List<SingleChildWidget> _buildProviders() {
       prev ?? TransactionsVM(stellarSvc: stellar),
     ),
 
-    // 10) Send depends on Stellar + SeedKeypair
+    // 11) Send depends on Stellar + SeedKeypair
     ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM,
         SendVM>(
       create: (ctx) => SendVM(
@@ -186,7 +192,7 @@ List<SingleChildWidget> _buildProviders() {
       prev ?? SendVM(service: stellar, seedVM: seedVM),
     ),
 
-    // 11) Seed phrase depends on Stellar
+    // 12) Seed phrase depends on Stellar
     ChangeNotifierProxyProvider<StellarWalletServices, SeedPhraseVM>(
       create: (ctx) =>
           SeedPhraseVM(service: ctx.read<StellarWalletServices>()),
@@ -194,7 +200,7 @@ List<SingleChildWidget> _buildProviders() {
       vm ?? SeedPhraseVM(service: stellar),
     ),
 
-    // 12) Swap depends on Stellar + SeedKeypair + WalletHome
+    // 13) Swap depends on Stellar + SeedKeypair + WalletHome
     ChangeNotifierProxyProvider3<StellarWalletServices, SeedKeypairVM, WalletHomeVM,
         SwapVM>(
       create: (ctx) => SwapVM(
@@ -213,7 +219,7 @@ List<SingleChildWidget> _buildProviders() {
       },
     ),
 
-    // 13) Claimable balances depends on Stellar + SeedKeypair + WalletHomeVM
+    // 14) Claimable balances depends on Stellar + SeedKeypair + WalletHomeVM
     ChangeNotifierProxyProvider3<StellarWalletServices, SeedKeypairVM,
         WalletHomeVM, ClaimableVM>(
       create: (ctx) => ClaimableVM(
