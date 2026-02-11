@@ -3,11 +3,7 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 
 Widget buildTabBar(AppColor colors) {
   return Container(
-    padding: EdgeInsets.only(bottom: 15),
-    decoration: BoxDecoration(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(12),
-    ),
+    padding: EdgeInsets.only(bottom: 10),
     child: TabBar(
       dividerColor: Colors.transparent,
       labelColor: colors.primary,

@@ -39,15 +39,15 @@ class PercentChipsRow extends StatelessWidget {
     return GestureDetector(
       onTap: () => onPick(pct),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: isActive ? c.primary.withValues(alpha: 0.12) : c.surface,
+          color: isActive ? c.primary.withOpacity(0.1) : c.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isActive
-                ? c.primary.withValues(alpha: 0.3)
-                : c.border.withValues(alpha: 0.3),
+                ? c.primary.withOpacity(0.3)
+                : c.border.withOpacity(0.15),
             width: 1,
           ),
         ),
@@ -56,7 +56,7 @@ class PercentChipsRow extends StatelessWidget {
             label,
             style: TextStyle(
               color: isActive ? c.primary : c.textSecondary,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
           ),

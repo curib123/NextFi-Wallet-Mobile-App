@@ -17,10 +17,11 @@ class ErrorCard extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: c.error.withValues(alpha: 0.08),
+        color: c.error.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: c.error.withValues(alpha: 0.2),
+          color: c.error.withOpacity(0.15),
+          width: 1,
         ),
       ),
       child: Row(
@@ -49,7 +50,7 @@ class ErrorCard extends StatelessWidget {
               child: Icon(
                 LucideIcons.refreshCw,
                 size: 16,
-                color: c.error.withValues(alpha: 0.7),
+                color: c.error,
               ),
             ),
           ],

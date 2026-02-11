@@ -14,7 +14,7 @@ class InfoRow extends StatelessWidget {
     final c = AppColor.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           if (icon != null) ...[
@@ -26,6 +26,7 @@ class InfoRow extends StatelessWidget {
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const Spacer(),

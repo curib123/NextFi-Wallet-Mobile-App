@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
+import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/features/receive/view/receive_screen.dart';
@@ -31,11 +32,16 @@ class WalletHomeScreen extends StatefulWidget {
 }
 
 class _WalletHomeScreenState extends State<WalletHomeScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final AnimationController _livePulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
   )..repeat(reverse: true);
+
+  late final AnimationController _backgroundAnimation = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 20),
+  )..repeat();
 
   final Map<String, AppAlertController> _hintAlertCtrls = <String, AppAlertController>{};
   AppAlertController? _bootBalancesCtl;
@@ -69,6 +75,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _livePulse.dispose();
+    _backgroundAnimation.dispose();
 
     _uiSub?.cancel();
     _uiSub = null;
@@ -120,93 +127,112 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       length: 2,
       child: Scaffold(
         backgroundColor: colors.surface,
-        body: SafeArea(
-          child: RefreshIndicator.adaptive(
-            onRefresh: () => context.read<WalletHomeVM>().refresh(force: true),
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: TopBar(),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: HeaderSection(
-                      colors: colors,
-                      currencyFmt: currencyFmt,
-                      loadingBalances: s.loadingBalances,
-                      totalFiat: totalFiat,
-                      lastBalancesAt: s.lastBalancesAt,
-                      onSwap: () => vm.onSwapPressed(),
-                      onSend: () => vm.onSendPressed(),
-                      onReceive: () => vm.onReceivePressed(),
-                      livePulse: _livePulse,
-                      incomingStrip: s.hasWallet
-                          ? IncomingHintsStrip(
-                        colors: colors,
-                        stellarAddress: s.address ?? '',
-                        incomingHints: s.hints
-                            .map((h) => {
-                          'hash': h.id,
-                          'from': h.from,
-                          'to': h.to,
-                          'amount': h.amount.toStringAsFixed(6),
-                          'assetCode': h.assetCode,
-                        })
-                            .toList(),
-                        onAcknowledge: (tx) =>
-                            context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
-                        walletState: s, // NEW: Pass wallet state for reserve impact calculation
-                      )
-                          : const SizedBox.shrink(),
-                      animateTotal: _animateTotal,
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: buildTabBar(colors),
-                  ),
-                ),
-                SliverFillRemaining(
-                  hasScrollBody: true,
-                  child: TabBarView(
-                    children: [
-                      TabKeepAlive(
-                        storageKey: 'assetsTab',
-                        child: AssetWidget(
-                          colors: colors,
-                          assets: assetList,
-                          logos: logosById,
-                          xlmBalance: s.xlm,
-                          usdcBalance: s.usdc,
-                          address: s.address ?? '',
-                          loading: assetsVM.loading || currency.loading || s.loadingBalances,
-                          onItemTap: (token) {
-                            vm.onReceivePressed(initialToken: token);
-                          },
-                          hasUsdcTrustline: stellar.hasUsdcTrustline(s.address ?? ''),
-                        ),
-                      ),
-                      TabKeepAlive(
-                        storageKey: 'recipientsTab',
-                        child: RecipientListWidget(
-                          colors: colors,
-                          xlmBalance: s.xlm,
-                          usdcBalance: s.usdc,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        body: Stack(
+          children: [
+            // Animated background
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _backgroundAnimation,
+                builder: (context, child) {
+                  return FintechBackground(
+                    progress: _backgroundAnimation.value,
+                    colors: colors,
+                    devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
+                    topBandFraction: 0.45,
+                  );
+                },
+              ),
             ),
-          ),
+            // Main content
+            SafeArea(
+              child: RefreshIndicator.adaptive(
+                onRefresh: () => context.read<WalletHomeVM>().refresh(force: true),
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: TopBar(),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: HeaderSection(
+                          colors: colors,
+                          currencyFmt: currencyFmt,
+                          loadingBalances: s.loadingBalances,
+                          totalFiat: totalFiat,
+                          lastBalancesAt: s.lastBalancesAt,
+                          onSwap: () => vm.onSwapPressed(),
+                          onSend: () => vm.onSendPressed(),
+                          onReceive: () => vm.onReceivePressed(),
+                          livePulse: _livePulse,
+                          incomingStrip: s.hasWallet
+                              ? IncomingHintsStrip(
+                            colors: colors,
+                            stellarAddress: s.address ?? '',
+                            incomingHints: s.hints
+                                .map((h) => {
+                              'hash': h.id,
+                              'from': h.from,
+                              'to': h.to,
+                              'amount': h.amount.toStringAsFixed(6),
+                              'assetCode': h.assetCode,
+                            })
+                                .toList(),
+                            onAcknowledge: (tx) =>
+                                context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
+                            walletState: s, // NEW: Pass wallet state for reserve impact calculation
+                          )
+                              : const SizedBox.shrink(),
+                          animateTotal: _animateTotal,
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
+                        child: buildTabBar(colors),
+                      ),
+                    ),
+                    SliverFillRemaining(
+                      hasScrollBody: true,
+                      child: TabBarView(
+                        children: [
+                          TabKeepAlive(
+                            storageKey: 'assetsTab',
+                            child: AssetWidget(
+                              colors: colors,
+                              assets: assetList,
+                              logos: logosById,
+                              xlmBalance: s.xlm,
+                              usdcBalance: s.usdc,
+                              address: s.address ?? '',
+                              loading: assetsVM.loading || currency.loading || s.loadingBalances,
+                              onItemTap: (token) {
+                                vm.onReceivePressed(initialToken: token);
+                              },
+                              hasUsdcTrustline: stellar.hasUsdcTrustline(s.address ?? ''),
+                            ),
+                          ),
+                          TabKeepAlive(
+                            storageKey: 'recipientsTab',
+                            child: RecipientListWidget(
+                              colors: colors,
+                              xlmBalance: s.xlm,
+                              usdcBalance: s.usdc,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -286,7 +312,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         e.address,
         e.xlm,
         e.usdc,
-        title: 'Send Coin',
+        title: 'Send Token',
         screenBuilder: (address, token, balance) =>
             SendScreen(address: address, token: token, balance: balance),
       );

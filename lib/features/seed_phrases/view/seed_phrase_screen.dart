@@ -63,10 +63,6 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     }
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Helpers
-  // ──────────────────────────────────────────────────────────────────────────
-
   Future<void> _copyAll(BuildContext context, String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     HapticFeedback.lightImpact();
@@ -76,586 +72,623 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       SnackBar(
         content: Row(
           children: [
-            Icon(LucideIcons.checkCircle2, color: Colors.white, size: 20),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Copied seed phrase (keep it safe!)',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
+            Icon(LucideIcons.checkCircle2, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            const Text(
+              'Recovery phrase copied',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
               ),
             ),
           ],
         ),
         backgroundColor: colors.primary,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
-
-  Future<void> _showCopyGuide(BuildContext context, SeedPhraseState s) async {
-    if (s.obscured) {
-      showFloatingSnackBar(
-        context,
-        message: "Reveal the phrase first to copy.",
-        type: SnackBarType.info,
-      );
-      return;
-    }
-    final colors = AppColor.of(context);
-    final ok = await _showActionSheet<bool>(
-      context: context,
-      icon: LucideIcons.copy,
-      title: 'Copy recovery phrase?',
-      confirmLabel: 'Copy anyway',
-      body: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _guideRow(colors, LucideIcons.shieldAlert, "Never share your phrase",
-              "Anyone with this phrase can control your funds."),
-          const SizedBox(height: 14),
-          _guideRow(colors, LucideIcons.phoneOff, "Avoid screenshots",
-              "Screenshots may be backed up to cloud services."),
-          const SizedBox(height: 14),
-          _guideRow(colors, LucideIcons.eye, "Ensure privacy",
-              "Make sure no one is looking at your screen."),
-        ],
-      ),
-    );
-    if (ok == true && context.mounted) {
-      await _copyAll(context, s.mnemonic);
-    }
-  }
-
-  Future<void> _confirmRegenerate(
-      BuildContext context, {
-        int? wordCount,
-      }) async {
-    final colors = AppColor.of(context);
-    final ok = await _showActionSheet<bool>(
-      context: context,
-      icon: LucideIcons.refreshCw,
-      title: 'Generate a new phrase',
-      confirmLabel: 'Generate',
-      body: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          'This will replace the current recovery phrase with a new one. '
-              'Make sure you have securely stored the current phrase if you '
-              'still need it.',
-          style: TextStyle(
-            color: colors.textSecondary,
-            height: 1.5,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-    if (ok == true && context.mounted) {
-      await context
-          .read<SeedPhraseVM>()
-          .regenerate(wordCountOverride: wordCount);
-      if (!context.mounted) return;
-      final chosen = wordCount ?? context.read<SeedPhraseVM>().wordCount;
-      showFloatingSnackBar(
-        context,
-        message: 'Generated a new $chosen-word recovery phrase.',
-        type: SnackBarType.success,
-      );
-    }
-  }
-
-  Future<void> _openChecklist(
-      BuildContext context,
-      SeedPhraseVM vm,
-      SeedPhraseState s,
-      ) async {
-    if (s.obscured) {
-      showFloatingSnackBar(
-        context,
-        message: "Reveal your recovery phrase first.",
-        type: SnackBarType.warning,
-      );
-      return;
-    }
-    if (s.loading) return;
-
-    final colors = AppColor.of(context);
-    bool a1 = s.ack1, a2 = s.ack2;
-
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) {
-          final ready = a1 && a2;
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  colors.surface,
-                  colors.surface.withOpacity(0.98),
-                ],
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(32),
-              ),
-            ),
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 16,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Drag handle
-                  Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: colors.border.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _sheetHeader(
-                      colors, LucideIcons.shieldCheck, "Security checklist"),
-                  const SizedBox(height: 20),
-                  ConfirmTile(
-                    title:
-                    "I wrote my recovery phrase on paper (or stored it offline).",
-                    icon: LucideIcons.pencil,
-                    value: a1,
-                    onChanged: (v) => setS(() => a1 = v),
-                    accent: colors.primary,
-                  ),
-                  const SizedBox(height: 12),
-                  ConfirmTile(
-                    title:
-                    "I understand NextFi cannot help recover this phrase.",
-                    icon: LucideIcons.shield,
-                    value: a2,
-                    onChanged: (v) => setS(() => a2 = v),
-                    accent: colors.success,
-                  ),
-                  const SizedBox(height: 20),
-                  _sheetActions(
-                    colors: colors,
-                    confirmLabel: 'Confirm & Secure',
-                    confirmEnabled: ready,
-                    onCancel: () => Navigator.pop(ctx, false),
-                    onConfirm: () => Navigator.pop(ctx, true),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    if (ok == true && mounted) {
-      vm.setAck1(a1);
-      vm.setAck2(a2);
-      await _startAuthFlow(context, vm);
-    }
-  }
-
-  Future<void> _startAuthFlow(BuildContext context, SeedPhraseVM vm) async {
-    final confirmed = await vm.saveSecurely();
-    if (!mounted) return;
-    if (confirmed) {
-      showFloatingSnackBar(
-        context,
-        message: 'Wallet secured successfully!',
-        type: SnackBarType.success,
-      );
-      await Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AuthGateScreen()),
-      );
-      if (mounted) {
-        final tabVM = context.read<TabVM>();
-        tabVM.setTab(0);
-        Phoenix.rebirth(context);
-      }
-    } else {
-      showFloatingSnackBar(
-        context,
-        message: 'Failed to secure wallet. Please try again.',
-        type: SnackBarType.error,
-      );
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Build
-  // ──────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-
     return Consumer<SeedPhraseVM>(
-      builder: (context, vm, child) {
+      builder: (_, vm, __) {
         final s = vm.state;
-        final readyVisual = s.ack1 && s.ack2;
-
         return Scaffold(
-          backgroundColor: colors.surface,
-          extendBodyBehindAppBar: true,
-          appBar: _buildAppBar(colors, vm, s),
-          body: Stack(
-            children: [
-              // Gradient background
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        colors.surface,
-                        colors.background.withOpacity(0.5),
-                        colors.surface,
-                      ],
-                    ),
+          backgroundColor: colors.background,
+          body: SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(context, colors, vm),
+                Expanded(
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            _buildHeader(colors, vm),
+                            const SizedBox(height: 24),
+                            _buildWordCountSelector(colors, vm, s),
+                            const SizedBox(height: 24),
+                            _buildPhraseSection(colors, vm, s),
+                            const SizedBox(height: 24),
+                            _buildSecurityInfo(colors),
+                            const SizedBox(height: 32),
+                            _buildActionButtons(context, colors, vm, s),
+                            const SizedBox(height: 20),
+                          ]),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              // Content
-              Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + 60,
-                        left: 20,
-                        right: 20,
-                        bottom: 20,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          FadeInDown(
-                            duration: const Duration(milliseconds: 500),
-                            child: WordCountPicker(
-                              current: vm.wordCount,
-                              loading: s.loading,
-                              onPick: (wc) => _confirmRegenerate(
-                                context,
-                                wordCount: wc,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          FadeInUp(
-                            duration: const Duration(milliseconds: 600),
-                            delay: const Duration(milliseconds: 150),
-                            child: MetaHeader(
-                              wordCount: s.words.length,
-                              obscured: s.obscured,
-                              onCopy: () => _showCopyGuide(context, s),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          FadeInUp(
-                            duration: const Duration(milliseconds: 700),
-                            delay: const Duration(milliseconds: 200),
-                            child: PhraseCard(
-                              words: s.obscured
-                                  ? List.filled(s.words.length, "••••••")
-                                  : s.words,
-                              obscured: s.obscured,
-                              isTwentyFour: vm.wordCount == 24,
-                              onTapObscured: vm.toggleObscure,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          FadeIn(
-                            duration: const Duration(milliseconds: 600),
-                            delay: const Duration(milliseconds: 250),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    colors.primary.withOpacity(0.05),
-                                    colors.primary.withOpacity(0.02),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: colors.border.withOpacity(0.15),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    LucideIcons.lightbulb,
-                                    size: 20,
-                                    color: colors.primary,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      "Write it down on paper and store offline. "
-                                          "Never share it. Screenshots can be risky.",
-                                      style: TextStyle(
-                                        color: colors.textSecondary,
-                                        fontSize: 13.5,
-                                        height: 1.5,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (s.error != null && s.error!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: colors.error.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: colors.error.withOpacity(0.3),
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    LucideIcons.alertCircle,
-                                    color: colors.error,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      s.error!,
-                                      style: TextStyle(
-                                        color: colors.error,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Bottom action bar
-                  Container(
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      border: Border(
-                        top: BorderSide(
-                          color: colors.border.withOpacity(0.15),
-                          width: 1.5,
-                        ),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 16,
-                          offset: const Offset(0, -4),
-                        ),
-                      ],
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CustomButton(
-                              text: s.loading ? "Securing..." : "Secure & Continue",
-                              icon: LucideIcons.arrowRight,
-                              type: readyVisual
-                                  ? ButtonType.filled
-                                  : ButtonType.outlined,
-                              onPressed: () => _openChecklist(context, vm, s),
-                            ),
-                            const SizedBox(height: 12),
-                            CustomButton(
-                              text: s.obscured ? "Tap to Reveal" : "Hide Phrase",
-                              icon: s.obscured ? LucideIcons.eye : LucideIcons.eyeOff,
-                              type: ButtonType.outlined,
-                              onPressed: vm.toggleObscure,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // UI components
-  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildAppBar(BuildContext context, AppColor colors, SeedPhraseVM vm) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(
+          bottom: BorderSide(
+            color: colors.border.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
+            iconSize: 24,
+          ),
+          Expanded(
+            child: Text(
+              'Recovery Phrase',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _showInfoSheet(context, colors),
+            icon: Icon(LucideIcons.info, color: colors.textSecondary),
+            iconSize: 22,
+          ),
+        ],
+      ),
+    );
+  }
 
-  PreferredSizeWidget _buildAppBar(
-      AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
-    return AppBar(
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      backgroundColor: Colors.transparent,
-      leading: Container(
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: colors.surface.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: colors.border.withOpacity(0.15),
-            width: 1.5,
+  Widget _buildHeader(AppColor colors, SeedPhraseVM vm) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Your secret recovery phrase',
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+            height: 1.2,
           ),
         ),
-        child: IconButton(
-          icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-          padding: EdgeInsets.zero,
-        ),
-      ),
-      title: Text(
-        'Your Recovery Phrase',
-        style: TextStyle(
-          color: colors.textPrimary,
-          fontWeight: FontWeight.w800,
-          fontSize: 18,
-          letterSpacing: -0.3,
-        ),
-      ),
-      centerTitle: false,
-      actions: [
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            color: colors.surface.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colors.border.withOpacity(0.15),
-              width: 1.5,
-            ),
-          ),
-          child: IconButton(
-            tooltip: 'Copy all',
-            onPressed: s.obscured ? null : () => _showCopyGuide(context, s),
-            icon: Icon(
-              LucideIcons.copy,
-              color: s.obscured
-                  ? colors.textSecondary.withOpacity(0.45)
-                  : colors.primary,
-              size: 20,
-            ),
+        const SizedBox(height: 8),
+        Text(
+          'Write down or copy these words in the right order and save them somewhere safe.',
+          style: TextStyle(
+            color: colors.textSecondary,
+            fontSize: 15,
+            height: 1.5,
           ),
         ),
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            color: colors.surface.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colors.border.withOpacity(0.15),
-              width: 1.5,
-            ),
-          ),
-          child: IconButton(
-            tooltip: s.obscured ? 'Reveal phrase' : 'Hide phrase',
-            onPressed: vm.toggleObscure,
-            icon: Icon(
-              s.obscured ? LucideIcons.eye : LucideIcons.eyeOff,
-              color: colors.textPrimary,
-              size: 20,
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          decoration: BoxDecoration(
-            color: colors.surface.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colors.border.withOpacity(0.15),
-              width: 1.5,
-            ),
-          ),
-          child: IconButton(
-            tooltip: 'Generate new phrase',
-            onPressed: () => _confirmRegenerate(context),
-            icon: Icon(
-              LucideIcons.refreshCw,
-              color: colors.textPrimary,
-              size: 20,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
       ],
     );
   }
 
-  Widget _guideRow(
-      AppColor colors, IconData icon, String title, String subtitle) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colors.background.withOpacity(0.6),
-            colors.background.withOpacity(0.3),
+  Widget _buildWordCountSelector(AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+    return Row(
+      children: [
+        _buildWordCountChip(colors, vm, s, 12),
+        const SizedBox(width: 8),
+        _buildWordCountChip(colors, vm, s, 18),
+        const SizedBox(width: 8),
+        _buildWordCountChip(colors, vm, s, 24),
+      ],
+    );
+  }
+
+  Widget _buildWordCountChip(AppColor colors, SeedPhraseVM vm, SeedPhraseState s, int count) {
+    final isSelected = vm.wordCount == count;
+    final isEnabled = !s.loading;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: isEnabled ? () async {
+          HapticFeedback.selectionClick();
+          if (vm.wordCount != count) {
+            await _confirmWordCountChange(context, vm, count);
+          }
+        } : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? colors.primary
+                : colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? colors.primary
+                  : colors.border.withOpacity(0.15),
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            '$count words',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : colors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhraseSection(AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+    return Column(
+      children: [
+        // Action bar (only show when revealed)
+        if (!s.obscured) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${s.words.length} words',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              _buildActionButton(
+                colors,
+                LucideIcons.copy,
+                'Copy',
+                    () => _showCopyConfirmation(context, colors, s),
+              ),
+              const SizedBox(width: 8),
+              _buildActionButton(
+                colors,
+                LucideIcons.eyeOff,
+                'Hide',
+                    () {
+                  HapticFeedback.lightImpact();
+                  vm.toggleObscure();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+        // Phrase card with grid
+        PhraseCard(
+          words: s.words,
+          obscured: s.obscured,
+          isTwentyFour: vm.isTwentyFour,
+          onTapObscured: () {
+            HapticFeedback.mediumImpact();
+            vm.toggleObscure();
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(AppColor colors, IconData icon, String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: colors.border.withOpacity(0.15),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: colors.textPrimary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
-        borderRadius: BorderRadius.circular(14),
+      ),
+    );
+  }
+
+  Widget _buildSecurityInfo(AppColor colors) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.warning.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: colors.border.withOpacity(0.15),
-          width: 1.5,
+          color: colors.warning.withOpacity(0.15),
+          width: 1,
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  colors.primary.withOpacity(0.12),
-                  colors.primary.withOpacity(0.06),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: colors.primary, size: 20),
+          Icon(
+            LucideIcons.alertTriangle,
+            color: colors.warning,
+            size: 20,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Never share your recovery phrase with anyone or risk losing your funds',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context, AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+    final canProceed = !s.obscured && !s.loading;
+
+    return Column(
+      children: [
+      // Primary action
+      SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton(
+        onPressed: canProceed ? () => _handleSecureAndContinue(context, vm, s) : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: colors.primary,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: colors.border.withOpacity(0.2),
+          disabledForegroundColor: colors.textSecondary.withOpacity(0.5),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: s.loading
+            ? SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
+            : const Text(
+         " 'I've saved it",
+        style: TextStyle(
+        fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+    ),
+    const SizedBox(height: 12),
+    // Secondary action
+    SizedBox(
+    width: double.infinity,
+    height: 54,
+    child: TextButton(
+    onPressed: s.loading ? null : () => _handleRegenerate(context, vm),
+    style: TextButton.styleFrom(
+    foregroundColor: colors.textPrimary,
+    shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
+    ),
+    ),
+    child: Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+    Icon(LucideIcons.refreshCw, size: 18),
+    const SizedBox(width: 8),
+    const Text(
+    'Generate new phrase',
+    style: TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w500,
+    ),
+    ),
+    ],
+    ),
+    ),
+    ),
+    ],
+    );
+  }
+
+  Future<void> _handleSecureAndContinue(
+      BuildContext context,
+      SeedPhraseVM vm,
+      SeedPhraseState s,
+      ) async {
+    HapticFeedback.mediumImpact();
+
+    final confirmed = await _showConfirmationSheet(context, s);
+    if (confirmed != true || !context.mounted) return;
+
+    await _startAuthFlow(context, vm);
+  }
+  Future<void> _startAuthFlow(BuildContext context, SeedPhraseVM vm) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AuthGateScreen(
+          goNext: () async {
+            if (!mounted) return;
+            try {
+              final ok = await vm.saveSecurely();
+              if (!ok) {
+                final err = vm.state.error;
+                if (err!.isNotEmpty && mounted) {
+                  showFloatingSnackBar(
+                    context,
+                    message: err,
+                    type: SnackBarType.error,
+                  );
+                }
+                return;
+              }
+
+              if (!mounted) return;
+              context.read<TabVM>().setTab(1);
+
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+
+              Phoenix.rebirth(context);
+            } catch (e) {
+              if (mounted) {
+                showFloatingSnackBar(
+                  context,
+                  message: "Failed to save phrase: $e",
+                  type: SnackBarType.error,
+                );
+              }
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+
+  Future<void> _handleRegenerate(BuildContext context, SeedPhraseVM vm) async {
+    final confirmed = await _showRegenerateSheet(context);
+    if (confirmed == true && context.mounted) {
+      HapticFeedback.mediumImpact();
+      await vm.regenerate();
+      if (context.mounted) {
+        showFloatingSnackBar(
+          context,
+          message: 'New recovery phrase generated',
+          type: SnackBarType.success,
+        );
+      }
+    }
+  }
+
+  Future<void> _showCopyConfirmation(
+      BuildContext context,
+      AppColor colors,
+      SeedPhraseState s,
+      ) async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildBottomSheet(
+        context,
+        colors,
+        icon: LucideIcons.copy,
+        title: 'Copy recovery phrase?',
+        description: 'Make sure no one can see your screen. Never share this phrase with anyone.',
+        confirmText: 'Copy phrase',
+        confirmColor: colors.primary,
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await _copyAll(context, s.mnemonic);
+    }
+  }
+
+  Future<bool?> _showConfirmationSheet(BuildContext context, SeedPhraseState s) {
+    final colors = AppColor.of(context);
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        decoration: BoxDecoration(
+          color: colors.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colors.border.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    LucideIcons.shieldCheck,
+                    color: colors.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Confirm backup',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildCheckItem(
+              colors,
+              'I wrote down my recovery phrase',
+              'I understand that anyone who has this phrase can access my wallet',
+            ),
+            const SizedBox(height: 12),
+            _buildCheckItem(
+              colors,
+              'I stored it in a safe place',
+              'I know NextFI cannot recover this phrase for me',
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: colors.border.withOpacity(0.2)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Continue',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCheckItem(AppColor colors, String title, String subtitle) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colors.border.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            LucideIcons.checkCircle2,
+            color: colors.success,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,18 +697,17 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                   title,
                   style: TextStyle(
                     color: colors.textPrimary,
-                    fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    letterSpacing: -0.1,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: TextStyle(
                     color: colors.textSecondary,
-                    height: 1.5,
-                    fontSize: 13,
+                    fontSize: 12,
+                    height: 1.3,
                   ),
                 ),
               ],
@@ -686,198 +718,284 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Shared bottom-sheet helpers
-  // ──────────────────────────────────────────────────────────────────────────
-
-  Future<T?> _showActionSheet<T>({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String confirmLabel,
-    required Widget body,
-  }) {
+  Future<bool?> _showRegenerateSheet(BuildContext context) {
     final colors = AppColor.of(context);
-    return showModalBottomSheet<T>(
+    return showModalBottomSheet<bool>(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
+      builder: (context) => _buildBottomSheet(
+        context,
+        colors,
+        icon: LucideIcons.refreshCw,
+        title: 'Generate new phrase?',
+        description: 'This will create a completely new recovery phrase. Your current phrase will be replaced.',
+        confirmText: 'Generate new',
+        confirmColor: colors.warning,
+      ),
+    );
+  }
+
+  void _showInfoSheet(BuildContext context, AppColor colors) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              colors.surface,
-              colors.surface.withOpacity(0.98),
-            ],
-          ),
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(32),
-          ),
+          color: colors.background,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Drag handle
-              Container(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
                 width: 40,
-                height: 5,
+                height: 4,
                 decoration: BoxDecoration(
                   color: colors.border.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 24),
-              _sheetHeader(colors, icon, title),
-              const SizedBox(height: 20),
-              body,
-              const SizedBox(height: 24),
-              _sheetActions(
-                colors: colors,
-                confirmLabel: confirmLabel,
-                onCancel: () => Navigator.pop(ctx, false as T),
-                onConfirm: () => Navigator.pop(ctx, true as T),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    LucideIcons.shieldAlert,
+                    color: colors.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'About recovery phrases',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildInfoItem(
+              colors,
+              'What is it?',
+              'A recovery phrase is a list of words that stores all the information needed to recover your wallet.',
+            ),
+            const SizedBox(height: 16),
+            _buildInfoItem(
+              colors,
+              'Why is it important?',
+              'If you lose access to your device, this phrase is the only way to recover your wallet and funds.',
+            ),
+            const SizedBox(height: 16),
+            _buildInfoItem(
+              colors,
+              'Keep it safe',
+              'Write it down on paper and store it somewhere secure. Never share it with anyone or store it digitally.',
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Got it',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 10),
+          ],
         ),
       ),
     );
   }
 
-  Widget _sheetHeader(AppColor colors, IconData icon, String title) {
-    return Row(
+  Widget _buildInfoItem(AppColor colors, String title, String description) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                colors.primary.withOpacity(0.15),
-                colors.primary.withOpacity(0.08),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(12),
+        Text(
+          title,
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
           ),
-          child: Icon(icon, color: colors.primary, size: 22),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(
-              color: colors.textPrimary,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              letterSpacing: -0.3,
-            ),
+        const SizedBox(height: 6),
+        Text(
+          description,
+          style: TextStyle(
+            color: colors.textSecondary,
+            fontSize: 14,
+            height: 1.5,
           ),
         ),
       ],
     );
   }
 
-  Widget _sheetActions({
-    required AppColor colors,
-    required String confirmLabel,
-    required VoidCallback onCancel,
-    required VoidCallback onConfirm,
-    bool confirmEnabled = true,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 52,
+  Widget _buildBottomSheet(
+      BuildContext context,
+      AppColor colors, {
+        required IconData icon,
+        required String title,
+        required String description,
+        required String confirmText,
+        required Color confirmColor,
+      }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  colors.background,
-                  colors.background.withOpacity(0.9),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: colors.border.withOpacity(0.25),
-                width: 1.5,
-              ),
+              color: colors.border.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(2),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onCancel,
-                borderRadius: BorderRadius.circular(16),
-                child: Center(
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: colors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: confirmColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: confirmColor, size: 28),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: colors.border.withOpacity(0.2)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(
-            height: 52,
-            decoration: BoxDecoration(
-              gradient: confirmEnabled
-                  ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colors.primary,
-                  colors.primary.withOpacity(0.85),
-                ],
-              )
-                  : null,
-              color: confirmEnabled ? null : colors.border.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: confirmEnabled
-                  ? [
-                BoxShadow(
-                  color: colors.primary.withOpacity(0.25),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-                  : null,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: confirmEnabled ? onConfirm : null,
-                borderRadius: BorderRadius.circular(16),
-                child: Center(
-                  child: Text(
-                    confirmLabel,
-                    style: TextStyle(
-                      color: confirmEnabled
-                          ? Colors.white
-                          : colors.textSecondary.withOpacity(0.5),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: confirmColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      confirmText,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  Future<void> _confirmWordCountChange(
+      BuildContext context,
+      SeedPhraseVM vm,
+      int newCount,
+      ) async {
+    final colors = AppColor.of(context);
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildBottomSheet(
+        context,
+        colors,
+        icon: LucideIcons.refreshCw,
+        title: 'Change word count?',
+        description: 'This will generate a new $newCount-word recovery phrase.',
+        confirmText: 'Change to $newCount words',
+        confirmColor: colors.primary,
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      HapticFeedback.mediumImpact();
+      await vm.setWordCount(newCount, regenerateNow: true);
+    }
   }
 }

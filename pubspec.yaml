@@ -51,6 +51,8 @@ dependencies:
   stellar_flutter_sdk: ^3.0.1
   mobile_scanner: ^7.0.1
   url_launcher: ^6.3.0
+  timeago: ^3.7.1
+  package_info_plus: ^8.0.0
 
 
 

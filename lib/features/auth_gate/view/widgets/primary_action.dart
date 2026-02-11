@@ -1,7 +1,6 @@
 // lib/features/auth_gate/view/widgets/primary_action.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/common/components/button/CustomButton.dart';
 
 class PrimaryAction extends StatelessWidget {
   const PrimaryAction({
@@ -23,20 +22,35 @@ class PrimaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: SizedBox(
-          width: double.infinity,
-          child: CustomButton(
-            text: text,
-            icon: icon,
-            type: ButtonType.filled,
-            onPressed: (){
-              enabled ? onPressed : null;
-            },
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: ElevatedButton(
+        onPressed: enabled ? onPressed : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: colors.primary,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: colors.border.withOpacity(0.2),
+          disabledForegroundColor: colors.textSecondary.withOpacity(0.5),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 10),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );

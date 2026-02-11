@@ -34,14 +34,10 @@ class ClaimableCreateScreen extends StatefulWidget {
   State<ClaimableCreateScreen> createState() => _ClaimableCreateScreenState();
 }
 
-class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
-    with SingleTickerProviderStateMixin {
+class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   final _form = GlobalKey<FormState>();
   final _recipientCtl = TextEditingController();
   final _amountCtl = TextEditingController();
-
-  late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
 
   late String _selectedAsset;
 
@@ -63,24 +59,12 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
   void initState() {
     super.initState();
     _selectedAsset = widget.initialAsset;
-
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
-    _animController.forward();
-
     _recipientCtl.addListener(_onRecipientChanged);
   }
 
   @override
   void dispose() {
     _recipientCtl.removeListener(_onRecipientChanged);
-    _animController.dispose();
     _recipientCtl.dispose();
     _amountCtl.dispose();
     super.dispose();
@@ -359,673 +343,414 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
 
     return Scaffold(
       backgroundColor: c.background,
-      body: Column(
-        children: [
-          Container(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 12,
-              left: 20,
-              right: 20,
-              bottom: 16,
-            ),
-            decoration: BoxDecoration(
-              color: c.background,
-              border: Border(
-                bottom: BorderSide(color: c.border.withOpacity(0.06), width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 22),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 16),
-                Text('Create Claimable Balance', style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                )),
-              ],
-            ),
-          ),
-          Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildAppBar(c),
+            Expanded(
               child: Form(
                 key: _form,
                 child: ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: c.surface.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: c.border.withOpacity(0.08), width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => setState(() => _mode = ClaimableMode.unconditional),
-                                borderRadius: BorderRadius.circular(12),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: _mode == ClaimableMode.unconditional ? c.background : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: _mode == ClaimableMode.unconditional ? [
-                                      BoxShadow(
-                                        color: c.primary.withOpacity(0.06),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ] : null,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(LucideIcons.zap, size: 16, color: _mode == ClaimableMode.unconditional ? c.primary : c.textSecondary),
-                                      const SizedBox(width: 8),
-                                      Text('Instant', style: TextStyle(
-                                        color: _mode == ClaimableMode.unconditional ? c.textPrimary : c.textSecondary,
-                                        fontWeight: _mode == ClaimableMode.unconditional ? FontWeight.w700 : FontWeight.w500,
-                                        fontSize: 13,
-                                        letterSpacing: -0.1,
-                                      )),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => setState(() => _mode = ClaimableMode.timeLocked),
-                                borderRadius: BorderRadius.circular(12),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: _mode == ClaimableMode.timeLocked ? c.background : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: _mode == ClaimableMode.timeLocked ? [
-                                      BoxShadow(
-                                        color: c.primary.withOpacity(0.06),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ] : null,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(LucideIcons.clock, size: 16, color: _mode == ClaimableMode.timeLocked ? c.primary : c.textSecondary),
-                                      const SizedBox(width: 8),
-                                      Text('Time-Locked', style: TextStyle(
-                                        color: _mode == ClaimableMode.timeLocked ? c.textPrimary : c.textSecondary,
-                                        fontWeight: _mode == ClaimableMode.timeLocked ? FontWeight.w700 : FontWeight.w500,
-                                        fontSize: 13,
-                                        letterSpacing: -0.1,
-                                      )),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildModeSelector(c),
                     const SizedBox(height: 24),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 10),
-                          child: Text('Recipient', style: TextStyle(
-                            color: c.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            letterSpacing: -0.1,
-                          )),
-                        ),
-                        if (_recipientLoading)
-                          const RecipientLoadingLine()
-                        else if (hasValidAddr && _resolvedRecipient != null)
-                          RecipientBadge(
-                            name: _resolvedRecipient!.name,
-                            colorValue: _resolvedRecipient!.color,
-                            address: _shortenAddress(addr),
-                            onEdit: _editRecipient,
-                          )
-                        else if (hasValidAddr && _resolvedRecipient == null)
-                            RecipientAddTemplate(
-                              address: _shortenAddress(addr),
-                              onAdd: () async {
-                                final saved = await showRecipientUpsertSheet(context, address: addr);
-                                if (saved == true && mounted) _lookupRecipient(addr);
-                              },
-                            )
-                          else
-                            Container(
-                              decoration: BoxDecoration(
-                                color: c.surface.withOpacity(0.4),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: c.border.withOpacity(0.08), width: 1),
-                              ),
-                              child: TextFormField(
-                                controller: _recipientCtl,
-                                textInputAction: TextInputAction.next,
-                                keyboardType: TextInputType.multiline,
-                                minLines: 1,
-                                maxLines: null,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  height: 1.3,
-                                  letterSpacing: 0.1,
-                                  fontWeight: FontWeight.w500,
-                                  color: c.textPrimary,
-                                  fontFeatures: const [ui.FontFeature.tabularFigures()],
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: 'Stellar address (G… 56 chars)',
-                                  hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.4), fontSize: 13),
-                                  prefixIcon: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Icon(LucideIcons.user, color: c.primary, size: 18),
-                                  ),
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        onPressed: _scanQR,
-                                        icon: Icon(LucideIcons.qrCode, size: 18, color: c.primary.withOpacity(0.7)),
-                                        tooltip: 'Scan QR',
-                                      ),
-                                      IconButton(
-                                        onPressed: _selectRecipient,
-                                        icon: Icon(LucideIcons.contact, size: 18, color: c.primary.withOpacity(0.7)),
-                                        tooltip: 'Select',
-                                      ),
-                                      if (_recipientCtl.text.trim().isNotEmpty)
-                                        IconButton(
-                                          onPressed: () {
-                                            _recipientCtl.clear();
-                                            setState(() => _resolvedRecipient = null);
-                                          },
-                                          icon: Icon(LucideIcons.x, size: 16, color: c.textSecondary.withOpacity(0.5)),
-                                        ),
-                                    ],
-                                  ),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                ),
-                                onChanged: (_) => setState(() {}),
-                                onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                              ),
-                            ),
-                      ],
-                    ),
+                    _buildRecipientField(c, hasValidAddr, addr),
                     const SizedBox(height: 24),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4, bottom: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Amount', style: TextStyle(
-                                color: c.textPrimary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                letterSpacing: -0.1,
-                              )),
-                              Text('Balance: ${currentBal.toStringAsFixed(2)} $_selectedAsset',
-                                  style: TextStyle(
-                                    color: c.textSecondary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  )),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: c.surface.withOpacity(0.4),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: c.border.withOpacity(0.08), width: 1),
-                          ),
-                          child: TextFormField(
-                            controller: _amountCtl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
-                            ],
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.2,
-                              color: c.textPrimary,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: '0.00',
-                              hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.3), fontSize: 16),
-                              prefixIcon: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: AssetLogo(keyOrSymbol: _selectedAsset, size: 22),
-                              ),
-                              suffixIcon: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    _amountCtl.text = currentBal > 0
-                                        ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
-                                        : '';
-                                    _amountCtl.selection = TextSelection.fromPosition(
-                                      TextPosition(offset: _amountCtl.text.length),
-                                    );
-                                  },
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    margin: const EdgeInsets.only(right: 10, top: 10, bottom: 10),
-                                    decoration: BoxDecoration(
-                                      color: c.primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: c.primary.withOpacity(0.2), width: 1),
-                                    ),
-                                    child: Text('MAX', style: TextStyle(
-                                      color: c.primary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 11,
-                                      letterSpacing: 0.5,
-                                    )),
-                                  ),
-                                ),
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            ),
-                            onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                          ),
-                        ),
-                      ],
-                    ),
+                    _buildAmountField(c, currentBal),
                     if (_mode == ClaimableMode.timeLocked) ...[
                       const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: c.surface.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: c.border.withOpacity(0.08), width: 1),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: c.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(LucideIcons.lock, size: 14, color: c.primary),
-                                ),
-                                const SizedBox(width: 10),
-                                Text('Unlock Schedule', style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  letterSpacing: -0.1,
-                                )),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: _pickUnlockDate,
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: c.background.withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(LucideIcons.calendar, size: 14, color: c.primary),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: Text(_unlockDate != null ? _dateFmt.format(_unlockDate!) : 'Select date', style: TextStyle(
-                                              color: c.textPrimary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              letterSpacing: -0.1,
-                                            ), overflow: TextOverflow.ellipsis)),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: _pickUnlockTime,
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: c.background.withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(LucideIcons.clock, size: 14, color: c.primary),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: Text(_unlockTime != null ? _unlockTime!.format(context) : 'Select time', style: TextStyle(
-                                              color: c.textPrimary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              letterSpacing: -0.1,
-                                            ), overflow: TextOverflow.ellipsis)),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_combinedUnlockDateTime != null) ...[
-                              const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: c.primary.withOpacity(0.06),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(LucideIcons.info, size: 12, color: c.primary),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: Text(
-                                      'Unlocks on ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
-                                      style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.4),
-                                    )),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                      _buildUnlockSchedule(c),
                     ],
                     const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: c.surface.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: c.border.withOpacity(0.08), width: 1),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: c.warning.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(LucideIcons.clock3, size: 14, color: c.warning),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text('Expiration', style: TextStyle(
-                                      color: c.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                      letterSpacing: -0.1,
-                                    )),
-                                  ],
-                                ),
-                              ),
-                              Transform.scale(
-                                scale: 0.85,
-                                child: Switch(
-                                  value: _hasExpiry,
-                                  activeColor: c.warning,
-                                  onChanged: (v) {
-                                    setState(() {
-                                      _hasExpiry = v;
-                                      if (!v) { _expiryDate = null; _expiryTime = null; }
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (!_hasExpiry) ...[
-                            const SizedBox(height: 10),
-                            Text('No expiration - claimable indefinitely',
-                                style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.4)),
-                          ],
-                          if (_hasExpiry) ...[
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: _pickExpiryDate,
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: c.background.withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(LucideIcons.calendar, size: 14, color: c.warning),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: Text(_expiryDate != null ? _dateFmt.format(_expiryDate!) : 'Select date', style: TextStyle(
-                                              color: c.textPrimary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              letterSpacing: -0.1,
-                                            ), overflow: TextOverflow.ellipsis)),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: _pickExpiryTime,
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: c.background.withOpacity(0.5),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: c.border.withOpacity(0.1), width: 1),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(LucideIcons.clock, size: 14, color: c.warning),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: Text(_expiryTime != null ? _expiryTime!.format(context) : 'Select time', style: TextStyle(
-                                              color: c.textPrimary,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              letterSpacing: -0.1,
-                                            ), overflow: TextOverflow.ellipsis)),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_combinedExpiryDateTime != null) ...[
-                              const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: c.warning.withOpacity(0.06),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(LucideIcons.alertCircle, size: 12, color: c.warning),
-                                    const SizedBox(width: 8),
-                                    Expanded(child: Text(
-                                      'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
-                                      style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.4),
-                                    )),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ],
-                      ),
-                    ),
+                    _buildExpirationSection(c),
                     const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: c.primary.withOpacity(0.04),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: c.primary.withOpacity(0.08), width: 1),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: c.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              isTimeLocked ? LucideIcons.shieldCheck : LucideIcons.info,
-                              size: 14,
-                              color: c.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('How it works', style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  letterSpacing: -0.1,
-                                )),
-                                const SizedBox(height: 6),
-                                Text(infoBody, style: TextStyle(
-                                  color: c.textSecondary,
-                                  fontSize: 11.5,
-                                  height: 1.5,
-                                )),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildInfoCard(c, infoBody, isTimeLocked),
                     const SizedBox(height: 100),
                   ],
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _buildBottomBar(c),
+    );
+  }
+
+  Widget _buildAppBar(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.background,
+        border: Border(
+          bottom: BorderSide(
+            color: c.border.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary),
+            iconSize: 24,
+          ),
+          Expanded(
+            child: Text(
+              'Create Claimable Balance',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.3,
+              ),
+            ),
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: c.background,
-            border: Border(
-              top: BorderSide(color: c.border.withOpacity(0.06), width: 1),
+    );
+  }
+
+  Widget _buildModeSelector(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: c.border.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _modeButton(
+              c,
+              LucideIcons.zap,
+              'Instant',
+              _mode == ClaimableMode.unconditional,
+                  () => setState(() => _mode = ClaimableMode.unconditional),
             ),
           ),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [c.primary, c.primary.withOpacity(0.9)],
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: c.primary.withOpacity(0.25),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+          Expanded(
+            child: _modeButton(
+              c,
+              LucideIcons.clock,
+              'Time-Locked',
+              _mode == ClaimableMode.timeLocked,
+                  () => setState(() => _mode = ClaimableMode.timeLocked),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeButton(AppColor c, IconData icon, String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? c.background : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: selected
+              ? Border.all(color: c.primary.withOpacity(0.15), width: 1)
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: selected ? c.primary : c.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? c.textPrimary : c.textSecondary,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 14,
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _submit,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Center(
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecipientField(AppColor c, bool hasValidAddr, String addr) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            'Recipient',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        ),
+        if (_recipientLoading)
+          const RecipientLoadingLine()
+        else if (hasValidAddr && _resolvedRecipient != null)
+          RecipientBadge(
+            name: _resolvedRecipient!.name,
+            colorValue: _resolvedRecipient!.color,
+            address: _shortenAddress(addr),
+            onEdit: _editRecipient,
+          )
+        else if (hasValidAddr && _resolvedRecipient == null)
+            RecipientAddTemplate(
+              address: _shortenAddress(addr),
+              onAdd: () async {
+                final saved = await showRecipientUpsertSheet(context, address: addr);
+                if (saved == true && mounted) _lookupRecipient(addr);
+              },
+            )
+          else
+            Container(
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: c.border.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
+              child: TextFormField(
+                controller: _recipientCtl,
+                textInputAction: TextInputAction.next,
+                keyboardType: TextInputType.multiline,
+                minLines: 1,
+                maxLines: null,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: c.textPrimary,
+                  fontFeatures: const [ui.FontFeature.tabularFigures()],
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Stellar address (G… 56 chars)',
+                  hintStyle: TextStyle(
+                    color: c.textSecondary.withOpacity(0.4),
+                    fontSize: 14,
+                  ),
+                  prefixIcon: Icon(LucideIcons.user, color: c.primary, size: 18),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _scanQR,
+                        icon: Icon(LucideIcons.qrCode, size: 18, color: c.primary),
+                        tooltip: 'Scan QR',
+                      ),
+                      IconButton(
+                        onPressed: _selectRecipient,
+                        icon: Icon(LucideIcons.contact, size: 18, color: c.primary),
+                        tooltip: 'Select',
+                      ),
+                      if (_recipientCtl.text.trim().isNotEmpty)
+                        IconButton(
+                          onPressed: () {
+                            _recipientCtl.clear();
+                            setState(() => _resolvedRecipient = null);
+                          },
+                          icon: Icon(LucideIcons.x, size: 16, color: c.textSecondary),
+                        ),
+                    ],
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              ),
+            ),
+      ],
+    );
+  }
+
+  Widget _buildAmountField(AppColor c, double currentBal) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Amount',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                'Balance: ${currentBal.toStringAsFixed(2)} $_selectedAsset',
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: c.border.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+          child: TextFormField(
+            controller: _amountCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+            ],
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: c.textPrimary,
+            ),
+            decoration: InputDecoration(
+              hintText: '0.00',
+              hintStyle: TextStyle(
+                color: c.textSecondary.withOpacity(0.3),
+                fontSize: 16,
+              ),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.all(12),
+                child: AssetLogo(keyOrSymbol: _selectedAsset, size: 22),
+              ),
+              suffixIcon: GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _amountCtl.text = currentBal > 0
+                      ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
+                      : '';
+                  _amountCtl.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _amountCtl.text.length),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.only(right: 10, top: 10, bottom: 10),
+                  decoration: BoxDecoration(
+                    color: c.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: c.primary.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    'MAX',
+                    style: TextStyle(
+                      color: c.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnlockSchedule(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.border.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(LucideIcons.lock, size: 14, color: c.primary),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Unlock Schedule',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: _pickUnlockDate,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: c.border.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(LucideIcons.send, size: 16, color: Colors.white),
-                        const SizedBox(width: 10),
-                        Text(
-                          _mode == ClaimableMode.timeLocked
-                              ? 'Create Time-Locked Balance'
-                              : 'Create Claimable Balance',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 14,
-                            letterSpacing: -0.1,
+                        Icon(LucideIcons.calendar, size: 14, color: c.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _unlockDate != null
+                                ? _dateFmt.format(_unlockDate!)
+                                : 'Select date',
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -1033,6 +758,344 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen>
                   ),
                 ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _pickUnlockTime,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: c.border.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.clock, size: 14, color: c.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _unlockTime != null
+                                ? _unlockTime!.format(context)
+                                : 'Select time',
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_combinedUnlockDateTime != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: c.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.info, size: 12, color: c.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Unlocks on ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpirationSection(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.border.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: c.warning.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(LucideIcons.clock3, size: 14, color: c.warning),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Expiration',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _hasExpiry,
+                activeColor: c.warning,
+                onChanged: (v) {
+                  setState(() {
+                    _hasExpiry = v;
+                    if (!v) {
+                      _expiryDate = null;
+                      _expiryTime = null;
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+          if (!_hasExpiry) ...[
+            const SizedBox(height: 10),
+            Text(
+              'No expiration - claimable indefinitely',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (_hasExpiry) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickExpiryDate,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: c.background,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: c.border.withOpacity(0.1),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(LucideIcons.calendar, size: 14, color: c.warning),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _expiryDate != null
+                                  ? _dateFmt.format(_expiryDate!)
+                                  : 'Select date',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickExpiryTime,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: c.background,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: c.border.withOpacity(0.1),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(LucideIcons.clock, size: 14, color: c.warning),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _expiryTime != null
+                                  ? _expiryTime!.format(context)
+                                  : 'Select time',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_combinedExpiryDateTime != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: c.warning.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.alertCircle, size: 12, color: c.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(AppColor c, String infoBody, bool isTimeLocked) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.primary.withOpacity(0.15),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: c.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              isTimeLocked ? LucideIcons.shieldCheck : LucideIcons.info,
+              size: 14,
+              color: c.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How it works',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  infoBody,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(AppColor c) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: c.background,
+          border: Border(
+            top: BorderSide(
+              color: c.border.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: c.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(LucideIcons.send, size: 16),
+                const SizedBox(width: 10),
+                Text(
+                  _mode == ClaimableMode.timeLocked
+                      ? 'Create Time-Locked Balance'
+                      : 'Create Claimable Balance',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -20,57 +20,65 @@ class ScanControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Theme.of(context).colorScheme;
-
-    Widget _pill(IconData icon, String label, VoidCallback onTap, {bool active = false}) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? c.primary.withOpacity(.15) : Colors.black26,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white24),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: active ? c.primary : Colors.white),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: active ? c.primary : Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             if (onClose != null)
-              _pill(LucideIcons.x, 'Close', onClose!),
+              _buildControl(
+                icon: LucideIcons.x,
+                onTap: onClose!,
+              ),
+            if (onClose == null) const SizedBox(width: 48),
             const Spacer(),
-            _pill(
-              torchOn ? LucideIcons.sunMedium : LucideIcons.sun,
-              torchOn ? 'Torch On' : 'Torch',
-              onToggleTorch,
-              active: torchOn,
+            _buildControl(
+              icon: torchOn ? LucideIcons.zap : LucideIcons.zapOff,
+              onTap: onToggleTorch,
+              isActive: torchOn,
             ),
-            const SizedBox(width: 8),
-            _pill(
-              LucideIcons.shuffle,
-              facing == CameraFacing.back ? 'Back' : 'Front',
-              onSwitchCamera,
+            const SizedBox(width: 12),
+            _buildControl(
+              icon: LucideIcons.flipHorizontal2,
+              onTap: onSwitchCamera,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControl({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: isActive
+                ? Colors.white.withOpacity(0.25)
+                : Colors.black.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isActive
+                  ? Colors.white.withOpacity(0.4)
+                  : Colors.white.withOpacity(0.15),
+              width: 1,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 22,
+            color: Colors.white,
+          ),
         ),
       ),
     );

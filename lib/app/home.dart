@@ -1,4 +1,4 @@
-// lib/Screen/home.dart
+// lib/app/home.dart
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
@@ -8,11 +8,10 @@ import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dar
 import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:provider/provider.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
 
-import '../features/settings/view_model/settings_vm.dart' hide ThemeBridge;
-
+import 'widgets/app_bottom_navigation.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -31,11 +30,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    // Apply system theme once at startup.
     _applySystemThemeToRoot();
 
-    // Also react to platform brightness changes ASAP (in addition to didChangePlatformBrightness).
     WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
       _applySystemThemeToRoot();
     };
@@ -49,7 +45,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // Called by Flutter when platform brightness toggles (e.g., user changes system theme)
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
@@ -59,15 +54,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void _applySystemThemeToRoot() {
     final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
     final mode = (brightness == Brightness.dark) ? ThemeMode.dark : ThemeMode.light;
-    // Hand off to your app-level theme controller via ThemeBridge.
     ThemeBridge.apply?.call(mode);
   }
 
   Future<void> _boot() async {
-    // initialize your signed fee config using the active wallet
     await TransactionFeeVaultSecureStorage().initSignedConfigFromActiveWallet();
-
-    // Show splash for at least this long while we check storage.
     final minSplash = Future.delayed(const Duration(seconds: 5));
     final check = _checkMnemonic();
     await Future.wait([minSplash, check]);
@@ -105,12 +96,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
 
-    // 1) Always show the splash first.
     if (_showSplash) {
       return const WalletCreationScreen(isSplash: true);
     }
 
-    // 2) While still loading state (edge), show the 2×2 Rubik's outline loader.
     if (_isLoading) {
       return Scaffold(
         body: Center(
@@ -128,49 +117,21 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       );
     }
 
-    // 3) If no wallet yet, go to your onboarding/creation screen.
     if (!_hasMnemonic) {
       return const WalletCreationScreen();
     }
 
-    // 4) If wallet exists but not authenticated, gate with Auth.
     if (!_isAuthenticated) {
       return AuthGateScreen(goNext: _onAuthSuccess);
     }
 
-    // 5) Authenticated main app with tabs.
     return ChangeNotifierProvider(
       create: (_) => TabVM(),
       child: Consumer<TabVM>(
         builder: (context, tabVM, _) {
           return Scaffold(
             body: tabVM.screens[tabVM.currentIndex],
-            bottomNavigationBar: BottomNavigationBar(
-              currentIndex: tabVM.currentIndex,
-              onTap: tabVM.setTab,
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: colors.primary,
-              unselectedItemColor: colors.textSecondary,
-              showUnselectedLabels: true,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.wallet),
-                  label: 'Wallet',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.shuffle),
-                  label: 'Swap',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.gift),
-                  label: 'Claimable',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(LucideIcons.package),
-                  label: 'Transaction',
-                ),
-              ],
-            ),
+            bottomNavigationBar: const AppBottomNavigationPremium(),
           );
         },
       ),
