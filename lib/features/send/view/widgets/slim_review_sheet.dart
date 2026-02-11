@@ -12,8 +12,7 @@ class SlimReviewSheet extends StatelessWidget {
     required this.sender,
     required this.to,
     required this.recipientGets,
-    required this.txFeeXlm,
-    required this.netFeeXlm,
+    required this.networkFeeXlm,
     required this.extraLabel,
     required this.extraValue,
     required this.onCancel,
@@ -23,7 +22,7 @@ class SlimReviewSheet extends StatelessWidget {
   });
 
   final String tokenStr, sender, to, recipientGets;
-  final String txFeeXlm, netFeeXlm, extraLabel, extraValue;
+  final String networkFeeXlm, extraLabel, extraValue;
   final VoidCallback onCancel, onConfirm;
   final String? remainingExpendable;
   final bool sending;
@@ -31,9 +30,6 @@ class SlimReviewSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final double tx = double.tryParse(txFeeXlm) ?? 0.0;
-    final double net = double.tryParse(netFeeXlm) ?? 0.0;
-    final String estCombinedStr = (tx + net).toStringAsFixed(7);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -190,7 +186,7 @@ class SlimReviewSheet extends StatelessWidget {
                     c: c,
                     icon: LucideIcons.coins,
                     label: 'Network fee',
-                    value: '$estCombinedStr XLM',
+                    value: '$networkFeeXlm XLM',
                   ),
                   Divider(
                     height: 20,

@@ -174,8 +174,7 @@ class _SendScreenState extends State<SendScreen> {
 
   Future<void> _confirmAndSend(SendVM vm) async {
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
-    final recipientGets =
-    vm.isXlm ? vm.recipientWillReceiveXlmFromBudget : vm.typedAmount;
+    final recipientGets = vm.recipientWillReceive;
 
     await showModalBottomSheet(
       context: context,
@@ -188,13 +187,11 @@ class _SendScreenState extends State<SendScreen> {
           sender: vm.senderAddress,
           to: vm.to,
           recipientGets: _numFmt.format(recipientGets),
-          txFeeXlm: (vm.txFeeXlm ?? 0).toStringAsFixed(7),
-          netFeeXlm: (vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7),
-          extraLabel:
-          vm.isXlm ? 'Total deducted' : 'XLM required for fees',
+          networkFeeXlm: (vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7),
+          extraLabel: vm.isXlm ? 'Total deducted' : 'Amount sent',
           extraValue: vm.isXlm
-              ? '${_numFmt.format(vm.typedAmount)} XLM'
-              : '${vm.needsXlmForFeesIfUsdcSend.toStringAsFixed(7)} XLM',
+              ? '${_numFmt.format(vm.totalDeductFromBalance)} XLM'
+              : '${_numFmt.format(vm.typedAmount)} USDC',
           remainingExpendable:
           '${_fmtAmount(vm.remainingExpendable)} $tokenStr',
           onCancel: () => Navigator.pop(context),
@@ -367,8 +364,7 @@ class _SendScreenState extends State<SendScreen> {
     final recipients = context.watch<RecipientAddressVM>();
 
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
-    final recipientGets =
-    vm.isXlm ? vm.recipientWillReceiveXlmFromBudget : vm.typedAmount;
+    final recipientGets = vm.recipientWillReceive;
 
     final typedAddr = _toCtl.text.trim();
     final saved = (!recipients.loading && typedAddr.isNotEmpty)
@@ -472,16 +468,13 @@ class _SendScreenState extends State<SendScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Preview card — now with remaining expendable
+        // Preview card — simplified for single operation model
         SlimPreviewCard(
           isXLM: vm.isXlm,
           token: tokenStr,
           recipientGets: recipientGets,
-          estNetworkFeeXlm: vm.estNetworkFeeXlm ?? 0,
-          txFeeXlm: vm.txFeeXlm ?? 0,
-          totalDeductedXlm: vm.isXlm ? vm.totalDeductXlmIfXlmSend : null,
-          xlmNeededForFees:
-          vm.isXlm ? null : vm.needsXlmForFeesIfUsdcSend,
+          networkFeeXlm: vm.estNetworkFeeXlm ?? 0,
+          totalDeductedXlm: vm.isXlm ? vm.totalDeductFromBalance : null,
           remainingExpendable:
           vm.typedAmount > 0 ? vm.remainingExpendable : null,
         ),

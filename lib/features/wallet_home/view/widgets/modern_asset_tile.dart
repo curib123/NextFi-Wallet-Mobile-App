@@ -330,18 +330,6 @@ class _ModernAssetTileState extends State<ModernAssetTile> with TickerProviderSt
       duration: const Duration(milliseconds: 250),
       width: 52,
       height: 52,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            (_isPressed || _isHovered ? trendColor : widget.colors.primary).withOpacity(0.15),
-            (_isPressed || _isHovered ? trendColor : widget.colors.primary).withOpacity(0.05),
-          ],
-        ),
-
-      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: url == null || url.isEmpty

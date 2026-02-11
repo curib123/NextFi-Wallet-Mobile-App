@@ -1,72 +1,63 @@
 import 'package:flutter/material.dart';
 
-/// Centralized color palette for the Blue Fintech / Web3 Wallet app.
-/// Designed for modern banking, crypto, and DeFi dashboards.
+/// Minimalist Muted Color Palette
+/// Calm fintech / wallet / banking UI (non-glowy).
 class AppColor {
-  // ─── Brand Colors (Fintech Blue Identity) ───────────────────────────
-  final Color primary = const Color(0xFF1565FF);      // Fintech Blue
-  final Color primaryDark = const Color(0xFF003ECC);  // Deep Finance Blue
-  final Color accent = const Color(0xFF00C2FF);       // Neon Aqua Action
+  // ─── Brand Colors (Muted Identity) ─────────────────────────────
+  final Color primary = const Color(0xFF3A5BFF);     // Soft Indigo
+  final Color primaryDark = const Color(0xFF2C46CC); // Muted deep indigo
+  final Color accent = const Color(0xFF8B9DC3);      // Grayish blue accent
 
-  // ─── Status Colors ──────────────────────────────────────────────────
-  final Color success = const Color(0xFF00E676);      // Profit / Success
-  final Color warning = const Color(0xFFFFB300);      // Alerts
-  final Color error = const Color(0xFFFF3D00);        // Critical / Loss
-  final Color info = const Color(0xFF29B6F6);         // Info Blue
+  // ─── Status Colors (Softened) ──────────────────────────────────
+  final Color success = const Color(0xFF34C759); // iOS green style
+  final Color warning = const Color(0xFFFF9F0A); // Soft orange
+  final Color error = const Color(0xFFFF453A);   // Soft red
+  final Color info = const Color(0xFF5AC8FA);    // Calm sky blue
 
-  // ─── Neutral Palette (Theme Adaptive) ───────────────────────────────
+  // ─── Neutral Palette ───────────────────────────────────────────
   final Color background;
   final Color surface;
   final Color textPrimary;
   final Color textSecondary;
   final Color border;
 
-  // ─── Crypto / Market Accent Colors ──────────────────────────────────
-  final Color chartGreen = const Color(0xFF00E676);
-  final Color chartRed = const Color(0xFFFF3D00);
+  // ─── Charts ────────────────────────────────────────────────────
+  final Color chartGreen = const Color(0xFF30D158);
+  final Color chartRed = const Color(0xFFFF453A);
 
-  final Color stellar = const Color(0xFF1565FF);   // Re-mapped to fintech blue
-  final Color bitcoin = const Color(0xFFF7931A);
-  final Color ethereum = const Color(0xFF627EEA);
+  // ─── Subtle Gradients (Very soft) ──────────────────────────────
 
-  // ─── Gradients ──────────────────────────────────────────────────────
-
-  /// Main brand gradient
+  /// Primary subtle gradient
   final LinearGradient primaryGradient = const LinearGradient(
-    colors: [Color(0xFF1565FF), Color(0xFF5B8CFF)],
+    colors: [
+      Color(0xFF3A5BFF),
+      Color(0xFF6F86FF),
+    ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  /// Accent / action gradient
-  final LinearGradient accentGradient = const LinearGradient(
-    colors: [Color(0xFF00C2FF), Color(0xFF00E5FF)],
+  /// Surface gradient
+  final LinearGradient surfaceGradient = const LinearGradient(
+    colors: [
+      Color(0xFFFFFFFF),
+      Color(0xFFF2F4F8),
+    ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  /// Success gradient
-  final LinearGradient successGradient = const LinearGradient(
-    colors: [Color(0xFF00E676), Color(0xFF69F0AE)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  /// Fintech glass crypto gradient
-  final LinearGradient cryptoGradient = const LinearGradient(
-    colors: [Color(0xFF1565FF), Color(0xFF00C2FF)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
-
-  /// Dark glassmorphism overlay
+  /// Dark subtle gradient
   final LinearGradient darkGlassGradient = const LinearGradient(
-    colors: [Color(0x1A1565FF), Color(0x0D00C2FF)],
+    colors: [
+      Color(0x1AFFFFFF),
+      Color(0x0DFFFFFF),
+    ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // ─── Constructors ───────────────────────────────────────────────────
+  // ─── Constructors ──────────────────────────────────────────────
   const AppColor._({
     required this.background,
     required this.surface,
@@ -75,25 +66,25 @@ class AppColor {
     required this.border,
   });
 
-  /// ─── Light Mode (Clean Fintech UI) ──────────────────────────────────
+  /// ─── Light Mode ───────────────────────────────────────────────
   static const AppColor light = AppColor._(
-    background: Color(0xFFF4F7FF),      // Soft blue gray
+    background: Color(0xFFF7F8FA),   // Neutral gray white
     surface: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF0A0F1C),
+    textPrimary: Color(0xFF111827),
     textSecondary: Color(0xFF6B7280),
-    border: Color(0xFFE3E8F2),
+    border: Color(0xFFE5E7EB),
   );
 
-  /// ─── Dark Mode (Neo-Bank / Web3 Style) ──────────────────────────────
+  /// ─── Dark Mode ────────────────────────────────────────────────
   static const AppColor dark = AppColor._(
-    background: Color(0xFF05070D),      // Deep fintech dark
-    surface: Color(0xFF0F121A),
-    textPrimary: Color(0xFFF5F7FF),
-    textSecondary: Color(0xFF9AA4B2),
-    border: Color(0xFF1C2333),
+    background: Color(0xFF0F1115),   // Soft dark
+    surface: Color(0xFF171923),
+    textPrimary: Color(0xFFF3F4F6),
+    textSecondary: Color(0xFF9CA3AF),
+    border: Color(0xFF2A2F3A),
   );
 
-  /// Get theme-aware colors
+  /// Theme resolver
   static AppColor of(BuildContext context) {
     return Theme.of(context).brightness == Brightness.dark
         ? AppColor.dark
@@ -101,7 +92,7 @@ class AppColor {
   }
 }
 
-/// ─── Theme Bridge for runtime theme switching ─────────────────────────
+/// ─── Theme Bridge ───────────────────────────────────────────────
 class ThemeBridge {
   static void Function(ThemeMode)? apply;
 }

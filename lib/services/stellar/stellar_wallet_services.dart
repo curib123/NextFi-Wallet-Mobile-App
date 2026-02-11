@@ -116,16 +116,6 @@ class StellarWalletServices {
             quickNodeUrlTestnet: quickNodeUrlTestnet,
             quickNodeDefaultHeaders: quickNodeDefaultHeaders,
           ),
-          feeService: StellarFeeService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            configVault: configVault,
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
           sdkQuickNode: _createQuickNodeSdk(
               testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
@@ -768,7 +758,7 @@ class StellarWalletServices {
   // PAYMENTS WITH ACTIVITY LOGGING
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<List<String>> sendXlmWithFee({
+  Future<String> sendXlm({
     required KeyPair keyPair,
     required String destination,
     required double amount,
@@ -794,7 +784,7 @@ class StellarWalletServices {
       }
 
       // Execute payment with progress tracking
-      final hashes = await paymentService.sendXlmWithFee(
+      final hash = await paymentService.sendXlm(
         keyPair: keyPair,
         destination: destination,
         amount: amount,
@@ -812,7 +802,7 @@ class StellarWalletServices {
         await _updateActivity(
           activityId,
           status: ActivityStatus.completed,
-          txHash: hashes.first,
+          txHash: hash,
           description: 'Payment sent successfully',
         );
 
@@ -820,7 +810,7 @@ class StellarWalletServices {
         _showNotification(log);
       }
 
-      return hashes;
+      return hash;
     } catch (e) {
       // Update activity on error
       if (activityId != null) {
@@ -849,7 +839,7 @@ class StellarWalletServices {
     }
   }
 
-  Future<List<String>> sendUsdcWithFee({
+  Future<String> sendUsdc({
     required KeyPair keyPair,
     required String destination,
     required double usdcAmount,
@@ -874,7 +864,7 @@ class StellarWalletServices {
         _showNotification(log);
       }
 
-      final hashes = await paymentService.sendUsdcWithFee(
+      final hash = await paymentService.sendUsdc(
         keyPair: keyPair,
         destination: destination,
         usdcAmount: usdcAmount,
@@ -892,7 +882,7 @@ class StellarWalletServices {
         await _updateActivity(
           activityId,
           status: ActivityStatus.completed,
-          txHash: hashes.first,
+          txHash: hash,
           description: 'Payment sent successfully',
         );
 
@@ -900,7 +890,7 @@ class StellarWalletServices {
         _showNotification(log);
       }
 
-      return hashes;
+      return hash;
     } catch (e) {
       // Update activity on error
       if (activityId != null) {
@@ -1359,7 +1349,7 @@ class StellarWalletServices {
   // FEE & QUOTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<String> getTransactionFeeAddress() => feeService.getTransactionFeeAddress();
+  Future<String> getTransactionFeeAddress() => feeService.getSwapFeeAddress();
   Future<int> getCurrentFeeStroops() => feeService.getCurrentFeeStroops();
   Future<double> getCurrentFeeXlm() => feeService.getCurrentFeeXlm();
   Future<String> getCurrentFeeLabel() => feeService.getCurrentFeeLabel();

@@ -578,45 +578,26 @@ class _KeyButtonState extends State<_KeyButton>
             child: Container(
               height: 64,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: widget.enabled
-                    ? widget.colors.surface.withOpacity(.6 + (_controller.value * 0.1))
-                    : widget.colors.surface.withOpacity(.3),
-                border: Border.all(
-                  color: widget.colors.primary.withOpacity(.1),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.colors.primary.withOpacity(.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                shape: BoxShape.circle,
+                color: widget.colors.primary.withOpacity(_controller.value * 0.15),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Center(
-                    child: isBackspace
-                        ? Icon(
-                      Icons.backspace_outlined,
-                      size: 24,
-                      color: widget.enabled
-                          ? widget.colors.textPrimary
-                          : widget.colors.textSecondary.withOpacity(.5),
-                    )
-                        : Text(
-                      widget.label,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: widget.enabled
-                            ? widget.colors.textPrimary
-                            : widget.colors.textSecondary.withOpacity(.5),
-                      ),
-                    ),
+              child: Center(
+                child: isBackspace
+                    ? Icon(
+                  Icons.backspace_outlined,
+                  size: 24,
+                  color: widget.enabled
+                      ? widget.colors.textPrimary
+                      : widget.colors.textSecondary.withOpacity(.5),
+                )
+                    : Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    color: widget.enabled
+                        ? widget.colors.textPrimary
+                        : widget.colors.textSecondary.withOpacity(.5),
                   ),
                 ),
               ),
@@ -675,35 +656,16 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
             child: Container(
               height: 64,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: widget.enabled
-                    ? widget.colors.surface.withOpacity(.6 + (_controller.value * 0.1))
-                    : widget.colors.surface.withOpacity(.3),
-                border: Border.all(
-                  color: widget.colors.primary.withOpacity(.2),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.colors.primary.withOpacity(.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                shape: BoxShape.circle,
+                color: widget.colors.primary.withOpacity(_controller.value * 0.15),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Center(
-                    child: Icon(
-                      Icons.fingerprint,
-                      size: 28,
-                      color: widget.enabled
-                          ? widget.colors.primary
-                          : widget.colors.primary.withOpacity(.5),
-                    ),
-                  ),
+              child: Center(
+                child: Icon(
+                  Icons.fingerprint,
+                  size: 28,
+                  color: widget.enabled
+                      ? widget.colors.primary
+                      : widget.colors.primary.withOpacity(.5),
                 ),
               ),
             ),

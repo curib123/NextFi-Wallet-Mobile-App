@@ -36,13 +36,11 @@ class SendVM extends ChangeNotifier {
   late SendToken _token;
   late String _senderAddr;
   late double _senderBalToken;  // expendable balance (reserve already out)
-  double? _senderBalXlm;       // expendable XLM (for USDC fee checks)
   String? _prefillName;
 
   SendToken get token => _token;
   bool get isXlm => _token == SendToken.xlm;
   double get senderBalanceToken => _senderBalToken;
-  double? get senderBalanceXlm => _senderBalXlm;
   String? get prefillName => _prefillName;
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -64,15 +62,11 @@ class SendVM extends ChangeNotifier {
   String? get error => _err;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Fees
+  // Network fee estimation (Stellar base fee only)
   // ──────────────────────────────────────────────────────────────────────────
 
-  double? _txFeeXlm;
   double? _estNetworkFeeXlm;
-  double? get txFeeXlm => _txFeeXlm;
   double? get estNetworkFeeXlm => _estNetworkFeeXlm;
-
-  int get _opCount => ((_txFeeXlm ?? 0) > 0) ? 2 : 1;
 
   // ──────────────────────────────────────────────────────────────────────────
   // Trustline check (dest USDC only — sender handled by service)
@@ -126,7 +120,6 @@ class SendVM extends ChangeNotifier {
     _token = token;
     _senderAddr = senderAddress;
     _senderBalToken = senderBalanceToken;
-    _senderBalXlm = null;
     _prefillName = prefillName;
 
     _accountId = _seedVM.accountId ?? senderAddress;
@@ -141,7 +134,6 @@ class SendVM extends ChangeNotifier {
     _configured = true;
     _loading = true;
 
-    _txFeeXlm = null;
     _estNetworkFeeXlm = null;
 
     _start();
@@ -152,21 +144,10 @@ class SendVM extends ChangeNotifier {
       final KeyPair kp = await _seedVM.deriveKeyPair();
       _accountId = kp.accountId;
 
-      // For USDC sends we need the sender's expendable XLM to validate fees.
-      // getXlmBalance already returns spendable (reserve subtracted).
-      if (!isXlm) {
-        try {
-          _senderBalXlm = await _svc.getXlmBalance(_accountId!);
-        } catch (_) {
-          _senderBalXlm = null;
-        }
-      }
-
-      // Fees
-      _txFeeXlm = await _svc.getCurrentFeeXlm();
+      // Estimate network fee
       try {
         _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
-            opCount: _opCount, percentile: 90);
+            opCount: 1, percentile: 90);
       } catch (_) {
         _estNetworkFeeXlm = null;
       }
@@ -186,7 +167,7 @@ class SendVM extends ChangeNotifier {
   void _resubscribeFeeStream() {
     _feeSub?.cancel();
     _feeSub = _svc
-        .feeEstimateStream(opCount: _opCount, percentile: 90)
+        .feeEstimateStream(opCount: 1, percentile: 90)
         .listen((f) {
       _estNetworkFeeXlm = f.totalXlm;
       _safeNotify();
@@ -255,17 +236,11 @@ class SendVM extends ChangeNotifier {
   // ──────────────────────────────────────────────────────────────────────────
 
   Future<void> refreshFees() async {
-    _txFeeXlm = await _svc.getCurrentFeeXlm();
     _resubscribeFeeStream();
     try {
       _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
-          opCount: _opCount, percentile: 90);
+          opCount: 1, percentile: 90);
     } catch (_) {}
-    if (!isXlm && _accountId != null) {
-      try {
-        _senderBalXlm = await _svc.getXlmBalance(_accountId!);
-      } catch (_) {}
-    }
     _safeNotify();
   }
 
@@ -275,49 +250,29 @@ class SendVM extends ChangeNotifier {
 
   double _floor7(double v) => (v * 1e7).floor() / 1e7;
 
-  double get _estTotalFee =>
-      _floor7((_txFeeXlm ?? 0) + (_estNetworkFeeXlm ?? 0));
+  /// Network fee for display purposes
+  double get networkFee => _estNetworkFeeXlm ?? 0;
 
-  /// What the recipient will actually receive for XLM sends.
-  /// Budget model: user types a total "budget" that includes fees.
-  double get recipientWillReceiveXlmFromBudget {
-    if (!isXlm) return 0;
-    final fee = _txFeeXlm ?? 0;
-    final net = _estNetworkFeeXlm ?? 0;
-    final budget = _typedAmount;
-    if (budget <= 0) return 0;
-
-    final amountParam = budget - net;
-    if (amountParam <= fee + 1e-7) return 0;
-
-    final recv = _floor7(amountParam - fee);
-    return recv > 0 ? recv : 0;
+  /// What the recipient will actually receive (same as typed amount for XLM)
+  double get recipientWillReceive {
+    if (_typedAmount <= 0) return 0;
+    return _typedAmount;
   }
 
-  /// Total XLM deducted from expendable balance for an XLM send.
-  double get totalDeductXlmIfXlmSend =>
-      isXlm ? (_typedAmount > 0 ? _typedAmount : 0) : 0;
+  /// Total deducted from balance (amount + network fee for XLM)
+  double get totalDeductFromBalance {
+    if (_typedAmount <= 0) return 0;
+    if (isXlm) {
+      return _floor7(_typedAmount + networkFee);
+    } else {
+      // USDC: only USDC amount is deducted, network fee comes from XLM balance
+      return _typedAmount;
+    }
+  }
 
-  /// XLM needed from expendable balance for fees when sending USDC.
-  double get needsXlmForFeesIfUsdcSend => isXlm ? 0 : _estTotalFee;
-
-  /// Remaining expendable balance after this transaction.
+  /// Remaining expendable balance after this transaction
   double get remainingExpendable {
-    if (isXlm) {
-      return (_senderBalToken - _typedAmount).clamp(0, double.infinity);
-    } else {
-      return (_senderBalToken - _typedAmount).clamp(0, double.infinity);
-    }
-  }
-
-  /// Remaining expendable XLM after fees (relevant for USDC sends).
-  double get remainingXlmExpendable {
-    if (isXlm) {
-      return (_senderBalToken - _typedAmount).clamp(0, double.infinity);
-    } else {
-      return ((_senderBalXlm ?? 0) - needsXlmForFeesIfUsdcSend)
-          .clamp(0, double.infinity);
-    }
+    return (_senderBalToken - totalDeductFromBalance).clamp(0, double.infinity);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -330,11 +285,9 @@ class SendVM extends ChangeNotifier {
     if (_typedAmount <= 0) return 'Enter amount';
 
     if (isXlm) {
-      if (_typedAmount > _senderBalToken + 1e-9) {
-        return 'Amount exceeds XLM balance';
-      }
-      if (recipientWillReceiveXlmFromBudget <= 0) {
-        return 'Amount too small after fees';
+      final totalNeeded = totalDeductFromBalance;
+      if (totalNeeded > _senderBalToken + 1e-9) {
+        return 'Amount + network fee exceeds XLM balance';
       }
       return null;
     } else {
@@ -343,12 +296,6 @@ class SendVM extends ChangeNotifier {
       }
       if (_destHasUsdcTL == false) {
         return 'Recipient has no USDC trustline';
-      }
-      final xlmNeed = needsXlmForFeesIfUsdcSend;
-      final xlmBal = _senderBalXlm ?? 0;
-      if (xlmBal + 1e-9 < xlmNeed) {
-        return 'Not enough XLM to cover fees '
-            '(${xlmNeed.toStringAsFixed(7)} XLM required)';
       }
       return null;
     }
@@ -388,41 +335,27 @@ class SendVM extends ChangeNotifier {
     final KeyPair keyPair = await _seedVM.deriveKeyPair();
 
     if (isXlm) {
-      final net = _estNetworkFeeXlm ?? 0;
-      final fee = _txFeeXlm ?? 0;
-
-      final amountParam = _typedAmount - net;
-      if (amountParam <= fee + 1e-7) {
-        throw StateError('Amount too small after fees.');
+      // Verify we have enough for amount + network fee
+      final totalNeeded = totalDeductFromBalance;
+      if (totalNeeded > _senderBalToken + 1e-9) {
+        throw StateError('Amount + network fee exceeds XLM balance');
       }
 
-      final txids = await _svc.sendXlmWithFee(
+      final txid = await _svc.sendXlm(
         keyPair: keyPair,
         destination: _to,
-        amount: _floor7(amountParam),
+        amount: _typedAmount,
         memoText: memo,
       );
-      return txids.first;
+      return txid;
     } else {
-      // Re-check expendable XLM for fee coverage
-      try {
-        _senderBalXlm = await _svc.getXlmBalance(keyPair.accountId);
-      } catch (_) {}
-      final xlmNeed = needsXlmForFeesIfUsdcSend;
-      if ((_senderBalXlm ?? 0) + 1e-9 < xlmNeed) {
-        throw StateError(
-          'Not enough XLM to cover fees '
-              '(${xlmNeed.toStringAsFixed(7)} XLM required).',
-        );
-      }
-
-      final txids = await _svc.sendUsdcWithFee(
+      final txid = await _svc.sendUsdc(
         keyPair: keyPair,
         destination: _to,
         usdcAmount: _typedAmount,
         memoText: memo,
       );
-      return txids.first;
+      return txid;
     }
   }
 }

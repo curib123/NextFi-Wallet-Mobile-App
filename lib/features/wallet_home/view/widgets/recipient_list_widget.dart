@@ -32,13 +32,8 @@ class RecipientListWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
 
-    final fab = FloatingActionButton.extended(
-      heroTag: 'recipient_add_fab',
-      tooltip: 'Add recipient',
-      elevation: 2,
-      highlightElevation: 4,
-      icon: const Icon(LucideIcons.userPlus, size: 20),
-      label: const Text('Add Recipient'),
+    final fab = _ModernAddButton(
+      colors: colors,
       onPressed: () async {
         final saved = await showRecipientUpsertSheet(context);
         if (saved == true && context.mounted) {
@@ -102,6 +97,82 @@ class RecipientListWidget extends StatelessWidget {
             child: body,
           );
         },
+      ),
+    );
+  }
+}
+
+/// Modern add recipient button with clean design
+class _ModernAddButton extends StatefulWidget {
+  final AppColor colors;
+  final VoidCallback onPressed;
+
+  const _ModernAddButton({
+    required this.colors,
+    required this.onPressed,
+  });
+
+  @override
+  State<_ModernAddButton> createState() => _ModernAddButtonState();
+}
+
+class _ModernAddButtonState extends State<_ModernAddButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onPressed();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 150),
+        scale: _isPressed ? 0.95 : 1.0,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                widget.colors.primary,
+                widget.colors.primary.withOpacity(0.85),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: widget.colors.primary.withOpacity(0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                LucideIcons.userPlus,
+                color: Colors.white,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Add Recipient',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -213,7 +284,7 @@ class _RecipientList extends StatelessWidget {
   }
 }
 
-/// Modern, smooth recipient tile with animations
+/// Modern, smooth recipient tile with transparent background
 class RecipientTile extends StatefulWidget {
   final AppColor colors;
   final RecipientAddressModel recipient;
@@ -259,23 +330,14 @@ class _RecipientTileState extends State<RecipientTile> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: widget.colors.surface,
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: _isPressed
                 ? accent.withOpacity(.3)
-                : widget.colors.border.withOpacity(.2),
+                : widget.colors.border.withOpacity(.15),
             width: _isPressed ? 2 : 1,
           ),
-          boxShadow: _isPressed
-              ? [
-            BoxShadow(
-              color: accent.withOpacity(0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ]
-              : null,
         ),
         child: Row(
           children: [

@@ -119,76 +119,64 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                       horizontal: 16,
                       vertical: 12,
                     ),
-                    child: Stack(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Morphing selection indicator
-                        _buildMorphingIndicator(
-                          tabVM.currentIndex,
-                          colors,
-                          isDark,
+                        _buildNavItem(
+                          context: context,
+                          icon: LucideIcons.wallet,
+                          label: 'Wallet',
+                          index: 0,
+                          isSelected: tabVM.currentIndex == 0,
+                          colors: colors,
+                          onTap: () => tabVM.setTab(0),
                         ),
-
-                        // Navigation items
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            _buildNavItem(
-                              context: context,
-                              icon: LucideIcons.wallet,
-                              label: 'Wallet',
-                              index: 0,
-                              isSelected: tabVM.currentIndex == 0,
-                              colors: colors,
-                              onTap: () => tabVM.setTab(0),
-                            ),
-                            _buildNavItem(
-                              context: context,
-                              icon: LucideIcons.activity,
-                              label: 'Activity',
-                              index: 1,
-                              isSelected: tabVM.currentIndex == 1,
-                              colors: colors,
-                              badgeCount: failedActivityCount,
-                              showDot: failedActivityCount == 0 && pendingActivityCount > 0,
-                              onTap: () => tabVM.setTab(1),
-                            ),
-                            _build3DSwapButton(
-                              context: context,
-                              isSelected: tabVM.currentIndex == 2,
-                              colors: colors,
-                              onTap: () => tabVM.setTab(2),
-                            ),
-                            _buildNavItem(
-                              context: context,
-                              icon: LucideIcons.gift,
-                              label: 'Claimable',
-                              index: 3,
-                              isSelected: tabVM.currentIndex == 3,
-                              colors: colors,
-                              badgeCount: totalClaimableCount,
-                              badgeColor: claimableReadyCount > 0
-                                  ? Colors.red
-                                  : Colors.orange,
-                              onTap: () => tabVM.setTab(3),
-                            ),
-                            _buildNavItem(
-                              context: context,
-                              icon: LucideIcons.history,
-                              label: 'History',
-                              index: 4,
-                              isSelected: tabVM.currentIndex == 4,
-                              colors: colors,
-                              badgeCount: unreadTxCount,
-                              showDot: unreadTxCount == 0 && pendingTxCount > 0,
-                              onTap: () {
-                                if (unreadTxCount > 0) {
-                                  transactionsVM.markAllAsRead();
-                                }
-                                tabVM.setTab(4);
-                              },
-                            ),
-                          ],
+                        _buildNavItem(
+                          context: context,
+                          icon: LucideIcons.activity,
+                          label: 'Activity',
+                          index: 1,
+                          isSelected: tabVM.currentIndex == 1,
+                          colors: colors,
+                          badgeCount: failedActivityCount,
+                          showDot: failedActivityCount == 0 && pendingActivityCount > 0,
+                          onTap: () => tabVM.setTab(1),
+                        ),
+                        _build3DSwapButton(
+                          context: context,
+                          isSelected: tabVM.currentIndex == 2,
+                          colors: colors,
+                          onTap: () => tabVM.setTab(2),
+                        ),
+                        _buildNavItem(
+                          context: context,
+                          icon: LucideIcons.gift,
+                          label: 'Claimable',
+                          index: 3,
+                          isSelected: tabVM.currentIndex == 3,
+                          colors: colors,
+                          badgeCount: totalClaimableCount,
+                          badgeColor: claimableReadyCount > 0
+                              ? Colors.red
+                              : Colors.orange,
+                          onTap: () => tabVM.setTab(3),
+                        ),
+                        _buildNavItem(
+                          context: context,
+                          icon: LucideIcons.history,
+                          label: 'History',
+                          index: 4,
+                          isSelected: tabVM.currentIndex == 4,
+                          colors: colors,
+                          badgeCount: unreadTxCount,
+                          showDot: unreadTxCount == 0 && pendingTxCount > 0,
+                          onTap: () {
+                            if (unreadTxCount > 0) {
+                              transactionsVM.markAllAsRead();
+                            }
+                            tabVM.setTab(4);
+                          },
                         ),
                       ],
                     ),
@@ -199,53 +187,6 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
           ),
         );
       },
-    );
-  }
-
-  /// Morphing pill indicator that flows between tabs
-  Widget _buildMorphingIndicator(int currentIndex, AppColor colors, bool isDark) {
-    // Skip center button (index 2)
-    if (currentIndex == 2) {
-      return const SizedBox.shrink();
-    }
-
-    // Calculate position accounting for center button
-    final totalItems = 5;
-    final itemWidth = (MediaQuery.of(context).size.width - 32) / totalItems;
-
-    double left;
-    if (currentIndex < 2) {
-      left = currentIndex * itemWidth;
-    } else {
-      left = currentIndex * itemWidth;
-    }
-
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
-      left: left + (itemWidth - 64) / 2,
-      top: 0,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-        width: 64,
-        height: 58,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              colors.primary.withOpacity(0.12),
-              colors.primary.withOpacity(0.06),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: colors.primary.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-      ),
     );
   }
 

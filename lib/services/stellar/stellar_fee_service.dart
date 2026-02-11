@@ -38,7 +38,7 @@ class StellarFeeService extends StellarBaseService {
   // Fee Address
   // ──────────────────────────────────────────────────────────────────────────
 
-  Future<String> getTransactionFeeAddress() async {
+  Future<String> getSwapFeeAddress() async {
     try {
       return (await configVault.readOrInit()).address;
     } catch (e) {

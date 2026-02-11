@@ -8,10 +8,8 @@ class SlimPreviewCard extends StatelessWidget {
   final bool isXLM;
   final String token;
   final double recipientGets;
-  final double estNetworkFeeXlm;
-  final double txFeeXlm;
+  final double networkFeeXlm;
   final double? totalDeductedXlm;
-  final double? xlmNeededForFees;
   final double? remainingExpendable;
 
   const SlimPreviewCard({
@@ -19,17 +17,14 @@ class SlimPreviewCard extends StatelessWidget {
     required this.isXLM,
     required this.token,
     required this.recipientGets,
-    required this.estNetworkFeeXlm,
-    required this.txFeeXlm,
+    required this.networkFeeXlm,
     this.totalDeductedXlm,
-    this.xlmNeededForFees,
     this.remainingExpendable,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final double estFee = txFeeXlm + estNetworkFeeXlm;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -129,7 +124,7 @@ class SlimPreviewCard extends StatelessWidget {
             c: c,
             icon: LucideIcons.coins,
             label: 'Network fee',
-            value: '${estFee.toStringAsFixed(7)} XLM',
+            value: '${networkFeeXlm.toStringAsFixed(7)} XLM',
           ),
 
           if (isXLM && (totalDeductedXlm ?? 0) > 0) ...[
@@ -139,16 +134,6 @@ class SlimPreviewCard extends StatelessWidget {
               icon: LucideIcons.minusCircle,
               label: 'Total deducted',
               value: '${totalDeductedXlm!.toStringAsFixed(6)} XLM',
-            ),
-          ],
-
-          if (!isXLM) ...[
-            const SizedBox(height: 8),
-            _DetailRow(
-              c: c,
-              icon: LucideIcons.wallet,
-              label: 'XLM for fees',
-              value: '${(xlmNeededForFees ?? 0).toStringAsFixed(7)} XLM',
             ),
           ],
 
