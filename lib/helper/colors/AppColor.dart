@@ -68,8 +68,8 @@ class AppColor {
 
   /// ─── Light Mode ───────────────────────────────────────────────
   static const AppColor light = AppColor._(
-    background: Color(0xFFF7F8FA),   // Neutral gray white
-    surface: Color(0xFFFFFFFF),
+    background: Color(0xFFF1F3F6),   // Neutral gray white
+    surface: Color(0xFFE6E8EC),
     textPrimary: Color(0xFF111827),
     textSecondary: Color(0xFF6B7280),
     border: Color(0xFFE5E7EB),
