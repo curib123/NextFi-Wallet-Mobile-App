@@ -121,27 +121,19 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                 maxHeight: MediaQuery.of(context).size.height * 0.85,
               ),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    widget.colors.surface,
-                    widget.colors.surface.withOpacity(0.98),
-                  ],
-                ),
+                color: widget.colors.surface,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(28),
                 ),
                 border: Border.all(
-                  color: widget.colors.border.withOpacity(0.15),
-                  width: 1.5,
+                  color: widget.colors.border.withOpacity(0.12),
+                  width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 40,
-                    offset: const Offset(0, -8),
-                    spreadRadius: -8,
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
@@ -174,12 +166,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
           width: 40,
           height: 4,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                widget.colors.border.withOpacity(0.5),
-                widget.colors.border.withOpacity(0.3),
-              ],
-            ),
+            color: widget.colors.border.withOpacity(0.4),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -193,18 +180,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      widget.colors.primary.withOpacity(0.12),
-                      widget.colors.primary.withOpacity(0.06),
-                    ],
-                  ),
+                  color: widget.colors.primary.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: widget.colors.primary.withOpacity(0.2),
-                    width: 1.5,
+                    color: widget.colors.primary.withOpacity(0.15),
+                    width: 1,
                   ),
                 ),
                 child: Icon(
@@ -257,19 +237,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
           ),
         ),
         const SizedBox(height: 16),
-        // Divider with gradient
+        // Divider
         Container(
           height: 1,
           margin: const EdgeInsets.symmetric(horizontal: _pad),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                widget.colors.border.withOpacity(0),
-                widget.colors.border.withOpacity(0.3),
-                widget.colors.border.withOpacity(0),
-              ],
-            ),
-          ),
+          color: widget.colors.border.withOpacity(0.15),
         ),
       ],
     );
@@ -305,18 +277,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              widget.colors.background.withOpacity(0.8),
-              widget.colors.background.withOpacity(0.6),
-            ],
-          ),
+          color: widget.colors.background.withOpacity(0.5),
           borderRadius: BorderRadius.circular(_radius),
           border: Border.all(
-            color: widget.colors.border.withOpacity(0.2),
-            width: 1.5,
+            color: widget.colors.border.withOpacity(0.15),
+            width: 1,
           ),
         ),
         child: Column(
@@ -325,18 +290,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    widget.colors.primary.withOpacity(0.12),
-                    widget.colors.primary.withOpacity(0.06),
-                  ],
-                ),
+                color: widget.colors.primary.withOpacity(0.08),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: widget.colors.primary.withOpacity(0.2),
-                  width: 2,
+                  color: widget.colors.primary.withOpacity(0.15),
+                  width: 1.5,
                 ),
               ),
               child: Icon(
@@ -375,13 +333,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
     return Container(
       padding: const EdgeInsets.all(_pad),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            widget.colors.surface.withOpacity(0),
-            widget.colors.surface,
-          ],
+        border: Border(
+          top: BorderSide(
+            color: widget.colors.border.withOpacity(0.08),
+            width: 1,
+          ),
         ),
       ),
       child: Row(
@@ -489,43 +445,18 @@ class _WalletCardState extends State<_WalletCard>
             curve: Curves.easeOut,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: widget.isActive
-                  ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  widget.colors.primary.withOpacity(0.12),
-                  widget.colors.primary.withOpacity(0.06),
-                ],
-              )
-                  : null,
-              color: !widget.isActive
-                  ? (_isPressed
+              color: widget.isActive
+                  ? widget.colors.primary.withOpacity(0.08)
+                  : (_isPressed
                   ? widget.colors.background.withOpacity(0.8)
-                  : widget.colors.background.withOpacity(0.5))
-                  : null,
+                  : widget.colors.background.withOpacity(0.5)),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: widget.isActive
-                    ? widget.colors.primary.withOpacity(0.3)
-                    : widget.colors.border.withOpacity(0.2),
-                width: widget.isActive ? 2 : 1.5,
+                    ? widget.colors.primary.withOpacity(0.25)
+                    : widget.colors.border.withOpacity(0.15),
+                width: widget.isActive ? 1.5 : 1,
               ),
-              boxShadow: _isPressed
-                  ? []
-                  : [
-                if (widget.isActive)
-                  BoxShadow(
-                    color: widget.colors.primary.withOpacity(0.15),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: Row(
               children: [
@@ -534,25 +465,15 @@ class _WalletCardState extends State<_WalletCard>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: widget.isActive
-                          ? [
-                        widget.colors.success.withOpacity(0.15),
-                        widget.colors.success.withOpacity(0.08),
-                      ]
-                          : [
-                        widget.colors.background,
-                        widget.colors.background.withOpacity(0.8),
-                      ],
-                    ),
+                    color: widget.isActive
+                        ? widget.colors.success.withOpacity(0.1)
+                        : widget.colors.background.withOpacity(0.8),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: widget.isActive
-                          ? widget.colors.success.withOpacity(0.3)
-                          : widget.colors.border.withOpacity(0.25),
-                      width: 1.5,
+                          ? widget.colors.success.withOpacity(0.2)
+                          : widget.colors.border.withOpacity(0.2),
+                      width: 1,
                     ),
                   ),
                   child: Icon(
@@ -604,18 +525,11 @@ class _WalletCardState extends State<_WalletCard>
                     padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          widget.colors.success.withOpacity(0.15),
-                          widget.colors.success.withOpacity(0.08),
-                        ],
-                      ),
+                      color: widget.colors.success.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: widget.colors.success.withOpacity(0.35),
-                        width: 1.5,
+                        color: widget.colors.success.withOpacity(0.25),
+                        width: 1,
                       ),
                     ),
                     child: Row(
@@ -631,7 +545,7 @@ class _WalletCardState extends State<_WalletCard>
                           'Active',
                           style: TextStyle(
                             color: widget.colors.success,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             fontSize: 11,
                             letterSpacing: 0.3,
                           ),
@@ -692,25 +606,15 @@ class _NewWalletButtonState extends State<_NewWalletButton> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: _isPressed
-                ? [
-              widget.colors.primary.withOpacity(0.9),
-              widget.colors.primary.withOpacity(0.8),
-            ]
-                : [
-              widget.colors.primary,
-              widget.colors.primary.withOpacity(0.9),
-            ],
-          ),
+          color: _isPressed
+              ? widget.colors.primary.withOpacity(0.9)
+              : widget.colors.primary,
           borderRadius: BorderRadius.circular(12),
           boxShadow: _isPressed
               ? []
               : [
             BoxShadow(
-              color: widget.colors.primary.withOpacity(0.3),
+              color: widget.colors.primary.withOpacity(0.25),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -779,31 +683,18 @@ class _ModernButtonState extends State<_ModernButton> {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         decoration: BoxDecoration(
-          gradient: widget.isPrimary
-              ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: _isPressed
-                ? [
-              widget.colors.primary.withOpacity(0.9),
-              widget.colors.primary.withOpacity(0.8),
-            ]
-                : [
-              widget.colors.primary,
-              widget.colors.primary.withOpacity(0.9),
-            ],
-          )
-              : null,
-          color: !widget.isPrimary
+          color: widget.isPrimary
               ? (_isPressed
+              ? widget.colors.primary.withOpacity(0.9)
+              : widget.colors.primary)
+              : (_isPressed
               ? widget.colors.background.withOpacity(0.8)
-              : widget.colors.background.withOpacity(0.5))
-              : null,
+              : widget.colors.background.withOpacity(0.5)),
           borderRadius: BorderRadius.circular(14),
           border: !widget.isPrimary
               ? Border.all(
-            color: widget.colors.border.withOpacity(0.25),
-            width: 1.5,
+            color: widget.colors.border.withOpacity(0.2),
+            width: 1,
           )
               : null,
           boxShadow: _isPressed
@@ -811,15 +702,10 @@ class _ModernButtonState extends State<_ModernButton> {
               : [
             if (widget.isPrimary)
               BoxShadow(
-                color: widget.colors.primary.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: widget.colors.primary.withOpacity(0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
           ],
         ),
         child: Row(

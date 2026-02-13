@@ -24,28 +24,49 @@ class ImportWalletScreen extends StatefulWidget {
 }
 
 class _ImportWalletScreenState extends State<ImportWalletScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
-  late AnimationController _fabController;
+  final ScrollController _scrollController = ScrollController();
+  bool _keyboardVisible = false;
 
   @override
   void initState() {
     super.initState();
-    _fabController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fabController.forward();
-    });
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
-    _fabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final bottomInset = View.of(context).viewInsets.bottom;
+    final isKeyboardVisible = bottomInset > 0;
+
+    if (_keyboardVisible != isKeyboardVisible) {
+      setState(() {
+        _keyboardVisible = isKeyboardVisible;
+      });
+
+      // Scroll to show suggestions when keyboard appears
+      if (isKeyboardVisible) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (_scrollController.hasClients && mounted) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -202,17 +223,19 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
         return Scaffold(
           backgroundColor: colors.background,
           extendBodyBehindAppBar: true,
+          resizeToAvoidBottomInset: true,
           appBar: _buildAppBar(colors, vm),
           body: Column(
             children: [
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(
                     20,
                     MediaQuery.of(context).padding.top + 80,
                     20,
-                    20,
+                    _keyboardVisible ? 120 : 20,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,6 +255,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
                           duration: const Duration(milliseconds: 300),
                           child: _buildSuggestionChips(colors, vm, s),
                         ),
+                        if (_keyboardVisible) const SizedBox(height: 20),
                       ],
                       const SizedBox(height: 16),
                       FadeInUp(
@@ -246,10 +270,10 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
                   ),
                 ),
               ),
+              // Fixed bottom import section
+              _buildBottomActions(context, vm, s, colors),
             ],
           ),
-          floatingActionButton: _buildFloatingActions(context, vm, s, colors),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         );
       },
     );
@@ -596,84 +620,79 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
     );
   }
 
-  Widget _buildFloatingActions(
+  Widget _buildBottomActions(
       BuildContext context,
       ImportWalletVM vm,
       ImportWalletState s,
       AppColor colors,
       ) {
-    return ScaleTransition(
-      scale: CurvedAnimation(
-        parent: _fabController,
-        curve: Curves.easeOut,
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        MediaQuery.of(context).padding.bottom + 16,
       ),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colors.surface,
-              colors.surface.withOpacity(0.95),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: colors.border.withOpacity(0.15),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-              spreadRadius: -4,
-            ),
-            BoxShadow(
-              color: colors.primary.withOpacity(0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            colors.surface.withOpacity(0.95),
+            colors.surface,
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ModernImportButton(
-              text: s.importing ? "Importing..." : "Import Wallet",
-              colors: colors,
-              enabled: !s.importing,
-              onPressed: s.importing
-                  ? () {}
-                  : () => _openImportChecklistModal(context, vm, s),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  LucideIcons.lightbulb,
-                  size: 16,
-                  color: colors.textSecondary.withOpacity(0.7),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Store offline & never share your recovery phrase",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: colors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
-                    ),
+        border: Border(
+          top: BorderSide(
+            color: colors.border.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ModernImportButton(
+            text: s.importing ? "Importing..." : "Import Wallet",
+            colors: colors,
+            enabled: !s.importing,
+            onPressed: s.importing
+                ? () {}
+                : () => _openImportChecklistModal(context, vm, s),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                LucideIcons.lightbulb,
+                size: 16,
+                color: colors.textSecondary.withOpacity(0.7),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Store offline & never share your recovery phrase",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    height: 1.4,
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
