@@ -24,45 +24,28 @@ class RecipientAddTemplate extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            c.primary.withOpacity(isDark ? 0.08 : 0.06),
-            c.primary.withOpacity(isDark ? 0.04 : 0.02),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: c.primary.withOpacity(isDark ? 0.15 : 0.12),
+          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
           width: 1.5,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.15)
-                : c.primary.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 3),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: Row(
         children: [
           // Icon
           Container(
-            width: 40,
-            height: 40,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
+              color: c.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary),
+            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
 
           // Text
           Expanded(
@@ -78,13 +61,13 @@ class RecipientAddTemplate extends StatelessWidget {
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   _shortenAddress(address),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.7),
+                    color: c.textSecondary.withOpacity(0.6),
                     fontFamily: 'monospace',
                     fontSize: 12,
                     letterSpacing: 0,
@@ -93,28 +76,24 @@ class RecipientAddTemplate extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
 
           // Save CTA
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onAdd,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: c.primary.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Save',
-                  style: TextStyle(
-                    color: c.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    letterSpacing: -0.2,
-                  ),
+          GestureDetector(
+            onTap: onAdd,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: c.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Save',
+                style: TextStyle(
+                  color: c.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: -0.2,
                 ),
               ),
             ),

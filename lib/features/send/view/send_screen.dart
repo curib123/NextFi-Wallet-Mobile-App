@@ -425,26 +425,29 @@ class _SendScreenState extends State<SendScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(c, tokenStr),
+            _buildModernHeader(c, tokenStr),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: _refresh,
                 color: c.primary,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                   children: [
-                    _buildRecipientSection(c, vm),
-                    const SizedBox(height: 32),
-                    _buildAmountSection(c, vm, tokenStr),
+                    const SizedBox(height: 24),
+                    _buildAmountCard(c, vm, tokenStr),
+                    const SizedBox(height: 20),
+                    _buildRecipientCard(c, vm),
                     if (!vm.isXlm) ...[
-                      const SizedBox(height: 28),
-                      _buildTrustlineHint(c, vm),
+                      const SizedBox(height: 16),
+                      _buildTrustlineStatus(c, vm),
                     ],
-                    const SizedBox(height: 28),
-                    _buildMemoSection(c),
-                    const SizedBox(height: 32),
-                    _buildTransactionPreview(c, vm, tokenStr),
-                    const SizedBox(height: 120),
+                    const SizedBox(height: 16),
+                    _buildMemoCard(c),
+                    if (vm.typedAmount > 0) ...[
+                      const SizedBox(height: 24),
+                      _buildTransactionBreakdown(c, vm, tokenStr),
+                    ],
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
@@ -452,120 +455,357 @@ class _SendScreenState extends State<SendScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(c, vm),
+      bottomNavigationBar: _buildFloatingActionBar(c, vm),
     );
   }
 
-  Widget _buildHeader(AppColor c, String tokenStr) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 24, 16),
+  // ──────────────────────────────────────────────────────────────────────────
+  // MODERN HEADER - Minimalist, clean app bar
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildModernHeader(AppColor c, String tokenStr) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 20, 12),
+      decoration: BoxDecoration(
+        color: c.background,
+        border: Border(
+          bottom: BorderSide(
+            color: c.border.withOpacity(0.06),
+            width: 1,
+          ),
+        ),
+      ),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 24),
-            splashRadius: 24,
-            padding: EdgeInsets.zero,
+            icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 22),
+            splashRadius: 22,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Send $tokenStr',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.8,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Transfer crypto to any Stellar address',
-                  style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.65),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ],
+          const SizedBox(width: 8),
+          Text(
+            'Send $tokenStr',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
             ),
           ),
-          AssetLogo(keyOrSymbol: tokenStr, size: 36),
+          const Spacer(),
+          AssetLogo(keyOrSymbol: tokenStr, size: 32),
         ],
       ),
     );
   }
 
-  Widget _buildRecipientSection(AppColor c, SendVM vm) {
-    final addr = _toCtl.text.trim();
-    final hasValidAddr = _looksLikeStellarPk(addr);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.send, size: 16, color: c.primary),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Send to',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (_recipientLoading)
-          _buildLoadingLine(c)
-        else if (hasValidAddr && _resolvedRecipient != null)
-          _buildRecipientBadge(c, _resolvedRecipient!)
-        else if (hasValidAddr && _resolvedRecipient == null)
-            _buildRecipientAddTemplate(c, addr)
-          else
-            _buildRecipientInput(c, addr, isDark),
-      ],
-    );
-  }
-
-  Widget _buildLoadingLine(AppColor c) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // AMOUNT CARD - Hero section with large input and quick actions
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildAmountCard(AppColor c, SendVM vm, String tokenStr) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      height: 64,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: c.border.withOpacity(0.12),
-          width: 1.5,
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.15)
-                : c.border.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.1)
+                : Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 1),
             spreadRadius: 0,
           ),
         ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Label + Balance
+          Row(
+            children: [
+              Text(
+                'Amount',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                  height: 1,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                LucideIcons.wallet,
+                size: 14,
+                color: c.textSecondary.withOpacity(0.5),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Large amount input
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _amtCtl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                  ],
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.w700,
+                    color: c.textPrimary,
+                    letterSpacing: -1.5,
+                    height: 1.1,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: TextStyle(
+                      color: c.textSecondary.withOpacity(0.2),
+                      fontSize: 40,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -1.5,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                  ),
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    tokenStr,
+                    style: TextStyle(
+                      color: c.textSecondary.withOpacity(0.6),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () => _applyPercent(vm, 1.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: c.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: c.primary.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        'MAX',
+                        style: TextStyle(
+                          color: c.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Quick amount chips
+          _buildQuickAmountChips(c, vm),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAmountChips(AppColor c, SendVM vm) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final presets = [
+      ('25%', 0.25),
+      ('50%', 0.50),
+      ('75%', 0.75),
+    ];
+
+    return Row(
+      children: [
+        for (int i = 0; i < presets.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _applyPercent(vm, presets[i].$2),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: (_lastPct != null && (_lastPct! - presets[i].$2).abs() < 0.001)
+                      ? c.primary.withOpacity(0.1)
+                      : (isDark ? c.background : c.surface.withOpacity(0.5)),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: (_lastPct != null && (_lastPct! - presets[i].$2).abs() < 0.001)
+                        ? c.primary.withOpacity(0.3)
+                        : c.border.withOpacity(isDark ? 0.1 : 0.15),
+                    width: 1,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    presets[i].$1,
+                    style: TextStyle(
+                      color: (_lastPct != null && (_lastPct! - presets[i].$2).abs() < 0.001)
+                          ? c.primary
+                          : c.textSecondary.withOpacity(0.7),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // RECIPIENT CARD - Clean address input with contact integration
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildRecipientCard(AppColor c, SendVM vm) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final addr = _toCtl.text.trim();
+    final hasValidAddr = _looksLikeStellarPk(addr);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Send to',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const Spacer(),
+              // Quick action buttons
+              _buildQuickActionButton(
+                c,
+                icon: LucideIcons.qrCode,
+                onTap: _openScanner,
+              ),
+              const SizedBox(width: 8),
+              _buildQuickActionButton(
+                c,
+                icon: LucideIcons.users,
+                onTap: _openRecipientsPicker,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          if (_recipientLoading)
+            _buildRecipientLoadingState(c)
+          else if (hasValidAddr && _resolvedRecipient != null)
+            _buildSavedRecipientChip(c, _resolvedRecipient!)
+          else if (hasValidAddr && _resolvedRecipient == null)
+              _buildNewRecipientChip(c, addr)
+            else
+              _buildRecipientInputField(c, addr, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton(AppColor c, {required IconData icon, required VoidCallback onTap}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isDark ? c.background : c.surface.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: c.border.withOpacity(isDark ? 0.1 : 0.15),
+            width: 1,
+          ),
+        ),
+        child: Icon(icon, size: 18, color: c.primary.withOpacity(0.8)),
+      ),
+    );
+  }
+
+  Widget _buildRecipientLoadingState(AppColor c) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.primary.withOpacity(0.1),
+          width: 1,
+        ),
       ),
       child: Center(
         child: SizedBox(
@@ -573,82 +813,50 @@ class _SendScreenState extends State<SendScreen> {
           width: 20,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: c.primary.withOpacity(0.6),
+            color: c.primary.withOpacity(0.5),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildRecipientBadge(AppColor c, RecipientAddressModel recipient) {
+  Widget _buildSavedRecipientChip(AppColor c, RecipientAddressModel recipient) {
     final color = Color(recipient.color);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(isDark ? 0.1 : 0.08),
-            color.withOpacity(isDark ? 0.05 : 0.03),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
+        color: color.withOpacity(isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: color.withOpacity(isDark ? 0.2 : 0.15),
           width: 1.5,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : color.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.1)
-                : color.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: Row(
         children: [
+          // Avatar
           Container(
-            width: 40,
-            height: 40,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  color.withOpacity(0.25),
-                  color.withOpacity(0.12),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
               child: Text(
-                recipient.name.isNotEmpty
-                    ? recipient.name[0].toUpperCase()
-                    : '?',
+                recipient.name.isNotEmpty ? recipient.name[0].toUpperCase() : '?',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
-                  fontSize: 17,
+                  fontSize: 16,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
+          // Name & Address
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,18 +867,16 @@ class _SendScreenState extends State<SendScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 15,
                     letterSpacing: -0.3,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   _shortenAddress(recipient.address),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.7),
+                    color: c.textSecondary.withOpacity(0.6),
                     fontFamily: 'monospace',
                     fontSize: 12,
                     letterSpacing: 0,
@@ -679,37 +885,20 @@ class _SendScreenState extends State<SendScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          // Edit button
           GestureDetector(
             onTap: () async {
-              final ok = await showRecipientUpsertSheet(
-                context,
-                initial: _resolvedRecipient,
-              );
+              final ok = await showRecipientUpsertSheet(context, initial: _resolvedRecipient);
               if (ok == true && mounted) _lookupRecipient(_toCtl.text.trim());
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.pencil, size: 14, color: color),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Edit',
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ],
-              ),
+              child: Icon(LucideIcons.pencil, size: 16, color: color),
             ),
           ),
         ],
@@ -717,48 +906,32 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  Widget _buildRecipientAddTemplate(AppColor c, String addr) {
+  Widget _buildNewRecipientChip(AppColor c, String addr) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            c.primary.withOpacity(isDark ? 0.08 : 0.06),
-            c.primary.withOpacity(isDark ? 0.04 : 0.02),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: c.primary.withOpacity(isDark ? 0.15 : 0.12),
+          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
           width: 1.5,
+          style: BorderStyle.solid,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.15)
-                : c.primary.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 3),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
+              color: c.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary),
+            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -772,13 +945,11 @@ class _SendScreenState extends State<SendScreen> {
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   _shortenAddress(addr),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.7),
+                    color: c.textSecondary.withOpacity(0.6),
                     fontFamily: 'monospace',
                     fontSize: 12,
                     letterSpacing: 0,
@@ -787,17 +958,17 @@ class _SendScreenState extends State<SendScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: () async {
               final saved = await showRecipientUpsertSheet(context, address: addr);
               if (saved == true && mounted) _lookupRecipient(addr);
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: c.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 'Save',
@@ -815,25 +986,15 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  Widget _buildRecipientInput(AppColor c, String addr, bool isDark) {
+  Widget _buildRecipientInputField(AppColor c, String addr, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15),
+          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
           width: 1.5,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.1)
-                : c.border.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: TextField(
         controller: _toCtl,
@@ -849,543 +1010,217 @@ class _SendScreenState extends State<SendScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Enter Stellar address (G…)',
+          hintText: 'Paste or enter Stellar address',
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.4),
             fontSize: 14,
             letterSpacing: -0.2,
           ),
           prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 18, right: 12),
-            child: Icon(LucideIcons.user, color: c.textSecondary.withOpacity(0.5), size: 20),
+            padding: const EdgeInsets.only(left: 16, right: 12),
+            child: Icon(LucideIcons.wallet, color: c.textSecondary.withOpacity(0.5), size: 18),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
-          suffixIcon: Padding(
+          suffixIcon: addr.isNotEmpty
+              ? Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: _openScanner,
-                  icon: Icon(LucideIcons.qrCode, size: 20, color: c.primary.withOpacity(0.8)),
-                  splashRadius: 20,
-                  tooltip: 'Scan QR',
-                ),
-                IconButton(
-                  onPressed: _openRecipientsPicker,
-                  icon: Icon(LucideIcons.contact, size: 20, color: c.primary.withOpacity(0.8)),
-                  splashRadius: 20,
-                  tooltip: 'Contacts',
-                ),
-                if (addr.isNotEmpty)
-                  IconButton(
-                    onPressed: () {
-                      _toCtl.clear();
-                      setState(() => _resolvedRecipient = null);
-                      context.read<SendVM>().setRecipient('');
-                    },
-                    icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
-                    splashRadius: 20,
-                  ),
-              ],
+            child: IconButton(
+              onPressed: () {
+                _toCtl.clear();
+                setState(() => _resolvedRecipient = null);
+                context.read<SendVM>().setRecipient('');
+              },
+              icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
+              splashRadius: 20,
             ),
-          ),
+          )
+              : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
       ),
     );
   }
 
-  Widget _buildAmountSection(AppColor c, SendVM vm, String tokenStr) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.coins, size: 16, color: c.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Amount',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-            Text(
-              '${vm.senderBalanceToken.toStringAsFixed(vm.isXlm ? 4 : 2)} $tokenStr',
-              style: TextStyle(
-                color: c.textSecondary.withOpacity(0.7),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withOpacity(0.12)
-                    : c.border.withOpacity(0.07),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 18, right: 14),
-                child: AssetLogo(keyOrSymbol: tokenStr, size: 32),
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _amtCtl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
-                  ],
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: c.textPrimary,
-                    letterSpacing: -0.8,
-                    height: 1.2,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '0.00',
-                    hintStyle: TextStyle(
-                      color: c.textSecondary.withOpacity(0.25),
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.8,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 20),
-                  ),
-                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: GestureDetector(
-                  onTap: () => _applyPercent(vm, 1.0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          c.primary.withOpacity(isDark ? 0.2 : 0.15),
-                          c.primary.withOpacity(isDark ? 0.12 : 0.08),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: c.primary.withOpacity(isDark ? 0.25 : 0.2),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark
-                              ? c.primary.withOpacity(0.2)
-                              : c.primary.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                          spreadRadius: 0,
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      'MAX',
-                      style: TextStyle(
-                        color: c.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Percent chips
-        _buildPercentChips(c, vm),
-      ],
-    );
-  }
-
-  Widget _buildPercentChips(AppColor c, SendVM vm) {
-    final presets = [
-      ('25%', 0.25),
-      ('50%', 0.50),
-      ('75%', 0.75),
-    ];
-
-    return Row(
-      children: [
-        for (int i = 0; i < presets.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: _buildPercentChip(
-              c,
-              label: presets[i].$1,
-              pct: presets[i].$2,
-              isActive: _lastPct != null &&
-                  (_lastPct! - presets[i].$2).abs() < 0.001,
-              onTap: () => _applyPercent(vm, presets[i].$2),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPercentChip(
-      AppColor c, {
-        required String label,
-        required double pct,
-        required bool isActive,
-        required VoidCallback onTap,
-      }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive
-              ? c.primary.withOpacity(0.12)
-              : (isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7)),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive
-                ? c.primary.withOpacity(0.3)
-                : c.border.withOpacity(isDark ? 0.12 : 0.15),
-            width: 1,
-          ),
-          boxShadow: isActive
-              ? [
-            BoxShadow(
-              color: isDark
-                  ? c.primary.withOpacity(0.15)
-                  : c.primary.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-              spreadRadius: 0,
-            ),
-          ]
-              : [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withOpacity(0.08)
-                  : c.border.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isActive ? c.primary : c.textSecondary,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
-              fontSize: 13,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTrustlineHint(AppColor c, SendVM vm) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // TRUSTLINE STATUS - Inline verification banner
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildTrustlineStatus(AppColor c, SendVM vm) {
     if (vm.to.trim().isEmpty) return const SizedBox.shrink();
 
     if (vm.checking) {
-      return _buildHintContainer(
+      return _buildStatusBanner(
         c,
-        gradient: [
-          c.primary.withOpacity(0.08),
-          c.primary.withOpacity(0.04),
-        ],
-        borderColor: c.primary.withOpacity(0.15),
-        child: Row(
-          children: [
-            SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: c.primary.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                'Verifying USDC trustline…',
-                style: TextStyle(
-                  color: c.textSecondary.withOpacity(0.8),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ),
-          ],
-        ),
+        icon: null,
+        title: 'Verifying trustline…',
+        color: c.primary,
+        showSpinner: true,
       );
     }
 
     if (vm.destHasUsdcTL == false) {
-      return _buildHintContainer(
+      return _buildStatusBanner(
         c,
-        gradient: [
-          c.error.withOpacity(0.1),
-          c.error.withOpacity(0.05),
-        ],
-        borderColor: c.error.withOpacity(0.2),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: c.error.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.alertTriangle, size: 16, color: c.error),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'No USDC Trustline',
-                    style: TextStyle(
-                      color: c.error,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'This address cannot receive USDC. The recipient needs to add a USDC trustline first.',
-                    style: TextStyle(
-                      color: c.error.withOpacity(0.85),
-                      fontSize: 12,
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        icon: LucideIcons.alertCircle,
+        title: 'Cannot receive USDC',
+        subtitle: 'Recipient needs to add USDC trustline',
+        color: c.error,
       );
     }
 
     if (vm.destHasUsdcTL == true) {
-      return _buildHintContainer(
+      return _buildStatusBanner(
         c,
-        gradient: [
-          c.success.withOpacity(0.1),
-          c.success.withOpacity(0.05),
-        ],
-        borderColor: c.success.withOpacity(0.2),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: c.success.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.checkCircle2, size: 16, color: c.success),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Trustline Verified',
-                    style: TextStyle(
-                      color: c.success,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'This address can receive USDC',
-                    style: TextStyle(
-                      color: c.textSecondary.withOpacity(0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        icon: LucideIcons.checkCircle2,
+        title: 'Ready to receive USDC',
+        color: c.success,
       );
     }
 
     return const SizedBox.shrink();
   }
 
-  Widget _buildHintContainer(
+  Widget _buildStatusBanner(
       AppColor c, {
-        required List<Color> gradient,
-        required Color borderColor,
-        required Widget child,
+        IconData? icon,
+        required String title,
+        String? subtitle,
+        required Color color,
+        bool showSpinner = false,
       }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 300),
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, _) {
-        return Opacity(
-          opacity: value,
-          child: Transform.scale(
-            scale: 0.95 + (0.05 * value),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: gradient,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withOpacity(isDark ? 0.2 : 0.15),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          if (showSpinner)
+            SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: color.withOpacity(0.7),
+              ),
+            )
+          else if (icon != null)
+            Icon(icon, size: 18, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: borderColor,
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDark
-                        ? Colors.black.withOpacity(0.15)
-                        : borderColor.withOpacity(0.1),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                    spreadRadius: 0,
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: color.withOpacity(0.7),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                    ),
                   ),
                 ],
-              ),
-              child: child,
+              ],
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildMemoSection(AppColor c) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // MEMO CARD - Optional note field
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildMemoCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasError = _memoBytes > 28;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.textSecondary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.messageSquare, size: 16, color: c.textSecondary.withOpacity(0.7)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Memo (optional)',
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: hasError
+              ? c.error.withOpacity(0.3)
+              : c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Memo',
                 style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 16,
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
+                  letterSpacing: 0.3,
                 ),
               ),
-            ),
-            Text(
-              '$_memoBytes / 28',
-              style: TextStyle(
-                color: _memoBytes > 28 ? c.error : c.textSecondary.withOpacity(0.6),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: c.textSecondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'OPTIONAL',
+                  style: TextStyle(
+                    color: c.textSecondary.withOpacity(0.5),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: _memoBytes > 28
-                  ? c.error.withOpacity(0.3)
-                  : (isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15)),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withOpacity(0.1)
-                    : c.border.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-                spreadRadius: 0,
+              const Spacer(),
+              Text(
+                '$_memoBytes / 28',
+                style: TextStyle(
+                  color: hasError ? c.error : c.textSecondary.withOpacity(0.5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
-          child: TextField(
+          const SizedBox(height: 14),
+          TextField(
             controller: _memoCtl,
             style: TextStyle(
               fontSize: 15,
@@ -1396,177 +1231,161 @@ class _SendScreenState extends State<SendScreen> {
             decoration: InputDecoration(
               hintText: 'Add a note (e.g., for exchanges)',
               hintStyle: TextStyle(
-                color: c.textSecondary.withOpacity(0.4),
+                color: c.textSecondary.withOpacity(0.35),
                 fontSize: 14,
                 letterSpacing: -0.2,
               ),
-              suffixIcon: _memoCtl.text.isEmpty
-                  ? null
-                  : IconButton(
-                onPressed: () => _memoCtl.clear(),
-                icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
-              ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              contentPadding: EdgeInsets.zero,
+              isDense: true,
             ),
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
-        ),
-        if (_memoBytes > 28) ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Text(
-              'Memo exceeds 28 bytes limit',
-              style: TextStyle(
-                color: c.error,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildTransactionPreview(AppColor c, SendVM vm, String tokenStr) {
-    if (vm.typedAmount <= 0) return const SizedBox.shrink();
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(LucideIcons.fileText, size: 16, color: c.textSecondary.withOpacity(0.7)),
-            const SizedBox(width: 10),
-            Text(
-              'Transaction Summary',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withOpacity(0.15)
-                    : c.border.withOpacity(0.08),
-                blurRadius: 14,
-                offset: const Offset(0, 3),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Recipient receives
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: c.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: c.primary.withOpacity(0.15),
-                    width: 1,
+          if (hasError) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(LucideIcons.alertCircle, size: 14, color: c.error),
+                const SizedBox(width: 6),
+                Text(
+                  'Memo exceeds 28 bytes',
+                  style: TextStyle(
+                    color: c.error,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? c.primary.withOpacity(0.12)
-                          : c.primary.withOpacity(0.08),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                      spreadRadius: 0,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.arrowUpRight, size: 16, color: c.primary),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Recipient receives',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${_numFmt.format(vm.recipientWillReceive)} $tokenStr',
-                      style: TextStyle(
-                        color: c.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              // Network fee
-              _buildDetailRow(
-                c,
-                icon: LucideIcons.coins,
-                label: 'Network fee',
-                value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
-              ),
-              if (vm.isXlm && vm.totalDeductFromBalance > 0) ...[
-                const SizedBox(height: 10),
-                _buildDetailRow(
-                  c,
-                  icon: LucideIcons.minusCircle,
-                  label: 'Total deducted',
-                  value: '${_numFmt.format(vm.totalDeductFromBalance)} XLM',
                 ),
               ],
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Divider(
-                  color: c.border.withOpacity(0.2),
-                  height: 1,
-                ),
-              ),
-              _buildDetailRow(
-                c,
-                icon: LucideIcons.wallet,
-                label: 'Remaining balance',
-                value: '${_fmtAmount(vm.remainingExpendable)} $tokenStr',
-                isMuted: true,
-              ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildDetailRow(
+  // ──────────────────────────────────────────────────────────────────────────
+  // TRANSACTION BREAKDOWN - Fee summary
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildTransactionBreakdown(AppColor c, SendVM vm, String tokenStr) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.15)
+                : Colors.black.withOpacity(0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 3),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Transaction summary',
+            style: TextStyle(
+              color: c.textSecondary.withOpacity(0.7),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Recipient receives
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: c.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: c.primary.withOpacity(0.15),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.arrowUpRight, size: 16, color: c.primary.withOpacity(0.7)),
+                const SizedBox(width: 10),
+                Text(
+                  'Recipient receives',
+                  style: TextStyle(
+                    color: c.textSecondary.withOpacity(0.8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${_numFmt.format(vm.recipientWillReceive)} $tokenStr',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Network fee
+          _buildFeeRow(
+            c,
+            label: 'Network fee',
+            value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
+            icon: LucideIcons.zap,
+          ),
+
+          if (vm.isXlm && vm.totalDeductFromBalance > 0) ...[
+            const SizedBox(height: 8),
+            _buildFeeRow(
+              c,
+              label: 'Total deducted',
+              value: '${_numFmt.format(vm.totalDeductFromBalance)} XLM',
+              icon: LucideIcons.minusCircle,
+            ),
+          ],
+
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Divider(
+              color: c.border.withOpacity(0.15),
+              height: 1,
+            ),
+          ),
+
+          _buildFeeRow(
+            c,
+            label: 'Remaining balance',
+            value: '${_fmtAmount(vm.remainingExpendable)} $tokenStr',
+            icon: LucideIcons.wallet,
+            muted: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeeRow(
       AppColor c, {
-        required IconData icon,
         required String label,
         required String value,
-        bool isMuted = false,
+        required IconData icon,
+        bool muted = false,
       }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1575,29 +1394,28 @@ class _SendScreenState extends State<SendScreen> {
           Icon(
             icon,
             size: 15,
-            color: isMuted
+            color: muted
                 ? c.textSecondary.withOpacity(0.4)
-                : c.textSecondary.withOpacity(0.6),
+                : c.textSecondary.withOpacity(0.5),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
               style: TextStyle(
-                color: c.textSecondary.withOpacity(isMuted ? 0.5 : 0.7),
+                color: c.textSecondary.withOpacity(muted ? 0.5 : 0.7),
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                letterSpacing: -0.2,
               ),
             ),
           ),
           Text(
             value,
             style: TextStyle(
-              color: isMuted ? c.textSecondary : c.textPrimary,
+              color: muted ? c.textSecondary : c.textPrimary,
               fontWeight: FontWeight.w600,
               fontSize: 13,
-              letterSpacing: -0.3,
+              letterSpacing: -0.2,
             ),
           ),
         ],
@@ -1605,33 +1423,36 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  Widget _buildBottomBar(AppColor c, SendVM vm) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // FLOATING ACTION BAR - Modern bottom CTA
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildFloatingActionBar(AppColor c, SendVM vm) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final canSubmit = vm.blockingReason == null && _memoBytes <= 28;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: c.background,
-        border: Border(
-          top: BorderSide(
-            color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.1),
-            width: 1,
-          ),
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.1 : 0.08),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : c.border.withOpacity(0.12),
-            blurRadius: isDark ? 32 : 24,
-            offset: const Offset(0, -6),
+                ? Colors.black.withOpacity(0.4)
+                : Colors.black.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
             spreadRadius: 0,
           ),
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.15)
-                : c.border.withOpacity(0.06),
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
             blurRadius: 12,
             offset: const Offset(0, -2),
             spreadRadius: 0,
@@ -1641,8 +1462,7 @@ class _SendScreenState extends State<SendScreen> {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          width: double.infinity,
-          height: 58,
+          height: 56,
           child: ElevatedButton(
             onPressed: canSubmit
                 ? () async {
@@ -1651,16 +1471,14 @@ class _SendScreenState extends State<SendScreen> {
             }
                 : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: canSubmit ? c.primary : c.primary.withOpacity(0.5),
-              foregroundColor: Colors.white,
+              backgroundColor: canSubmit ? c.primary : c.surface,
+              foregroundColor: canSubmit ? Colors.white : c.textSecondary.withOpacity(0.4),
               disabledBackgroundColor: c.surface,
               disabledForegroundColor: c.textSecondary.withOpacity(0.4),
-              elevation: canSubmit ? 4 : 0,
-              shadowColor: canSubmit
-                  ? c.primary.withOpacity(isDark ? 0.3 : 0.2)
-                  : Colors.transparent,
+              elevation: 0,
+              shadowColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
             child: Row(
@@ -1689,7 +1507,7 @@ class _SendScreenState extends State<SendScreen> {
 }
 
 // ============================================================================
-// REVIEW SHEET
+// REVIEW SHEET - Redesigned confirmation modal
 // ============================================================================
 
 class _ReviewSheet extends StatefulWidget {
@@ -1757,15 +1575,24 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     final vm = context.watch<SendVM>();
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
     final numFmt = NumberFormat('#,##0.######');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Material(
-        color: c.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? c.surface : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 40,
+              offset: const Offset(0, -8),
+              spreadRadius: 0,
+            ),
+          ],
         ),
         child: SafeArea(
           top: false,
@@ -1774,11 +1601,11 @@ class _ReviewSheetState extends State<_ReviewSheet> {
             children: [
               // Handle
               Container(
-                width: 40,
+                width: 36,
                 height: 4,
-                margin: const EdgeInsets.only(top: 14, bottom: 24),
+                margin: const EdgeInsets.only(top: 12, bottom: 20),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.4),
+                  color: c.border.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1788,85 +1615,58 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: c.primary.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(LucideIcons.fileCheck, size: 18, color: c.primary),
-                    ),
-                    const SizedBox(width: 12),
                     Text(
-                      'Review Transaction',
+                      'Confirm transaction',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 20,
+                        fontSize: 22,
                         color: c.textPrimary,
-                        letterSpacing: -0.5,
+                        letterSpacing: -0.8,
                       ),
                     ),
                     const Spacer(),
-                    AssetLogo(keyOrSymbol: tokenStr, size: 24),
+                    AssetLogo(keyOrSymbol: tokenStr, size: 28),
                   ],
                 ),
               ),
 
               const SizedBox(height: 24),
 
-              // Amount highlight
+              // Amount hero
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        c.primary.withOpacity(0.1),
-                        c.primary.withOpacity(0.05),
+                        c.primary.withOpacity(0.12),
+                        c.primary.withOpacity(0.06),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: c.primary.withOpacity(0.2),
                       width: 1.5,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: c.primary.withOpacity(0.12),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                        spreadRadius: 0,
-                      ),
-                      BoxShadow(
-                        color: c.primary.withOpacity(0.06),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                        spreadRadius: 0,
-                      ),
-                    ],
                   ),
                   child: Column(
                     children: [
-                      Row(
-                        children: [
-                          Icon(LucideIcons.arrowUpRight, size: 16, color: c.primary),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Recipient receives',
-                            style: TextStyle(
-                              color: c.textSecondary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'Sending',
+                        style: TextStyle(
+                          color: c.textSecondary.withOpacity(0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
@@ -1875,8 +1675,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                             style: TextStyle(
                               color: c.primary,
                               fontWeight: FontWeight.w800,
-                              fontSize: 32,
-                              letterSpacing: -1,
+                              fontSize: 36,
+                              letterSpacing: -1.5,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1885,8 +1685,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                             style: TextStyle(
                               color: c.primary.withOpacity(0.7),
                               fontWeight: FontWeight.w600,
-                              fontSize: 18,
-                              letterSpacing: -0.3,
+                              fontSize: 20,
+                              letterSpacing: -0.5,
                             ),
                           ),
                         ],
@@ -1904,65 +1704,63 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   children: [
-                    _buildDetailCard(
+                    _buildReviewSection(
                       c,
                       children: [
-                        _buildDetailRow(
+                        _buildReviewRow(
                           c,
-                          icon: LucideIcons.userCircle,
                           label: 'From',
                           value: _shortenAddress(vm.senderAddress),
-                          mono: true,
+                          icon: LucideIcons.userCircle,
                         ),
-                        Divider(height: 24, color: c.border.withOpacity(0.2)),
-                        _buildDetailRow(
+                        const SizedBox(height: 14),
+                        _buildReviewRow(
                           c,
-                          icon: LucideIcons.target,
                           label: widget.recipientName != null ? 'To (${widget.recipientName})' : 'To',
                           value: _shortenAddress(vm.to),
-                          mono: true,
+                          icon: LucideIcons.target,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    _buildDetailCard(
+                    const SizedBox(height: 12),
+                    _buildReviewSection(
                       c,
                       children: [
-                        _buildDetailRow(
+                        _buildReviewRow(
                           c,
-                          icon: LucideIcons.coins,
                           label: 'Network fee',
                           value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
+                          icon: LucideIcons.zap,
                         ),
                         if (vm.isXlm) ...[
-                          Divider(height: 24, color: c.border.withOpacity(0.2)),
-                          _buildDetailRow(
+                          const SizedBox(height: 14),
+                          _buildReviewRow(
                             c,
-                            icon: LucideIcons.minusCircle,
                             label: 'Total deducted',
                             value: '${numFmt.format(vm.totalDeductFromBalance)} XLM',
+                            icon: LucideIcons.minusCircle,
                           ),
                         ],
-                        Divider(height: 24, color: c.border.withOpacity(0.2)),
-                        _buildDetailRow(
+                        const SizedBox(height: 14),
+                        _buildReviewRow(
                           c,
-                          icon: LucideIcons.wallet,
                           label: 'Remaining',
                           value: '${numFmt.format(vm.remainingExpendable)} $tokenStr',
+                          icon: LucideIcons.wallet,
                           muted: true,
                         ),
                       ],
                     ),
                     if (widget.memo.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      _buildDetailCard(
+                      const SizedBox(height: 12),
+                      _buildReviewSection(
                         c,
                         children: [
-                          _buildDetailRow(
+                          _buildReviewRow(
                             c,
-                            icon: LucideIcons.messageSquare,
                             label: 'Memo',
                             value: widget.memo,
+                            icon: LucideIcons.messageSquare,
                           ),
                         ],
                       ),
@@ -1987,7 +1785,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           side: BorderSide(
-                            color: c.border.withOpacity(0.4),
+                            color: c.border.withOpacity(0.3),
                             width: 1.5,
                           ),
                           foregroundColor: c.textSecondary,
@@ -2002,7 +1800,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
                       child: ElevatedButton(
@@ -2014,10 +1812,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                           ),
                           backgroundColor: _sending ? c.primary.withOpacity(0.7) : c.primary,
                           foregroundColor: Colors.white,
-                          elevation: _sending ? 0 : 4,
-                          shadowColor: _sending
-                              ? Colors.transparent
-                              : c.primary.withOpacity(0.3),
+                          elevation: _sending ? 0 : 2,
+                          shadowColor: c.primary.withOpacity(0.3),
                         ),
                         child: _sending
                             ? Row(
@@ -2042,12 +1838,12 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                             ),
                           ],
                         )
-                            : Row(
+                            : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(LucideIcons.checkCircle, size: 18),
-                            const SizedBox(width: 12),
-                            const Text(
+                            Icon(LucideIcons.checkCircle, size: 18),
+                            SizedBox(width: 12),
+                            Text(
                               'Confirm Send',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
@@ -2069,39 +1865,28 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     );
   }
 
-  Widget _buildDetailCard(AppColor c, {required List<Widget> children}) {
+  Widget _buildReviewSection(AppColor c, {required List<Widget> children}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(14),
+        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? c.border.withOpacity(0.15) : c.border.withOpacity(0.2),
-          width: 1.5,
+          color: c.border.withOpacity(isDark ? 0.1 : 0.15),
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.12)
-                : c.border.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: Column(children: children),
     );
   }
 
-  Widget _buildDetailRow(
+  Widget _buildReviewRow(
       AppColor c, {
-        required IconData icon,
         required String label,
         required String value,
-        bool mono = false,
+        required IconData icon,
         bool muted = false,
       }) {
     return Row(
@@ -2111,8 +1896,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
           icon,
           size: 16,
           color: muted
-              ? c.textSecondary.withOpacity(0.5)
-              : c.textSecondary.withOpacity(0.65),
+              ? c.textSecondary.withOpacity(0.4)
+              : c.textSecondary.withOpacity(0.6),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -2125,20 +1910,16 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   color: c.textSecondary.withOpacity(muted ? 0.5 : 0.7),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  letterSpacing: -0.1,
                 ),
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 4),
               SelectableText(
                 value,
-                maxLines: 2,
                 style: TextStyle(
                   color: muted ? c.textSecondary : c.textPrimary,
                   fontWeight: FontWeight.w600,
-                  fontFamily: mono ? 'monospace' : null,
-                  fontSize: mono ? 12 : 13,
-                  letterSpacing: mono ? 0 : -0.2,
-                  height: 1.3,
+                  fontSize: 14,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
@@ -2165,19 +1946,19 @@ class _LoadingState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            height: 32,
-            width: 32,
+            height: 40,
+            width: 40,
             child: CircularProgressIndicator(
               strokeWidth: 3,
               color: c.primary.withOpacity(0.5),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Text(
             'Loading wallet…',
             style: TextStyle(
               color: c.textSecondary.withOpacity(0.6),
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
               letterSpacing: -0.2,
             ),
@@ -2210,29 +1991,29 @@ class _ErrorState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: c.error.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
                     color: isDark
                         ? Colors.black.withOpacity(0.2)
                         : c.error.withOpacity(0.1),
-                    blurRadius: 16,
+                    blurRadius: 20,
                     offset: const Offset(0, 4),
                     spreadRadius: 0,
                   ),
                 ],
               ),
-              child: Icon(LucideIcons.alertTriangle, size: 32, color: c.error),
+              child: Icon(LucideIcons.alertTriangle, size: 40, color: c.error),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Text(
-              'Unable to Load Wallet',
+              'Unable to Load',
               style: TextStyle(
                 color: c.textPrimary,
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.5,
               ),
@@ -2248,19 +2029,19 @@ class _ErrorState extends StatelessWidget {
                 letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             ElevatedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              icon: const Icon(LucideIcons.refreshCw, size: 18),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 backgroundColor: c.primary,
                 foregroundColor: Colors.white,
-                elevation: 3,
+                elevation: 2,
                 shadowColor: c.primary.withOpacity(0.3),
               ),
             ),

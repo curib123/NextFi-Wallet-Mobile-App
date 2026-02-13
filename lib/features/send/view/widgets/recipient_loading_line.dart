@@ -8,27 +8,16 @@ class RecipientLoadingLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      height: 64,
+      height: 56,
       decoration: BoxDecoration(
-        color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(18),
+        color: c.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: c.border.withOpacity(0.12),
-          width: 1.5,
+          color: c.primary.withOpacity(0.1),
+          width: 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.15)
-                : c.border.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: Center(
         child: SizedBox(
@@ -36,7 +25,7 @@ class RecipientLoadingLine extends StatelessWidget {
           width: 20,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: c.primary.withOpacity(0.6),
+            color: c.primary.withOpacity(0.5),
           ),
         ),
       ),

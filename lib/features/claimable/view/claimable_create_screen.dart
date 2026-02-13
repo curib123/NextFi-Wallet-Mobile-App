@@ -332,27 +332,28 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(c),
+            _buildModernHeader(c),
             Expanded(
               child: Form(
                 key: _form,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                   children: [
-                    _buildModeSelector(c),
-                    const SizedBox(height: 48),
-                    _buildRecipientSection(c),
-                    const SizedBox(height: 36),
-                    _buildAmountSection(c, currentBal),
+                    const SizedBox(height: 20),
+                    _buildModeCard(c),
+                    const SizedBox(height: 20),
+                    _buildAmountCard(c, currentBal),
+                    const SizedBox(height: 20),
+                    _buildRecipientCard(c),
                     if (_mode == ClaimableMode.timeLocked) ...[
-                      const SizedBox(height: 36),
-                      _buildUnlockSection(c),
+                      const SizedBox(height: 20),
+                      _buildUnlockCard(c),
                     ],
-                    const SizedBox(height: 36),
-                    _buildExpirationSection(c),
+                    const SizedBox(height: 20),
+                    _buildExpirationCard(c),
                     if (_mode == ClaimableMode.timeLocked || _hasExpiry) ...[
-                      const SizedBox(height: 28),
-                      _buildInfoBanner(c),
+                      const SizedBox(height: 20),
+                      _buildInfoCard(c),
                     ],
                     const SizedBox(height: 100),
                   ],
@@ -362,22 +363,33 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(c),
+      bottomNavigationBar: _buildFloatingActionBar(c),
     );
   }
 
-  Widget _buildHeader(AppColor c) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 24, 16),
+  // ──────────────────────────────────────────────────────────────────────────
+  // MODERN HEADER
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildModernHeader(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 20, 12),
+      decoration: BoxDecoration(
+        color: c.background,
+        border: Border(
+          bottom: BorderSide(
+            color: c.border.withOpacity(0.06),
+            width: 1,
+          ),
+        ),
+      ),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 24),
-            splashRadius: 24,
-            padding: EdgeInsets.zero,
+            icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary, size: 22),
+            splashRadius: 22,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,18 +398,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   'Claimable Balance',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 22,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: -0.8,
-                    height: 1.2,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Send crypto with conditions',
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.65),
-                    fontSize: 13,
+                    color: c.textSecondary.withOpacity(0.6),
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                     letterSpacing: -0.1,
                   ),
@@ -405,19 +416,37 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               ],
             ),
           ),
+          AssetLogo(keyOrSymbol: _selectedAsset, size: 32),
         ],
       ),
     );
   }
 
-  Widget _buildModeSelector(AppColor c) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // MODE SELECTOR CARD
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildModeCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: isDark ? c.surface.withOpacity(0.4) : c.surface.withOpacity(0.6),
+        color: isDark ? c.surface : Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -426,6 +455,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               c,
               icon: LucideIcons.zap,
               label: 'Instant',
+              subtitle: 'Claim anytime',
               isSelected: _mode == ClaimableMode.unconditional,
               onTap: () => setState(() => _mode = ClaimableMode.unconditional),
             ),
@@ -434,8 +464,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           Expanded(
             child: _buildModeOption(
               c,
-              icon: LucideIcons.lock,
+              icon: LucideIcons.clock,
               label: 'Scheduled',
+              subtitle: 'Time-locked',
               isSelected: _mode == ClaimableMode.timeLocked,
               onTap: () => setState(() => _mode = ClaimableMode.timeLocked),
             ),
@@ -449,48 +480,74 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       AppColor c, {
         required IconData icon,
         required String label,
+        required String subtitle,
         required bool isSelected,
         required VoidCallback onTap,
       }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? c.background : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isSelected
-              ? [
-            BoxShadow(
-              color: isDark
-                  ? Colors.black.withOpacity(0.3)
-                  : c.border.withOpacity(0.15),
-              blurRadius: isDark ? 12 : 8,
-              offset: const Offset(0, 2),
-            ),
-          ]
+          gradient: isSelected
+              ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              c.primary.withOpacity(0.12),
+              c.primary.withOpacity(0.06),
+            ],
+          )
               : null,
+          color: isSelected ? null : (isDark ? c.background : c.surface.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? c.primary.withOpacity(0.3)
+                : c.border.withOpacity(isDark ? 0.08 : 0.1),
+            width: 1.5,
+          ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Column(
           children: [
-            Icon(
-              icon,
-              size: 17,
-              color: isSelected ? c.primary : c.textSecondary.withOpacity(0.65),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? c.primary.withOpacity(0.15)
+                    : c.textSecondary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: isSelected ? c.primary : c.textSecondary.withOpacity(0.6),
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(height: 10),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? c.textPrimary : c.textSecondary.withOpacity(0.65),
-                fontSize: 15,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? c.primary : c.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: c.textSecondary.withOpacity(isSelected ? 0.7 : 0.5),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: -0.1,
               ),
             ),
           ],
@@ -499,68 +556,424 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildRecipientSection(AppColor c) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // AMOUNT CARD
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildAmountCard(AppColor c, double currentBal) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Amount',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                  height: 1,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                LucideIcons.wallet,
+                size: 14,
+                color: c.textSecondary.withOpacity(0.5),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${currentBal.toStringAsFixed(2)} $_selectedAsset',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _amountCtl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                  ],
+                  style: TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.w700,
+                    color: c.textPrimary,
+                    letterSpacing: -1.5,
+                    height: 1.1,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: TextStyle(
+                      color: c.textSecondary.withOpacity(0.2),
+                      fontSize: 40,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -1.5,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                  ),
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _selectedAsset,
+                    style: TextStyle(
+                      color: c.textSecondary.withOpacity(0.6),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _amountCtl.text = currentBal > 0
+                          ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
+                          : '';
+                      _amountCtl.selection = TextSelection.fromPosition(
+                        TextPosition(offset: _amountCtl.text.length),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: c.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: c.primary.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        'MAX',
+                        style: TextStyle(
+                          color: c.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // RECIPIENT CARD
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildRecipientCard(AppColor c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final addr = _recipientCtl.text.trim();
     final hasValidAddr = _looksLikeStellarPk(addr);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Recipient',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const Spacer(),
+              _buildQuickActionButton(c, icon: LucideIcons.qrCode, onTap: _scanQR),
+              const SizedBox(width: 8),
+              _buildQuickActionButton(c, icon: LucideIcons.users, onTap: _selectRecipient),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_recipientLoading)
+            _buildRecipientLoadingState(c)
+          else if (hasValidAddr && _resolvedRecipient != null)
+            _buildSavedRecipientChip(c, _resolvedRecipient!)
+          else if (hasValidAddr && _resolvedRecipient == null)
+              _buildNewRecipientChip(c, addr)
+            else
+              _buildRecipientInputField(c, addr, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton(AppColor c, {required IconData icon, required VoidCallback onTap}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isDark ? c.background : c.surface.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: c.border.withOpacity(isDark ? 0.1 : 0.15),
+            width: 1,
+          ),
+        ),
+        child: Icon(icon, size: 18, color: c.primary.withOpacity(0.8)),
+      ),
+    );
+  }
+
+  Widget _buildRecipientLoadingState(AppColor c) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.primary.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Center(
+        child: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: c.primary.withOpacity(0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSavedRecipientChip(AppColor c, RecipientAddressModel recipient) {
+    final color = Color(recipient.color);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withOpacity(isDark ? 0.2 : 0.15),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                recipient.name.isNotEmpty ? recipient.name[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recipient.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _shortenAddress(recipient.address),
+                  style: TextStyle(
+                    color: c.textSecondary.withOpacity(0.6),
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _editRecipient,
+            child: Container(
               padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(LucideIcons.pencil, size: 16, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewRecipientChip(AppColor c, String addr) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: c.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'New address',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _shortenAddress(addr),
+                  style: TextStyle(
+                    color: c.textSecondary.withOpacity(0.6),
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () async {
+              final saved = await showRecipientUpsertSheet(context, address: addr);
+              if (saved == true && mounted) _lookupRecipient(addr);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: c.primary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(LucideIcons.userCheck, size: 16, color: c.primary),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Recipient',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
+              child: Text(
+                'Save',
+                style: TextStyle(
+                  color: c.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (_recipientLoading)
-          const RecipientLoadingLine()
-        else if (hasValidAddr && _resolvedRecipient != null)
-          RecipientBadge(
-            name: _resolvedRecipient!.name,
-            colorValue: _resolvedRecipient!.color,
-            address: _shortenAddress(addr),
-            onEdit: _editRecipient,
-          )
-        else if (hasValidAddr && _resolvedRecipient == null)
-            RecipientAddTemplate(
-              address: _shortenAddress(addr),
-              onAdd: () async {
-                final saved = await showRecipientUpsertSheet(context, address: addr);
-                if (saved == true && mounted) _lookupRecipient(addr);
-              },
-            )
-          else
-            _buildRecipientInput(c, addr),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildRecipientInput(AppColor c, String addr) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+  Widget _buildRecipientInputField(AppColor c, String addr, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15),
+          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
           width: 1.5,
         ),
       ),
@@ -578,46 +991,32 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Enter address or select contact',
+          hintText: 'Paste or enter Stellar address',
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.4),
             fontSize: 14,
             letterSpacing: -0.2,
           ),
           prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 18, right: 12),
-            child: Icon(LucideIcons.user, color: c.textSecondary.withOpacity(0.5), size: 20),
+            padding: const EdgeInsets.only(left: 16, right: 12),
+            child: Icon(LucideIcons.wallet, color: c.textSecondary.withOpacity(0.5), size: 18),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
-          suffixIcon: Padding(
+          suffixIcon: addr.isNotEmpty
+              ? Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: _scanQR,
-                  icon: Icon(LucideIcons.qrCode, size: 20, color: c.primary.withOpacity(0.8)),
-                  splashRadius: 20,
-                ),
-                IconButton(
-                  onPressed: _selectRecipient,
-                  icon: Icon(LucideIcons.contact, size: 20, color: c.primary.withOpacity(0.8)),
-                  splashRadius: 20,
-                ),
-                if (addr.isNotEmpty)
-                  IconButton(
-                    onPressed: () {
-                      _recipientCtl.clear();
-                      setState(() => _resolvedRecipient = null);
-                    },
-                    icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
-                    splashRadius: 20,
-                  ),
-              ],
+            child: IconButton(
+              onPressed: () {
+                _recipientCtl.clear();
+                setState(() => _resolvedRecipient = null);
+              },
+              icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
+              splashRadius: 20,
             ),
-          ),
+          )
+              : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
         onChanged: (_) => setState(() {}),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
@@ -625,281 +1024,86 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildAmountSection(AppColor c, double currentBal) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // UNLOCK SCHEDULE CARD
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildUnlockCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.coins, size: 16, color: c.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Amount',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-            Text(
-              '${currentBal.toStringAsFixed(2)} $_selectedAsset',
-              style: TextStyle(
-                color: c.textSecondary.withOpacity(0.7),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
         ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15),
-              width: 1.5,
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 18, right: 14),
-                child: AssetLogo(keyOrSymbol: _selectedAsset, size: 32),
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _amountCtl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
-                  ],
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: c.textPrimary,
-                    letterSpacing: -0.8,
-                    height: 1.2,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '0.00',
-                    hintStyle: TextStyle(
-                      color: c.textSecondary.withOpacity(0.25),
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.8,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 20),
-                  ),
-                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                child: Icon(LucideIcons.clock, size: 16, color: c.primary),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 14),
-                child: GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    _amountCtl.text = currentBal > 0
-                        ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
-                        : '';
-                    _amountCtl.selection = TextSelection.fromPosition(
-                      TextPosition(offset: _amountCtl.text.length),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          c.primary.withOpacity(isDark ? 0.2 : 0.15),
-                          c.primary.withOpacity(isDark ? 0.12 : 0.08),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: c.primary.withOpacity(isDark ? 0.25 : 0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      'MAX',
-                      style: TextStyle(
-                        color: c.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
+              const SizedBox(width: 12),
+              Text(
+                'Unlock schedule',
+                style: TextStyle(
+                  color: c.textSecondary.withOpacity(0.7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
                 ),
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildUnlockSection(AppColor c) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.clock, size: 16, color: c.primary),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Unlock Schedule',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: true)),
-            const SizedBox(width: 12),
-            Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: true)),
-          ],
-        ),
-        if (_combinedUnlockDateTime != null) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: c.primary.withOpacity(0.15),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(LucideIcons.checkCircle2, size: 16, color: c.primary.withOpacity(0.8)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Unlocks ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
-                    style: TextStyle(
-                      color: c.textSecondary.withOpacity(0.9),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildExpirationSection(AppColor c) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.warning.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(LucideIcons.timerOff, size: 16, color: c.warning),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Expiration',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-            Transform.scale(
-              scale: 0.9,
-              child: Switch(
-                value: _hasExpiry,
-                activeColor: c.warning,
-                onChanged: (v) {
-                  setState(() {
-                    _hasExpiry = v;
-                    if (!v) {
-                      _expiryDate = null;
-                      _expiryTime = null;
-                    }
-                  });
-                },
-              ),
-            ),
-          ],
-        ),
-        if (_hasExpiry) ...[
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: false)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: false)),
+              Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: true)),
+              const SizedBox(width: 10),
+              Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: true)),
             ],
           ),
-          if (_combinedExpiryDateTime != null) ...[
-            const SizedBox(height: 16),
+          if (_combinedUnlockDateTime != null) ...[
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: c.warning.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
+                color: c.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: c.warning.withOpacity(0.2),
+                  color: c.primary.withOpacity(0.15),
                   width: 1,
                 ),
               ),
               child: Row(
                 children: [
-                  Icon(LucideIcons.alertTriangle, size: 16, color: c.warning.withOpacity(0.8)),
-                  const SizedBox(width: 12),
+                  Icon(LucideIcons.checkCircle2, size: 16, color: c.primary.withOpacity(0.7)),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
+                      'Unlocks ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
                       style: TextStyle(
-                        color: c.textSecondary.withOpacity(0.9),
+                        color: c.textPrimary.withOpacity(0.85),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                         letterSpacing: -0.2,
@@ -911,7 +1115,123 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             ),
           ],
         ],
-      ],
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // EXPIRATION CARD
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildExpirationCard(AppColor c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(LucideIcons.timerOff, size: 16, color: c.warning),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Add expiration',
+                  style: TextStyle(
+                    color: c.textSecondary.withOpacity(0.7),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: 0.85,
+                child: Switch(
+                  value: _hasExpiry,
+                  activeColor: c.warning,
+                  onChanged: (v) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _hasExpiry = v;
+                      if (!v) {
+                        _expiryDate = null;
+                        _expiryTime = null;
+                      }
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (_hasExpiry) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: false)),
+                const SizedBox(width: 10),
+                Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: false)),
+              ],
+            ),
+            if (_combinedExpiryDateTime != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.warning.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: c.warning.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.alertTriangle, size: 16, color: c.warning.withOpacity(0.7)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
+                        style: TextStyle(
+                          color: c.textPrimary.withOpacity(0.85),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 
@@ -923,39 +1243,46 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         ? (isUnlock ? _unlockDate : _expiryDate)
         : (isUnlock ? _unlockTime : _expiryTime);
     final text = isDate
-        ? (value != null ? _dateFmt.format(value as DateTime) : 'Date')
-        : (value != null ? (value as TimeOfDay).format(context) : 'Time');
+        ? (value != null ? _dateFmt.format(value as DateTime) : 'Select date')
+        : (value != null ? (value as TimeOfDay).format(context) : 'Select time');
 
     final onTap = isDate
         ? (isUnlock ? _pickUnlockDate : _pickExpiryDate)
         : (isUnlock ? _pickUnlockTime : _pickExpiryTime);
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? c.surface.withOpacity(0.5) : c.surface.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(16),
+          color: isDark ? c.background : c.surface.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: value != null
-                ? color.withOpacity(isDark ? 0.3 : 0.25)
-                : (isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.15)),
+                ? color.withOpacity(isDark ? 0.25 : 0.2)
+                : c.border.withOpacity(isDark ? 0.12 : 0.2),
             width: 1.5,
           ),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: color.withOpacity(0.8)),
+            Icon(
+              icon,
+              size: 16,
+              color: value != null ? color.withOpacity(0.8) : c.textSecondary.withOpacity(0.5),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
                   color: value != null ? c.textPrimary : c.textSecondary.withOpacity(0.5),
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
+                  letterSpacing: -0.2,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -966,7 +1293,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildInfoBanner(AppColor c) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // INFO CARD
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildInfoCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isTimeLocked = _mode == ClaimableMode.timeLocked;
 
@@ -984,42 +1314,36 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            c.surface.withOpacity(0.4),
-            c.surface.withOpacity(0.2),
-          ],
-        ),
+        color: isDark ? c.surface : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: c.primary.withOpacity(0.08),
+          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: isDark
+                ? Colors.black.withOpacity(0.15)
+                : Colors.black.withOpacity(0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 3),
             spreadRadius: 0,
           ),
         ],
       ),
-
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(isDark ? 0.15 : 0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: c.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               LucideIcons.info,
               size: 16,
-              color: c.primary,
+              color: c.primary.withOpacity(0.8),
             ),
           ),
           const SizedBox(width: 14),
@@ -1027,10 +1351,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             child: Text(
               message,
               style: TextStyle(
-                color: c.textSecondary.withOpacity(0.9),
+                color: c.textSecondary.withOpacity(0.8),
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                height: 1.6,
+                height: 1.5,
                 letterSpacing: -0.2,
               ),
             ),
@@ -1040,43 +1364,49 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildBottomBar(AppColor c) {
+  // ──────────────────────────────────────────────────────────────────────────
+  // FLOATING ACTION BAR
+  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildFloatingActionBar(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: c.background,
-        border: Border(
-          top: BorderSide(
-            color: isDark ? c.border.withOpacity(0.12) : c.border.withOpacity(0.1),
-            width: 1,
-          ),
+        color: isDark ? c.surface : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: c.border.withOpacity(isDark ? 0.1 : 0.08),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : c.border.withOpacity(0.08),
-            blurRadius: isDark ? 24 : 20,
+                ? Colors.black.withOpacity(0.4)
+                : Colors.black.withOpacity(0.08),
+            blurRadius: 24,
             offset: const Offset(0, -4),
+            spreadRadius: 0,
           ),
         ],
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          width: double.infinity,
-          height: 58,
+          height: 56,
           child: ElevatedButton(
-            onPressed: _submit,
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              _submit();
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: c.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               shadowColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
             child: Row(
