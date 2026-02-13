@@ -222,11 +222,13 @@ class _FintechBackgroundPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: isDark
             ? [
-          // Dark mode - use black overlay
+          // Black with blue undertone
           Colors.transparent,
-          Colors.black.withOpacity(.15),
-          Colors.black.withOpacity(.35),
-          Colors.black.withOpacity(.50),
+          Color(0xFF000814).withOpacity(.15),
+          Color(0xFF000814).withOpacity(.35),
+          Color(0xFF000814).withOpacity(.50),
+
+
         ]
             : [
           // Light mode - use subtle primary color overlay

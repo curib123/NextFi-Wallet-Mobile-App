@@ -377,105 +377,76 @@ class AssetWidget extends StatelessWidget {
   }
 
   Widget _shimmerTile(BuildContext context) {
-    Widget block(double w, double h, {double r = 8}) => Container(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Color blockColor = isDark
+        ? const Color(0xFF1C1C1E)
+        : const Color(0xFFE5E7EB);
+
+    Widget block(double w, double h, {double r = 6}) => Container(
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: blockColor,
         borderRadius: BorderRadius.circular(r),
       ),
     );
 
-    final sw = MediaQuery.of(context).size.width;
-    final contentW = (sw - 140).clamp(180.0, sw);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark
+          ? const Color(0xFF1A1A1A)
+          : const Color(0xFFE6E8EB),
+      highlightColor: isDark
+          ? const Color(0xFF242424)
+          : const Color(0xFFF2F3F5),
+      period: const Duration(milliseconds: 2000),
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: colors.border.withOpacity(isDark ? 0.12 : 0.08),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            /// Leading circle
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: blockColor,
+                shape: BoxShape.circle,
+              ),
             ),
-          ],
-        ),
-        child: Shimmer.fromColors(
-          baseColor: colors.border.withOpacity(isDark ? 0.15 : 0.12),
-          highlightColor: colors.border.withOpacity(isDark ? 0.08 : 0.04),
-          period: const Duration(milliseconds: 1500),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
+
+            const SizedBox(width: 14),
+
+            /// Text skeletons
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  block(140, 14),
+                  const SizedBox(height: 8),
+                  block(100, 12),
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            /// Right meta
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      block(contentW * 0.35, 17, r: 6),
-                      const SizedBox(height: 8),
-                      block(contentW * 0.25, 14, r: 5),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: block(contentW * 0.28, 11, r: 4),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    block(90, 18, r: 6),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: block(56, 13, r: 4),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: block(50, 12, r: 4),
-                    ),
-                  ],
-                ),
+                block(60, 14),
+                const SizedBox(height: 8),
+                block(40, 12, r: 12),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
   }
+
+
 }
 
 // Price Window Selector Widget - with visible horizontal wave shimmer
