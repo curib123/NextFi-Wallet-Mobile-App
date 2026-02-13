@@ -18,6 +18,8 @@ class HeaderSection extends StatefulWidget {
     required this.livePulse,
     required this.incomingStrip,
     this.animateTotal = false,
+    this.onBuy,
+    this.onSell,
   });
 
   final AppColor colors;
@@ -33,6 +35,12 @@ class HeaderSection extends StatefulWidget {
 
   /// If false, the total is shown immediately (no counting animation).
   final bool animateTotal;
+
+  /// Optional: Called when Buy is tapped (Buy XLM)
+  final VoidCallback? onBuy;
+
+  /// Optional: Called when Sell is tapped (Sell XLM)
+  final VoidCallback? onSell;
 
   @override
   State<HeaderSection> createState() => _HeaderSectionState();
@@ -148,7 +156,7 @@ class _HeaderSectionState extends State<HeaderSection> {
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
                 blurRadius: 8,
-                offset: Offset(0, 2),
+                offset: const Offset(0, 2),
                 spreadRadius: 0,
               ),
             ],
@@ -308,15 +316,15 @@ class _HeaderSectionState extends State<HeaderSection> {
               ),
               _ActionTile(
                 colors: widget.colors,
-                icon: LucideIcons.wallet,
-                label: 'Deposit',
-                onTap: () => debugPrint('Deposit'),
+                icon: LucideIcons.dollarSign,
+                label: 'Buy',
+                onTap: widget.onBuy ?? () => debugPrint('Buy'),
               ),
               _ActionTile(
                 colors: widget.colors,
-                icon: LucideIcons.upload,
-                label: 'Withdraw',
-                onTap: () => debugPrint('Withdraw'),
+                icon: LucideIcons.banknote,
+                label: 'Sell',
+                onTap: widget.onSell ?? () => debugPrint('Sell'),
               ),
             ],
           ),
@@ -350,6 +358,7 @@ class _ActionTile extends StatelessWidget {
       children: [
         InkWell(
           onTap: onTap,
+          borderRadius: BorderRadius.circular(50),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,

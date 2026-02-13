@@ -15,6 +15,8 @@ import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 /// Supports both received (claimable by user) and sent (created by user) balances.
 /// Supports expiration predicates for both instant and time-locked modes.
 ///
+/// **FILTER**: Only shows XLM and USDC claimable balances.
+///
 /// **Best Practice**: Uses WalletHomeVM for balance retrieval to ensure
 /// consistency and avoid redundant API calls.
 class ClaimableVM extends ChangeNotifier {
@@ -124,6 +126,27 @@ class ClaimableVM extends ChangeNotifier {
         _safeNotify();
       }
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Filtering helpers
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /// Check if a claimable item is XLM or USDC
+  bool _isXlmOrUsdc(ClaimableItem item) {
+    final assetCode = item.assetCode.toUpperCase();
+
+    // Native XLM
+    if (assetCode == 'XLM') return true;
+
+    // USDC - check against issuer
+    if (assetCode == 'USDC') {
+      // Allow if no issuer specified (shouldn't happen) or matches USDC issuer
+      if (item.assetIssuer == null) return true;
+      return item.assetIssuer == _svc.usdcIssuer;
+    }
+
+    return false;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -321,11 +344,16 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   /// Fetch balances that can be claimed by this account
+  ///
+  /// **FILTERED**: Only returns XLM and USDC claimable balances
   Future<List<ClaimableItem>> _fetchReceivedBalances(String accountId) async {
     final raw = await _svc.getClaimableBalances(accountId: accountId);
     final now = DateTime.now();
 
-    final items = raw.map((r) => _parseResponse(r, accountId, now)).toList();
+    final items = raw
+        .map((r) => _parseResponse(r, accountId, now))
+        .where(_isXlmOrUsdc) // ← FILTER: Only XLM and USDC
+        .toList();
 
     // Sort: claimable-now first, then expired last, then by amount desc
     items.sort((a, b) {
@@ -344,6 +372,8 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   /// Fetch balances created/sponsored by this account
+  ///
+  /// **FILTERED**: Only returns XLM and USDC claimable balances
   Future<List<ClaimableItem>> _fetchSentBalances(String accountId) async {
     final raw = await _svc.getSentClaimableBalances(accountId: accountId);
     final now = DateTime.now();
@@ -357,13 +387,18 @@ class ClaimableVM extends ChangeNotifier {
 
         final parsed = _parsePredicate(claimant.predicate, now);
 
-        items.add(_parseSentResponse(
+        final item = _parseSentResponse(
           r,
           claimant.destination,
           accountId,
           now,
           parsed,
-        ));
+        );
+
+        // ← FILTER: Only add XLM and USDC items
+        if (_isXlmOrUsdc(item)) {
+          items.add(item);
+        }
       }
     }
 

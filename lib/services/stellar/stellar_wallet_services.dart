@@ -26,8 +26,14 @@ import 'package:next_fi/features/activity/model/activity_log.dart';
 import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
 import 'package:next_fi/features/activity/view/widgets/activity_notification.dart';
 
+// Export base service types
 export 'package:next_fi/services/stellar/stellar_base_service.dart'
     show StellarWalletError, ProgressCallback;
+
+// Export ramp-related types
+export 'package:next_fi/services/stellar/stellar_ramp_service.dart'
+    show RampProvider, RampTransactionType, FiatCurrency, ProviderInfo, DeepLinkResult;
+
 
 /// Production-ready Stellar wallet service with integrated activity logging.
 ///
@@ -112,16 +118,6 @@ class StellarWalletServices {
             sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
             sdkQuickNode: _createQuickNodeSdk(
                 testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          feeService: StellarFeeService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            configVault: configVault,
             quickNodeUrlMainnet: quickNodeUrlMainnet,
             quickNodeUrlTestnet: quickNodeUrlTestnet,
             quickNodeDefaultHeaders: quickNodeDefaultHeaders,
@@ -522,6 +518,62 @@ class StellarWalletServices {
     }
   }
 
+  /// Quick buy XLM with recommended provider
+  Future<DeepLinkResult> buyXlmQuick({
+    required String stellarAddress,
+    double? amount,
+    FiatCurrency? currency,
+    String? region,
+  }) async {
+    final provider = getRecommendedRampProvider(
+      type: RampTransactionType.buy,
+      currency: currency,
+      region: region,
+    );
+
+    return buyXlmWithProvider(
+      stellarAddress: stellarAddress,
+      provider: provider,
+      amount: amount,
+      currency: currency,
+    );
+  }
+
+  /// Quick sell XLM with recommended provider
+  Future<DeepLinkResult> sellXlmQuick({
+    required String stellarAddress,
+    double? amount,
+    FiatCurrency? currency,
+    String? region,
+  }) async {
+    final provider = getRecommendedRampProvider(
+      type: RampTransactionType.sell,
+      currency: currency,
+      region: region,
+    );
+
+    return sellXlmWithProvider(
+      stellarAddress: stellarAddress,
+      provider: provider,
+      amount: amount,
+      currency: currency,
+    );
+  }
+
+  /// Quick swap with recommended DEX
+  Future<DeepLinkResult> swapQuick({
+    required String stellarAddress,
+  }) async {
+    final provider = getRecommendedRampProvider(
+      type: RampTransactionType.swap,
+    );
+
+    return swapOnDex(
+      stellarAddress: stellarAddress,
+      provider: provider,
+    );
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Ramp Service Helper Methods (Direct Access)
   // ──────────────────────────────────────────────────────────────────────────
@@ -768,7 +820,7 @@ class StellarWalletServices {
   // PAYMENTS WITH ACTIVITY LOGGING
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<List<String>> sendXlmWithFee({
+  Future<String> sendXlm({
     required KeyPair keyPair,
     required String destination,
     required double amount,
@@ -794,7 +846,7 @@ class StellarWalletServices {
       }
 
       // Execute payment with progress tracking
-      final hashes = await paymentService.sendXlmWithFee(
+      final hash = await paymentService.sendXlm(
         keyPair: keyPair,
         destination: destination,
         amount: amount,
@@ -812,7 +864,7 @@ class StellarWalletServices {
         await _updateActivity(
           activityId,
           status: ActivityStatus.completed,
-          txHash: hashes.first,
+          txHash: hash,
           description: 'Payment sent successfully',
         );
 
@@ -820,7 +872,7 @@ class StellarWalletServices {
         _showNotification(log);
       }
 
-      return hashes;
+      return hash;
     } catch (e) {
       // Update activity on error
       if (activityId != null) {
@@ -849,7 +901,7 @@ class StellarWalletServices {
     }
   }
 
-  Future<List<String>> sendUsdcWithFee({
+  Future<String> sendUsdc({
     required KeyPair keyPair,
     required String destination,
     required double usdcAmount,
@@ -874,7 +926,7 @@ class StellarWalletServices {
         _showNotification(log);
       }
 
-      final hashes = await paymentService.sendUsdcWithFee(
+      final hash = await paymentService.sendUsdc(
         keyPair: keyPair,
         destination: destination,
         usdcAmount: usdcAmount,
@@ -892,7 +944,7 @@ class StellarWalletServices {
         await _updateActivity(
           activityId,
           status: ActivityStatus.completed,
-          txHash: hashes.first,
+          txHash: hash,
           description: 'Payment sent successfully',
         );
 
@@ -900,7 +952,7 @@ class StellarWalletServices {
         _showNotification(log);
       }
 
-      return hashes;
+      return hash;
     } catch (e) {
       // Update activity on error
       if (activityId != null) {
@@ -1359,7 +1411,7 @@ class StellarWalletServices {
   // FEE & QUOTES
   // ══════════════════════════════════════════════════════════════════════════
 
-  Future<String> getTransactionFeeAddress() => feeService.getTransactionFeeAddress();
+  Future<String> getTransactionFeeAddress() => feeService.getSwapFeeAddress();
   Future<int> getCurrentFeeStroops() => feeService.getCurrentFeeStroops();
   Future<double> getCurrentFeeXlm() => feeService.getCurrentFeeXlm();
   Future<String> getCurrentFeeLabel() => feeService.getCurrentFeeLabel();

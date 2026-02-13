@@ -5,7 +5,7 @@ import 'package:next_fi/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/services/stellar/stellar_account_service.dart';
 import 'package:next_fi/services/stellar/stellar_fee_service.dart';
 
-/// Service for path payments (swaps)
+/// Service for path payments (swaps) with 0.3% swap fee (industry standard)
 class StellarSwapService extends StellarBaseService {
   final StellarAccountService accountService;
   final StellarFeeService feeService;
@@ -30,7 +30,7 @@ class StellarSwapService extends StellarBaseService {
   Asset get usdc => accountService.usdc;
 
   // ──────────────────────────────────────────────────────────────────────────
-  // XLM to USDC Swap
+  // XLM to USDC Swap (with 0.3% swap fee - industry standard)
   // ──────────────────────────────────────────────────────────────────────────
 
   Future<String> swapXlmToUsdc({
@@ -87,22 +87,24 @@ class StellarSwapService extends StellarBaseService {
       }
 
       onProgress?.call('Calculating fees...');
-      final feeAddr = toClassicAccountId(await feeService.getTransactionFeeAddress());
-      final feeStroops = await feeService.getCurrentFeeStroops();
-      final feeXlm = fromStroops(feeStroops);
+      final feeAddr = toClassicAccountId(await feeService.getSwapFeeAddress());
+
+      // Calculate 0.3% swap fee in XLM (industry standard)
+      final swapFeeXlm = sendAmountXlm * 0.003;
+      final swapFeeStroops = (swapFeeXlm * 1e7).round();
 
       onProgress?.call('Checking balance...');
       final senderXlmBal = await accountService.getXlmBalance(self);
 
       const minReserve = 1.5;
-      final totalNeeded = sendAmountXlm + feeXlm + minReserve;
+      final totalNeeded = sendAmountXlm + swapFeeXlm + minReserve;
 
       if (senderXlmBal < totalNeeded) {
         fail(
           'Not enough XLM for this swap',
           technicalError: 'Have: ${StellarBaseService.fmt7(senderXlmBal)} XLM | Need: ${StellarBaseService.fmt7(totalNeeded)} XLM',
           advice:
-          'Breakdown: ${StellarBaseService.fmt7(sendAmountXlm)} to swap + ${StellarBaseService.fmt7(feeXlm)} network fee + ${StellarBaseService.fmt7(minReserve)} account reserve. You need ${StellarBaseService.fmt7(totalNeeded - senderXlmBal)} more XLM',
+          'Breakdown: ${StellarBaseService.fmt7(sendAmountXlm)} to swap + ${StellarBaseService.fmt7(swapFeeXlm)} swap fee (0.3%) + ${StellarBaseService.fmt7(minReserve)} account reserve. You need ${StellarBaseService.fmt7(totalNeeded - senderXlmBal)} more XLM',
           code: 'INSUFFICIENT_BALANCE',
         );
       }
@@ -110,8 +112,8 @@ class StellarSwapService extends StellarBaseService {
       onProgress?.call('Preparing swap...');
       final acc = await loadAccount(self);
 
-      final needsFeeOp = feeStroops > 0;
-      final opCount = needsFeeOp ? 2 : 1;
+      final needsSwapFee = swapFeeStroops > 0;
+      final opCount = needsSwapFee ? 2 : 1;
       final feeXlmNet =
       await feeService.estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
@@ -128,9 +130,9 @@ class StellarSwapService extends StellarBaseService {
         ..setMaxOperationFee(perOpStroops)
         ..addOperation(opPath);
 
-      if (needsFeeOp) {
+      if (needsSwapFee) {
         tb.addOperation(
-          PaymentOperationBuilder(feeAddr, xlm, StellarBaseService.fmt7(feeXlm)).build(),
+          PaymentOperationBuilder(feeAddr, xlm, StellarBaseService.fmt7(swapFeeXlm)).build(),
         );
       }
 
@@ -159,7 +161,7 @@ class StellarSwapService extends StellarBaseService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // USDC to XLM Swap
+  // USDC to XLM Swap (with 0.3% swap fee in USDC - industry standard)
   // ──────────────────────────────────────────────────────────────────────────
 
   Future<String> swapUsdcToXlm({
@@ -196,28 +198,31 @@ class StellarSwapService extends StellarBaseService {
       onProgress?.call('Checking USDC setup...');
       await accountService.ensureUsdcTrustline(keyPair, onProgress: onProgress);
 
+      onProgress?.call('Calculating fees...');
+      final feeAddr = toClassicAccountId(await feeService.getSwapFeeAddress());
+
+      // Calculate 0.3% swap fee in USDC (industry standard)
+      final swapFeeUsdc = sendAmountUsdc * 0.003;
+
       onProgress?.call('Checking balance...');
       final senderUsdcBal = await accountService.getUsdcBalance(self);
-      if (senderUsdcBal < sendAmountUsdc) {
+      final totalUsdcNeeded = sendAmountUsdc + swapFeeUsdc;
+
+      if (senderUsdcBal < totalUsdcNeeded) {
         fail(
           'Not enough USDC in your wallet',
-          technicalError: 'Have: ${StellarBaseService.fmt7(senderUsdcBal)} USDC, Need: ${StellarBaseService.fmt7(sendAmountUsdc)} USDC',
+          technicalError: 'Have: ${StellarBaseService.fmt7(senderUsdcBal)} USDC, Need: ${StellarBaseService.fmt7(totalUsdcNeeded)} USDC',
           advice:
-          'You need ${StellarBaseService.fmt7(sendAmountUsdc - senderUsdcBal)} more USDC to complete this swap',
+          'Breakdown: ${StellarBaseService.fmt7(sendAmountUsdc)} to swap + ${StellarBaseService.fmt7(swapFeeUsdc)} swap fee (0.3%). You need ${StellarBaseService.fmt7(totalUsdcNeeded - senderUsdcBal)} more USDC',
           code: 'INSUFFICIENT_USDC',
         );
       }
 
-      onProgress?.call('Calculating fees...');
-      final feeAddr = toClassicAccountId(await feeService.getTransactionFeeAddress());
-      final feeStroops = await feeService.getCurrentFeeStroops();
-      final feeXlm = fromStroops(feeStroops);
-
       onProgress?.call('Preparing swap...');
       final acc = await loadAccount(self);
 
-      final needsFeeOp = feeStroops > 0;
-      final opCount = needsFeeOp ? 2 : 1;
+      final needsSwapFee = swapFeeUsdc > 0;
+      final opCount = needsSwapFee ? 2 : 1;
       final feeXlmNet =
       await feeService.estimateNetworkFeeXlm(opCount: opCount, percentile: 90);
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
@@ -225,16 +230,7 @@ class StellarSwapService extends StellarBaseService {
       final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);
 
       if (dest == self) {
-        if (minXlmOut < feeXlm) {
-          fail(
-            'Swap amount too low to cover fees',
-            technicalError: 'Minimum output: ${StellarBaseService.fmt7(minXlmOut)} XLM | Fee required: ${StellarBaseService.fmt7(feeXlm)} XLM',
-            advice:
-            'The swap needs to receive at least ${StellarBaseService.fmt7(feeXlm)} XLM to cover the transaction fee. Try increasing your swap amount',
-            code: 'MIN_OUTPUT_TOO_LOW',
-          );
-        }
-
+        // Swapping to self
         final opPath = PathPaymentStrictSendOperationBuilder(
           usdc,
           StellarBaseService.fmt7(sendAmountUsdc),
@@ -243,23 +239,15 @@ class StellarSwapService extends StellarBaseService {
           StellarBaseService.fmt7(minXlmOut),
         ).build();
 
-        tb
-          ..addOperation(opPath)
-          ..addOperation(
-            PaymentOperationBuilder(feeAddr, xlm, StellarBaseService.fmt7(feeXlm)).build(),
-          );
-      } else {
-        final senderXlmBal = await accountService.getXlmBalance(self);
-        if (senderXlmBal < feeXlm) {
-          fail(
-            'Not enough XLM for transaction fee',
-            technicalError: 'Have: ${StellarBaseService.fmt7(senderXlmBal)} XLM, Need: ${StellarBaseService.fmt7(feeXlm)} XLM',
-            advice:
-            'You need ${StellarBaseService.fmt7(feeXlm - senderXlmBal)} more XLM to pay the network fee for this swap',
-            code: 'INSUFFICIENT_XLM_FOR_FEE',
+        tb.addOperation(opPath);
+
+        if (needsSwapFee) {
+          tb.addOperation(
+            PaymentOperationBuilder(feeAddr, usdc, StellarBaseService.fmt7(swapFeeUsdc)).build(),
           );
         }
-
+      } else {
+        // Swapping to different destination
         onProgress?.call('Checking destination...');
         if (!await accountExists(dest)) {
           fail(
@@ -278,11 +266,13 @@ class StellarSwapService extends StellarBaseService {
           StellarBaseService.fmt7(minXlmOut),
         ).build();
 
-        tb
-          ..addOperation(opPath)
-          ..addOperation(
-            PaymentOperationBuilder(feeAddr, xlm, StellarBaseService.fmt7(feeXlm)).build(),
+        tb.addOperation(opPath);
+
+        if (needsSwapFee) {
+          tb.addOperation(
+            PaymentOperationBuilder(feeAddr, usdc, StellarBaseService.fmt7(swapFeeUsdc)).build(),
           );
+        }
       }
 
       if (memoText?.isNotEmpty == true) {

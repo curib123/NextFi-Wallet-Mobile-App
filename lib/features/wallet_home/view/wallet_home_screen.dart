@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
+import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
+import 'package:next_fi/features/wallet_home/view_model/ramp_handler.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/features/receive/view/receive_screen.dart';
@@ -168,6 +169,25 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           onSwap: () => vm.onSwapPressed(),
                           onSend: () => vm.onSendPressed(),
                           onReceive: () => vm.onReceivePressed(),
+                          // NEW: Pass ramp handlers to HeaderSection
+                          onBuy: s.hasWallet && s.address != null
+                              ? () => RampHandler.handleDeposit(
+                            context: context,
+                            stellarAddress: s.address!,
+                            initialCurrency: FiatCurrency.usd,
+                            initialToken: 'XLM',
+                            region: 'PH',
+                          )
+                              : null,
+                          onSell: s.hasWallet && s.address != null
+                              ? () => RampHandler.handleWithdraw(
+                            context: context,
+                            stellarAddress: s.address!,
+                            initialCurrency: FiatCurrency.php,
+                            initialToken: 'XLM',
+                            region: 'PH',
+                          )
+                              : null,
                           livePulse: _livePulse,
                           incomingStrip: s.hasWallet
                               ? IncomingHintsStrip(
@@ -184,7 +204,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                                 .toList(),
                             onAcknowledge: (tx) =>
                                 context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
-                            walletState: s, // NEW: Pass wallet state for reserve impact calculation
+                            walletState: s,
                           )
                               : const SizedBox.shrink(),
                           animateTotal: _animateTotal,

@@ -12,20 +12,20 @@ class RecipientLoadingLine extends StatelessWidget {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(12),
+        color: c.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: c.border.withValues(alpha: 0.3),
+          color: c.primary.withOpacity(0.1),
           width: 1,
         ),
       ),
       child: Center(
         child: SizedBox(
-          height: 18,
-          width: 18,
+          height: 20,
+          width: 20,
           child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: c.primary.withValues(alpha: 0.6),
+            strokeWidth: 2.5,
+            color: c.primary.withOpacity(0.5),
           ),
         ),
       ),

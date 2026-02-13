@@ -17,40 +17,35 @@ class RecipientBadge extends StatelessWidget {
   final String address;
   final VoidCallback onEdit;
 
+  String _shortenAddress(String addr) {
+    if (addr.length <= 16) return addr;
+    return '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final color = Color(colorValue);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.07),
-            color.withValues(alpha: 0.03),
-          ],
+        color: color.withOpacity(isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withOpacity(isDark ? 0.2 : 0.15),
+          width: 1.5,
         ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
           // Avatar
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  color.withValues(alpha: 0.18),
-                  color.withValues(alpha: 0.08),
-                ],
-              ),
+              color: color.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
@@ -59,7 +54,7 @@ class RecipientBadge extends StatelessWidget {
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
-                  fontSize: 15,
+                  fontSize: 16,
                 ),
               ),
             ),
@@ -77,19 +72,21 @@ class RecipientBadge extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    letterSpacing: -0.3,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  address,
+                  _shortenAddress(address),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withValues(alpha: 0.65),
+                    color: c.textSecondary.withOpacity(0.6),
                     fontFamily: 'monospace',
-                    fontSize: 11,
+                    fontSize: 12,
+                    letterSpacing: 0,
                   ),
                 ),
               ],
@@ -98,34 +95,15 @@ class RecipientBadge extends StatelessWidget {
           const SizedBox(width: 8),
 
           // Edit button
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onEdit,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.pencil, size: 12, color: color),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Edit',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+          GestureDetector(
+            onTap: onEdit,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Icon(LucideIcons.pencil, size: 16, color: color),
             ),
           ),
         ],

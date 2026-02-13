@@ -13,20 +13,29 @@ import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
 /// Stores and verifies a **Transaction Fee** configuration (separate from Stellar network fee).
-/// Uses a signed payload {schema, version, address, fee_usd} verified by a signer pubkey.
+/// Uses a signed payload {schema, version, address, fee_usd, swap_fee_percent} verified by a signer pubkey.
 /// **NEW**: Dynamically calculates fee in stroops based on current USDC price.
+/// **NEW**: Supports swap fees with configurable percentage (default 0.3% - industry standard).
 /// Falls back to safe defaults if verification fails. Includes automatic migration
 /// from older "profit_*" storage keys.
 class TransactionFeeVaultSecureStorage {
   // ────────────────────────────────────────────────────────────────────────────
-  // Storage keys (config cache) — new transaction-fee names (v2)
-  static const String _kKeyAddr    = 'txfee_cfg_addr_v2';
-  static const String _kKeyFeeUsd  = 'txfee_cfg_fee_usd_v2';
+  // Storage keys (config cache) — new transaction-fee names (v3)
+  static const String _kKeyAddr         = 'txfee_cfg_addr_v3';
+  static const String _kKeyFeeUsd       = 'txfee_cfg_fee_usd_v3';
+  static const String _kKeySwapFeePercent = 'txfee_cfg_swap_fee_percent_v3';
 
-  // Storage keys (signed bundle) — new transaction-fee names (v2 schema)
-  static const String _kSignedPayloadB64 = 'txfee_cfg_signed_payload_b64_v2';
-  static const String _kSignatureB64     = 'txfee_cfg_signature_b64_v2';
-  static const String _kSignerPubKey     = 'txfee_cfg_signer_pub_v2';
+  // Storage keys (signed bundle) — new transaction-fee names (v3 schema)
+  static const String _kSignedPayloadB64 = 'txfee_cfg_signed_payload_b64_v3';
+  static const String _kSignatureB64     = 'txfee_cfg_signature_b64_v3';
+  static const String _kSignerPubKey     = 'txfee_cfg_signer_pub_v3';
+
+  // Legacy v2 keys (fee_usd based)
+  static const String _LEG_v2_kKeyAddr          = 'txfee_cfg_addr_v2';
+  static const String _LEG_v2_kKeyFeeUsd        = 'txfee_cfg_fee_usd_v2';
+  static const String _LEG_v2_kSignedPayloadB64 = 'txfee_cfg_signed_payload_b64_v2';
+  static const String _LEG_v2_kSignatureB64     = 'txfee_cfg_signature_b64_v2';
+  static const String _LEG_v2_kSignerPubKey     = 'txfee_cfg_signer_pub_v2';
 
   // Legacy v1 keys (fee_stroops based)
   static const String _LEG_v1_kKeyAddr          = 'txfee_cfg_addr_v1';
@@ -45,10 +54,12 @@ class TransactionFeeVaultSecureStorage {
   // Built-in safe defaults (used if verification fails or no bundle available)
   static const String _DEFAULT_ADDR = 'GC77YDSLSYFVH5BMEANWEOWOKAAZDLBCST25VSS5XLITS3VEYLZ4YDUE';
   static const double _DEFAULT_FEE_USD = 0.05; // $0.05 USD equivalent
-  static const int    _VERSION = 2;
+  static const double _DEFAULT_SWAP_FEE_PERCENT = 0.3; // 0.3% swap fee (industry standard)
+  static const int    _VERSION = 3;
 
-  // Payload schema (dynamic USD-based) — updated name
-  static const String _SCHEMA = 'TXFEECFG-DYNAMIC-USD-v2';
+  // Payload schema (dynamic USD-based with swap fees) — updated name
+  static const String _SCHEMA = 'TXFEECFG-DYNAMIC-USD-v3';
+  static const String _SCHEMA_V2 = 'TXFEECFG-DYNAMIC-USD-v2';
   static const String _SCHEMA_V1 = 'TXFEECFG-FIXED-v1';
 
   final FlutterSecureStorage _storage;
@@ -57,6 +68,7 @@ class TransactionFeeVaultSecureStorage {
   /// Dev helpers (optional): one-shot bootstrap using the ACTIVE wallet.
   final bool   devAutoInitFromActive;
   final double devInitFeeUsd;
+  final double devInitSwapFeePercent;
   final String? devInitRecipientOverride;
 
   TransactionFeeVaultSecureStorage({
@@ -64,6 +76,7 @@ class TransactionFeeVaultSecureStorage {
     CurrencyVM? currencyVM, // NEW: inject CurrencyVM
     this.devAutoInitFromActive = false,
     this.devInitFeeUsd = 0.01,
+    this.devInitSwapFeePercent = 0.3, // 0.3% industry standard
     this.devInitRecipientOverride,
   }) : _storage = storage ??
       const FlutterSecureStorage(
@@ -86,6 +99,7 @@ class TransactionFeeVaultSecureStorage {
     if (devAutoInitFromActive) {
       await _maybeDevInitFromActiveWallet(
         feeUsd: devInitFeeUsd,
+        swapFeePercent: devInitSwapFeePercent,
         recipientOverride: devInitRecipientOverride,
       );
     }
@@ -97,6 +111,7 @@ class TransactionFeeVaultSecureStorage {
     try {
       final cachedAddr = await _storage.read(key: _kKeyAddr);
       final cachedFee  = await _storage.read(key: _kKeyFeeUsd);
+      final cachedSwap = await _storage.read(key: _kKeySwapFeePercent);
 
       if (cachedAddr != verified.address) {
         await _storage.write(key: _kKeyAddr, value: verified.address);
@@ -105,6 +120,10 @@ class TransactionFeeVaultSecureStorage {
       if (cachedFee != feeStr) {
         await _storage.write(key: _kKeyFeeUsd, value: feeStr);
       }
+      final swapStr = verified.swapFeePercent.toString();
+      if (cachedSwap != swapStr) {
+        await _storage.write(key: _kKeySwapFeePercent, value: swapStr);
+      }
     } catch (_) {/* ignore */}
 
     return verified;
@@ -112,13 +131,24 @@ class TransactionFeeVaultSecureStorage {
 
   // Convenience getters - **NEW**: Now dynamically calculate stroops
   Future<String> getAddress() async => (await readOrInit()).address;
+
+  /// Get transaction fee address (for send/receive operations)
+  Future<String> getTransactionFeeAddress() async => await getAddress();
+
+  /// Get swap fee address (for swap operations)
+  Future<String> getSwapFeeAddress() async => await getAddress();
+
   Future<double> getFeeUsd() async => (await readOrInit()).feeUsd;
+  Future<double> getSwapFeePercent() async => (await readOrInit()).swapFeePercent;
 
   /// **NEW**: Dynamically calculate fee in stroops based on current USDC price
   Future<int> getFeeStroops() async {
     final config = await readOrInit();
     return await _calculateDynamicFeeStroops(config.feeUsd);
   }
+
+  /// Alias for getCurrentFeeStroops (backwards compatibility)
+  Future<int> getCurrentFeeStroops() async => await getFeeStroops();
 
   /// **NEW**: Get fee in XLM based on current USDC price
   Future<double> getFeeXlm() async {
@@ -136,6 +166,24 @@ class TransactionFeeVaultSecureStorage {
   Future<String> getFeeUsdLabel() async {
     final usd = await getFeeUsd();
     return '\$${usd.toStringAsFixed(2)} USD';
+  }
+
+  /// **NEW**: Get formatted swap fee label
+  Future<String> getSwapFeeLabel() async {
+    final percent = await getSwapFeePercent();
+    return '${percent.toStringAsFixed(1)}%';
+  }
+
+  /// **NEW**: Calculate swap fee for a given amount in XLM
+  Future<double> calculateSwapFeeXlm(double amountXlm) async {
+    final percent = await getSwapFeePercent();
+    return amountXlm * (percent / 100.0);
+  }
+
+  /// **NEW**: Calculate swap fee for a given amount in USDC
+  Future<double> calculateSwapFeeUsdc(double amountUsdc) async {
+    final percent = await getSwapFeePercent();
+    return amountUsdc * (percent / 100.0);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -162,32 +210,38 @@ class TransactionFeeVaultSecureStorage {
   // DEV: one-shot initializer using SeedStorage
   Future<bool> initSignedConfigFromActiveWallet({
     double feeUsd = 0.01,
+    double swapFeePercent = 0.3, // Industry standard
     String? recipientOverride,
   }) async {
     return _devInitFromActiveWallet(
       feeUsd: feeUsd,
+      swapFeePercent: swapFeePercent,
       recipientOverride: recipientOverride,
     );
   }
 
   Future<void> _maybeDevInitFromActiveWallet({
     required double feeUsd,
+    required double swapFeePercent,
     String? recipientOverride,
   }) async {
     // If we already have a signed bundle (new or legacy), do nothing
     final haveNew = await _hasAnySignedBundle(newKeys: true);
+    final haveV2  = await _hasAnySignedBundle(v2Keys: true);
     final haveV1  = await _hasAnySignedBundle(v1Keys: true);
     final haveOld = await _hasAnySignedBundle(newKeys: false);
-    if (haveNew || haveV1 || haveOld) return;
+    if (haveNew || haveV2 || haveV1 || haveOld) return;
 
     await _devInitFromActiveWallet(
       feeUsd: feeUsd,
+      swapFeePercent: swapFeePercent,
       recipientOverride: recipientOverride,
     );
   }
 
   Future<bool> _hasAnySignedBundle({
     bool newKeys = false,
+    bool v2Keys = false,
     bool v1Keys = false,
   }) async {
     String payloadKey, sigKey, signerKey;
@@ -196,6 +250,10 @@ class TransactionFeeVaultSecureStorage {
       payloadKey = _LEG_v1_kSignedPayloadB64;
       sigKey = _LEG_v1_kSignatureB64;
       signerKey = _LEG_v1_kSignerPubKey;
+    } else if (v2Keys) {
+      payloadKey = _LEG_v2_kSignedPayloadB64;
+      sigKey = _LEG_v2_kSignatureB64;
+      signerKey = _LEG_v2_kSignerPubKey;
     } else if (newKeys) {
       payloadKey = _kSignedPayloadB64;
       sigKey = _kSignatureB64;
@@ -215,9 +273,10 @@ class TransactionFeeVaultSecureStorage {
   /// Dev bootstrap:
   /// - Signs with the active **Stellar secret seed** if available (S… 56 chars).
   /// - If we cannot sign, returns false quietly (no bundle written).
-  /// **UPDATED**: Now uses fee_usd instead of fee_stroops
+  /// **UPDATED**: Now uses fee_usd and swap_fee_percent
   Future<bool> _devInitFromActiveWallet({
     required double feeUsd,
+    required double swapFeePercent,
     String? recipientOverride,
   }) async {
     try {
@@ -248,12 +307,13 @@ class TransactionFeeVaultSecureStorage {
       // Basic address sanity
       KeyPair.fromAccountId(recipient);
 
-      // 2) Build payload **NEW**: with fee_usd instead of fee_stroops
+      // 2) Build payload **NEW**: with fee_usd and swap_fee_percent
       final payloadMap = <String, dynamic>{
         'schema': _SCHEMA,
         'version': _VERSION,
         'address': recipient,
         'fee_usd': feeUsd,
+        'swap_fee_percent': swapFeePercent,
       };
       final payloadJson  = jsonEncode(payloadMap);
       final payloadBytes = utf8.encode(payloadJson);
@@ -265,13 +325,14 @@ class TransactionFeeVaultSecureStorage {
           // but skip writing a (useless) unsigned bundle.
           await _storage.write(key: _kKeyAddr,   value: recipient);
           await _storage.write(key: _kKeyFeeUsd, value: feeUsd.toString());
+          await _storage.write(key: _kKeySwapFeePercent, value: swapFeePercent.toString());
         }
         return false;
       }
 
       final sigBytes = signerKp.sign(payloadBytes);
 
-      // 4) Persist signed bundle (NEW v2 keys)
+      // 4) Persist signed bundle (NEW v3 keys)
       await _storage.write(key: _kSignedPayloadB64, value: base64Encode(payloadBytes));
       await _storage.write(key: _kSignatureB64,     value: base64Encode(sigBytes));
       await _storage.write(key: _kSignerPubKey,     value: signerKp.accountId);
@@ -280,6 +341,7 @@ class TransactionFeeVaultSecureStorage {
         // Also mirror the readable fields for convenience
         await _storage.write(key: _kKeyAddr,   value: recipient);
         await _storage.write(key: _kKeyFeeUsd, value: feeUsd.toString());
+        await _storage.write(key: _kKeySwapFeePercent, value: swapFeePercent.toString());
       }
       return true;
     } catch (_) {
@@ -289,30 +351,39 @@ class TransactionFeeVaultSecureStorage {
 
   // ────────────────────────────────────────────────────────────────────────────
   // Verification (non-fatal): returns defaults if anything fails. Also migrates legacy keys.
-  // **UPDATED**: Now handles both v2 (fee_usd) and v1 (fee_stroops) schemas
+  // **UPDATED**: Now handles v3 (fee_usd + swap_fee_percent), v2 (fee_usd), and v1 (fee_stroops) schemas
   Future<TransactionFeeConfig> _verifyOrDefault() async {
     try {
-      // Try NEW v2 bundle first, then v1, then legacy profit bundle.
+      // Try NEW v3 bundle first, then v2, then v1, then legacy profit bundle.
       String? signerPub    = await _storage.read(key: _kSignerPubKey);
       String? payloadB64   = await _storage.read(key: _kSignedPayloadB64);
       String? signatureB64 = await _storage.read(key: _kSignatureB64);
 
+      bool usingV2 = false;
       bool usingV1 = false;
       bool usingLegacy = false;
 
       if (signerPub == null || payloadB64 == null || signatureB64 == null) {
-        // Try v1 keys
-        signerPub    = await _storage.read(key: _LEG_v1_kSignerPubKey);
-        payloadB64   = await _storage.read(key: _LEG_v1_kSignedPayloadB64);
-        signatureB64 = await _storage.read(key: _LEG_v1_kSignatureB64);
-        usingV1 = (signerPub != null && payloadB64 != null && signatureB64 != null);
+        // Try v2 keys
+        signerPub    = await _storage.read(key: _LEG_v2_kSignerPubKey);
+        payloadB64   = await _storage.read(key: _LEG_v2_kSignedPayloadB64);
+        signatureB64 = await _storage.read(key: _LEG_v2_kSignatureB64);
+        usingV2 = (signerPub != null && payloadB64 != null && signatureB64 != null);
 
-        if (!usingV1) {
-          // Try legacy profit keys
-          signerPub    = await _storage.read(key: _LEG_kSignerPubKey);
-          payloadB64   = await _storage.read(key: _LEG_kSignedPayloadB64);
-          signatureB64 = await _storage.read(key: _LEG_kSignatureB64);
-          usingLegacy  = (signerPub != null && payloadB64 != null && signatureB64 != null);
+        if (!usingV2) {
+          // Try v1 keys
+          signerPub    = await _storage.read(key: _LEG_v1_kSignerPubKey);
+          payloadB64   = await _storage.read(key: _LEG_v1_kSignedPayloadB64);
+          signatureB64 = await _storage.read(key: _LEG_v1_kSignatureB64);
+          usingV1 = (signerPub != null && payloadB64 != null && signatureB64 != null);
+
+          if (!usingV1) {
+            // Try legacy profit keys
+            signerPub    = await _storage.read(key: _LEG_kSignerPubKey);
+            payloadB64   = await _storage.read(key: _LEG_kSignedPayloadB64);
+            signatureB64 = await _storage.read(key: _LEG_kSignatureB64);
+            usingLegacy  = (signerPub != null && payloadB64 != null && signatureB64 != null);
+          }
         }
       }
 
@@ -321,6 +392,7 @@ class TransactionFeeVaultSecureStorage {
         return const TransactionFeeConfig(
           address: _DEFAULT_ADDR,
           feeUsd: _DEFAULT_FEE_USD,
+          swapFeePercent: _DEFAULT_SWAP_FEE_PERCENT,
           version: _VERSION,
         );
       }
@@ -335,6 +407,7 @@ class TransactionFeeVaultSecureStorage {
         return const TransactionFeeConfig(
           address: _DEFAULT_ADDR,
           feeUsd: _DEFAULT_FEE_USD,
+          swapFeePercent: _DEFAULT_SWAP_FEE_PERCENT,
           version: _VERSION,
         );
       }
@@ -345,12 +418,18 @@ class TransactionFeeVaultSecureStorage {
       final version = (map['version'] as int?) ?? 0;
       final addr    = (map['address'] as String?)?.trim() ?? '';
 
-      // **NEW**: Handle both v2 (fee_usd) and v1 (fee_stroops) schemas
+      // **NEW**: Handle v3 (fee_usd + swap_fee_percent), v2 (fee_usd), and v1 (fee_stroops) schemas
       double feeUsd;
+      double swapFeePercent;
 
-      if (schema == _SCHEMA && version >= 2) {
-        // v2 schema: fee_usd
+      if (schema == _SCHEMA && version >= 3) {
+        // v3 schema: fee_usd + swap_fee_percent
         feeUsd = (map['fee_usd'] as num?)?.toDouble() ?? -1.0;
+        swapFeePercent = (map['swap_fee_percent'] as num?)?.toDouble() ?? -1.0;
+      } else if (schema == _SCHEMA_V2 || (usingV2 && version >= 2)) {
+        // v2 schema: fee_usd only, use default swap fee
+        feeUsd = (map['fee_usd'] as num?)?.toDouble() ?? -1.0;
+        swapFeePercent = _DEFAULT_SWAP_FEE_PERCENT;
       } else if (schema == _SCHEMA_V1 || usingV1 || usingLegacy) {
         // v1 or legacy schema: fee_stroops → convert to approximate USD
         final feeStroops = (map['fee_stroops'] as num?)?.toInt() ?? -1;
@@ -364,14 +443,17 @@ class TransactionFeeVaultSecureStorage {
           final xlmPrice = _currencyVM?.xlmRate ?? 0.10;
           feeUsd = feeXlm * xlmPrice;
         }
+        swapFeePercent = _DEFAULT_SWAP_FEE_PERCENT;
       } else {
         feeUsd = -1.0;
+        swapFeePercent = -1.0;
       }
 
-      if (schema == null || version < 1 || addr.isEmpty || feeUsd < 0) {
+      if (schema == null || version < 1 || addr.isEmpty || feeUsd < 0 || swapFeePercent < 0) {
         return const TransactionFeeConfig(
           address: _DEFAULT_ADDR,
           feeUsd: _DEFAULT_FEE_USD,
+          swapFeePercent: _DEFAULT_SWAP_FEE_PERCENT,
           version: _VERSION,
         );
       }
@@ -381,9 +463,11 @@ class TransactionFeeVaultSecureStorage {
 
       // Clamp fee to a sane range ($0.001 to $10 USD)
       final feeClamped = min(max(feeUsd, 0.001), 10.0);
+      // Clamp swap fee to a sane range (0.05% to 1.0% - industry standard range)
+      final swapFeeClamped = min(max(swapFeePercent, 0.05), 1.0);
 
-      // If we verified from legacy keys, migrate them to new v2 keys for future reads.
-      if (usingLegacy || usingV1) {
+      // If we verified from legacy keys, migrate them to new v3 keys for future reads.
+      if (usingLegacy || usingV1 || usingV2) {
         try {
           // Copy the bundle (can't re-sign without private key)
           await _storage.write(key: _kSignerPubKey,     value: signerPub);
@@ -393,34 +477,52 @@ class TransactionFeeVaultSecureStorage {
           // Migrate cached mirrors
           await _storage.write(key: _kKeyAddr,   value: addr);
           await _storage.write(key: _kKeyFeeUsd, value: feeClamped.toString());
+          await _storage.write(key: _kKeySwapFeePercent, value: swapFeeClamped.toString());
         } catch (_) {/* ignore */}
       }
 
       return TransactionFeeConfig(
         address: addr,
         feeUsd: feeClamped,
+        swapFeePercent: swapFeeClamped,
         version: version,
       );
     } catch (_) {
       return const TransactionFeeConfig(
         address: _DEFAULT_ADDR,
         feeUsd: _DEFAULT_FEE_USD,
+        swapFeePercent: _DEFAULT_SWAP_FEE_PERCENT,
         version: _VERSION,
       );
     }
   }
+
+  /// **NEW**: Estimate network fee in XLM for a given number of operations
+  Future<double> estimateNetworkFeeXlm({
+    required int opCount,
+    int percentile = 90,
+  }) async {
+    // This is a simplified estimation. In production, you might want to
+    // query the Stellar network for current fee stats.
+    // For now, assume 100 stroops per operation (standard base fee)
+    final baseFeeStroops = 100;
+    final totalStroops = baseFeeStroops * opCount;
+    return totalStroops / 1e7;
+  }
 }
 
 /// Value object for **Transaction Fee** config.
-/// **UPDATED**: Now stores fee_usd instead of fee_stroops
+/// **UPDATED**: Now stores fee_usd and swap_fee_percent
 class TransactionFeeConfig {
   final String address;
   final double feeUsd;
+  final double swapFeePercent;
   final int version;
 
   const TransactionFeeConfig({
     required this.address,
     required this.feeUsd,
+    required this.swapFeePercent,
     required this.version,
   });
 
@@ -439,4 +541,7 @@ class TransactionFeeConfig {
 
   /// Get USD fee amount
   String get feeUsdLabel => '\$${feeUsd.toStringAsFixed(2)} USD';
+
+  /// Get swap fee percentage
+  String get swapFeeLabel => '${swapFeePercent.toStringAsFixed(1)}%';
 }

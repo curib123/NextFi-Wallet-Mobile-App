@@ -275,23 +275,6 @@ class _WalletCreationScreenState
                       letterSpacing: .2,
                     ),
                   ),
-
-                  /// ✅ REAL VERSION
-                  if (_version.isNotEmpty) ...[
-                    const SizedBox(
-                        height: 6),
-                    Text(
-                      _version,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colors
-                            .textSecondary
-                            .withOpacity(.7),
-                        fontWeight:
-                        FontWeight.w500,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
