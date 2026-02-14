@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/oath2.0/token_storage.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:next_fi/services/wallet/wallet_core_service.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 
 /// Result returned by the switch-wallet sheet.
 class WalletSwitchResult {
@@ -33,9 +35,6 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
     }) async {
   final colors = AppColor.of(context);
 
-  // Get wallet overview (local + cloud)
-  final overview = await WalletManager.I.getWalletOverview();
-
   return showModalBottomSheet<WalletSwitchResult>(
     context: context,
     useSafeArea: true,
@@ -44,8 +43,6 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
     builder: (ctx) {
       return _WalletSwitchBody(
         colors: colors,
-        localWallets: overview.localWallets,
-        cloudWallets: overview.cloudOnlyWallets,
         activeId: currentActiveId,
         allowGenerate: allowGenerate,
         newWalletLabel: generateLabel,
@@ -58,8 +55,6 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
 class _WalletSwitchBody extends StatefulWidget {
   const _WalletSwitchBody({
     required this.colors,
-    required this.localWallets,
-    required this.cloudWallets,
     required this.activeId,
     required this.allowGenerate,
     required this.newWalletLabel,
@@ -67,8 +62,6 @@ class _WalletSwitchBody extends StatefulWidget {
   });
 
   final AppColor colors;
-  final List<WalletViewModel> localWallets;
-  final List<CloudWallet> cloudWallets;
   final String? activeId;
   final bool allowGenerate;
   final String newWalletLabel;
@@ -86,7 +79,9 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
 
   List<WalletViewModel> _localWallets = [];
   List<CloudWallet> _cloudWallets = [];
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _isRemoving = false;
+  String? _error;
 
   static const double _pad = 20;
   static const double _radius = 16;
@@ -94,8 +89,6 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   @override
   void initState() {
     super.initState();
-    _localWallets = widget.localWallets;
-    _cloudWallets = widget.cloudWallets;
 
     _controller = AnimationController(
       vsync: this,
@@ -111,6 +104,57 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
     );
 
     _controller.forward();
+    _loadWallets();
+  }
+
+  Future<void> _loadWallets() async {
+    try {
+      // Check if user is logged in
+      final tokenStorage = TokenStorage();
+      final isLoggedIn = await tokenStorage.hasTokens;
+
+      if (isLoggedIn) {
+        // User is logged in - fetch from backend (includes cloud wallets)
+        final overview = await WalletManager.I.getWalletOverview();
+
+        if (mounted) {
+          setState(() {
+            _localWallets = overview.localWallets;
+            _cloudWallets = overview.cloudOnlyWallets;
+            _isLoading = false;
+          });
+        }
+      } else {
+        // User NOT logged in - only show local wallets
+        final localWallets = await SeedStorage.listWallets();
+
+        if (mounted) {
+          setState(() {
+            _localWallets = localWallets.map((wallet) {
+              return WalletViewModel(
+                localId: wallet.id,
+                backendId: null,
+                name: wallet.name,
+                publicAddress: wallet.publicAddress,
+                createdAt: wallet.createdAt,
+                lastUsedAt: wallet.lastUsedAt,
+                isActive: wallet.id == widget.activeId,
+                syncedToBackend: false,
+              );
+            }).toList();
+            _cloudWallets = []; // No cloud wallets when not logged in
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -180,18 +224,18 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
     if (confirmed != true) return;
 
     try {
-      setState(() => _isLoading = true);
+      setState(() => _isRemoving = true);
 
       // Remove from backend
       await WalletCoreService.I.remove(walletId: wallet.backendId);
 
       // Update local list
-      setState(() {
-        _cloudWallets.removeWhere((w) => w.backendId == wallet.backendId);
-        _isLoading = false;
-      });
-
       if (mounted) {
+        setState(() {
+          _cloudWallets.removeWhere((w) => w.backendId == wallet.backendId);
+          _isRemoving = false;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${wallet.label} removed from cloud'),
@@ -201,9 +245,9 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
         );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-
       if (mounted) {
+        setState(() => _isRemoving = false);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to remove: $e'),
@@ -255,7 +299,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                       _buildHeader(context, totalWallets),
                       const SizedBox(height: 8),
                       Flexible(
-                        child: totalWallets == 0
+                        child: _isLoading
+                            ? _buildLoadingState()
+                            : _error != null
+                            ? _buildErrorState()
+                            : totalWallets == 0
                             ? _buildEmptyState()
                             : _buildWalletList(),
                       ),
@@ -263,7 +311,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                     ],
                   ),
                 ),
-                if (_isLoading)
+                if (_isRemoving)
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
@@ -280,6 +328,77 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            color: widget.colors.primary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Loading wallets...',
+            style: TextStyle(
+              color: widget.colors.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(_pad),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              LucideIcons.alertCircle,
+              size: 48,
+              color: widget.colors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load wallets',
+              style: TextStyle(
+                color: widget.colors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error ?? 'Unknown error',
+              style: TextStyle(
+                color: widget.colors.textSecondary,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            _ModernButton(
+              text: 'Retry',
+              icon: LucideIcons.refreshCw,
+              colors: widget.colors,
+              isPrimary: true,
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+                _loadWallets();
+              },
+            ),
+          ],
         ),
       ),
     );

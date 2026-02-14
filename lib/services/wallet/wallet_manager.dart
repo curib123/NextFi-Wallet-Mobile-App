@@ -353,8 +353,15 @@ class WalletManager {
 
   /// Get complete wallet overview (local + cloud-only)
   /// This is what you should use on login to show all wallets
-  Future<WalletOverview> getWalletOverview() async {
+  ///
+  /// IMPORTANT: This also auto-syncs local wallets to backend
+  Future<WalletOverview> getWalletOverview({bool autoSync = true}) async {
     try {
+      // Auto-sync local wallets to backend (if enabled)
+      if (autoSync) {
+        await _autoSyncLocalWallets();
+      }
+
       // Get local wallets with seeds
       final localWallets = await listWallets();
 
@@ -369,6 +376,51 @@ class WalletManager {
       );
     } catch (e) {
       throw WalletException('Failed to get wallet overview: $e');
+    }
+  }
+
+  /// Auto-sync local wallets to backend (silent, best-effort)
+  /// This ensures all local wallets are registered in the backend
+  Future<void> _autoSyncLocalWallets() async {
+    try {
+      final localWallets = await SeedStorage.listWallets();
+
+      // Get existing backend wallets
+      List<dynamic> backendWallets = [];
+      try {
+        backendWallets = await _api.list();
+      } catch (e) {
+        print('[WalletManager] Backend list failed during auto-sync: $e');
+        return; // Can't sync if we can't fetch backend wallets
+      }
+
+      // Sync each local wallet to backend
+      for (final local in localWallets) {
+        if (local.publicAddress == null) continue;
+
+        // Check if already exists in backend
+        final exists = backendWallets.any(
+              (b) => b.publicAddress == local.publicAddress,
+        );
+
+        if (!exists) {
+          // Create in backend (silent, best-effort)
+          try {
+            await _api.create(
+              publicAddress: local.publicAddress!,
+              label: local.name,
+              network: 'stellar',
+            );
+            print('[WalletManager] Auto-synced wallet: ${local.name}');
+          } catch (e) {
+            // Silent failure - don't block the UI
+            print('[WalletManager] Auto-sync failed for ${local.name}: $e');
+          }
+        }
+      }
+    } catch (e) {
+      // Silent failure - auto-sync is best-effort
+      print('[WalletManager] Auto-sync error: $e');
     }
   }
 
