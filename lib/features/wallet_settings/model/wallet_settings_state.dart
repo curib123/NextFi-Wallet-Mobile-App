@@ -7,7 +7,7 @@ class WalletSettingsState {
   final List<String> words;
 
   final bool loading;
-  final bool obscured;     // hidden until auth
+  final bool obscured;     // hidden until oath2.0
   final bool authorized;   // set true after AuthGate goNext
   final String? error;
 

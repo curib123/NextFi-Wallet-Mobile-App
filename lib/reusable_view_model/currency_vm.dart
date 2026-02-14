@@ -58,6 +58,9 @@ class CurrencyVM extends ChangeNotifier {
 
   bool _loading = true;
 
+  /// True when no live rates are available — UI should show "—" not a stale value.
+  bool _ratesUnavailable = false;
+
   // Cache timestamps
   DateTime? _lastRateRefresh;
   DateTime? _lastHistoryRefresh;
@@ -87,6 +90,11 @@ class CurrencyVM extends ChangeNotifier {
   // ── Public API ────────────────────────────────────────────────────────────
   String get fiat => _fiat;
   bool get loading => _loading;
+
+  /// True when rates could not be fetched. UI should show "—" or "N/A"
+  /// instead of displaying a balance with a stale or zero rate.
+  bool get ratesUnavailable => _ratesUnavailable;
+
   double get usdcRate => _usdcRate;
   double get xlmRate => _xlmRate;
   double get lastUsdcPerXlm => _lastUsdcPerXlm;
@@ -229,6 +237,7 @@ class CurrencyVM extends ChangeNotifier {
         if (p.usdcPerXlm > 0 && p.usdcPerXlm.isFinite) {
           final oldPrice = _lastUsdcPerXlm;
           _lastUsdcPerXlm = p.usdcPerXlm;
+          _ratesUnavailable = false;
           _recomputeXlmFiat();
           _consecutiveErrors = 0; // Reset error counter on success
 
@@ -244,8 +253,8 @@ class CurrencyVM extends ChangeNotifier {
         debugPrint('CurrencyVM: Stream error: $e');
         _consecutiveErrors++;
 
-        // Use cached price if stream fails
-        _useCachedPriceAsFallback();
+        // Zero out rates on stream failure so UI shows N/A, not stale price
+        _zeroRates('Stream error');
       },
       cancelOnError: false,
     );
@@ -272,6 +281,19 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   // ── Core Logic ────────────────────────────────────────────────────────────
+
+  /// Zeros all live rates and marks as unavailable.
+  /// Called on any fetch/stream failure to prevent stale balance display.
+  void _zeroRates(String reason) {
+    if (_disposed) return;
+    _usdcRate = 0;
+    _xlmRate = 0;
+    _lastUsdcPerXlm = 0;
+    _ratesUnavailable = true;
+    debugPrint('CurrencyVM: Rates zeroed ($reason) — UI should show N/A');
+    notifyListeners();
+  }
+
   Future<void> _refreshUsdToFiat() async {
     if (_disposed) return;
 
@@ -281,6 +303,7 @@ class CurrencyVM extends ChangeNotifier {
 
       if (fx != null && fx.isFinite && fx > 0) {
         _usdcRate = fx;
+        _ratesUnavailable = false;
         _lastRateRefresh = DateTime.now();
 
         if (!_usdcCtrl.isClosed && !_disposed) {
@@ -301,8 +324,8 @@ class CurrencyVM extends ChangeNotifier {
       debugPrint('CurrencyVM: Error refreshing rates: $e');
       _consecutiveErrors++;
 
-      // ALWAYS fallback to latest cached rates
-      await _useCachedRatesAsFallback();
+      // Zero out rates — never show a stale cached rate as a real balance
+      _zeroRates('fetch failed');
     } finally {
       _setLoading(false);
       if (!_disposed) notifyListeners();

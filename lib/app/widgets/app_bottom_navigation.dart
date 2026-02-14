@@ -18,7 +18,7 @@ import 'package:next_fi/reusable_view_model/tab_vm.dart';
 /// - Glassmorphism with backdrop blur
 /// - 3D-style floating center button
 /// - Liquid animations
-/// - Smart badge placement
+/// - Smart drawer placement
 /// - Haptic feedback
 /// - Performance optimized
 ///
@@ -353,7 +353,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
     );
   }
 
-  /// Clean badge with subtle shadow
+  /// Clean drawer with subtle shadow
   Widget _buildLiquidBadge(int count, Color color) {
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 500),

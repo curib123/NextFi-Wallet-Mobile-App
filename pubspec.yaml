@@ -53,6 +53,8 @@ dependencies:
   url_launcher: ^6.3.0
   timeago: ^3.7.1
   package_info_plus: ^8.0.0
+  google_sign_in: ^6.2.1
+  flutter_facebook_auth: ^7.0.0
 
 
 
