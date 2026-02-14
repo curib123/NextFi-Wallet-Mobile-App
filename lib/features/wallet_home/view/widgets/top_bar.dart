@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
@@ -25,8 +26,7 @@ class TopBar extends StatefulWidget {
   State<TopBar> createState() => _TopBarState();
 }
 
-class _TopBarState extends State<TopBar>
-    with WidgetsBindingObserver {
+class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
   final _tokenStorage = TokenStorage();
 
   bool _isLoggedIn = false;
@@ -47,8 +47,7 @@ class _TopBarState extends State<TopBar>
   }
 
   @override
-  void didChangeAppLifecycleState(
-      AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshProfile();
     }
@@ -57,8 +56,7 @@ class _TopBarState extends State<TopBar>
   Future<void> _refreshProfile() async {
     setState(() => _loading = true);
 
-    final hasTokens =
-    await _tokenStorage.hasTokens;
+    final hasTokens = await _tokenStorage.hasTokens;
 
     if (!hasTokens) {
       if (!mounted) return;
@@ -71,12 +69,8 @@ class _TopBarState extends State<TopBar>
     }
 
     try {
-      final client =
-      AuthHttpClient(tokenStorage: _tokenStorage);
-
-      final json =
-      await client.get(AuthEndpoints.me);
-
+      final client = AuthHttpClient(tokenStorage: _tokenStorage);
+      final json = await client.get(AuthEndpoints.me);
       final user = User.fromJson(json);
 
       if (!mounted) return;
@@ -100,9 +94,7 @@ class _TopBarState extends State<TopBar>
 
   void _openDrawer(BuildContext context) {
     if (widget.scaffoldKey != null) {
-      widget.scaffoldKey!
-          .currentState
-          ?.openDrawer();
+      widget.scaffoldKey!.currentState?.openDrawer();
     } else {
       Scaffold.of(context).openDrawer();
     }
@@ -112,12 +104,10 @@ class _TopBarState extends State<TopBar>
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final vm = context.watch<WalletHomeVM>();
-    final walletName =
-        vm.state.walletName ?? 'Default Wallet';
+    final walletName = vm.state.walletName ?? 'Default Wallet';
 
     return Padding(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [
           Builder(
@@ -132,8 +122,7 @@ class _TopBarState extends State<TopBar>
           _WalletSwitcher(
             walletName: walletName,
             colors: colors,
-            onTap: () =>
-                _handleWalletSwitch(context),
+            onTap: () => _handleWalletSwitch(context),
           ),
 
           const Spacer(),
@@ -144,8 +133,7 @@ class _TopBarState extends State<TopBar>
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                  const SettingsScreen(),
+                  builder: (_) => const SettingsScreen(),
                 ),
               );
 
@@ -155,11 +143,10 @@ class _TopBarState extends State<TopBar>
             },
           ),
 
-          if (!_loading &&
-              _isLoggedIn &&
-              _user != null) ...[
+          // ✅ Using centralized avatar component
+          if (!_loading && _isLoggedIn && _user != null) ...[
             const SizedBox(width: 8),
-            _ProfileAvatar(
+            UserAvatarMedium(
               user: _user!,
               colors: colors,
             ),
@@ -169,13 +156,10 @@ class _TopBarState extends State<TopBar>
     );
   }
 
-  Future<void> _handleWalletSwitch(
-      BuildContext context) async {
-    final activeId =
-    await SeedStorage.getActiveWalletId();
+  Future<void> _handleWalletSwitch(BuildContext context) async {
+    final activeId = await SeedStorage.getActiveWalletId();
 
-    final res =
-    await showWalletSwitchSheet(
+    final res = await showWalletSwitchSheet(
       context,
       currentActiveId: activeId,
       allowGenerate: true,
@@ -187,17 +171,13 @@ class _TopBarState extends State<TopBar>
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-          const ImportWalletScreen(),
+          builder: (_) => const ImportWalletScreen(),
         ),
       );
 
       if (!context.mounted) return;
 
-      await context
-          .read<WalletHomeVM>()
-          .boot();
-
+      await context.read<WalletHomeVM>().boot();
       await _refreshProfile();
 
       showFloatingSnackBar(
@@ -213,29 +193,21 @@ class _TopBarState extends State<TopBar>
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-          const SeedPhraseScreen(),
+          builder: (_) => const SeedPhraseScreen(),
         ),
       );
 
       if (!context.mounted) return;
 
-      await context
-          .read<WalletHomeVM>()
-          .boot();
-
+      await context.read<WalletHomeVM>().boot();
       await _refreshProfile();
       return;
     }
 
-    final chosenId =
-        res.chosenWalletId;
+    final chosenId = res.chosenWalletId;
 
-    if (chosenId != null &&
-        chosenId != activeId) {
-      final ok = await context
-          .read<WalletHomeVM>()
-          .switchTo(chosenId);
+    if (chosenId != null && chosenId != activeId) {
+      final ok = await context.read<WalletHomeVM>().switchTo(chosenId);
 
       if (!context.mounted) return;
 
@@ -243,12 +215,8 @@ class _TopBarState extends State<TopBar>
 
       showFloatingSnackBar(
         context,
-        message: ok
-            ? 'Switched active wallet.'
-            : 'Failed to switch wallet.',
-        type: ok
-            ? SnackBarType.success
-            : SnackBarType.error,
+        message: ok ? 'Switched active wallet.' : 'Failed to switch wallet.',
+        type: ok ? SnackBarType.success : SnackBarType.error,
       );
     }
   }
@@ -264,40 +232,33 @@ class _MenuButton extends StatefulWidget {
   });
 
   @override
-  State<_MenuButton> createState() =>
-      _MenuButtonState();
+  State<_MenuButton> createState() => _MenuButtonState();
 }
 
-class _MenuButtonState
-    extends State<_MenuButton>
+class _MenuButtonState extends State<_MenuButton>
     with SingleTickerProviderStateMixin {
-  late final AnimationController
-  _controller;
-  late final Animation<double>
-  _scaleAnimation;
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
   bool _isPressed = false;
 
   @override
   void initState() {
     super.initState();
 
-    _controller =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(
-              milliseconds: 150),
-        );
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
 
-    _scaleAnimation =
-        Tween<double>(
-          begin: 1.0,
-          end: 0.92,
-        ).animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: Curves.easeInOut,
-          ),
-        );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.92,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
   }
 
   @override
@@ -308,54 +269,39 @@ class _MenuButtonState
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        Theme.of(context).brightness ==
-            Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onTapDown: (_) {
-        setState(
-                () => _isPressed = true);
+        setState(() => _isPressed = true);
         _controller.forward();
       },
       onTapUp: (_) {
-        setState(
-                () => _isPressed = false);
+        setState(() => _isPressed = false);
         _controller.reverse();
         widget.onTap();
       },
       onTapCancel: () {
-        setState(
-                () => _isPressed = false);
+        setState(() => _isPressed = false);
         _controller.reverse();
       },
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: AnimatedContainer(
-          duration: const Duration(
-              milliseconds: 200),
+          duration: const Duration(milliseconds: 200),
           width: 44,
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: _isPressed
-                ? widget.colors.border
-                .withOpacity(
-                isDark
-                    ? 0.15
-                    : 0.12)
-                : widget.colors.border
-                .withOpacity(
-                isDark
-                    ? 0.08
-                    : 0.05),
+                ? widget.colors.border.withOpacity(isDark ? 0.15 : 0.12)
+                : widget.colors.border.withOpacity(isDark ? 0.08 : 0.05),
           ),
           child: Icon(
             LucideIcons.menu,
             size: 20,
-            color:
-            widget.colors.textPrimary,
+            color: widget.colors.textPrimary,
           ),
         ),
       ),
@@ -363,8 +309,7 @@ class _MenuButtonState
   }
 }
 
-class _WalletSwitcher
-    extends StatelessWidget {
+class _WalletSwitcher extends StatelessWidget {
   final String walletName;
   final AppColor colors;
   final VoidCallback onTap;
@@ -380,36 +325,26 @@ class _WalletSwitcher
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-        const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          borderRadius:
-          BorderRadius.circular(16),
-          color: colors.border
-              .withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          color: colors.border.withOpacity(0.08),
         ),
         child: Row(
-          mainAxisSize:
-          MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               walletName,
               style: TextStyle(
-                fontWeight:
-                FontWeight.w700,
-                color: colors
-                    .textPrimary,
+                fontWeight: FontWeight.w700,
+                color: colors.textPrimary,
               ),
             ),
             const SizedBox(width: 6),
             Icon(
-              LucideIcons
-                  .chevronDown,
+              LucideIcons.chevronDown,
               size: 18,
-              color: colors
-                  .textPrimary,
+              color: colors.textPrimary,
             ),
           ],
         ),
@@ -418,8 +353,7 @@ class _WalletSwitcher
   }
 }
 
-class _SettingsButton
-    extends StatelessWidget {
+class _SettingsButton extends StatelessWidget {
   final AppColor colors;
   final VoidCallback onTap;
 
@@ -433,45 +367,9 @@ class _SettingsButton
     return IconButton(
       icon: Icon(
         LucideIcons.settings,
-        color:
-        colors.textPrimary,
+        color: colors.textPrimary,
       ),
       onPressed: onTap,
-    );
-  }
-}
-
-class _ProfileAvatar
-    extends StatelessWidget {
-  final User user;
-  final AppColor colors;
-
-  const _ProfileAvatar({
-    required this.user,
-    required this.colors,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final initial =
-    user.name.isNotEmpty
-        ? user.name[0]
-        .toUpperCase()
-        : '?';
-
-    return CircleAvatar(
-      radius: 18,
-      backgroundColor:
-      colors.primary,
-      child: Text(
-        initial,
-        style:
-        const TextStyle(
-          color: Colors.white,
-          fontWeight:
-          FontWeight.bold,
-        ),
-      ),
     );
   }
 }

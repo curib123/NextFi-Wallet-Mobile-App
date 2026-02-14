@@ -23,6 +23,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _auth = AuthService();
+  final vm = LoginVM();
 
   bool _googleLoading = false;
   bool _facebookLoading = false;
@@ -56,8 +57,7 @@ class _LoginScreenState extends State<LoginScreen>
     final isDark = brightness == Brightness.dark;
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-      statusBarIconBrightness:
-      isDark ? Brightness.light : Brightness.dark,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       systemNavigationBarColor:
       isDark ? AppColor.dark.background : AppColor.light.background,
     ));
@@ -65,27 +65,43 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ── Auth ─────────────────────────────────────────────────────────
 
-
-  final vm = LoginVM();
-
   Future<void> _signInGoogle() async {
+    if (_googleLoading || _facebookLoading) return;
+
+    HapticFeedback.lightImpact();
+    setState(() => _googleLoading = true);
+
     try {
-      final user =
-      await vm.signInGoogle();
+      final user = await vm.signInGoogle();
 
-      if (!mounted ||
-          user == null) return;
+      if (!mounted) return;
 
-      await showLoginSuccessModal(
-        context,
-        user: user,
-      );
+      setState(() => _googleLoading = false);
 
-      widget.onLoginSuccess?.call();
+      if (user != null) {
+        HapticFeedback.mediumImpact();
 
-      Navigator.pop(context, true);
+        // Show success modal
+        await showLoginSuccessModal(
+          context,
+          user: user,
+        );
+
+        if (!mounted) return;
+
+        // Trigger success callback
+        widget.onLoginSuccess?.call();
+
+        // Navigate back
+        Navigator.pop(context, true);
+      } else {
+        _snack('Login was cancelled or failed');
+      }
     } catch (e) {
-      _snack(e.toString());
+      if (mounted) {
+        setState(() => _googleLoading = false);
+        _snack(e.toString());
+      }
     }
   }
 
@@ -96,27 +112,43 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _facebookLoading = true);
 
     try {
-      await _auth.signInWithFacebook();
+      final user = await _auth.signInWithFacebook();
 
       if (!mounted) return;
 
-      HapticFeedback.mediumImpact();
+      setState(() => _facebookLoading = false);
 
-      widget.onLoginSuccess?.call();
+      if (user != null) {
+        HapticFeedback.mediumImpact();
 
-      Navigator.of(context).pop(true);
+        // Show success modal
+        await showLoginSuccessModal(
+          context,
+          user: user,
+        );
 
+        if (!mounted) return;
+
+        // Trigger success callback
+        widget.onLoginSuccess?.call();
+
+        // Navigate back
+        Navigator.pop(context, true);
+      } else {
+        _snack('Login was cancelled or failed');
+      }
     } on AuthException catch (e) {
-      _snack(e.message);
-    } catch (_) {
-      _snack('Something went wrong');
-    } finally {
       if (mounted) {
         setState(() => _facebookLoading = false);
+        _snack(e.message);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _facebookLoading = false);
+        _snack('Something went wrong');
       }
     }
   }
-
 
   void _snack(String msg) {
     if (!mounted) return;
@@ -138,6 +170,9 @@ class _LoginScreenState extends State<LoginScreen>
     _applySystemUi(isDark ? Brightness.dark : Brightness.light);
     final bottom = MediaQuery.of(context).padding.bottom;
     final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+
+    // ✅ Show loading overlay when any auth is in progress
+    final isLoading = _googleLoading || _facebookLoading;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -206,6 +241,60 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
           ),
+
+          // ✅ Loading overlay
+          if (isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: colors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            valueColor: AlwaysStoppedAnimation(colors.primary),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Signing you in...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Please wait',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -277,7 +366,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 12),
         Text(
-          'Invest, trade, and grow your crypto\nportfolio — all in one place.',
+          'Manage your XLM & USDC pair — send, receive, claim balances, and trade seamlessly. Login is optional for buy & sell.',
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w400,
@@ -397,12 +486,14 @@ class _AuthButtonState extends State<_AuthButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
+      onTapDown: widget.isLoading ? null : (_) => setState(() => _pressed = true),
+      onTapUp: widget.isLoading
+          ? null
+          : (_) {
         setState(() => _pressed = false);
         widget.onTap();
       },
-      onTapCancel: () => setState(() => _pressed = false),
+      onTapCancel: widget.isLoading ? null : () => setState(() => _pressed = false),
       child: AnimatedScale(
         scale: _pressed ? 0.975 : 1.0,
         duration: const Duration(milliseconds: 100),

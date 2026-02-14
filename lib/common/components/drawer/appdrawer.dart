@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
@@ -185,8 +186,7 @@ class _AppDrawerState extends State<AppDrawer>
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                            const WalletScreenSettings(),
+                            builder: (_) => const WalletScreenSettings(),
                           ),
                         );
                       },
@@ -201,8 +201,7 @@ class _AppDrawerState extends State<AppDrawer>
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                            const SettingsScreen(),
+                            builder: (_) => const SettingsScreen(),
                           ),
                         );
                       },
@@ -230,7 +229,7 @@ class _AppDrawerState extends State<AppDrawer>
 
 //
 // ─────────────────────────────────────────────────────────────
-// PROFILE HEADER (WITH APP INFO)
+// PROFILE HEADER (WITH APP INFO) - ✅ UPDATED WITH CENTRALIZED AVATAR
 // ─────────────────────────────────────────────────────────────
 //
 
@@ -248,8 +247,6 @@ class _ProfileHeader extends StatelessWidget {
     final c = AppColor.of(context);
     final top = MediaQuery.of(context).padding.top;
 
-    final initial = user.name.isNotEmpty ? user.name[0] : '?';
-
     return Container(
       width: double.infinity,
       color: c.surface,
@@ -258,16 +255,11 @@ class _ProfileHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
+              // ✅ Using centralized avatar component
+              UserAvatar(
+                user: user,
                 radius: 28,
-                backgroundColor: c.primary,
-                child: Text(
-                  initial.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                colors: c,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -279,14 +271,20 @@ class _ProfileHeader extends StatelessWidget {
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w700,
+                        fontSize: 16,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       user.email,
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 12,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -337,9 +335,14 @@ class _LoginPrompt extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CircleAvatar(
+          CircleAvatar(
             radius: 28,
-            child: Icon(Icons.person_outline),
+            backgroundColor: c.border.withOpacity(0.3),
+            child: Icon(
+              Icons.person_outline,
+              size: 28,
+              color: c.textSecondary,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -347,8 +350,10 @@ class _LoginPrompt extends StatelessWidget {
             style: TextStyle(
               color: c.textPrimary,
               fontWeight: FontWeight.w700,
+              fontSize: 16,
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             'Sign in to unlock features',
             style: TextStyle(
@@ -405,6 +410,7 @@ class _NavTile extends StatelessWidget {
       title: Text(label),
       subtitle: Text(description),
       onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 }
@@ -655,15 +661,32 @@ class _ProfileShimmer extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: c.border,
+              color: c.border.withOpacity(0.3),
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 12),
-          Container(
-            width: 120,
-            height: 14,
-            color: c.border,
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 120,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: c.border.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: 180,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: c.border.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -689,12 +712,13 @@ class _SectionLabel extends StatelessWidget {
     final c = AppColor.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
         label.toUpperCase(),
         style: TextStyle(
           color: c.textSecondary,
-          fontSize: 10,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
           letterSpacing: 1.2,
         ),
       ),
