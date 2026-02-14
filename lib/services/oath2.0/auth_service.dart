@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:next_fi/services/device_meta/devices_meta.dart';
+import 'package:next_fi/services/fcm_notification/fcm_notification_core.dart';
 import 'package:next_fi/services/oath2.0/auth_http_client.dart';
 import 'package:next_fi/services/oath2.0/endpoints.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
@@ -307,25 +309,38 @@ class AuthService {
   Future<void> logout() async {
     debugPrint('[AUTH] Logout');
 
+    // 1) Deactivate this device's push token on backend (best-effort)
+    try {
+      final meta = await DeviceMetaService.instance.getMeta();
+      await FcmNotificationCore().logoutDeactivateDevice(meta.deviceId);
+      debugPrint('[FCM] Deactivated deviceId=${meta.deviceId}');
+    } catch (e) {
+      debugPrint('[FCM] Deactivate skipped/failed: $e');
+    }
+
+    // 2) Call backend logout (best-effort)
     try {
       await _http.post(AuthEndpoints.logout);
     } catch (e) {
       debugPrint('[AUTH] Logout API failed: $e');
     }
 
+    // 3) Clear tokens + social sessions
     await Future.wait([
       _tokenStorage.clear(),
       _googleSignIn.signOut(),
       FacebookAuth.instance.logOut(),
     ]);
 
-    // Clear all caches
+    // 4) Clear caches
     _cachedUser = null;
     _userFetchTime = null;
     _isAuthenticatedCache = false;
 
+    // 5) Notify app
     _statusCtrl.add(AuthStatus.unauthenticated);
   }
+
 
   // ── Authentication State (CACHED) ─────────────────────────────
 

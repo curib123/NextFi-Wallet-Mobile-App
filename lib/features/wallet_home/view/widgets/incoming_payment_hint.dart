@@ -8,7 +8,7 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
-/// Enhanced incoming payment hint with glassmorphism and reserve impact display
+/// Minimalist incoming payment hint with clean modern design
 Widget incomingPaymentHint(
     Map<String, dynamic> tx,
     String me, {
@@ -37,12 +37,12 @@ Widget incomingPaymentHint(
       final reserveImpact = isNewAsset ? 0.5 : 0.0;
 
       return TweenAnimationBuilder<double>(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
         tween: Tween(begin: 0.0, end: 1.0),
         builder: (context, value, child) {
           return Transform.translate(
-            offset: Offset(0, 10 * (1 - value)),
+            offset: Offset(0, 8 * (1 - value)),
             child: Opacity(
               opacity: value,
               child: child,
@@ -59,41 +59,32 @@ Widget incomingPaymentHint(
               await Clipboard.setData(ClipboardData(text: txId));
               showFloatingSnackBar(context, message: 'Transaction ID copied', type: SnackBarType.success);
             },
-            borderRadius: BorderRadius.circular(16),
-            splashColor: colors.success.withOpacity(.10),
-            highlightColor: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
             child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    colors.success.withOpacity(.12),
-                    colors.success.withOpacity(.06),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
+                color: colors.success.withOpacity(.04),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: colors.success.withOpacity(.25),
-                  width: 1.5,
+                  color: colors.success.withOpacity(.15),
+                  width: 1,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: colors.success.withOpacity(.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      _GlowingDot(color: colors.success),
-                      const SizedBox(width: 12),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: colors.success,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,56 +92,46 @@ Widget incomingPaymentHint(
                             Row(
                               children: [
                                 Flexible(
-                                  child: RichText(
+                                  child: Text(
+                                    '+ ${_fmtAmount(amount)} $symbol',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    text: TextSpan(
-                                      children: [
-                                        TextSpan(
-                                          text: '+ ${_fmtAmount(amount)} $symbol',
-                                          style: TextStyle(
-                                            color: colors.success,
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 16,
-                                            letterSpacing: -0.3,
-                                          ),
-                                        ),
-                                      ],
+                                    style: TextStyle(
+                                      color: colors.success,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      letterSpacing: -0.2,
                                     ),
                                   ),
                                 ),
                                 if (isNewAsset) ...[
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: colors.warning.withOpacity(.15),
+                                      color: colors.warning.withOpacity(.1),
                                       borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: colors.warning.withOpacity(.3),
-                                        width: 1,
-                                      ),
                                     ),
                                     child: Text(
                                       'NEW',
                                       style: TextStyle(
                                         fontSize: 9,
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight: FontWeight.w700,
                                         color: colors.warning,
-                                        letterSpacing: 0.5,
+                                        letterSpacing: 0.3,
                                       ),
                                     ),
                                   ),
                                 ],
                               ],
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 3),
                             Text(
                               'from ${_short(from)} • ${_relative(tsMs)}',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: colors.textSecondary.withOpacity(0.8),
+                                color: colors.textSecondary.withOpacity(0.7),
                                 letterSpacing: -0.1,
                               ),
                             ),
@@ -158,7 +139,11 @@ Widget incomingPaymentHint(
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Icon(LucideIcons.chevronRight, size: 18, color: colors.textSecondary.withOpacity(0.6)),
+                      Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: colors.textSecondary.withOpacity(0.5)
+                      ),
                     ],
                   ),
 
@@ -166,12 +151,12 @@ Widget incomingPaymentHint(
                   if (reserveImpact > 0) ...[
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                       decoration: BoxDecoration(
-                        color: colors.warning.withOpacity(.1),
+                        color: colors.warning.withOpacity(.06),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: colors.warning.withOpacity(.25),
+                          color: colors.warning.withOpacity(.2),
                           width: 1,
                         ),
                       ),
@@ -180,10 +165,10 @@ Widget incomingPaymentHint(
                         children: [
                           Icon(
                             LucideIcons.info,
-                            size: 14,
+                            size: 13,
                             color: colors.warning,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 7),
                           Flexible(
                             child: Text(
                               'Adds ${reserveImpact.toStringAsFixed(1)} XLM reserve for new trustline',
@@ -209,66 +194,7 @@ Widget incomingPaymentHint(
   );
 }
 
-// Glowing animated dot
-class _GlowingDot extends StatefulWidget {
-  final Color color;
-  const _GlowingDot({required this.color});
-
-  @override
-  State<_GlowingDot> createState() => _GlowingDotState();
-}
-
-class _GlowingDotState extends State<_GlowingDot> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-
-    _animation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    _controller.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: widget.color,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withOpacity(0.6 * _animation.value),
-                blurRadius: 12 * _animation.value,
-                spreadRadius: 2 * _animation.value,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// Enhanced bottom sheet with glassmorphism
+// Enhanced bottom sheet with clean minimal design
 void _showTxDetailsSheet(
     BuildContext context,
     Map<String, dynamic> tx,
@@ -297,16 +223,16 @@ void _showTxDetailsSheet(
     useSafeArea: true,
     backgroundColor: colors.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) => Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             height: 4,
-            width: 40,
+            width: 36,
             margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
               color: colors.border.withOpacity(0.3),
@@ -318,25 +244,14 @@ void _showTxDetailsSheet(
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colors.success.withOpacity(0.15),
-                      colors.success.withOpacity(0.08),
-                    ],
-                  ),
+                  color: colors.success.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: colors.success.withOpacity(0.2),
-                    width: 1,
-                  ),
                 ),
-                child: Icon(LucideIcons.arrowDownLeft, color: colors.success, size: 24),
+                child: Icon(LucideIcons.arrowDownLeft, color: colors.success, size: 22),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,9 +260,9 @@ void _showTxDetailsSheet(
                       'Incoming $symbol',
                       style: TextStyle(
                         color: colors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        letterSpacing: -0.4,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                        letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -355,7 +270,7 @@ void _showTxDetailsSheet(
                       '+ ${_fmtAmount(amount)} $symbol',
                       style: TextStyle(
                         color: colors.success,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
@@ -378,20 +293,20 @@ void _showTxDetailsSheet(
 
           // Reserve impact
           if (reserveImpact > 0) ...[
-            _divider(colors),
+            const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colors.warning.withOpacity(0.08),
+                color: colors.warning.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: colors.warning.withOpacity(0.2),
+                  color: colors.warning.withOpacity(0.15),
                   width: 1,
                 ),
               ),
               child: Row(
                 children: [
-                  Icon(LucideIcons.shield, size: 18, color: colors.warning),
+                  Icon(LucideIcons.shield, size: 17, color: colors.warning),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -405,11 +320,12 @@ void _showTxDetailsSheet(
                             color: colors.textSecondary,
                           ),
                         ),
+                        const SizedBox(height: 1),
                         Text(
                           '+${reserveImpact.toStringAsFixed(1)} XLM locked for new trustline',
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: colors.warning,
                           ),
                         ),
@@ -427,14 +343,13 @@ void _showTxDetailsSheet(
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(LucideIcons.check, size: 20),
+              icon: const Icon(LucideIcons.check, size: 18),
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.success,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 elevation: 0,
-                shadowColor: colors.success.withOpacity(0.3),
               ),
               onPressed: () {
                 Navigator.pop(ctx);
@@ -444,7 +359,7 @@ void _showTxDetailsSheet(
               label: const Text(
                 'Mark as received',
                 style: TextStyle(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   fontSize: 15,
                   letterSpacing: -0.2,
                 ),
@@ -459,16 +374,8 @@ void _showTxDetailsSheet(
 
 Widget _divider(AppColor colors) => Container(
   height: 1,
-  margin: const EdgeInsets.symmetric(vertical: 10),
-  decoration: BoxDecoration(
-    gradient: LinearGradient(
-      colors: [
-        colors.border.withOpacity(0.0),
-        colors.border.withOpacity(0.15),
-        colors.border.withOpacity(0.0),
-      ],
-    ),
-  ),
+  margin: const EdgeInsets.symmetric(vertical: 12),
+  color: colors.border.withOpacity(0.1),
 );
 
 Widget _flatRow(
@@ -479,11 +386,11 @@ Widget _flatRow(
       required AppColor colors,
     }) {
   return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 10),
+    padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(
       children: [
         SizedBox(
-          width: 72,
+          width: 70,
           child: Text(
             label,
             style: TextStyle(
@@ -510,13 +417,13 @@ Widget _flatRow(
         if (fullValue != null)
           IconButton(
             visualDensity: VisualDensity.compact,
-            iconSize: 18,
-            splashRadius: 20,
+            iconSize: 16,
+            splashRadius: 18,
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: fullValue));
               showFloatingSnackBar(context, message: '$label copied', type: SnackBarType.success);
             },
-            icon: Icon(LucideIcons.copy, color: colors.textSecondary.withOpacity(0.6)),
+            icon: Icon(LucideIcons.copy, color: colors.textSecondary.withOpacity(0.5)),
           ),
       ],
     ),

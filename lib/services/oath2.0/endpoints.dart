@@ -1,3 +1,5 @@
+import 'package:next_fi/services/base_url/base_url.dart';
+
 /// Single source of truth for the NextFi backend URLs.
 ///
 /// Usage:
@@ -10,9 +12,6 @@
 /// ```
 class AuthEndpoints {
   AuthEndpoints._();
-
-  // ── Base ──────────────────────────────────────────────────────────
-  static const baseUrl = 'https://nextfi-backend.onrender.com/api/v1';
 
   // ── Google OAuth ──────────────────────────────────────────────────
   static const googleRedirect    = '/auth/google';
@@ -33,5 +32,5 @@ class AuthEndpoints {
   /// Returns the full URL for a given path.
   /// e.g. `AuthEndpoints.fullUrl(AuthEndpoints.me)`
   /// → `https://nextfi-backend.onrender.com/api/v1/auth/me`
-  static String fullUrl(String path) => '$baseUrl$path';
+  static String fullUrl(String path) => '$cetralized_baseUrl$path';
 }

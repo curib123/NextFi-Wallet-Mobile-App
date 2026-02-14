@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/common/components/button/CustomButton.dart';
-import 'package:next_fi/services/secure_storage/seed_storage.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
+import 'package:next_fi/services/wallet/wallet_core_service.dart';
 
 /// Result returned by the switch-wallet sheet.
 class WalletSwitchResult {
@@ -32,7 +32,9 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
       String importLabel = 'Import Wallet',
     }) async {
   final colors = AppColor.of(context);
-  final wallets = await SeedStorage.listWallets();
+
+  // Get wallet overview (local + cloud)
+  final overview = await WalletManager.I.getWalletOverview();
 
   return showModalBottomSheet<WalletSwitchResult>(
     context: context,
@@ -42,7 +44,8 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
     builder: (ctx) {
       return _WalletSwitchBody(
         colors: colors,
-        wallets: wallets,
+        localWallets: overview.localWallets,
+        cloudWallets: overview.cloudOnlyWallets,
         activeId: currentActiveId,
         allowGenerate: allowGenerate,
         newWalletLabel: generateLabel,
@@ -55,7 +58,8 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
 class _WalletSwitchBody extends StatefulWidget {
   const _WalletSwitchBody({
     required this.colors,
-    required this.wallets,
+    required this.localWallets,
+    required this.cloudWallets,
     required this.activeId,
     required this.allowGenerate,
     required this.newWalletLabel,
@@ -63,7 +67,8 @@ class _WalletSwitchBody extends StatefulWidget {
   });
 
   final AppColor colors;
-  final List<dynamic> wallets;
+  final List<WalletViewModel> localWallets;
+  final List<CloudWallet> cloudWallets;
   final String? activeId;
   final bool allowGenerate;
   final String newWalletLabel;
@@ -79,12 +84,19 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
 
+  List<WalletViewModel> _localWallets = [];
+  List<CloudWallet> _cloudWallets = [];
+  bool _isLoading = false;
+
   static const double _pad = 20;
   static const double _radius = 16;
 
   @override
   void initState() {
     super.initState();
+    _localWallets = widget.localWallets;
+    _cloudWallets = widget.cloudWallets;
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -107,8 +119,106 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
     super.dispose();
   }
 
+  Future<void> _removeCloudWallet(CloudWallet wallet) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: widget.colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              LucideIcons.alertTriangle,
+              color: widget.colors.error,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Remove Wallet',
+              style: TextStyle(
+                color: widget.colors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Remove "${wallet.label}" from cloud?\n\nThis wallet has no local seed and cannot be recovered unless you import it again.',
+          style: TextStyle(
+            color: widget.colors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: widget.colors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Remove',
+              style: TextStyle(
+                color: widget.colors.error,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      setState(() => _isLoading = true);
+
+      // Remove from backend
+      await WalletCoreService.I.remove(walletId: wallet.backendId);
+
+      // Update local list
+      setState(() {
+        _cloudWallets.removeWhere((w) => w.backendId == wallet.backendId);
+        _isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${wallet.label} removed from cloud'),
+            backgroundColor: widget.colors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove: $e'),
+            backgroundColor: widget.colors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final totalWallets = _localWallets.length + _cloudWallets.length;
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: ScaleTransition(
@@ -116,40 +226,58 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.only(top: 60),
-            child: Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.85,
-              ),
-              decoration: BoxDecoration(
-                color: widget.colors.surface,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                border: Border.all(
-                  color: widget.colors.border.withOpacity(0.12),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, -4),
+            child: Stack(
+              children: [
+                Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.85,
                   ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHeader(context),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: widget.wallets.isEmpty
-                        ? _buildEmptyState()
-                        : _buildWalletList(),
+                  decoration: BoxDecoration(
+                    color: widget.colors.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
+                    ),
+                    border: Border.all(
+                      color: widget.colors.border.withOpacity(0.12),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 24,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
                   ),
-                  _buildFooterActions(context),
-                ],
-              ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeader(context, totalWallets),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: totalWallets == 0
+                            ? _buildEmptyState()
+                            : _buildWalletList(),
+                      ),
+                      _buildFooterActions(context),
+                    ],
+                  ),
+                ),
+                if (_isLoading)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(28),
+                        ),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -157,7 +285,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, int totalWallets) {
     return Column(
       children: [
         const SizedBox(height: 12),
@@ -211,7 +339,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "${widget.wallets.length} wallet${widget.wallets.length != 1 ? 's' : ''} available",
+                      "$totalWallets wallet${totalWallets != 1 ? 's' : ''} available",
                       style: TextStyle(
                         color: widget.colors.textSecondary.withOpacity(0.7),
                         fontSize: 13,
@@ -248,25 +376,141 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildWalletList() {
-    return ListView.separated(
+    return ListView(
       shrinkWrap: true,
       padding: const EdgeInsets.symmetric(horizontal: _pad, vertical: 12),
-      itemCount: widget.wallets.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        return _WalletCard(
-          wallet: widget.wallets[i],
-          isActive: widget.wallets[i].id == widget.activeId,
-          colors: widget.colors,
-          delay: Duration(milliseconds: i * 50),
-          onTap: () {
-            Navigator.pop(
-              context,
-              WalletSwitchResult(chosenWalletId: widget.wallets[i].id),
+      children: [
+        // Local wallets section
+        if (_localWallets.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.shield,
+                  size: 14,
+                  color: widget.colors.success,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'MY WALLETS',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: widget.colors.textSecondary.withOpacity(0.8),
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: widget.colors.success.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${_localWallets.length}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: widget.colors.success,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ..._localWallets.asMap().entries.map((entry) {
+            final i = entry.key;
+            final wallet = entry.value;
+            final isActive = wallet.localId == widget.activeId;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _WalletCard(
+                wallet: wallet,
+                isActive: isActive,
+                colors: widget.colors,
+                delay: Duration(milliseconds: i * 50),
+                onTap: isActive
+                    ? null
+                    : () {
+                  Navigator.pop(
+                    context,
+                    WalletSwitchResult(chosenWalletId: wallet.localId),
+                  );
+                },
+              ),
             );
-          },
-        );
-      },
+          }),
+        ],
+
+        // Cloud-only wallets section
+        if (_cloudWallets.isNotEmpty) ...[
+          if (_localWallets.isNotEmpty) const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.cloud,
+                  size: 14,
+                  color: widget.colors.warning,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'CLOUD ONLY',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: widget.colors.warning,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: widget.colors.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.alertTriangle,
+                        size: 10,
+                        color: widget.colors.warning,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'No seed',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: widget.colors.warning,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ..._cloudWallets.asMap().entries.map((entry) {
+            final i = entry.key;
+            final wallet = entry.value;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _CloudWalletCard(
+                wallet: wallet,
+                colors: widget.colors,
+                delay: Duration(milliseconds: (_localWallets.length + i) * 50),
+                onRemove: () => _removeCloudWallet(wallet),
+              ),
+            );
+          }),
+        ],
+      ],
     );
   }
 
@@ -380,14 +624,14 @@ class _WalletCard extends StatefulWidget {
     required this.isActive,
     required this.colors,
     required this.delay,
-    required this.onTap,
+    this.onTap,
   });
 
-  final dynamic wallet;
+  final WalletViewModel wallet;
   final bool isActive;
   final AppColor colors;
   final Duration delay;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   State<_WalletCard> createState() => _WalletCardState();
@@ -434,12 +678,14 @@ class _WalletCardState extends State<_WalletCard>
       child: FadeTransition(
         opacity: _opacityAnimation,
         child: GestureDetector(
-          onTapDown: (_) => setState(() => _isPressed = true),
-          onTapUp: (_) {
+          onTapDown: widget.onTap != null ? (_) => setState(() => _isPressed = true) : null,
+          onTapUp: widget.onTap != null
+              ? (_) {
             setState(() => _isPressed = false);
-            widget.onTap();
-          },
-          onTapCancel: () => setState(() => _isPressed = false),
+            widget.onTap?.call();
+          }
+              : null,
+          onTapCancel: widget.onTap != null ? () => setState(() => _isPressed = false) : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
@@ -561,6 +807,257 @@ class _WalletCardState extends State<_WalletCard>
                   ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _truncateAddress(String address) {
+    if (address.length <= 20) return address;
+    return '${address.substring(0, 8)}...${address.substring(address.length - 8)}';
+  }
+}
+
+// ── Cloud Wallet Card Widget ────────────────────────────────────────────────
+
+class _CloudWalletCard extends StatefulWidget {
+  const _CloudWalletCard({
+    required this.wallet,
+    required this.colors,
+    required this.delay,
+    required this.onRemove,
+  });
+
+  final CloudWallet wallet;
+  final AppColor colors;
+  final Duration delay;
+  final VoidCallback onRemove;
+
+  @override
+  State<_CloudWalletCard> createState() => _CloudWalletCardState();
+}
+
+class _CloudWalletCardState extends State<_CloudWalletCard>
+    with TickerProviderStateMixin {
+  late AnimationController _entryController;
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
+  late Animation<double> _pulseScale;
+  late Animation<double> _pulseOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Entry animation
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _entryController, curve: Curves.easeOut),
+    );
+
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _entryController, curve: Curves.easeIn),
+    );
+
+    // Pulse animation for remove button
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _pulseScale = Tween<double>(begin: 0.95, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _pulseOpacity = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _entryController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _entryController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: FadeTransition(
+        opacity: _opacityAnimation,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: widget.colors.warning.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.colors.warning.withOpacity(0.2),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Icon with warning badge
+              Stack(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: widget.colors.warning.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: widget.colors.warning.withOpacity(0.25),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      LucideIcons.cloud,
+                      color: widget.colors.warning,
+                      size: 22,
+                    ),
+                  ),
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: widget.colors.error,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: widget.colors.surface,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        LucideIcons.alertTriangle,
+                        size: 10,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              // Wallet info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.wallet.label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: widget.colors.textPrimary,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _truncateAddress(widget.wallet.publicAddress),
+                      style: TextStyle(
+                        color: widget.colors.textSecondary.withOpacity(0.7),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: widget.colors.warning.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: widget.colors.warning.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.key,
+                            size: 11,
+                            color: widget.colors.warning,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'No local seed • Import to use',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: widget.colors.warning,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Animated remove button
+              AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _pulseScale.value,
+                    child: Opacity(
+                      opacity: _pulseOpacity.value,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: widget.colors.error.withOpacity(0.4),
+                              blurRadius: 12 * _pulseOpacity.value,
+                              spreadRadius: 2 * _pulseOpacity.value,
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: widget.colors.error,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            onTap: widget.onRemove,
+                            customBorder: const CircleBorder(),
+                            child: const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Icon(
+                                LucideIcons.trash2,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),

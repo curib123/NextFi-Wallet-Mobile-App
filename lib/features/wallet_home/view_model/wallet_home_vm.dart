@@ -4,11 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
 import 'package:next_fi/services/oath2.0/token_storage.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar show PaymentOperationResponse, Asset;
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar
+    show PaymentOperationResponse, Asset;
 
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
+
+// ✅ add this import
+import 'package:next_fi/services/fcm_notification/fcm_notification_core.dart';
 
 /// UI-neutral severity for toasts/snackbars
 enum UiSeverity { info, success, warning, error }
@@ -137,7 +141,8 @@ class WalletHomeVM extends ChangeNotifier {
   }
 
   // ─────────────── UI events stream (for the View) ───────────────
-  final StreamController<WalletHomeUiEvent> _ui = StreamController<WalletHomeUiEvent>.broadcast();
+  final StreamController<WalletHomeUiEvent> _ui =
+  StreamController<WalletHomeUiEvent>.broadcast();
   Stream<WalletHomeUiEvent> get uiEvents => _ui.stream;
 
   void _emit(WalletHomeUiEvent e) {
@@ -162,6 +167,10 @@ class WalletHomeVM extends ChangeNotifier {
   bool _bootEventsArmed = true;
   DateTime? _lastFetch;
   String? _lastBoundAddress;
+
+  // ✅ throttle self-push (avoid spamming)
+  DateTime? _lastSelfPushAt;
+  static const Duration _minSelfPushGap = Duration(minutes: 3);
 
   // ───────────────────── Auth check helper ─────────────────────
 
@@ -189,17 +198,42 @@ class WalletHomeVM extends ChangeNotifier {
     return true;
   }
 
+  // ✅ Send push to self ONLY if logged in + throttled
+  Future<void> _notifyMeIfAuthed({
+    required String title,
+    required String body,
+    Map<String, String>? data,
+  }) async {
+    if (_disposed) return;
+
+    // throttle
+    final now = DateTime.now();
+    if (_lastSelfPushAt != null &&
+        now.difference(_lastSelfPushAt!) < _minSelfPushGap) {
+      return;
+    }
+
+    final authed = await _isAuthenticated();
+    if (!authed) return;
+
+    try {
+      await FcmNotificationCore().sendPushToMe(
+        title: title,
+        body: body,
+        data: data ?? const {'route': '/wallet'},
+      );
+      _lastSelfPushAt = now;
+      debugPrint('[FCM] sendPushToMe ok');
+    } catch (e) {
+      debugPrint('[FCM] sendPushToMe failed: $e');
+    }
+  }
 
   // ───────────────────── Buy / Sell ─────────────────────
 
-  /// Called by the View when user taps Buy.
-  /// Redirects to login if not authenticated; otherwise emits [StartBuyFlow].
   Future<void> onBuyPressed() async {
     if (!_state.hasWallet || _state.address == null) {
-      _emit(const ShowToastEvent(
-        'Wallet not loaded yet',
-        UiSeverity.warning,
-      ));
+      _emit(const ShowToastEvent('Wallet not loaded yet', UiSeverity.warning));
       return;
     }
 
@@ -213,15 +247,9 @@ class WalletHomeVM extends ChangeNotifier {
     ));
   }
 
-
-  /// Called by the View when user taps Sell.
-  /// Redirects to login if not authenticated; otherwise emits [StartSellFlow].
   Future<void> onSellPressed() async {
     if (!_state.hasWallet || _state.address == null) {
-      _emit(const ShowToastEvent(
-        'Wallet not loaded yet',
-        UiSeverity.warning,
-      ));
+      _emit(const ShowToastEvent('Wallet not loaded yet', UiSeverity.warning));
       return;
     }
 
@@ -234,7 +262,6 @@ class WalletHomeVM extends ChangeNotifier {
       usdc: _state.usdc,
     ));
   }
-
 
   // ───────────────────── Binding helpers ─────────────────────
 
@@ -367,7 +394,10 @@ class WalletHomeVM extends ChangeNotifier {
     } catch (e) {
       debugPrint('WalletHomeVM.refresh error: $e');
       if (force) {
-        _emit(ShowToastEvent('Failed to refresh balances', UiSeverity.warning));
+        _emit(const ShowToastEvent(
+          'Failed to refresh balances',
+          UiSeverity.warning,
+        ));
       }
     } finally {
       _balancesInFlight = false;
@@ -413,7 +443,7 @@ class WalletHomeVM extends ChangeNotifier {
     });
 
     _incomingSub = _stellar.paymentsStream(_state.address!).listen(
-          (op) {
+          (op) async {
         if (_disposed) return;
 
         if (op.transactionSuccessful != true) return;
@@ -425,14 +455,18 @@ class WalletHomeVM extends ChangeNotifier {
         _seen.add(id);
         _pruneSeenSet();
 
+        final assetCode = op.assetType == stellar.Asset.TYPE_NATIVE
+            ? 'XLM'
+            : (op.assetCode ?? 'ASSET');
+
+        final amount = double.tryParse(op.amount ?? '0') ?? 0.0;
+
         final hint = IncomingHint(
           id: id,
           from: op.from ?? '',
           to: op.to ?? '',
-          assetCode: op.assetType == stellar.Asset.TYPE_NATIVE
-              ? 'XLM'
-              : (op.assetCode ?? 'ASSET'),
-          amount: double.tryParse(op.amount ?? '0') ?? 0.0,
+          assetCode: assetCode,
+          amount: amount,
           at: DateTime.now(),
         );
 
@@ -443,6 +477,13 @@ class WalletHomeVM extends ChangeNotifier {
 
         _set(_state.copyWith(hints: next));
         _emit(IncomingHintAddedEvent(hint));
+
+        // ✅ OPTIONAL: send a push to yourself (only if logged in + throttled)
+        await _notifyMeIfAuthed(
+          title: 'Incoming $assetCode',
+          body: '+$amount $assetCode received',
+          data: const {'route': '/wallet'},
+        );
 
         _scheduleBalanceKick(_debounceDelay);
       },
@@ -456,7 +497,7 @@ class WalletHomeVM extends ChangeNotifier {
   void attachConfirmedTxStream(Stream<Map> txStream) {
     _externalTxSub?.cancel();
     _externalTxSub = txStream.listen(
-          (tx) {
+          (tx) async {
         if (_disposed) return;
 
         final hash = (tx['hash'] ?? '').toString().trim();
@@ -465,11 +506,14 @@ class WalletHomeVM extends ChangeNotifier {
         final asset = (tx['asset'] ?? 'XLM').toString();
         final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
 
-        _emit(TransactionConfirmedEvent(
-          hash: hash,
-          asset: asset,
-          amount: amount,
-        ));
+        _emit(TransactionConfirmedEvent(hash: hash, asset: asset, amount: amount));
+
+        // ✅ OPTIONAL: self-push on confirmations too (logged-in + throttled)
+        await _notifyMeIfAuthed(
+          title: 'Transaction confirmed',
+          body: '$amount $asset confirmed',
+          data: const {'route': '/wallet'},
+        );
       },
       onError: (e) {
         debugPrint('External tx stream error: $e');
@@ -529,14 +573,10 @@ class WalletHomeVM extends ChangeNotifier {
     }
   }
 
-  // ─────────────── Price Window Selection ───────────────
-
   void setPriceWindow(PriceWindow window) {
     if (_state.selectedWindow == window) return;
     _set(_state.copyWith(selectedWindow: window));
   }
-
-  // ─────────────── UI-intent API (called by View) ───────────────
 
   void onSwapPressed() {
     if (!_state.hasWallet) {
@@ -573,7 +613,6 @@ class WalletHomeVM extends ChangeNotifier {
     ));
   }
 
-  // App lifecycle hooks
   void onResumed() {
     if (!_disposed) {
       startRealtime();
