@@ -83,8 +83,34 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   bool _isRemoving = false;
   String? _error;
 
-  static const double _pad = 20;
-  static const double _radius = 16;
+  // Responsive helper methods
+  double _getResponsiveValue(BuildContext context, {
+    required double mobile,
+    required double tablet,
+  }) {
+    final width = MediaQuery.of(context).size.width;
+    if (width >= 768) return tablet;
+    return mobile;
+  }
+
+  double _getPadding(BuildContext context) =>
+      _getResponsiveValue(context, mobile: 16, tablet: 24);
+
+  double _getRadius(BuildContext context) =>
+      _getResponsiveValue(context, mobile: 16, tablet: 20);
+
+  double _getFontScale(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < 360) return 0.9; // Small phones
+    if (width >= 768) return 1.1; // Tablets
+    return 1.0; // Normal phones
+  }
+
+  double _getMaxWidth(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width >= 768) return 600; // Max width for tablets
+    return width; // Full width for phones
+  }
 
   @override
   void initState() {
@@ -164,27 +190,33 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Future<void> _removeCloudWallet(CloudWallet wallet) async {
+    final pad = _getPadding(context);
+    final fontScale = _getFontScale(context);
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: widget.colors.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20 * fontScale),
         ),
         title: Row(
           children: [
             Icon(
               LucideIcons.alertTriangle,
               color: widget.colors.error,
-              size: 24,
+              size: 24 * fontScale,
             ),
-            const SizedBox(width: 12),
-            Text(
-              'Remove Wallet',
-              style: TextStyle(
-                color: widget.colors.textPrimary,
-                fontWeight: FontWeight.w800,
+            SizedBox(width: 12 * fontScale),
+            Flexible(
+              child: Text(
+                'Remove Wallet',
+                style: TextStyle(
+                  color: widget.colors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18 * fontScale,
+                ),
               ),
             ),
           ],
@@ -194,6 +226,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
           style: TextStyle(
             color: widget.colors.textSecondary,
             height: 1.5,
+            fontSize: 14 * fontScale,
           ),
         ),
         actions: [
@@ -204,6 +237,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               style: TextStyle(
                 color: widget.colors.textSecondary,
                 fontWeight: FontWeight.w600,
+                fontSize: 14 * fontScale,
               ),
             ),
           ),
@@ -214,6 +248,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               style: TextStyle(
                 color: widget.colors.error,
                 fontWeight: FontWeight.w700,
+                fontSize: 14 * fontScale,
               ),
             ),
           ),
@@ -260,27 +295,32 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Future<void> _deleteLocalWallet(WalletViewModel wallet) async {
+    final fontScale = _getFontScale(context);
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: widget.colors.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20 * fontScale),
         ),
         title: Row(
           children: [
             Icon(
               LucideIcons.alertTriangle,
               color: widget.colors.error,
-              size: 24,
+              size: 24 * fontScale,
             ),
-            const SizedBox(width: 12),
-            Text(
-              'Delete Wallet',
-              style: TextStyle(
-                color: widget.colors.textPrimary,
-                fontWeight: FontWeight.w800,
+            SizedBox(width: 12 * fontScale),
+            Flexible(
+              child: Text(
+                'Delete Wallet',
+                style: TextStyle(
+                  color: widget.colors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18 * fontScale,
+                ),
               ),
             ),
           ],
@@ -290,6 +330,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
           style: TextStyle(
             color: widget.colors.textSecondary,
             height: 1.5,
+            fontSize: 14 * fontScale,
           ),
         ),
         actions: [
@@ -300,6 +341,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               style: TextStyle(
                 color: widget.colors.textSecondary,
                 fontWeight: FontWeight.w600,
+                fontSize: 14 * fontScale,
               ),
             ),
           ),
@@ -310,6 +352,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               style: TextStyle(
                 color: widget.colors.error,
                 fontWeight: FontWeight.w700,
+                fontSize: 14 * fontScale,
               ),
             ),
           ),
@@ -358,6 +401,10 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   @override
   Widget build(BuildContext context) {
     final totalWallets = _localWallets.length + _cloudWallets.length;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxWidth = _getMaxWidth(context);
+    final pad = _getPadding(context);
+    final radius = _getRadius(context);
 
     return FadeTransition(
       opacity: _fadeAnimation,
@@ -365,63 +412,73 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
         scale: _scaleAnimation,
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.only(top: 60),
-            child: Stack(
-              children: [
-                Container(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.85,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.colors.surface,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(28),
-                    ),
-                    border: Border.all(
-                      color: widget.colors.border.withOpacity(0.12),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 24,
-                        offset: const Offset(0, -4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeader(context, totalWallets),
-                      const SizedBox(height: 8),
-                      Flexible(
-                        child: _isLoading
-                            ? _buildLoadingState()
-                            : _error != null
-                            ? _buildErrorState()
-                            : totalWallets == 0
-                            ? _buildEmptyState()
-                            : _buildWalletList(),
-                      ),
-                      _buildFooterActions(context),
-                    ],
-                  ),
+            padding: EdgeInsets.only(
+              top: screenWidth >= 768 ? 80 : 60,
+            ),
+            child: Center(
+              child: Container(
+                width: maxWidth,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
                 ),
-                if (_isRemoving)
-                  Positioned.fill(
-                    child: Container(
+                margin: EdgeInsets.symmetric(
+                  horizontal: screenWidth >= 768 ? 24 : 0,
+                ),
+                child: Stack(
+                  children: [
+                    Container(
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(28),
+                        color: widget.colors.surface,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(28 * (radius / 16)),
+                        ),
+                        border: Border.all(
+                          color: widget.colors.border.withOpacity(0.12),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildHeader(context, totalWallets),
+                          SizedBox(height: 8 * _getFontScale(context)),
+                          Flexible(
+                            child: _isLoading
+                                ? _buildLoadingState()
+                                : _error != null
+                                ? _buildErrorState()
+                                : totalWallets == 0
+                                ? _buildEmptyState()
+                                : _buildWalletList(),
+                          ),
+                          _buildFooterActions(context),
+                        ],
+                      ),
+                    ),
+                    if (_isRemoving)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(28 * (radius / 16)),
+                            ),
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
                         ),
                       ),
-                      child: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -430,19 +487,22 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildLoadingState() {
+    final fontScale = _getFontScale(context);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(
             color: widget.colors.primary,
+            strokeWidth: 3 * fontScale,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16 * fontScale),
           Text(
             'Loading wallets...',
             style: TextStyle(
               color: widget.colors.textSecondary,
-              fontSize: 14,
+              fontSize: 14 * fontScale,
             ),
           ),
         ],
@@ -451,41 +511,45 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildErrorState() {
+    final pad = _getPadding(context);
+    final fontScale = _getFontScale(context);
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(_pad),
+        padding: EdgeInsets.all(pad),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               LucideIcons.alertCircle,
-              size: 48,
+              size: 48 * fontScale,
               color: widget.colors.error,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16 * fontScale),
             Text(
               'Failed to load wallets',
               style: TextStyle(
                 color: widget.colors.textPrimary,
-                fontSize: 16,
+                fontSize: 16 * fontScale,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8 * fontScale),
             Text(
               _error ?? 'Unknown error',
               style: TextStyle(
                 color: widget.colors.textSecondary,
-                fontSize: 13,
+                fontSize: 13 * fontScale,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24 * fontScale),
             _ModernButton(
               text: 'Retry',
               icon: LucideIcons.refreshCw,
               colors: widget.colors,
               isPrimary: true,
+              fontScale: fontScale,
               onPressed: () {
                 setState(() {
                   _isLoading = true;
@@ -501,30 +565,102 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildHeader(BuildContext context, int totalWallets) {
+    final pad = _getPadding(context);
+    final fontScale = _getFontScale(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Column(
       children: [
-        const SizedBox(height: 12),
+        SizedBox(height: 12 * fontScale),
         // Sheet handle
         Container(
-          width: 40,
-          height: 4,
+          width: 40 * fontScale,
+          height: 4 * fontScale,
           decoration: BoxDecoration(
             color: widget.colors.border.withOpacity(0.4),
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(2 * fontScale),
           ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20 * fontScale),
         // Header with title and action
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _pad),
-          child: Row(
+          padding: EdgeInsets.symmetric(horizontal: pad),
+          child: screenWidth < 360
+              ? Column(
             children: [
-              // Icon
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12 * fontScale),
+                    decoration: BoxDecoration(
+                      color: widget.colors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14 * fontScale),
+                      border: Border.all(
+                        color: widget.colors.primary.withOpacity(0.15),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      LucideIcons.shuffle,
+                      color: widget.colors.primary,
+                      size: 22 * fontScale,
+                    ),
+                  ),
+                  SizedBox(width: 14 * fontScale),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Switch Wallet",
+                          style: TextStyle(
+                            color: widget.colors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20 * fontScale,
+                            letterSpacing: -0.3,
+                            height: 1.2,
+                          ),
+                        ),
+                        SizedBox(height: 2 * fontScale),
+                        Text(
+                          "$totalWallets wallet${totalWallets != 1 ? 's' : ''} available",
+                          style: TextStyle(
+                            color: widget.colors.textSecondary.withOpacity(0.7),
+                            fontSize: 13 * fontScale,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (widget.allowGenerate) ...[
+                SizedBox(height: 12 * fontScale),
+                SizedBox(
+                  width: double.infinity,
+                  child: _NewWalletButton(
+                    label: widget.newWalletLabel,
+                    colors: widget.colors,
+                    fontScale: fontScale,
+                    onPressed: () {
+                      Navigator.pop(
+                        context,
+                        const WalletSwitchResult(createNew: true),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          )
+              : Row(
+            children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(12 * fontScale),
                 decoration: BoxDecoration(
                   color: widget.colors.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14 * fontScale),
                   border: Border.all(
                     color: widget.colors.primary.withOpacity(0.15),
                     width: 1,
@@ -533,11 +669,10 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                 child: Icon(
                   LucideIcons.shuffle,
                   color: widget.colors.primary,
-                  size: 22,
+                  size: 22 * fontScale,
                 ),
               ),
-              const SizedBox(width: 14),
-              // Title
+              SizedBox(width: 14 * fontScale),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -547,28 +682,28 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                       style: TextStyle(
                         color: widget.colors.textPrimary,
                         fontWeight: FontWeight.w800,
-                        fontSize: 20,
+                        fontSize: 20 * fontScale,
                         letterSpacing: -0.3,
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2 * fontScale),
                     Text(
                       "$totalWallets wallet${totalWallets != 1 ? 's' : ''} available",
                       style: TextStyle(
                         color: widget.colors.textSecondary.withOpacity(0.7),
-                        fontSize: 13,
+                        fontSize: 13 * fontScale,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-              // New wallet button
               if (widget.allowGenerate)
                 _NewWalletButton(
                   label: widget.newWalletLabel,
                   colors: widget.colors,
+                  fontScale: fontScale,
                   onPressed: () {
                     Navigator.pop(
                       context,
@@ -579,11 +714,10 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        // Divider
+        SizedBox(height: 16 * fontScale),
         Container(
           height: 1,
-          margin: const EdgeInsets.symmetric(horizontal: _pad),
+          margin: EdgeInsets.symmetric(horizontal: pad),
           color: widget.colors.border.withOpacity(0.15),
         ),
       ],
@@ -591,42 +725,54 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildWalletList() {
+    final pad = _getPadding(context);
+    final fontScale = _getFontScale(context);
+
     return ListView(
       shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(horizontal: _pad, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: pad,
+        vertical: 12 * fontScale,
+      ),
       children: [
         // Local wallets section
         if (_localWallets.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            padding: EdgeInsets.only(
+              bottom: 12 * fontScale,
+              top: 4 * fontScale,
+            ),
             child: Row(
               children: [
                 Icon(
                   LucideIcons.shield,
-                  size: 14,
+                  size: 14 * fontScale,
                   color: widget.colors.success,
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: 6 * fontScale),
                 Text(
                   'MY WALLETS',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 12 * fontScale,
                     fontWeight: FontWeight.w700,
                     color: widget.colors.textSecondary.withOpacity(0.8),
                     letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8 * fontScale),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8 * fontScale,
+                    vertical: 2 * fontScale,
+                  ),
                   decoration: BoxDecoration(
                     color: widget.colors.success.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(6 * fontScale),
                   ),
                   child: Text(
                     '${_localWallets.length}',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 11 * fontScale,
                       fontWeight: FontWeight.w700,
                       color: widget.colors.success,
                     ),
@@ -640,11 +786,12 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
             final wallet = entry.value;
             final isActive = wallet.localId == widget.activeId;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: EdgeInsets.only(bottom: 8 * fontScale),
               child: _WalletCard(
                 wallet: wallet,
                 isActive: isActive,
                 colors: widget.colors,
+                fontScale: fontScale,
                 delay: Duration(milliseconds: i * 50),
                 onTap: isActive
                     ? null
@@ -662,46 +809,52 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
 
         // Cloud-only wallets section
         if (_cloudWallets.isNotEmpty) ...[
-          if (_localWallets.isNotEmpty) const SizedBox(height: 12),
+          if (_localWallets.isNotEmpty) SizedBox(height: 12 * fontScale),
           Padding(
-            padding: const EdgeInsets.only(bottom: 12, top: 4),
+            padding: EdgeInsets.only(
+              bottom: 12 * fontScale,
+              top: 4 * fontScale,
+            ),
             child: Row(
               children: [
                 Icon(
                   LucideIcons.cloud,
-                  size: 14,
+                  size: 14 * fontScale,
                   color: widget.colors.warning,
                 ),
-                const SizedBox(width: 6),
+                SizedBox(width: 6 * fontScale),
                 Text(
                   'CLOUD ONLY',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 12 * fontScale,
                     fontWeight: FontWeight.w700,
                     color: widget.colors.warning,
                     letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8 * fontScale),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8 * fontScale,
+                    vertical: 2 * fontScale,
+                  ),
                   decoration: BoxDecoration(
                     color: widget.colors.warning.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(6 * fontScale),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         LucideIcons.alertTriangle,
-                        size: 10,
+                        size: 10 * fontScale,
                         color: widget.colors.warning,
                       ),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4 * fontScale),
                       Text(
                         'No seed',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 11 * fontScale,
                           fontWeight: FontWeight.w700,
                           color: widget.colors.warning,
                         ),
@@ -716,10 +869,11 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
             final i = entry.key;
             final wallet = entry.value;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: EdgeInsets.only(bottom: 8 * fontScale),
               child: _CloudWalletCard(
                 wallet: wallet,
                 colors: widget.colors,
+                fontScale: fontScale,
                 delay: Duration(milliseconds: (_localWallets.length + i) * 50),
                 onRemove: () => _removeCloudWallet(wallet),
               ),
@@ -731,14 +885,21 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildEmptyState() {
+    final pad = _getPadding(context);
+    final radius = _getRadius(context);
+    final fontScale = _getFontScale(context);
+
     return Padding(
-      padding: const EdgeInsets.all(_pad),
+      padding: EdgeInsets.all(pad),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        padding: EdgeInsets.symmetric(
+          vertical: 48 * fontScale,
+          horizontal: 24 * fontScale,
+        ),
         decoration: BoxDecoration(
           color: widget.colors.background.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(_radius),
+          borderRadius: BorderRadius.circular(radius),
           border: Border.all(
             color: widget.colors.border.withOpacity(0.15),
             width: 1,
@@ -748,7 +909,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(20 * fontScale),
               decoration: BoxDecoration(
                 color: widget.colors.primary.withOpacity(0.08),
                 shape: BoxShape.circle,
@@ -759,27 +920,27 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
               ),
               child: Icon(
                 LucideIcons.wallet,
-                size: 40,
+                size: 40 * fontScale,
                 color: widget.colors.primary,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20 * fontScale),
             Text(
               'No wallets yet',
               style: TextStyle(
                 color: widget.colors.textPrimary,
                 fontWeight: FontWeight.w800,
-                fontSize: 18,
+                fontSize: 18 * fontScale,
                 letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8 * fontScale),
             Text(
               'Create a new wallet or import an existing one to get started.',
               style: TextStyle(
                 color: widget.colors.textSecondary.withOpacity(0.8),
                 height: 1.5,
-                fontSize: 14,
+                fontSize: 14 * fontScale,
               ),
               textAlign: TextAlign.center,
             ),
@@ -790,8 +951,12 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 
   Widget _buildFooterActions(BuildContext context) {
+    final pad = _getPadding(context);
+    final fontScale = _getFontScale(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Container(
-      padding: const EdgeInsets.all(_pad),
+      padding: EdgeInsets.all(pad),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
@@ -800,23 +965,58 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
           ),
         ),
       ),
-      child: Row(
+      child: screenWidth < 360
+          ? Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: _ModernButton(
+              text: 'Close',
+              icon: LucideIcons.x,
+              colors: widget.colors,
+              fontScale: fontScale,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          if (widget.allowGenerate) SizedBox(height: 12 * fontScale),
+          if (widget.allowGenerate)
+            SizedBox(
+              width: double.infinity,
+              child: _ModernButton(
+                text: widget.importLabel,
+                icon: LucideIcons.download,
+                colors: widget.colors,
+                fontScale: fontScale,
+                isPrimary: true,
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    const WalletSwitchResult(importRequested: true),
+                  );
+                },
+              ),
+            ),
+        ],
+      )
+          : Row(
         children: [
           Expanded(
             child: _ModernButton(
               text: 'Close',
               icon: LucideIcons.x,
               colors: widget.colors,
+              fontScale: fontScale,
               onPressed: () => Navigator.pop(context),
             ),
           ),
-          if (widget.allowGenerate) const SizedBox(width: 12),
+          if (widget.allowGenerate) SizedBox(width: 12 * fontScale),
           if (widget.allowGenerate)
             Expanded(
               child: _ModernButton(
                 text: widget.importLabel,
                 icon: LucideIcons.download,
                 colors: widget.colors,
+                fontScale: fontScale,
                 isPrimary: true,
                 onPressed: () {
                   Navigator.pop(
@@ -839,6 +1039,7 @@ class _WalletCard extends StatefulWidget {
     required this.wallet,
     required this.isActive,
     required this.colors,
+    required this.fontScale,
     required this.delay,
     this.onTap,
     this.onDelete,
@@ -847,6 +1048,7 @@ class _WalletCard extends StatefulWidget {
   final WalletViewModel wallet;
   final bool isActive;
   final AppColor colors;
+  final double fontScale;
   final Duration delay;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
@@ -891,6 +1093,8 @@ class _WalletCardState extends State<_WalletCard>
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = widget.fontScale;
+
     return ScaleTransition(
       scale: _scaleAnimation,
       child: FadeTransition(
@@ -910,14 +1114,14 @@ class _WalletCardState extends State<_WalletCard>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOut,
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(16 * fontScale),
                 decoration: BoxDecoration(
                   color: widget.isActive
                       ? widget.colors.primary.withOpacity(0.08)
                       : (_isPressed
                       ? widget.colors.background.withOpacity(0.8)
                       : widget.colors.background.withOpacity(0.5)),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(16 * fontScale),
                   border: Border.all(
                     color: widget.isActive
                         ? widget.colors.primary.withOpacity(0.25)
@@ -929,13 +1133,13 @@ class _WalletCardState extends State<_WalletCard>
                   children: [
                     // Icon
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 48 * fontScale,
+                      height: 48 * fontScale,
                       decoration: BoxDecoration(
                         color: widget.isActive
                             ? widget.colors.success.withOpacity(0.1)
                             : widget.colors.background.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(12 * fontScale),
                         border: Border.all(
                           color: widget.isActive
                               ? widget.colors.success.withOpacity(0.2)
@@ -950,10 +1154,10 @@ class _WalletCardState extends State<_WalletCard>
                         color: widget.isActive
                             ? widget.colors.success
                             : widget.colors.textSecondary,
-                        size: 22,
+                        size: 22 * fontScale,
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    SizedBox(width: 14 * fontScale),
                     // Wallet info
                     Expanded(
                       child: Column(
@@ -964,18 +1168,18 @@ class _WalletCardState extends State<_WalletCard>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              fontSize: 15,
+                              fontSize: 15 * fontScale,
                               color: widget.colors.textPrimary,
                               letterSpacing: -0.1,
                             ),
                           ),
                           if (widget.wallet.publicAddress?.isNotEmpty ?? false) ...[
-                            const SizedBox(height: 4),
+                            SizedBox(height: 4 * fontScale),
                             Text(
                               _truncateAddress(widget.wallet.publicAddress!),
                               style: TextStyle(
                                 color: widget.colors.textSecondary.withOpacity(0.7),
-                                fontSize: 12,
+                                fontSize: 12 * fontScale,
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: 0.2,
                                 fontFamily: 'monospace',
@@ -987,15 +1191,17 @@ class _WalletCardState extends State<_WalletCard>
                     ),
                     // Add spacing for delete button if not active
                     if (!widget.isActive && widget.onDelete != null)
-                      const SizedBox(width: 40),
+                      SizedBox(width: 40 * fontScale),
                     // Active badge or chevron
                     if (widget.isActive)
                       Container(
-                        padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12 * fontScale,
+                          vertical: 6 * fontScale,
+                        ),
                         decoration: BoxDecoration(
                           color: widget.colors.success.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(8 * fontScale),
                           border: Border.all(
                             color: widget.colors.success.withOpacity(0.25),
                             width: 1,
@@ -1006,16 +1212,16 @@ class _WalletCardState extends State<_WalletCard>
                           children: [
                             Icon(
                               LucideIcons.check,
-                              size: 12,
+                              size: 12 * fontScale,
                               color: widget.colors.success,
                             ),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4 * fontScale),
                             Text(
                               'Active',
                               style: TextStyle(
                                 color: widget.colors.success,
                                 fontWeight: FontWeight.w700,
-                                fontSize: 11,
+                                fontSize: 11 * fontScale,
                                 letterSpacing: 0.3,
                               ),
                             ),
@@ -1025,7 +1231,7 @@ class _WalletCardState extends State<_WalletCard>
                     else if (widget.onDelete == null)
                       Icon(
                         LucideIcons.chevronRight,
-                        size: 18,
+                        size: 18 * fontScale,
                         color: widget.colors.textSecondary.withOpacity(0.4),
                       ),
                   ],
@@ -1035,15 +1241,15 @@ class _WalletCardState extends State<_WalletCard>
             // Delete button - positioned in top-right corner
             if (widget.onDelete != null && !widget.isActive)
               Positioned(
-                top: 6,
-                right: 6,
+                top: 6 * fontScale,
+                right: 6 * fontScale,
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: widget.onDelete,
                     customBorder: const CircleBorder(),
                     child: Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: EdgeInsets.all(10 * fontScale),
                       decoration: BoxDecoration(
                         color: widget.colors.error.withOpacity(0.08),
                         shape: BoxShape.circle,
@@ -1054,14 +1260,14 @@ class _WalletCardState extends State<_WalletCard>
                         boxShadow: [
                           BoxShadow(
                             color: widget.colors.error.withOpacity(0.1),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                            blurRadius: 6 * fontScale,
+                            offset: Offset(0, 2 * fontScale),
                           ),
                         ],
                       ),
                       child: Icon(
                         LucideIcons.trash2,
-                        size: 14,
+                        size: 14 * fontScale,
                         color: widget.colors.error,
                       ),
                     ),
@@ -1086,12 +1292,14 @@ class _CloudWalletCard extends StatefulWidget {
   const _CloudWalletCard({
     required this.wallet,
     required this.colors,
+    required this.fontScale,
     required this.delay,
     required this.onRemove,
   });
 
   final CloudWallet wallet;
   final AppColor colors;
+  final double fontScale;
   final Duration delay;
   final VoidCallback onRemove;
 
@@ -1154,15 +1362,17 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = widget.fontScale;
+
     return ScaleTransition(
       scale: _scaleAnimation,
       child: FadeTransition(
         opacity: _opacityAnimation,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16 * fontScale),
           decoration: BoxDecoration(
             color: widget.colors.warning.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16 * fontScale),
             border: Border.all(
               color: widget.colors.warning.withOpacity(0.2),
               width: 1.5,
@@ -1174,11 +1384,11 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
               Stack(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 48 * fontScale,
+                    height: 48 * fontScale,
                     decoration: BoxDecoration(
                       color: widget.colors.warning.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(12 * fontScale),
                       border: Border.all(
                         color: widget.colors.warning.withOpacity(0.25),
                         width: 1,
@@ -1187,14 +1397,14 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                     child: Icon(
                       LucideIcons.cloud,
                       color: widget.colors.warning,
-                      size: 22,
+                      size: 22 * fontScale,
                     ),
                   ),
                   Positioned(
-                    right: -2,
-                    top: -2,
+                    right: -2 * fontScale,
+                    top: -2 * fontScale,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: EdgeInsets.all(4 * fontScale),
                       decoration: BoxDecoration(
                         color: widget.colors.error,
                         shape: BoxShape.circle,
@@ -1203,16 +1413,16 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                           width: 2,
                         ),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         LucideIcons.alertTriangle,
-                        size: 10,
+                        size: 10 * fontScale,
                         color: Colors.white,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14 * fontScale),
               // Wallet info
               Expanded(
                 child: Column(
@@ -1223,31 +1433,31 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 15,
+                        fontSize: 15 * fontScale,
                         color: widget.colors.textPrimary,
                         letterSpacing: -0.1,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4 * fontScale),
                     Text(
                       _truncateAddress(widget.wallet.publicAddress),
                       style: TextStyle(
                         color: widget.colors.textSecondary.withOpacity(0.7),
-                        fontSize: 12,
+                        fontSize: 12 * fontScale,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.2,
                         fontFamily: 'monospace',
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6 * fontScale),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8 * fontScale,
+                        vertical: 4 * fontScale,
                       ),
                       decoration: BoxDecoration(
                         color: widget.colors.warning.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(6 * fontScale),
                         border: Border.all(
                           color: widget.colors.warning.withOpacity(0.3),
                           width: 1,
@@ -1258,14 +1468,14 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                         children: [
                           Icon(
                             LucideIcons.key,
-                            size: 11,
+                            size: 11 * fontScale,
                             color: widget.colors.warning,
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4 * fontScale),
                           Text(
                             'No local seed • Import to use',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 10 * fontScale,
                               fontWeight: FontWeight.w700,
                               color: widget.colors.warning,
                               letterSpacing: 0.2,
@@ -1277,7 +1487,7 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12 * fontScale),
               // Animated remove button
               AnimatedBuilder(
                 animation: _pulseController,
@@ -1292,8 +1502,8 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                           boxShadow: [
                             BoxShadow(
                               color: widget.colors.error.withOpacity(0.4),
-                              blurRadius: 12 * _pulseOpacity.value,
-                              spreadRadius: 2 * _pulseOpacity.value,
+                              blurRadius: 12 * _pulseOpacity.value * fontScale,
+                              spreadRadius: 2 * _pulseOpacity.value * fontScale,
                             ),
                           ],
                         ),
@@ -1303,12 +1513,12 @@ class _CloudWalletCardState extends State<_CloudWalletCard>
                           child: InkWell(
                             onTap: widget.onRemove,
                             customBorder: const CircleBorder(),
-                            child: const Padding(
-                              padding: EdgeInsets.all(12),
+                            child: Padding(
+                              padding: EdgeInsets.all(12 * fontScale),
                               child: Icon(
                                 LucideIcons.trash2,
                                 color: Colors.white,
-                                size: 18,
+                                size: 18 * fontScale,
                               ),
                             ),
                           ),
@@ -1337,11 +1547,13 @@ class _NewWalletButton extends StatefulWidget {
   const _NewWalletButton({
     required this.label,
     required this.colors,
+    required this.fontScale,
     required this.onPressed,
   });
 
   final String label;
   final AppColor colors;
+  final double fontScale;
   final VoidCallback onPressed;
 
   @override
@@ -1353,6 +1565,8 @@ class _NewWalletButtonState extends State<_NewWalletButton> {
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = widget.fontScale;
+
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) {
@@ -1362,37 +1576,40 @@ class _NewWalletButtonState extends State<_NewWalletButton> {
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: 14 * fontScale,
+          vertical: 10 * fontScale,
+        ),
         decoration: BoxDecoration(
           color: _isPressed
               ? widget.colors.primary.withOpacity(0.9)
               : widget.colors.primary,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12 * fontScale),
           boxShadow: _isPressed
               ? []
               : [
             BoxShadow(
               color: widget.colors.primary.withOpacity(0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              blurRadius: 8 * fontScale,
+              offset: Offset(0, 2 * fontScale),
             ),
           ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               LucideIcons.plus,
-              size: 16,
+              size: 16 * fontScale,
               color: Colors.white,
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: 6 * fontScale),
             Text(
               widget.label,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontSize: 13 * fontScale,
                 letterSpacing: 0.2,
               ),
             ),
@@ -1410,6 +1627,7 @@ class _ModernButton extends StatefulWidget {
     required this.text,
     required this.icon,
     required this.colors,
+    required this.fontScale,
     required this.onPressed,
     this.isPrimary = false,
   });
@@ -1417,6 +1635,7 @@ class _ModernButton extends StatefulWidget {
   final String text;
   final IconData icon;
   final AppColor colors;
+  final double fontScale;
   final VoidCallback onPressed;
   final bool isPrimary;
 
@@ -1429,6 +1648,8 @@ class _ModernButtonState extends State<_ModernButton> {
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = widget.fontScale;
+
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) {
@@ -1439,7 +1660,10 @@ class _ModernButtonState extends State<_ModernButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        padding: EdgeInsets.symmetric(
+          vertical: 16 * fontScale,
+          horizontal: 20 * fontScale,
+        ),
         decoration: BoxDecoration(
           color: widget.isPrimary
               ? (_isPressed
@@ -1448,7 +1672,7 @@ class _ModernButtonState extends State<_ModernButton> {
               : (_isPressed
               ? widget.colors.background.withOpacity(0.8)
               : widget.colors.background.withOpacity(0.5)),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(14 * fontScale),
           border: !widget.isPrimary
               ? Border.all(
             color: widget.colors.border.withOpacity(0.2),
@@ -1461,8 +1685,8 @@ class _ModernButtonState extends State<_ModernButton> {
             if (widget.isPrimary)
               BoxShadow(
                 color: widget.colors.primary.withOpacity(0.25),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                blurRadius: 8 * fontScale,
+                offset: Offset(0, 2 * fontScale),
               ),
           ],
         ),
@@ -1471,12 +1695,12 @@ class _ModernButtonState extends State<_ModernButton> {
           children: [
             Icon(
               widget.icon,
-              size: 18,
+              size: 18 * fontScale,
               color: widget.isPrimary
                   ? Colors.white
                   : widget.colors.textPrimary,
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10 * fontScale),
             Text(
               widget.text,
               style: TextStyle(
@@ -1484,7 +1708,7 @@ class _ModernButtonState extends State<_ModernButton> {
                 color: widget.isPrimary
                     ? Colors.white
                     : widget.colors.textPrimary,
-                fontSize: 14,
+                fontSize: 14 * fontScale,
                 letterSpacing: 0.2,
               ),
             ),

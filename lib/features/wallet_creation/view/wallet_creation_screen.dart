@@ -164,27 +164,6 @@ class _WalletCreationScreenState
 
                                       const SizedBox(
                                           height: 6),
-
-                                      if (!widget
-                                          .isSplash)
-                                        Text(
-                                          'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-                                          textAlign:
-                                          TextAlign
-                                              .center,
-                                          style:
-                                          TextStyle(
-                                            fontSize: 14,
-                                            fontWeight:
-                                            FontWeight
-                                                .w600,
-                                            color: colors
-                                                .textSecondary,
-                                            height: 1.4,
-                                            letterSpacing:
-                                            .2,
-                                          ),
-                                        ),
                                     ],
                                   ),
                                 ),
