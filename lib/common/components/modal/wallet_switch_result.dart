@@ -259,6 +259,102 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
     }
   }
 
+  Future<void> _deleteLocalWallet(WalletViewModel wallet) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: widget.colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              LucideIcons.alertTriangle,
+              color: widget.colors.error,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Delete Wallet',
+              style: TextStyle(
+                color: widget.colors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Delete "${wallet.name}"?\n\n⚠️ WARNING: This will permanently delete the wallet and its seed phrase from this device. Make sure you have backed up your seed phrase!',
+          style: TextStyle(
+            color: widget.colors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: widget.colors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Delete',
+              style: TextStyle(
+                color: widget.colors.error,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      setState(() => _isRemoving = true);
+
+      // Delete wallet (local + backend)
+      await WalletManager.I.deleteWallet(localId: wallet.localId);
+
+      // Update local list
+      if (mounted) {
+        setState(() {
+          _localWallets.removeWhere((w) => w.localId == wallet.localId);
+          _isRemoving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${wallet.name} deleted'),
+            backgroundColor: widget.colors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isRemoving = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete: $e'),
+            backgroundColor: widget.colors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalWallets = _localWallets.length + _cloudWallets.length;
@@ -558,6 +654,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
                     WalletSwitchResult(chosenWalletId: wallet.localId),
                   );
                 },
+                onDelete: isActive ? null : () => _deleteLocalWallet(wallet),
               ),
             );
           }),
@@ -735,7 +832,7 @@ class _WalletSwitchBodyState extends State<_WalletSwitchBody>
   }
 }
 
-// ── Wallet Card Widget ──────────────────────────────────────────────────────
+// ── Wallet Card Widget (With Top-Right Delete Button) ──────────────────────
 
 class _WalletCard extends StatefulWidget {
   const _WalletCard({
@@ -744,6 +841,7 @@ class _WalletCard extends StatefulWidget {
     required this.colors,
     required this.delay,
     this.onTap,
+    this.onDelete,
   });
 
   final WalletViewModel wallet;
@@ -751,6 +849,7 @@ class _WalletCard extends StatefulWidget {
   final AppColor colors;
   final Duration delay;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
   @override
   State<_WalletCard> createState() => _WalletCardState();
@@ -796,137 +895,180 @@ class _WalletCardState extends State<_WalletCard>
       scale: _scaleAnimation,
       child: FadeTransition(
         opacity: _opacityAnimation,
-        child: GestureDetector(
-          onTapDown: widget.onTap != null ? (_) => setState(() => _isPressed = true) : null,
-          onTapUp: widget.onTap != null
-              ? (_) {
-            setState(() => _isPressed = false);
-            widget.onTap?.call();
-          }
-              : null,
-          onTapCancel: widget.onTap != null ? () => setState(() => _isPressed = false) : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: widget.isActive
-                  ? widget.colors.primary.withOpacity(0.08)
-                  : (_isPressed
-                  ? widget.colors.background.withOpacity(0.8)
-                  : widget.colors.background.withOpacity(0.5)),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: widget.isActive
-                    ? widget.colors.primary.withOpacity(0.25)
-                    : widget.colors.border.withOpacity(0.15),
-                width: widget.isActive ? 1.5 : 1,
+        child: Stack(
+          children: [
+            // Main card content
+            GestureDetector(
+              onTapDown: widget.onTap != null ? (_) => setState(() => _isPressed = true) : null,
+              onTapUp: widget.onTap != null
+                  ? (_) {
+                setState(() => _isPressed = false);
+                widget.onTap?.call();
+              }
+                  : null,
+              onTapCancel: widget.onTap != null ? () => setState(() => _isPressed = false) : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: widget.isActive
+                      ? widget.colors.primary.withOpacity(0.08)
+                      : (_isPressed
+                      ? widget.colors.background.withOpacity(0.8)
+                      : widget.colors.background.withOpacity(0.5)),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: widget.isActive
+                        ? widget.colors.primary.withOpacity(0.25)
+                        : widget.colors.border.withOpacity(0.15),
+                    width: widget.isActive ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Icon
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: widget.isActive
+                            ? widget.colors.success.withOpacity(0.1)
+                            : widget.colors.background.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: widget.isActive
+                              ? widget.colors.success.withOpacity(0.2)
+                              : widget.colors.border.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Icon(
+                        widget.isActive
+                            ? LucideIcons.checkCircle2
+                            : LucideIcons.wallet,
+                        color: widget.isActive
+                            ? widget.colors.success
+                            : widget.colors.textSecondary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Wallet info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.wallet.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: widget.colors.textPrimary,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                          if (widget.wallet.publicAddress?.isNotEmpty ?? false) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _truncateAddress(widget.wallet.publicAddress!),
+                              style: TextStyle(
+                                color: widget.colors.textSecondary.withOpacity(0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.2,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Add spacing for delete button if not active
+                    if (!widget.isActive && widget.onDelete != null)
+                      const SizedBox(width: 40),
+                    // Active badge or chevron
+                    if (widget.isActive)
+                      Container(
+                        padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: widget.colors.success.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: widget.colors.success.withOpacity(0.25),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.check,
+                              size: 12,
+                              color: widget.colors.success,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Active',
+                              style: TextStyle(
+                                color: widget.colors.success,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (widget.onDelete == null)
+                      Icon(
+                        LucideIcons.chevronRight,
+                        size: 18,
+                        color: widget.colors.textSecondary.withOpacity(0.4),
+                      ),
+                  ],
+                ),
               ),
             ),
-            child: Row(
-              children: [
-                // Icon
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: widget.isActive
-                        ? widget.colors.success.withOpacity(0.1)
-                        : widget.colors.background.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: widget.isActive
-                          ? widget.colors.success.withOpacity(0.2)
-                          : widget.colors.border.withOpacity(0.2),
-                      width: 1,
-                    ),
-                  ),
-                  child: Icon(
-                    widget.isActive
-                        ? LucideIcons.checkCircle2
-                        : LucideIcons.wallet,
-                    color: widget.isActive
-                        ? widget.colors.success
-                        : widget.colors.textSecondary,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                // Wallet info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.wallet.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: widget.colors.textPrimary,
-                          letterSpacing: -0.1,
+            // Delete button - positioned in top-right corner
+            if (widget.onDelete != null && !widget.isActive)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: widget.onDelete,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: widget.colors.error.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: widget.colors.error.withOpacity(0.2),
+                          width: 1,
                         ),
-                      ),
-                      if (widget.wallet.publicAddress?.isNotEmpty ?? false) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _truncateAddress(widget.wallet.publicAddress!),
-                          style: TextStyle(
-                            color: widget.colors.textSecondary.withOpacity(0.7),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.2,
-                            fontFamily: 'monospace',
+                        boxShadow: [
+                          BoxShadow(
+                            color: widget.colors.error.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Active badge
-                if (widget.isActive)
-                  Container(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: widget.colors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: widget.colors.success.withOpacity(0.25),
-                        width: 1,
+                        ],
+                      ),
+                      child: Icon(
+                        LucideIcons.trash2,
+                        size: 14,
+                        color: widget.colors.error,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          LucideIcons.check,
-                          size: 12,
-                          color: widget.colors.success,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Active',
-                          style: TextStyle(
-                            color: widget.colors.success,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 18,
-                    color: widget.colors.textSecondary.withOpacity(0.4),
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
         ),
       ),
     );

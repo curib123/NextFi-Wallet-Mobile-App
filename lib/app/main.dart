@@ -9,6 +9,7 @@ import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 import 'package:next_fi/firebase_options.dart';
 import 'package:next_fi/services/device_meta/devices_meta.dart';
 import 'package:next_fi/services/fcm_notification/fcm_notification_core.dart';
+import 'package:next_fi/services/fcm_notification/fcm_bootstrap.dart';
 import 'package:next_fi/services/local_notif/local_nofification.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
@@ -70,6 +71,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   debugPrint('[FCM][bg] ${message.messageId} data=${message.data}');
+  // System notification is shown automatically by backend config (no need to call LocalNotif here)
 }
 
 Future<void> main() async {
@@ -86,26 +88,9 @@ Future<void> main() async {
     await _secure.write(key: _kThemePrefKey, value: raw);
   };
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // ───────────────────────── FCM init ─────────────────────────
+  // ✅ Use FcmBootstrap for clean initialization
+  await FcmBootstrap.init();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  // iOS + Android 13+ permission (Android <= 12 will just grant)
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-
-  // iOS: allow showing notif while foreground (Android still needs local notif if you want banners)
-  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
 
   runApp(
     Phoenix(
@@ -270,10 +255,8 @@ class _MyAppState extends State<MyApp> {
     _bindFcm();
   }
 
-
-
   Future<void> _bindFcm() async {
-    // Ensure local notifications are ready (for foreground heads-up)
+    // ✅ Initialize local notifications for foreground display
     await LocalNotif.I.init(
       onLocalTap: (payload) {
         if (payload != null && payload.isNotEmpty) {
@@ -283,15 +266,8 @@ class _MyAppState extends State<MyApp> {
       },
     );
 
-    // ✅ IMPORTANT: prevent duplicate notifications in FOREGROUND
-    // If you show your own local notif in onMessage, disable system foreground alerts.
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: false,
-      badge: false,
-      sound: false,
-    );
-
-    final token = await FirebaseMessaging.instance.getToken();
+    // ✅ Get device meta and token
+    final token = await FcmBootstrap.getToken();
     final deviceMeta = await DeviceMetaService.instance.getMeta();
 
     debugPrint('[FCM] token=$token');
@@ -299,7 +275,7 @@ class _MyAppState extends State<MyApp> {
       '[FCM] deviceId=${deviceMeta.deviceId} platform=${deviceMeta.platform} appVersion=${deviceMeta.appVersion}',
     );
 
-    // ✅ If token already exists, send it now (ONLY works if logged in / JWT exists)
+    // ✅ Register token with backend
     if (token != null) {
       try {
         await FcmNotificationCore().upsertDeviceToken(
@@ -328,36 +304,32 @@ class _MyAppState extends State<MyApp> {
       }
     });
 
-    // ✅ Foreground: show ONE heads-up notification via flutter_local_notifications
-    FirebaseMessaging.onMessage.listen((RemoteMessage msg) async {
-      debugPrint(
-        '[FCM][onMessage] ${msg.notification?.title} | ${msg.notification?.body}',
-      );
-      debugPrint('[FCM][data] ${msg.data}');
-      await LocalNotif.I.showFromFcm(msg);
-    });
-
-    // ✅ Tap from background (system notification)
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage msg) {
-      debugPrint('[FCM][openedApp] data=${msg.data}');
-      _handlePushTap(msg);
-    });
-
-    // ✅ Tap from terminated (system notification)
-    final initial = await FirebaseMessaging.instance.getInitialMessage();
-    if (initial != null) {
-      debugPrint('[FCM][initialMessage] data=${initial.data}');
-      _handlePushTap(initial);
-    }
+    // ✅ Use FcmBootstrap.bindListeners for clean setup
+    await FcmBootstrap.bindListeners(
+      onForeground: (RemoteMessage msg) async {
+        debugPrint(
+          '[FCM][onMessage] ${msg.notification?.title} | ${msg.notification?.body}',
+        );
+        debugPrint('[FCM][data] ${msg.data}');
+        // Show notification in foreground using LocalNotif
+        await LocalNotif.I.showFromFcm(msg);
+      },
+      onOpenedFromBackground: (RemoteMessage msg) {
+        debugPrint('[FCM][openedApp] data=${msg.data}');
+        _handlePushTap(msg);
+      },
+      onOpenedFromTerminated: (RemoteMessage msg) {
+        debugPrint('[FCM][initialMessage] data=${msg.data}');
+        _handlePushTap(msg);
+      },
+    );
   }
-
-
-
 
   void _handlePushTap(RemoteMessage msg) {
     final route = msg.data['route'];
     if (route is String && route.isNotEmpty) {
       debugPrint('[FCM] Navigate to: $route');
+      // Navigator.of(context).pushNamed(route);
     }
   }
 
