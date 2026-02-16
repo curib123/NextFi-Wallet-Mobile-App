@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
-import 'package:next_fi/services/oath2.0/token_storage.dart';
+import 'package:next_fi/services/secure_storage/token_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar
     show PaymentOperationResponse, Asset;
 

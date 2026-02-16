@@ -28,7 +28,7 @@ class _WalletCreationScreenState
     extends State<WalletCreationScreen>
     with SingleTickerProviderStateMixin {
 
-  static const _logoAsset = 'assets/icon/icon.png';
+  static const _logoAsset = 'assets/icon/ic_stat_notification.png';
 
   /// ✅ REAL APP INFO
   String _appName = '';

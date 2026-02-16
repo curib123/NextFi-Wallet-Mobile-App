@@ -1,20 +1,8 @@
-// lib/services/fcm_notification/fcm_notification_core.dart
-//
-// Core / single place to access FCM Tokens + Notifications APIs.
-// Uses:
-//   - _baseUrl = cetralized_baseUrl
-//   - TokenStorage (FlutterSecureStorage)
-//
-// Usage:
-//   final fcmCore = FcmNotificationCore();
-//   await fcmCore.upsertDeviceToken(...);
-//   await fcmCore.sendPushToMe(...);
-//   await fcmCore.sendPushToUser(...);
-//   await fcmCore.logoutDeactivateDevice(...);
+
 
 import 'package:next_fi/services/fcm_notification/fcm_notification_service.dart';
 import 'package:next_fi/services/fcm_notification/models/fcm_models.dart';
-import 'package:next_fi/services/oath2.0/token_storage.dart';
+import 'package:next_fi/services/secure_storage/token_storage.dart';
 
 import '../base_url/base_url.dart' show cetralized_baseUrl;
 

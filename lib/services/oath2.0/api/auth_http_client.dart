@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:next_fi/services/oath2.0/endpoints.dart';
+import 'package:next_fi/services/oath2.0/api/endpoints.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
 import 'package:next_fi/services/oath2.0/models/auth_response.dart';
-import 'package:next_fi/services/oath2.0/token_storage.dart';
+import 'package:next_fi/services/secure_storage/token_storage.dart';
 
-import '../base_url/base_url.dart';
+import '../../base_url/base_url.dart';
 
 
 /// HTTP client that auto-attaches Bearer tokens and handles 401 refresh.

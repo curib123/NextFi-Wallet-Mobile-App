@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'wallet_endpoints.dart';
-import 'helpers/wallet_helpers.dart';
-import 'helpers/wallet_exceptions.dart';
-import 'models/wallet_models.dart';
-import 'models/wallet_dtos.dart';
+import '../helpers/wallet_helpers.dart';
+import '../helpers/wallet_exceptions.dart';
+import '../models/wallet_models.dart';
+import '../models/wallet_dtos.dart';
 
 typedef TokenProvider = Future<String?> Function();
 

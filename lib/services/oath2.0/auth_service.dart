@@ -6,12 +6,12 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:next_fi/services/device_meta/devices_meta.dart';
 import 'package:next_fi/services/fcm_notification/fcm_notification_core.dart';
-import 'package:next_fi/services/oath2.0/auth_http_client.dart';
-import 'package:next_fi/services/oath2.0/endpoints.dart';
+import 'package:next_fi/services/oath2.0/api/auth_http_client.dart';
+import 'package:next_fi/services/oath2.0/api/endpoints.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
 import 'package:next_fi/services/oath2.0/models/auth_response.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
-import 'package:next_fi/services/oath2.0/token_storage.dart';
+import 'package:next_fi/services/secure_storage/token_storage.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 

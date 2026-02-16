@@ -9,7 +9,7 @@ class WalletCreationState {
     this.isSplash = false,
     this.title = 'NextFI Wallet',
     this.subtitle = 'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-    this.logoAsset = 'assets/icon/icon.png',
+    this.logoAsset = 'assets/icon/ic_stat_notification.png',
   });
 
   WalletCreationState copyWith({

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/services/oath2.0/token_storage.dart';
+import 'package:next_fi/services/secure_storage/token_storage.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:next_fi/services/wallet/wallet_core_service.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';

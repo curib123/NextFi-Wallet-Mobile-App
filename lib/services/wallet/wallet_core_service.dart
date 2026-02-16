@@ -1,8 +1,10 @@
-import '../oath2.0/token_storage.dart';
-import 'wallet_service.dart';
-import 'models/wallet_dtos.dart';
-import 'models/wallet_models.dart';
-import 'helpers/wallet_exceptions.dart';
+
+
+import 'package:next_fi/services/secure_storage/token_storage.dart';
+import 'package:next_fi/services/wallet/api/wallet_service.dart';
+import 'package:next_fi/services/wallet/helpers/wallet_exceptions.dart';
+import 'package:next_fi/services/wallet/models/wallet_dtos.dart';
+import 'package:next_fi/services/wallet/models/wallet_models.dart';
 
 class WalletCoreService {
   WalletCoreService._();
