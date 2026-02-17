@@ -316,13 +316,13 @@ class _HeaderSectionState extends State<HeaderSection> {
               ),
               _ActionTile(
                 colors: widget.colors,
-                icon: LucideIcons.dollarSign,
+                icon: LucideIcons.arrowDown,
                 label: 'Buy',
                 onTap: widget.onBuy ?? () => debugPrint('Buy'),
               ),
               _ActionTile(
                 colors: widget.colors,
-                icon: LucideIcons.banknote,
+                icon: LucideIcons.arrowUp,
                 label: 'Sell',
                 onTap: widget.onSell ?? () => debugPrint('Sell'),
               ),

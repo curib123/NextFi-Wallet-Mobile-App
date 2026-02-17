@@ -1,0 +1,11 @@
+<resources>
+    <string name="default_web_client_id">
+        53734918028-hvsc41gb8ogai7rrqs6ctjgnf5mhcscr.apps.googleusercontent.com
+    </string>
+
+
+    <!-- Facebook Login -->
+    <string name="facebook_app_id">2125310254891371</string>
+    <string name="facebook_client_token">241bc75b793b8ada3cf9ad783f35508c</string>
+
+</resources>

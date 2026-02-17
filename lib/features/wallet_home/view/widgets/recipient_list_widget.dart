@@ -11,13 +11,14 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/common/components/modal/token_chooser.dart';
 
-/// Recipient list widget (provider-powered) with modern animations
+/// Recipient list widget (provider-powered) with modern animations and auth checks
 class RecipientListWidget extends StatelessWidget {
   final AppColor colors;
   final void Function(RecipientAddressModel)? onSelect;
   final String? fromAddress;
   final double? xlmBalance;
   final double? usdcBalance;
+  final VoidCallback? onLoginPressed;
 
   const RecipientListWidget({
     super.key,
@@ -26,25 +27,12 @@ class RecipientListWidget extends StatelessWidget {
     this.fromAddress,
     this.xlmBalance,
     this.usdcBalance,
+    this.onLoginPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
-
-    final fab = _ModernAddButton(
-      colors: colors,
-      onPressed: () async {
-        final saved = await showRecipientUpsertSheet(context);
-        if (saved == true && context.mounted) {
-          showFloatingSnackBar(
-            context,
-            message: 'Recipient saved',
-            type: SnackBarType.info,
-          );
-        }
-      },
-    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -69,9 +57,16 @@ class RecipientListWidget extends StatelessWidget {
         ),
       )
           : null,
-      floatingActionButton: fab,
       body: Consumer<RecipientAddressVM>(
         builder: (context, prov, _) {
+          // Check authentication first
+          if (!prov.isAuthenticated && !prov.loading) {
+            return _NotAuthenticatedView(
+              colors: colors,
+              onLoginPressed: onLoginPressed,
+            );
+          }
+
           if (prov.loading) {
             return Center(
               child: Column(
@@ -99,6 +94,30 @@ class RecipientListWidget extends StatelessWidget {
             );
           }
 
+          final fab = _ModernAddButton(
+            colors: colors,
+            onPressed: () async {
+              if (!prov.isAuthenticated) {
+                showFloatingSnackBar(
+                  context,
+                  message: 'Please login first',
+                  type: SnackBarType.warning,
+                );
+                return;
+              }
+
+              final saved = await showRecipientUpsertSheet(context);
+              if (saved == true && context.mounted) {
+                await prov.refresh();
+                showFloatingSnackBar(
+                  context,
+                  message: 'Recipient saved',
+                  type: SnackBarType.info,
+                );
+              }
+            },
+          );
+
           final Widget body = prov.items.isEmpty
               ? _EmptyRecipients(colors: colors)
               : _RecipientList(
@@ -109,13 +128,153 @@ class RecipientListWidget extends StatelessWidget {
             usdcBalance: usdcBalance,
           );
 
-          return AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: body,
+          return Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: body,
+              ),
+              Positioned(
+                right: 20,
+                bottom: 20,
+                child: fab,
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// View shown when user is not authenticated
+class _NotAuthenticatedView extends StatelessWidget {
+  final AppColor colors;
+  final VoidCallback? onLoginPressed;
+
+  const _NotAuthenticatedView({
+    required this.colors,
+    this.onLoginPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, 30 * (1 - value)),
+              child: child,
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Lock icon
+                Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: colors.warning.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colors.warning.withOpacity(0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    LucideIcons.lock,
+                    size: 56,
+                    color: colors.warning,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Login Required',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Please login first to view and manage your saved recipient addresses',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textSecondary.withOpacity(0.7),
+                    fontSize: 15,
+                    height: 1.5,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                // Login button
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    if (onLoginPressed != null) {
+                      onLoginPressed!();
+                    } else {
+                      // Default: navigate to login screen
+                      Navigator.pushNamed(context, '/login');
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: colors.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.primary.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.logIn,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Login to Continue',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -279,6 +438,7 @@ class _RecipientList extends StatelessWidget {
                 initial: r,
               );
               if (saved == true && context.mounted) {
+                await context.read<RecipientAddressVM>().refresh();
                 showFloatingSnackBar(
                   context,
                   message: 'Recipient updated',
@@ -289,13 +449,24 @@ class _RecipientList extends StatelessWidget {
             onDelete: () async {
               final ok = await _confirmDelete(context, r.name);
               if (ok != true) return;
-              await context.read<RecipientAddressVM>().remove(r.id);
-              if (context.mounted) {
-                showFloatingSnackBar(
-                  context,
-                  message: 'Recipient removed',
-                  type: SnackBarType.warning,
-                );
+
+              try {
+                await context.read<RecipientAddressVM>().remove(r.id);
+                if (context.mounted) {
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Recipient removed',
+                    type: SnackBarType.warning,
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  showFloatingSnackBar(
+                    context,
+                    message: 'Failed to remove: ${e.toString()}',
+                    type: SnackBarType.error,
+                  );
+                }
               }
             },
           ),

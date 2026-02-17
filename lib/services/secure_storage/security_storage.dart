@@ -120,7 +120,7 @@ class SecurityStorage {
 
     final ok = _hashPin(pin, salt) == storedHash;
     if (ok) {
-      // Successful auth ⇒ reset counters.
+      // Successful oath2.0 ⇒ reset counters.
       await _storage.write(key: _kAttempts, value: '0', aOptions: _aOpts, iOptions: _iOpts);
       await _storage.delete(key: _kLockoutUntil, aOptions: _aOpts, iOptions: _iOpts);
       return true;
@@ -192,7 +192,7 @@ class SecurityStorage {
     return Duration(milliseconds: diffMs);
   }
 
-  /// Reset failed attempts / lockout (call after a successful biometric auth).
+  /// Reset failed attempts / lockout (call after a successful biometric oath2.0).
   static Future<void> markSuccessfulAuth() async {
     await _storage.write(key: _kAttempts, value: '0', aOptions: _aOpts, iOptions: _iOpts);
     await _storage.delete(key: _kLockoutUntil, aOptions: _aOpts, iOptions: _iOpts);

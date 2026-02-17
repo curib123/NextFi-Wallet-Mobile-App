@@ -10,6 +10,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 // Reusables
 import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 
 /// Call this to open the sheet.
 /// Returns true if something was saved.
@@ -135,13 +136,24 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
   }
 
   Future<void> _save() async {
+    // Check authentication first
+    final prov = context.read<RecipientAddressVM>();
+    if (!prov.isAuthenticated) {
+      showFloatingSnackBar(
+        context,
+        message: 'Please login first to save recipients',
+        type: SnackBarType.error,
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       HapticFeedback.heavyImpact();
       return;
     }
+
     setState(() => _saving = true);
     try {
-      final prov = context.read<RecipientAddressVM>();
       final name = _name.text.trim();
       final address = _addr.text.trim();
 
@@ -161,8 +173,19 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       await _animController.reverse();
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    } catch (e) {
+      if (!mounted) return;
+
+      // Show error message
+      showFloatingSnackBar(
+        context,
+        message: e.toString().contains('Not authenticated')
+            ? 'Session expired. Please login again.'
+            : 'Failed to save: ${e.toString()}',
+        type: SnackBarType.error,
+      );
+
+      setState(() => _saving = false);
     }
   }
 
@@ -187,72 +210,113 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
 
   Widget _buildHeader(bool isEdit) {
     final c = AppColor.of(context);
+    final prov = context.watch<RecipientAddressVM>();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: c.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: c.primary.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: c.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.primary.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(
-              isEdit ? LucideIcons.edit3 : LucideIcons.userPlus,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isEdit ? 'Edit Recipient' : 'Add Recipient',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: c.textPrimary,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  isEdit ? 'Update contact details' : 'Save for quick transfers',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: c.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _close,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
                 child: Icon(
-                  LucideIcons.x,
-                  color: c.textSecondary,
-                  size: 20,
+                  isEdit ? LucideIcons.edit3 : LucideIcons.userPlus,
+                  color: Colors.white,
+                  size: 22,
                 ),
               ),
-            ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isEdit ? 'Edit Recipient' : 'Add Recipient',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: c.textPrimary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isEdit ? 'Update contact details' : 'Save for quick transfers',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: c.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _close,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      LucideIcons.x,
+                      color: c.textSecondary,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+
+          // Auth warning banner
+          if (!prov.isAuthenticated)
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: c.warning.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: c.warning.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.alertCircle,
+                    color: c.warning,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Please login to save recipients',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: c.warning,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -483,6 +547,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
     final c = AppColor.of(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isEdit = widget.initial != null;
+    final prov = context.watch<RecipientAddressVM>();
 
     final addressSuffix = Row(
       mainAxisSize: MainAxisSize.min,
@@ -586,7 +651,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                                   : null,
                               onTap: () => setState(() => _addrTouched = true),
                               onFieldSubmitted: (_) =>
-                              _canSave ? _save() : null,
+                              _canSave && prov.isAuthenticated ? _save() : null,
                             ),
                             _addressStatus(),
                             const SizedBox(height: 24),
@@ -631,14 +696,18 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                           child: CustomButton(
                             text: _saving
                                 ? 'Saving...'
+                                : !prov.isAuthenticated
+                                ? 'Login Required'
                                 : (isEdit ? 'Save Changes' : 'Add Recipient'),
-                            type: _canSave
+                            type: (_canSave && prov.isAuthenticated)
                                 ? ButtonType.filled
                                 : ButtonType.disabled,
-                            onPressed: _canSave ? _save : () {},
+                            onPressed: (_canSave && prov.isAuthenticated) ? _save : () {},
                             fullWidth: true,
                             icon: _saving
                                 ? LucideIcons.loader2
+                                : !prov.isAuthenticated
+                                ? LucideIcons.lock
                                 : LucideIcons.check,
                           ),
                         ),

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -38,6 +39,7 @@ class _ActivityScreenState extends State<ActivityScreen>
     final colors = AppColor.of(context);
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Activity'),
         bottom: TabBar(

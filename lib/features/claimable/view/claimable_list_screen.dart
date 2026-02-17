@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -123,6 +124,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     final vm = context.watch<ClaimableVM>();
 
     return Scaffold(
+      drawer: const AppDrawer(),
       backgroundColor: c.background,
       body: SafeArea(
         child: Column(

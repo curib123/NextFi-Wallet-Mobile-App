@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/common/components/drawer/appdrawer.dart';
+import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
-import 'package:next_fi/features/wallet_home/view_model/ramp_handler.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/features/receive/view/receive_screen.dart';
@@ -128,6 +129,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       length: 2,
       child: Scaffold(
         backgroundColor: colors.surface,
+        /// DRAWER HERE
+        drawer: const AppDrawer(),
+
         body: Stack(
           children: [
             // Animated background
@@ -169,25 +173,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           onSwap: () => vm.onSwapPressed(),
                           onSend: () => vm.onSendPressed(),
                           onReceive: () => vm.onReceivePressed(),
-                          // NEW: Pass ramp handlers to HeaderSection
-                          onBuy: s.hasWallet && s.address != null
-                              ? () => RampHandler.handleDeposit(
-                            context: context,
-                            stellarAddress: s.address!,
-                            initialCurrency: FiatCurrency.usd,
-                            initialToken: 'XLM',
-                            region: 'PH',
-                          )
-                              : null,
-                          onSell: s.hasWallet && s.address != null
-                              ? () => RampHandler.handleWithdraw(
-                            context: context,
-                            stellarAddress: s.address!,
-                            initialCurrency: FiatCurrency.php,
-                            initialToken: 'XLM',
-                            region: 'PH',
-                          )
-                              : null,
+                          onBuy: () => vm.onBuyPressed(),
+                          onSell: () => vm.onSellPressed(),
                           livePulse: _livePulse,
                           incomingStrip: s.hasWallet
                               ? IncomingHintsStrip(
@@ -258,7 +245,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
-  // ──────────────────────── Event handling (UI side effects) ────────────────────────
+
+
+// ──────────────────────── Event handling (UI side effects) ────────────────────────
   void _onUiEvent(WalletHomeUiEvent e) async {
     if (!mounted) return;
 
@@ -277,13 +266,59 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     final vm = context.read<WalletHomeVM>();
 
-    if (e is ShowToastEvent) {
-      showFloatingSnackBar(context, message: e.message, type: _mapSeverity(e.severity));
+    /// ───────────────── LOGIN NAVIGATION ─────────────────
+    if (e is NavigateToLogin) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+      );
+      return;
+    }
+    /// ───────────────── BUY FLOW (TEMP DISABLED) ─────────────────
+    if (e is StartBuyFlow) {
+      // TODO: Implement Buy flow screen
+      debugPrint('StartBuyFlow triggered — screen not implemented yet');
+
+      showFloatingSnackBar(
+        context,
+        message: 'Buy feature coming soon',
+        type: SnackBarType.info,
+      );
+
       return;
     }
 
+    /// ───────────────── SELL FLOW (TEMP DISABLED) ─────────────────
+    if (e is StartSellFlow) {
+      // TODO: Implement Sell flow screen
+      debugPrint('StartSellFlow triggered — screen not implemented yet');
+
+      showFloatingSnackBar(
+        context,
+        message: 'Sell feature coming soon',
+        type: SnackBarType.info,
+      );
+
+      return;
+    }
+
+
+    /// ───────────────── TOAST ─────────────────
+    if (e is ShowToastEvent) {
+      showFloatingSnackBar(
+        context,
+        message: e.message,
+        type: _mapSeverity(e.severity),
+      );
+      return;
+    }
+
+    /// ───────────────── BOOT LOADING ─────────────────
     if (e is BootBalancesLoading) {
-      if (mounted) setState(() => _animateTotal = false); // never animate while loading
+      setState(() => _animateTotal = false);
+
       _bootBalancesCtl ??= showAppAlert(
         context,
         type: AppAlertType.loading,
@@ -294,38 +329,33 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       return;
     }
 
+    /// ───────────────── BOOT READY ─────────────────
     if (e is BootBalancesReady) {
-      if (!mounted) return;
       final currency = context.read<CurrencyVM>();
-      final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
-      final fxXlm = currency.xlmToFiat(e.xlm);
-      final fxUsdc = currency.usdcToFiat(e.usdc);
-      final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+      final currencyFmt =
+      NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
 
-      // Update, then immediately close and decide whether to enable animation.
+      final totalFiat =
+          currency.xlmToFiat(e.xlm) + currency.usdcToFiat(e.usdc);
+
       _bootBalancesCtl?.update(
         AppAlertType.success,
         title: 'Balances ready',
         subtitle: 'Total ${currencyFmt.format(totalFiat)}',
       );
+
       _bootBalancesCtl?.close();
       _bootBalancesCtl = null;
 
-      if (!_shownInitialTotal) {
-        // First boot: keep static.
-        if (mounted) {
-          setState(() {
-            _animateTotal = false;
-            _shownInitialTotal = true;
-          });
-        }
-      } else {
-        // Subsequent refreshes/updates: allow counting animation.
-        if (mounted) setState(() => _animateTotal = true);
-      }
+      setState(() {
+        _animateTotal = _shownInitialTotal;
+        _shownInitialTotal = true;
+      });
+
       return;
     }
 
+    /// ───────────────── SEND FLOW ─────────────────
     if (e is StartSendFlow) {
       await showTokenSelector(
         context,
@@ -336,13 +366,14 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         screenBuilder: (address, token, balance) =>
             SendScreen(address: address, token: token, balance: balance),
       );
+
       if (!mounted) return;
       await vm.refresh(force: true);
       return;
     }
 
+    /// ───────────────── RECEIVE FLOW ─────────────────
     if (e is StartReceiveFlow) {
-      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -357,15 +388,18 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       return;
     }
 
+    /// ───────────────── SWAP ─────────────────
     if (e is NavigateToSwap) {
-      if (!mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const SwapScreen()),
+        MaterialPageRoute(
+          builder: (_) => const SwapScreen(),
+        ),
       );
       return;
     }
 
+    /// ───────────────── INCOMING HINT ─────────────────
     if (e is IncomingHintAddedEvent) {
       _showPendingAlertForHint(e.hint);
       return;
@@ -373,6 +407,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     if (e is TransactionConfirmedEvent) {
       final ctl = _hintAlertCtrls.remove(e.hash);
+
       if (ctl != null) {
         ctl.update(
           AppAlertType.success,
@@ -380,6 +415,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
           subtitle: 'Confirmed on-chain.',
           primaryText: 'Done',
         );
+
         vm.ackHint(e.hash);
       }
       return;

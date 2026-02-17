@@ -2,28 +2,30 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
-import 'package:next_fi/services/secure_storage/recipient_address_storage.dart';
+import 'package:next_fi/services/recipient_wallets/recipient_wallets_core.dart';
+import 'package:next_fi/services/recipient_wallets/models/recipient_wallet_models.dart';
 
-/// Recipient addresses reusable_view_model (ChangeNotifier-based)
-/// - Persists via RecipientAddressStorage (no direct secure-storage refs here)
-/// - Case-insensitive de-dup by address
-/// - Awaitable init via [ready] to avoid races
+/// Recipient addresses view model (ChangeNotifier-based)
+/// - Uses RecipientWalletsCore API service (JWT-authenticated)
+/// - Converts API RecipientWallet models to local RecipientAddressModel
+/// - Handles authentication state
 class RecipientAddressVM with ChangeNotifier {
-  final RecipientAddressStorage _storage;
+  final RecipientWalletsCore _api;
 
-  // Make init awaitable to avoid races
   late final Future<void> _ready;
 
   List<RecipientAddressModel> _items = [];
   bool _loading = true;
+  bool _isAuthenticated = false;
   Object? _lastError;
 
-  RecipientAddressVM([RecipientAddressStorage? storage])
-      : _storage = storage ?? const RecipientAddressStorage() {
+  RecipientAddressVM([RecipientWalletsCore? api])
+      : _api = api ?? RecipientWalletsCore() {
     _ready = _init();
   }
 
   bool get loading => _loading;
+  bool get isAuthenticated => _isAuthenticated;
   Object? get lastError => _lastError;
   Future<void> get ready => _ready;
 
@@ -51,10 +53,20 @@ class RecipientAddressVM with ChangeNotifier {
 
   Future<void> _init() async {
     try {
-      _items = await _storage.readAll();
+      // Try to fetch from API - if JWT is missing, this will throw
+      final recipients = await _api.getAllRecipients(activeOnly: false);
+      _items = recipients.map(_toLocal).toList();
+      _isAuthenticated = true;
     } catch (e, st) {
       _lastError = e;
       _items = [];
+
+      // Check if error is authentication-related
+      if (e.toString().contains('Not authenticated') ||
+          e.toString().contains('401')) {
+        _isAuthenticated = false;
+      }
+
       if (kDebugMode) {
         debugPrint('RecipientAddressVM _init error: $e\n$st');
       }
@@ -64,112 +76,219 @@ class RecipientAddressVM with ChangeNotifier {
     }
   }
 
-  Future<void> _persist() async {
-    await _storage.writeAll(_items);
+  /// Convert API RecipientWallet to local RecipientAddressModel
+  RecipientAddressModel _toLocal(RecipientWallet wallet) {
+    return RecipientAddressModel(
+      id: wallet.id,
+      name: wallet.name,
+      address: wallet.publicAddress,
+      color: _extractColorFromMemo(wallet.memo) ?? 0xFF7B16FF,
+      createdAt: wallet.createdAt,
+      updatedAt: wallet.updatedAt,
+    );
   }
 
-  /// Create (de-dup by address, **case-insensitive**, trimmed).
+  /// Extract color from memo field (format: "color:0xFF7B16FF;memo text")
+  int? _extractColorFromMemo(String? memo) {
+    if (memo == null || !memo.contains('color:')) return null;
+    try {
+      final colorPart = memo.split(';').firstWhere(
+            (part) => part.startsWith('color:'),
+        orElse: () => '',
+      );
+      if (colorPart.isEmpty) return null;
+      final colorStr = colorPart.replaceFirst('color:', '').trim();
+      return int.tryParse(colorStr);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Create memo with embedded color (format: "color:0xFF7B16FF;actual memo")
+  String _createMemoWithColor(int color, String? userMemo) {
+    final colorPart = 'color:$color';
+    if (userMemo == null || userMemo.trim().isEmpty) {
+      return colorPart;
+    }
+    return '$colorPart;${userMemo.trim()}';
+  }
+
+  /// Refresh data from API
+  Future<void> refresh() async {
+    if (!_isAuthenticated) return;
+
+    _loading = true;
+    notifyListeners();
+
+    try {
+      final recipients = await _api.getAllRecipients(activeOnly: false);
+      _items = recipients.map(_toLocal).toList();
+      _lastError = null;
+    } catch (e, st) {
+      _lastError = e;
+      if (e.toString().contains('Not authenticated') ||
+          e.toString().contains('401')) {
+        _isAuthenticated = false;
+        _items = [];
+      }
+      if (kDebugMode) {
+        debugPrint('RecipientAddressVM refresh error: $e\n$st');
+      }
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Create recipient via API
   Future<RecipientAddressModel> add({
     required String name,
     required String address,
     required int color,
   }) async {
-    await _ready; // prevent init race
-    final now = DateTime.now();
-    final normAddr = address.trim().toLowerCase();
-
-    final existingIndex = _items.indexWhere(
-          (e) => e.address.trim().toLowerCase() == normAddr,
-    );
-
-    if (existingIndex >= 0) {
-      final updated = _items[existingIndex].copyWith(
-        name: name.trim(),
-        // keep original address casing as stored, but we could update too:
-        // address: address.trim(),
-        color: color,
-        updatedAt: now,
-      );
-      _items[existingIndex] = updated;
-      await _persist();
-      notifyListeners();
-      return updated;
+    if (!_isAuthenticated) {
+      throw Exception('Not authenticated. Please login first.');
     }
 
-    final rec = RecipientAddressModel(
-      id: now.microsecondsSinceEpoch.toString(),
-      name: name.trim(),
-      address: address.trim(),
-      color: color,
-      createdAt: now,
-      updatedAt: now,
-    );
-    _items.add(rec);
-    await _persist();
-    notifyListeners();
-    return rec;
+    await _ready;
+
+    try {
+      final wallet = await _api.addRecipient(
+        name: name.trim(),
+        address: address.trim(),
+        network: 'stellar',
+        memo: _createMemoWithColor(color, null),
+      );
+
+      final local = _toLocal(wallet);
+
+      // Update local cache
+      final existingIndex = _items.indexWhere(
+            (e) => e.address.trim().toLowerCase() == address.trim().toLowerCase(),
+      );
+
+      if (existingIndex >= 0) {
+        _items[existingIndex] = local;
+      } else {
+        _items.add(local);
+      }
+
+      notifyListeners();
+      return local;
+    } catch (e) {
+      if (e.toString().contains('Not authenticated') ||
+          e.toString().contains('401')) {
+        _isAuthenticated = false;
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
-  /// Update (merges if another record already has the same address, case-insensitive).
+  /// Update recipient via API
   Future<RecipientAddressModel?> update(
       String id, {
         String? name,
         String? address,
         int? color,
       }) async {
-    await _ready; // prevent init race
-    final idx = _items.indexWhere((e) => e.id == id);
-    if (idx < 0) return null;
-
-    // If address is changing, enforce case-insensitive de-dup to the same id
-    if (address != null) {
-      final norm = address.trim().toLowerCase();
-      final otherIdx = _items.indexWhere(
-            (e) => e.id != id && e.address.trim().toLowerCase() == norm,
-      );
-      if (otherIdx >= 0) {
-        // Merge into the existing record instead of creating a dup.
-        final now = DateTime.now();
-        final merged = _items[otherIdx].copyWith(
-          name: name?.trim(),
-          address: address.trim(),
-          color: color,
-          updatedAt: now,
-        );
-        _items.removeAt(idx);
-        _items[otherIdx] = merged;
-        await _persist();
-        notifyListeners();
-        return merged;
-      }
+    if (!_isAuthenticated) {
+      throw Exception('Not authenticated. Please login first.');
     }
 
-    final now = DateTime.now();
-    final next = _items[idx].copyWith(
-      name: name?.trim(),
-      address: address?.trim(),
-      color: color,
-      updatedAt: now,
-    );
-    _items[idx] = next;
-    await _persist();
-    notifyListeners();
-    return next;
+    await _ready;
+
+    try {
+      final current = byId(id);
+      if (current == null) return null;
+
+      // Prepare memo with color
+      String? newMemo;
+      if (color != null) {
+        newMemo = _createMemoWithColor(color, null);
+      }
+
+      final wallet = await _api.updateRecipient(
+        id: id,
+        name: name?.trim(),
+        address: address?.trim(),
+        memo: newMemo,
+      );
+
+      final local = _toLocal(wallet);
+
+      // Update local cache
+      final idx = _items.indexWhere((e) => e.id == id);
+      if (idx >= 0) {
+        _items[idx] = local;
+      }
+
+      notifyListeners();
+      return local;
+    } catch (e) {
+      if (e.toString().contains('Not authenticated') ||
+          e.toString().contains('401')) {
+        _isAuthenticated = false;
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
-  /// Delete
+  /// Delete recipient via API
   Future<void> remove(String id) async {
-    await _ready; // prevent init race
-    _items.removeWhere((e) => e.id == id);
-    await _persist();
+    if (!_isAuthenticated) {
+      throw Exception('Not authenticated. Please login first.');
+    }
+
+    await _ready;
+
+    try {
+      await _api.deleteRecipient(id);
+
+      // Update local cache
+      _items.removeWhere((e) => e.id == id);
+      notifyListeners();
+    } catch (e) {
+      if (e.toString().contains('Not authenticated') ||
+          e.toString().contains('401')) {
+        _isAuthenticated = false;
+        notifyListeners();
+      }
+      rethrow;
+    }
+  }
+
+  /// Search recipients via API
+  Future<List<RecipientAddressModel>> search(String query) async {
+    if (!_isAuthenticated) return [];
+
+    try {
+      final results = await _api.searchRecipients(
+        query: query,
+        activeOnly: false,
+      );
+      return results.map(_toLocal).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Search error: $e');
+      }
+      return [];
+    }
+  }
+
+  /// Set authentication state (call this after login/logout)
+  void setAuthState(bool isAuth) {
+    _isAuthenticated = isAuth;
+    if (!isAuth) {
+      _items = [];
+    }
     notifyListeners();
   }
 
-  /// Wipe all
-  Future<void> clear() async {
-    await _ready; // prevent init race
-    _items.clear();
-    await _storage.deleteAll();
-    notifyListeners();
+  @override
+  void dispose() {
+    _api.dispose();
+    super.dispose();
   }
 }

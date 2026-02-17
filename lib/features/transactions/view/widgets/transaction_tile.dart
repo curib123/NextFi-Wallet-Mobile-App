@@ -63,7 +63,7 @@ class TransactionTile extends StatelessWidget {
     final subtitlePeer =
     recName != null ? '$recName (${shortAddr(peerAddr)})' : shortAddr(peerAddr);
 
-    // Leading: your AssetLogo + tiny direction badge
+    // Leading: your AssetLogo + tiny direction drawer
     Widget leading = Stack(
       clipBehavior: Clip.none,
       children: [
