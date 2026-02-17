@@ -21,6 +21,8 @@ import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dar
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
+import 'package:next_fi/services/federation_address/federation_address_core_service.dart';
+import 'package:next_fi/services/federation_address/models/federation_address_models.dart';
 
 class SendScreen extends StatefulWidget {
   final String address;
@@ -60,6 +62,10 @@ class _SendScreenState extends State<SendScreen> {
 
   bool _recipientLoading = false;
   RecipientAddressModel? _resolvedRecipient;
+  bool _federationLoading = false;
+  FederationResolveResponse? _resolvedFederation;
+  String? _federationError;
+  int _federationResolveSeq = 0;
 
   @override
   void didChangeDependencies() {
@@ -91,7 +97,6 @@ class _SendScreenState extends State<SendScreen> {
     });
 
     _toCtl.addListener(() {
-      vm.setRecipient(_toCtl.text.trim());
       _onRecipientChanged();
     });
 
@@ -103,11 +108,10 @@ class _SendScreenState extends State<SendScreen> {
     if (widget.autoOpenScanner && !_scannerOpenedOnce) {
       final hasPrefill =
           (widget.prefillAddress ?? '').trim().isNotEmpty ||
-              _toCtl.text.trim().isNotEmpty;
+          _toCtl.text.trim().isNotEmpty;
       if (!hasPrefill) {
         _scannerOpenedOnce = true;
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _openScanner());
+        WidgetsBinding.instance.addPostFrameCallback((_) => _openScanner());
       }
     }
 
@@ -126,23 +130,95 @@ class _SendScreenState extends State<SendScreen> {
   // Recipient lookup
   // ──────────────────────────────────────────────────────────────────────────
 
-  bool _looksLikeStellarPk(String x) =>
-      RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
+  bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
+  bool _looksLikeFederation(String x) =>
+      RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
 
   void _onRecipientChanged() {
-    final addr = _toCtl.text.trim();
+    final vm = context.read<SendVM>();
+    final input = _toCtl.text.trim();
 
-    if (!_looksLikeStellarPk(addr)) {
-      if (_resolvedRecipient != null || _recipientLoading) {
-        setState(() {
-          _resolvedRecipient = null;
-          _recipientLoading = false;
-        });
-      }
+    if (input.isEmpty) {
+      vm.setRecipient('');
+      setState(() {
+        _resolvedRecipient = null;
+        _recipientLoading = false;
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+      });
       return;
     }
 
-    _lookupRecipient(addr);
+    if (_looksLikeStellarPk(input)) {
+      vm.setRecipient(input);
+      setState(() {
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+      });
+      _lookupRecipient(input);
+      return;
+    }
+
+    if (_looksLikeFederation(input)) {
+      vm.setRecipient('');
+      setState(() {
+        _resolvedRecipient = null;
+      });
+      _resolveFederation(input);
+      return;
+    }
+
+    vm.setRecipient(input);
+    setState(() {
+      _resolvedRecipient = null;
+      _recipientLoading = false;
+      _resolvedFederation = null;
+      _federationError = null;
+      _federationLoading = false;
+    });
+  }
+
+  Future<void> _resolveFederation(String federationAddress) async {
+    final vm = context.read<SendVM>();
+    final requestId = ++_federationResolveSeq;
+
+    setState(() {
+      _federationLoading = true;
+      _federationError = null;
+      _resolvedFederation = null;
+      _recipientLoading = true;
+      _resolvedRecipient = null;
+    });
+
+    try {
+      final resolved = await FederationAddressCoreService.I.resolveByName(
+        federationAddress,
+      );
+      if (!mounted || requestId != _federationResolveSeq) return;
+
+      final accountId = resolved.accountId.trim();
+      if (accountId.isEmpty || !_looksLikeStellarPk(accountId)) {
+        throw StateError('Resolved federation has no valid Stellar account id');
+      }
+
+      vm.setRecipient(accountId);
+      setState(() {
+        _resolvedFederation = resolved;
+        _federationLoading = false;
+      });
+      await _lookupRecipient(accountId);
+    } catch (e) {
+      if (!mounted || requestId != _federationResolveSeq) return;
+      vm.setRecipient('');
+      setState(() {
+        _federationLoading = false;
+        _recipientLoading = false;
+        _resolvedFederation = null;
+        _federationError = 'Federation not found or unavailable.';
+      });
+    }
   }
 
   Future<void> _lookupRecipient(String address) async {
@@ -174,17 +250,14 @@ class _SendScreenState extends State<SendScreen> {
   // ──────────────────────────────────────────────────────────────────────────
 
   Future<void> _refresh() async {
-    final vm = context.read<SendVM>();
-    await vm.refreshFees();
-    vm.setRecipient(_toCtl.text.trim());
+    await context.read<SendVM>().refreshFees();
+    _onRecipientChanged();
     await Future.delayed(const Duration(milliseconds: 250));
   }
 
   double _floorTo(double v, int dec) {
     final scale = math.pow(10, dec);
-    return (v >= 0
-        ? (v * scale).floor() / scale
-        : (v * scale).ceil() / scale)
+    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale)
         .toDouble();
   }
 
@@ -197,7 +270,8 @@ class _SendScreenState extends State<SendScreen> {
     HapticFeedback.selectionClick();
 
     double targetAmount;
-    if (percent >= 0.999) { // MAX button (1.0)
+    if (percent >= 0.999) {
+      // MAX button (1.0)
       if (vm.isXlm) {
         // For XLM: deduct network fee
         final fee = vm.networkFee;
@@ -214,7 +288,8 @@ class _SendScreenState extends State<SendScreen> {
     final v = _floorTo(targetAmount, 7);
     _amtCtl.text = _fmtAmount(v);
     _amtCtl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _amtCtl.text.length));
+      TextPosition(offset: _amtCtl.text.length),
+    );
     _lastPct = percent;
     setState(() {});
   }
@@ -347,7 +422,8 @@ class _SendScreenState extends State<SendScreen> {
 
     _toCtl.text = addr;
     _toCtl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _toCtl.text.length));
+      TextPosition(offset: _toCtl.text.length),
+    );
     if (mounted) context.read<SendVM>().setRecipient(addr);
   }
 
@@ -373,7 +449,8 @@ class _SendScreenState extends State<SendScreen> {
 
     _toCtl.text = addr;
     _toCtl.selection = TextSelection.fromPosition(
-        TextPosition(offset: _toCtl.text.length));
+      TextPosition(offset: _toCtl.text.length),
+    );
 
     vm.pickRecipient(addr, displayName: picked.name);
   }
@@ -469,10 +546,7 @@ class _SendScreenState extends State<SendScreen> {
       decoration: BoxDecoration(
         color: c.background,
         border: Border(
-          bottom: BorderSide(
-            color: c.border.withOpacity(0.06),
-            width: 1,
-          ),
+          bottom: BorderSide(color: c.border.withOpacity(0.06), width: 1),
         ),
       ),
       child: Row(
@@ -577,9 +651,13 @@ class _SendScreenState extends State<SendScreen> {
               Expanded(
                 child: TextField(
                   controller: _amtCtl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,7}$'),
+                    ),
                   ],
                   style: TextStyle(
                     fontSize: 40,
@@ -620,7 +698,10 @@ class _SendScreenState extends State<SendScreen> {
                   GestureDetector(
                     onTap: () => _applyPercent(vm, 1.0),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: c.primary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -656,11 +737,7 @@ class _SendScreenState extends State<SendScreen> {
 
   Widget _buildQuickAmountChips(AppColor c, SendVM vm) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final presets = [
-      ('25%', 0.25),
-      ('50%', 0.50),
-      ('75%', 0.75),
-    ];
+    final presets = [('25%', 0.25), ('50%', 0.50), ('75%', 0.75)];
 
     return Row(
       children: [
@@ -673,12 +750,16 @@ class _SendScreenState extends State<SendScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: (_lastPct != null && (_lastPct! - presets[i].$2).abs() < 0.001)
+                  color:
+                      (_lastPct != null &&
+                          (_lastPct! - presets[i].$2).abs() < 0.001)
                       ? c.primary.withOpacity(0.1)
                       : (isDark ? c.background : c.surface.withOpacity(0.5)),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: (_lastPct != null && (_lastPct! - presets[i].$2).abs() < 0.001)
+                    color:
+                        (_lastPct != null &&
+                            (_lastPct! - presets[i].$2).abs() < 0.001)
                         ? c.primary.withOpacity(0.3)
                         : c.border.withOpacity(isDark ? 0.1 : 0.15),
                     width: 1,
@@ -688,7 +769,9 @@ class _SendScreenState extends State<SendScreen> {
                   child: Text(
                     presets[i].$1,
                     style: TextStyle(
-                      color: (_lastPct != null && (_lastPct! - presets[i].$2).abs() < 0.001)
+                      color:
+                          (_lastPct != null &&
+                              (_lastPct! - presets[i].$2).abs() < 0.001)
                           ? c.primary
                           : c.textSecondary.withOpacity(0.7),
                       fontWeight: FontWeight.w600,
@@ -711,7 +794,17 @@ class _SendScreenState extends State<SendScreen> {
   Widget _buildRecipientCard(AppColor c, SendVM vm) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final addr = _toCtl.text.trim();
-    final hasValidAddr = _looksLikeStellarPk(addr);
+    final resolvedAccountId = _resolvedFederation?.accountId.trim();
+    final hasValidAddr =
+        _looksLikeStellarPk(addr) ||
+        (_looksLikeFederation(addr) &&
+            resolvedAccountId != null &&
+            _looksLikeStellarPk(resolvedAccountId));
+    final hasFederationInput = _looksLikeFederation(addr);
+    final recipientLookupAddress = _looksLikeStellarPk(addr)
+        ? addr
+        : (resolvedAccountId ?? addr);
+    final isLoadingRecipient = _recipientLoading || _federationLoading;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -764,20 +857,62 @@ class _SendScreenState extends State<SendScreen> {
           ),
           const SizedBox(height: 16),
 
-          if (_recipientLoading)
+          if (isLoadingRecipient)
             _buildRecipientLoadingState(c)
           else if (hasValidAddr && _resolvedRecipient != null)
             _buildSavedRecipientChip(c, _resolvedRecipient!)
           else if (hasValidAddr && _resolvedRecipient == null)
-              _buildNewRecipientChip(c, addr)
-            else
-              _buildRecipientInputField(c, addr, isDark),
+            _buildNewRecipientChip(c, recipientLookupAddress)
+          else
+            _buildRecipientInputField(c, addr, isDark),
+          if (hasFederationInput) ...[
+            const SizedBox(height: 10),
+            _buildFederationStatus(c),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionButton(AppColor c, {required IconData icon, required VoidCallback onTap}) {
+  Widget _buildFederationStatus(AppColor c) {
+    if (_federationLoading) {
+      return _buildStatusBanner(
+        c,
+        icon: null,
+        title: 'Resolving federation address...',
+        color: c.primary,
+        showSpinner: true,
+      );
+    }
+
+    if (_federationError != null) {
+      return _buildStatusBanner(
+        c,
+        icon: LucideIcons.alertCircle,
+        title: _federationError!,
+        color: c.error,
+      );
+    }
+
+    final resolved = _resolvedFederation;
+    if (resolved != null && resolved.accountId.trim().isNotEmpty) {
+      return _buildStatusBanner(
+        c,
+        icon: LucideIcons.checkCircle2,
+        title: 'Resolved to ${_shortenAddress(resolved.accountId)}',
+        subtitle: resolved.stellarAddress,
+        color: c.success,
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildQuickActionButton(
+    AppColor c, {
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -803,10 +938,7 @@ class _SendScreenState extends State<SendScreen> {
       decoration: BoxDecoration(
         color: c.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.primary.withOpacity(0.1),
-          width: 1,
-        ),
+        border: Border.all(color: c.primary.withOpacity(0.1), width: 1),
       ),
       child: Center(
         child: SizedBox(
@@ -847,7 +979,9 @@ class _SendScreenState extends State<SendScreen> {
             ),
             child: Center(
               child: Text(
-                recipient.name.isNotEmpty ? recipient.name[0].toUpperCase() : '?',
+                recipient.name.isNotEmpty
+                    ? recipient.name[0].toUpperCase()
+                    : '?',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
@@ -890,7 +1024,10 @@ class _SendScreenState extends State<SendScreen> {
           // Edit button
           GestureDetector(
             onTap: () async {
-              final ok = await showRecipientUpsertSheet(context, initial: _resolvedRecipient);
+              final ok = await showRecipientUpsertSheet(
+                context,
+                initial: _resolvedRecipient,
+              );
               if (ok == true && mounted) _lookupRecipient(_toCtl.text.trim());
             },
             child: Container(
@@ -930,7 +1067,11 @@ class _SendScreenState extends State<SendScreen> {
               color: c.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
+            child: Icon(
+              LucideIcons.userPlus,
+              size: 18,
+              color: c.primary.withOpacity(0.7),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -962,7 +1103,10 @@ class _SendScreenState extends State<SendScreen> {
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () async {
-              final saved = await showRecipientUpsertSheet(context, address: addr);
+              final saved = await showRecipientUpsertSheet(
+                context,
+                address: addr,
+              );
               if (saved == true && mounted) _lookupRecipient(addr);
             },
             child: Container(
@@ -1011,7 +1155,7 @@ class _SendScreenState extends State<SendScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste or enter Stellar address',
+          hintText: 'Paste G... or name*domain',
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.4),
             fontSize: 14,
@@ -1019,25 +1163,36 @@ class _SendScreenState extends State<SendScreen> {
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 16, right: 12),
-            child: Icon(LucideIcons.wallet, color: c.textSecondary.withOpacity(0.5), size: 18),
+            child: Icon(
+              LucideIcons.wallet,
+              color: c.textSecondary.withOpacity(0.5),
+              size: 18,
+            ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           suffixIcon: addr.isNotEmpty
               ? Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              onPressed: () {
-                _toCtl.clear();
-                setState(() => _resolvedRecipient = null);
-                context.read<SendVM>().setRecipient('');
-              },
-              icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
-              splashRadius: 20,
-            ),
-          )
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    onPressed: () {
+                      _toCtl.clear();
+                      setState(() => _resolvedRecipient = null);
+                      context.read<SendVM>().setRecipient('');
+                    },
+                    icon: Icon(
+                      LucideIcons.x,
+                      size: 18,
+                      color: c.textSecondary.withOpacity(0.5),
+                    ),
+                    splashRadius: 20,
+                  ),
+                )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
         ),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
       ),
@@ -1083,13 +1238,13 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   Widget _buildStatusBanner(
-      AppColor c, {
-        IconData? icon,
-        required String title,
-        String? subtitle,
-        required Color color,
-        bool showSpinner = false,
-      }) {
+    AppColor c, {
+    IconData? icon,
+    required String title,
+    String? subtitle,
+    required Color color,
+    bool showSpinner = false,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -1310,14 +1465,15 @@ class _SendScreenState extends State<SendScreen> {
             decoration: BoxDecoration(
               color: c.primary.withOpacity(0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: c.primary.withOpacity(0.15),
-                width: 1,
-              ),
+              border: Border.all(color: c.primary.withOpacity(0.15), width: 1),
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.arrowUpRight, size: 16, color: c.primary.withOpacity(0.7)),
+                Icon(
+                  LucideIcons.arrowUpRight,
+                  size: 16,
+                  color: c.primary.withOpacity(0.7),
+                ),
                 const SizedBox(width: 10),
                 Text(
                   'Recipient receives',
@@ -1363,10 +1519,7 @@ class _SendScreenState extends State<SendScreen> {
 
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Divider(
-              color: c.border.withOpacity(0.15),
-              height: 1,
-            ),
+            child: Divider(color: c.border.withOpacity(0.15), height: 1),
           ),
 
           _buildFeeRow(
@@ -1382,12 +1535,12 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   Widget _buildFeeRow(
-      AppColor c, {
-        required String label,
-        required String value,
-        required IconData icon,
-        bool muted = false,
-      }) {
+    AppColor c, {
+    required String label,
+    required String value,
+    required IconData icon,
+    bool muted = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -1467,13 +1620,15 @@ class _SendScreenState extends State<SendScreen> {
           child: ElevatedButton(
             onPressed: canSubmit
                 ? () async {
-              HapticFeedback.mediumImpact();
-              await _confirmAndSend(vm);
-            }
+                    HapticFeedback.mediumImpact();
+                    await _confirmAndSend(vm);
+                  }
                 : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: canSubmit ? c.primary : c.surface,
-              foregroundColor: canSubmit ? Colors.white : c.textSecondary.withOpacity(0.4),
+              foregroundColor: canSubmit
+                  ? Colors.white
+                  : c.textSecondary.withOpacity(0.4),
               disabledBackgroundColor: c.surface,
               disabledForegroundColor: c.textSecondary.withOpacity(0.4),
               elevation: 0,
@@ -1485,10 +1640,7 @@ class _SendScreenState extends State<SendScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  canSubmit ? LucideIcons.send : LucideIcons.lock,
-                  size: 20,
-                ),
+                Icon(canSubmit ? LucideIcons.send : LucideIcons.lock, size: 20),
                 const SizedBox(width: 12),
                 Text(
                   canSubmit ? 'Review & Send' : 'Complete all fields',
@@ -1515,10 +1667,7 @@ class _ReviewSheet extends StatefulWidget {
   final String memo;
   final String? recipientName;
 
-  const _ReviewSheet({
-    required this.memo,
-    this.recipientName,
-  });
+  const _ReviewSheet({required this.memo, this.recipientName});
 
   @override
   State<_ReviewSheet> createState() => _ReviewSheetState();
@@ -1581,7 +1730,9 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     return AnimatedPadding(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? c.surface : Colors.white,
@@ -1717,7 +1868,9 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         const SizedBox(height: 14),
                         _buildReviewRow(
                           c,
-                          label: widget.recipientName != null ? 'To (${widget.recipientName})' : 'To',
+                          label: widget.recipientName != null
+                              ? 'To (${widget.recipientName})'
+                              : 'To',
                           value: _shortenAddress(vm.to),
                           icon: LucideIcons.target,
                         ),
@@ -1730,7 +1883,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         _buildReviewRow(
                           c,
                           label: 'Network fee',
-                          value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
+                          value:
+                              '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
                           icon: LucideIcons.zap,
                         ),
                         if (vm.isXlm) ...[
@@ -1738,7 +1892,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                           _buildReviewRow(
                             c,
                             label: 'Total deducted',
-                            value: '${numFmt.format(vm.totalDeductFromBalance)} XLM',
+                            value:
+                                '${numFmt.format(vm.totalDeductFromBalance)} XLM',
                             icon: LucideIcons.minusCircle,
                           ),
                         ],
@@ -1746,7 +1901,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         _buildReviewRow(
                           c,
                           label: 'Remaining',
-                          value: '${numFmt.format(vm.remainingExpendable)} $tokenStr',
+                          value:
+                              '${numFmt.format(vm.remainingExpendable)} $tokenStr',
                           icon: LucideIcons.wallet,
                           muted: true,
                         ),
@@ -1779,7 +1935,9 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _sending ? null : () => Navigator.pop(context),
+                        onPressed: _sending
+                            ? null
+                            : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
@@ -1805,55 +1963,59 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                     Expanded(
                       flex: 2,
                       child: ElevatedButton(
-                        onPressed: _sending ? null : () => _confirm(vm, context),
+                        onPressed: _sending
+                            ? null
+                            : () => _confirm(vm, context),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          backgroundColor: _sending ? c.primary.withOpacity(0.7) : c.primary,
+                          backgroundColor: _sending
+                              ? c.primary.withOpacity(0.7)
+                              : c.primary,
                           foregroundColor: Colors.white,
                           elevation: _sending ? 0 : 2,
                           shadowColor: c.primary.withOpacity(0.3),
                         ),
                         child: _sending
                             ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white.withOpacity(0.9),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'Sending…',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ],
-                        )
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white.withOpacity(0.9),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text(
+                                    'Sending…',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
+                              )
                             : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(LucideIcons.checkCircle, size: 18),
-                            SizedBox(width: 12),
-                            Text(
-                              'Confirm Send',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                letterSpacing: -0.2,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(LucideIcons.checkCircle, size: 18),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Confirm Send',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
                   ],
@@ -1884,12 +2046,12 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   }
 
   Widget _buildReviewRow(
-      AppColor c, {
-        required String label,
-        required String value,
-        required IconData icon,
-        bool muted = false,
-      }) {
+    AppColor c, {
+    required String label,
+    required String value,
+    required IconData icon,
+    bool muted = false,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2010,7 +2172,10 @@ class _ErrorState extends StatelessWidget {
               icon: const Icon(LucideIcons.refreshCw, size: 18),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 16,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),

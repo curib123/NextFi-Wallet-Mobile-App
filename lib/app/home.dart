@@ -4,7 +4,6 @@ import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
-import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
@@ -31,9 +30,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _applySystemThemeToRoot();
 
-    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
-      _applySystemThemeToRoot();
-    };
+    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged =
+        () {
+          _applySystemThemeToRoot();
+        };
 
     _boot();
   }
@@ -51,13 +51,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   void _applySystemThemeToRoot() {
-    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-    final mode = (brightness == Brightness.dark) ? ThemeMode.dark : ThemeMode.light;
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final mode = (brightness == Brightness.dark)
+        ? ThemeMode.dark
+        : ThemeMode.light;
     ThemeBridge.apply?.call(mode);
   }
 
   Future<void> _boot() async {
-    await TransactionFeeVaultSecureStorage().initSignedConfigFromActiveWallet();
     final minSplash = Future.delayed(const Duration(seconds: 5));
     final check = _checkMnemonic();
     await Future.wait([minSplash, check]);
@@ -98,9 +100,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
 
     if (_isLoading) {
-      return const Scaffold(
-        body: PageLoader(label: 'Loading wallet...'),
-      );
+      return const Scaffold(body: PageLoader(label: 'Loading wallet...'));
     }
 
     if (!_hasMnemonic) {
