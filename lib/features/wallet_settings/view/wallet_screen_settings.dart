@@ -8,6 +8,7 @@ import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_settings/view_model/wallet_settings_vm.dart';
 import 'package:provider/provider.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/wallet_switch_result.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -236,7 +237,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
           extendBodyBehindAppBar: true,
           appBar: _buildAppBar(colors, s),
           body: s.loading
-              ? _buildLoading(colors)
+              ? _buildLoading()
               : Column(
             children: [
               Expanded(
@@ -369,41 +370,8 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     );
   }
 
-  Widget _buildLoading(AppColor colors) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colors.primary.withOpacity(0.12),
-                  colors.primary.withOpacity(0.06),
-                ],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: CircularProgressIndicator(
-              color: colors.primary,
-              strokeWidth: 3,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Loading wallet settings...',
-            style: TextStyle(
-              color: colors.textSecondary,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildLoading() {
+    return const PageLoader(label: 'Loading wallet settings...');
   }
 
   Widget _buildTipSection(AppColor colors) {

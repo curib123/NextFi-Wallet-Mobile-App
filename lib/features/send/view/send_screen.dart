@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/asset/asset_logo.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/recipient_upsert_sheet.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
@@ -1939,33 +1940,7 @@ class _LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 40,
-            width: 40,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: c.primary.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Loading wallet…',
-            style: TextStyle(
-              color: c.textSecondary.withOpacity(0.6),
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -0.2,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const PageLoader(label: 'Loading wallet...');
   }
 }
 

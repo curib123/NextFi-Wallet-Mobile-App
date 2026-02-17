@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_dtos.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
@@ -160,7 +161,7 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     return Scaffold(
       backgroundColor: c.background,
       appBar: _buildAppBar(c),
-      body: _loading ? _buildLoader(c) : _buildBody(c),
+      body: _loading ? _buildLoader() : _buildBody(c),
     );
   }
 
@@ -191,24 +192,8 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     );
   }
 
-  Widget _buildLoader(AppColor c) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 28, height: 28,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              valueColor: AlwaysStoppedAnimation(c.primary),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text('Loading payment setup…',
-              style: TextStyle(color: c.textSecondary, fontSize: 13)),
-        ],
-      ),
-    );
+  Widget _buildLoader() {
+    return const PageLoader(label: 'Loading payment setup...');
   }
 
   Widget _buildBody(AppColor c) {

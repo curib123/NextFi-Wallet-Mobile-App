@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../../../helper/colors/AppColor.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE LOADER  — drop-in replacement, same constructor signature
+// ─────────────────────────────────────────────────────────────────────────────
+
 class PageLoader extends StatelessWidget {
   const PageLoader({
     super.key,
@@ -13,9 +17,9 @@ class PageLoader extends StatelessWidget {
   });
 
   final String? label;
-  final double size;
+  final double  size;
   final Duration speed;
-  final Color? color;
+  final Color?  color;
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +32,9 @@ class PageLoader extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ModernFintechLoader(
-              size: size,
-              speed: speed,
-              color: c,
-            ),
+            WavingDotsLoader(color: c, dotSize: size),
             if (label != null) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Text(
                 label!,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -50,314 +50,147 @@ class PageLoader extends StatelessWidget {
   }
 }
 
-// Modern fintech loader with smooth animations
-class ModernFintechLoader extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// WAVING DOTS LOADER
+// 5 circles that sine-wave top→bottom, each offset left→right by phase.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class WavingDotsLoader extends StatefulWidget {
+  const WavingDotsLoader({
+    super.key,
+    required this.color,
+    this.dotCount  = 5,
+    this.dotSize   = 10,
+    this.waveHeight = 14,
+    this.speed     = const Duration(milliseconds: 1200),
+  });
+
+  final Color   color;
+  final int     dotCount;
+  final double  dotSize;
+  final double  waveHeight;
+  final Duration speed;
+
+  @override
+  State<WavingDotsLoader> createState() => _WavingDotsLoaderState();
+}
+
+class _WavingDotsLoaderState extends State<WavingDotsLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: widget.speed)..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dotR   = widget.dotSize;
+    final gap    = dotR * 1.1;
+    final width  = widget.dotCount * (dotR * 2) + (widget.dotCount - 1) * gap;
+    final height = dotR * 2 + widget.waveHeight * 2;
+
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, __) {
+          final t = _ctrl.value; // 0 → 1 repeating
+
+          return SizedBox(
+            width: width,
+            height: height,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: List.generate(widget.dotCount, (i) {
+                if (i > 0) SizedBox(width: gap);
+
+                // Each dot gets a staggered phase: leftmost leads, rightmost trails
+                final stagger = i / (widget.dotCount - 1); // 0.0 → 1.0
+                final phase   = (t - stagger * 0.35) * math.pi * 2;
+
+                // Vertical offset: sine wave, centered
+                final dy   = math.sin(phase) * widget.waveHeight;
+                // Scale: slightly bigger at wave peak
+                final scale = 0.75 + math.sin(phase).abs() * 0.25;
+                // Opacity: dimmer at trough, brighter at crest
+                final alpha = 0.3 + math.sin(phase).abs() * 0.7;
+
+                return Padding(
+                  padding: EdgeInsets.only(left: i == 0 ? 0 : gap),
+                  child: Transform.translate(
+                    offset: Offset(0, dy),
+                    child: Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width:  dotR * 2,
+                        height: dotR * 2,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: widget.color.withOpacity(alpha),
+                          boxShadow: [
+                            BoxShadow(
+                              color:      widget.color.withOpacity(alpha * 0.4),
+                              blurRadius: dotR * scale * 1.5,
+                              spreadRadius: 0,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY ALIASES — kept so nothing else in the codebase breaks
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ModernFintechLoader extends StatelessWidget {
   const ModernFintechLoader({
     super.key,
-    this.size = 48,
+    this.size  = 48,
     this.speed = const Duration(milliseconds: 1400),
     required this.color,
   });
 
-  final double size;
+  final double   size;
   final Duration speed;
-  final Color color;
+  final Color    color;
 
   @override
-  State<ModernFintechLoader> createState() => _ModernFintechLoaderState();
+  Widget build(BuildContext context) =>
+      WavingDotsLoader(color: color, dotSize: size * 0.38, speed: speed);
 }
 
-class _ModernFintechLoaderState extends State<ModernFintechLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: widget.speed)..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: SizedBox.square(
-        dimension: widget.size,
-        child: CustomPaint(
-          painter: _FintechLoaderPainter(
-            repaint: _ctrl,
-            tProvider: () => _ctrl.value,
-            color: widget.color,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FintechLoaderPainter extends CustomPainter {
-  _FintechLoaderPainter({
-    required Listenable repaint,
-    required this.tProvider,
-    required this.color,
-  }) : super(repaint: repaint);
-
-  final double Function() tProvider;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final t = tProvider();
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide * 0.35;
-
-    // Draw 3 orbiting dots with smooth trails
-    for (int i = 0; i < 3; i++) {
-      final angle = (t * math.pi * 2) + (i * math.pi * 2 / 3);
-      final x = center.dx + math.cos(angle) * radius;
-      final y = center.dy + math.sin(angle) * radius;
-
-      // Dot with soft gradient effect
-      final dotRadius = size.shortestSide * 0.08;
-      final opacity = 0.3 + (math.sin(t * math.pi * 2 + i) * 0.7).abs();
-
-      final paint = Paint()
-        ..color = color.withOpacity(opacity)
-        ..style = PaintingStyle.fill
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dotRadius * 0.5);
-
-      canvas.drawCircle(Offset(x, y), dotRadius, paint);
-
-      // Outer glow
-      final glowPaint = Paint()
-        ..color = color.withOpacity(opacity * 0.3)
-        ..style = PaintingStyle.fill
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, dotRadius * 1.5);
-
-      canvas.drawCircle(Offset(x, y), dotRadius * 1.5, glowPaint);
-    }
-
-    // Center pulse circle
-    final pulseRadius = radius * (0.15 + math.sin(t * math.pi * 2) * 0.1);
-    final pulsePaint = Paint()
-      ..color = color.withOpacity(0.15)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(center, pulseRadius, pulsePaint);
-
-    // Outer ring
-    final ringPaint = Paint()
-      ..color = color.withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.shortestSide * 0.02;
-
-    canvas.drawCircle(center, radius, ringPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FintechLoaderPainter oldDelegate) {
-    return oldDelegate.color.value != color.value;
-  }
-}
-
-// Legacy Rubiks Cube loader for backward compatibility
-class RubiksCubeLoader extends StatefulWidget {
+class RubiksCubeLoader extends StatelessWidget {
   const RubiksCubeLoader({
     super.key,
-    this.size = 48,
+    this.size  = 48,
     this.speed = const Duration(milliseconds: 1400),
     required this.color,
   });
 
-  final double size;
+  final double   size;
   final Duration speed;
-  final Color color;
+  final Color    color;
 
   @override
-  State<RubiksCubeLoader> createState() => _RubiksCubeLoaderState();
-}
-
-class _RubiksCubeLoaderState extends State<RubiksCubeLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: widget.speed)..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: SizedBox.square(
-        dimension: widget.size,
-        child: CustomPaint(
-          painter: _RubiksPainter(
-            repaint: _ctrl,
-            tProvider: () => _ctrl.value,
-            color: widget.color,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RubiksPainter extends CustomPainter {
-  _RubiksPainter({
-    required Listenable repaint,
-    required this.tProvider,
-    required this.color,
-  }) : super(repaint: repaint);
-
-  static const int _grid = 2;
-  static const List<List<int>> _moves = [
-    [0, 1, 3, 2],
-    [0, 2, 3, 1],
-  ];
-
-  final double Function() tProvider;
-  final Color color;
-
-  final Paint _paint = Paint()
-    ..isAntiAlias = true
-    ..style = PaintingStyle.stroke;
-
-  final double _gapRatio = 0.12;
-  final double _cornerRatio = 0.20; // More rounded for softer look
-  double _strokeFor(Size size) => size.shortestSide * 0.06; // Thinner stroke
-
-  double _ease(double x) => Curves.easeInOutCubic.transform(x.clamp(0.0, 1.0));
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final t = tProvider();
-    const n = _grid;
-    final slots = n * n;
-
-    final gap = size.shortestSide * _gapRatio;
-    final totalGaps = gap * (n - 1);
-    final tile = (size.shortestSide - totalGaps) / n;
-    final r = Radius.circular(size.shortestSide * _cornerRatio);
-
-    _paint
-      ..color = color
-      ..strokeWidth = _strokeFor(size);
-
-    final List<Offset> slotCenters = List.generate(slots, (i) {
-      final row = i ~/ n;
-      final col = i % n;
-      final dx = col * (tile + gap) + tile / 2;
-      final dy = row * (tile + gap) + tile / 2;
-      return Offset(dx, dy);
-    });
-
-    final totalMoves = _moves.length;
-    final phaseF = t * totalMoves;
-    final completedMoves = phaseF.floor();
-    final local = _ease(phaseF - completedMoves);
-    final currentMove = _moves[completedMoves % totalMoves];
-
-    List<int> s2t = List.generate(slots, (i) => i);
-    for (int m = 0; m < completedMoves; m++) {
-      final cyc = _moves[m % totalMoves];
-      _applyCycleInPlace(s2t, cyc);
-    }
-
-    final Map<int, Offset> tilePos = {};
-    final movingSet = currentMove.toSet();
-
-    for (int slot = 0; slot < slots; slot++) {
-      final tileId = s2t[slot];
-      if (!movingSet.contains(slot)) {
-        tilePos[tileId] = slotCenters[slot];
-      }
-    }
-
-    for (int j = 0; j < currentMove.length; j++) {
-      final fromSlot = currentMove[j];
-      final toSlot = currentMove[(j + 1) % currentMove.length];
-
-      final tileId = s2t[fromSlot];
-      final p0 = slotCenters[fromSlot];
-      final p1 = slotCenters[toSlot];
-
-      final mid = Offset.lerp(p0, p1, 0.5)!;
-      final dir = (p1 - p0);
-      final norm = Offset(-dir.dy, dir.dx)
-          .scale(1 / (dir.distance + 1e-6), 1 / (dir.distance + 1e-6));
-      final arcBump = tile * 0.12;
-      final control = mid + norm * arcBump;
-
-      final pos = _quadBezier(p0, control, p1, local);
-      tilePos[tileId] = pos;
-    }
-
-    for (int tileId = 0; tileId < slots; tileId++) {
-      final center = tilePos[tileId]!;
-      final isMoving = _isTileMoving(tileId, s2t, currentMove);
-      final twist = isMoving ? (math.sin(local * math.pi) * 0.10) : 0.0;
-
-      canvas.save();
-      canvas.translate(center.dx, center.dy);
-      if (twist != 0) canvas.rotate(twist);
-
-      final rect =
-      Rect.fromCenter(center: Offset.zero, width: tile, height: tile);
-      final rr = RRect.fromRectAndRadius(rect, r);
-
-      // Soft shadow effect
-      final shadowPaint = Paint()
-        ..color = color.withOpacity(0.1)
-        ..style = PaintingStyle.fill
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawRRect(rr, shadowPaint);
-
-      // Main outline with gradient effect
-      canvas.drawRRect(rr, _paint);
-
-      canvas.restore();
-    }
-  }
-
-  void _applyCycleInPlace(List<int> s2t, List<int> cycle) {
-    if (cycle.isEmpty) return;
-    final first = s2t[cycle.first];
-    for (int j = 0; j < cycle.length - 1; j++) {
-      s2t[cycle[j]] = s2t[cycle[j + 1]];
-    }
-    s2t[cycle.last] = first;
-  }
-
-  bool _isTileMoving(int tileId, List<int> s2t, List<int> currentCycle) {
-    for (final slot in currentCycle) {
-      if (s2t[slot] == tileId) return true;
-    }
-    return false;
-  }
-
-  Offset _quadBezier(Offset p0, Offset p1, Offset p2, double t) {
-    final u = 1 - t;
-    return Offset(
-      u * u * p0.dx + 2 * u * t * p1.dx + t * t * p2.dx,
-      u * u * p0.dy + 2 * u * t * p1.dy + t * t * p2.dy,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RubiksPainter oldDelegate) {
-    return oldDelegate.color.value != color.value;
-  }
+  Widget build(BuildContext context) =>
+      WavingDotsLoader(color: color, dotSize: size * 0.38, speed: speed);
 }

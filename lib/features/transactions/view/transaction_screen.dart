@@ -283,7 +283,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
-                  child: RubiksCubeLoader(color: colors.textPrimary),
+                  child: ModernFintechLoader(
+                    size: 24,
+                    speed: const Duration(milliseconds: 1200),
+                    color: colors.textPrimary,
+                  ),
                 ),
               );
             }

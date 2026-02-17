@@ -1,6 +1,5 @@
 // lib/app/home.dart
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
@@ -9,7 +8,7 @@ import 'package:next_fi/services/secure_storage/profit_address_vault_secure_stor
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
+import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 
 import 'widgets/app_bottom_navigation.dart';
 
@@ -94,26 +93,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-
     if (_showSplash) {
       return const WalletCreationScreen(isSplash: true);
     }
 
     if (_isLoading) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RubiksCubeLoader(
-                size: 30,
-                speed: const Duration(milliseconds: 1200),
-                color: colors.textSecondary,
-              ),
-            ],
-          ),
-        ),
+      return const Scaffold(
+        body: PageLoader(label: 'Loading wallet...'),
       );
     }
 
