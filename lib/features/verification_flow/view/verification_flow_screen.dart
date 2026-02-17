@@ -104,6 +104,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen> {
     }
 
     final statusLabel = _trustStatusText(snapshot.verification.status);
+    final status = snapshot.verification.status;
+    final canContinue = status == TrustStatus.basic || status == TrustStatus.unknown;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -147,20 +149,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen> {
           SizedBox(
             height: 48,
             child: ElevatedButton(
-              onPressed: () {
-                final step = snapshot.nextStepIndex > 3
-                    ? 3
-                    : snapshot.nextStepIndex;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Resume verification at step $step.'),
-                  ),
-                );
-              },
+              onPressed: canContinue ? () => _continueFromSnapshot(snapshot) : null,
               child: Text(
-                snapshot.isCompleted
-                    ? 'Verification Completed'
-                    : 'Continue Step ${snapshot.nextStepIndex}',
+                _ctaLabel(snapshot),
               ),
             ),
           ),
@@ -306,6 +297,43 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen> {
         return 'SUSPENDED';
       case TrustStatus.unknown:
         return 'UNKNOWN';
+    }
+  }
+
+  String _ctaLabel(VerificationFlowSnapshot snapshot) {
+    switch (snapshot.verification.status) {
+      case TrustStatus.reviewing:
+        return 'Under Review';
+      case TrustStatus.ready:
+        return 'Verified';
+      case TrustStatus.suspended:
+        return 'Verification Suspended';
+      case TrustStatus.basic:
+      case TrustStatus.unknown:
+        return snapshot.isCompleted
+            ? 'Verification Completed'
+            : 'Continue Step ${snapshot.nextStepIndex}';
+    }
+  }
+
+  Future<void> _continueFromSnapshot(VerificationFlowSnapshot snapshot) async {
+    final step = snapshot.nextStepIndex > 3 ? 3 : snapshot.nextStepIndex;
+    final routeName = switch (step) {
+      1 => '/verification/profile',
+      2 => '/verification/selfie',
+      3 => '/verification/payment',
+      _ => '/verification/profile',
+    };
+
+    try {
+      await Navigator.of(context).pushNamed(routeName);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Step $step route is not configured yet ($routeName).'),
+        ),
+      );
     }
   }
 }

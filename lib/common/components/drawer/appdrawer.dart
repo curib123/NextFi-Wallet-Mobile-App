@@ -14,6 +14,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/services/verification/models/verification_models.dart';
+import 'package:next_fi/services/verification/verification_core_service.dart';
 
 class AppDrawer extends StatefulWidget {
   final VoidCallback? onLogout;
@@ -27,12 +29,14 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
   final _auth = AuthService();
+  final _verification = VerificationCoreService.I;
 
   static User? _cachedUser;
   static PackageInfo? _cachedInfo;
 
   bool _loading = true;
   bool _loggingOut = false;
+  TrustStatus _trustStatus = TrustStatus.unknown;
 
   late final AnimationController _entryCtrl;
 
@@ -61,6 +65,7 @@ class _AppDrawerState extends State<AppDrawer>
     await Future.wait([
       _fetchRealUser(),
       _fetchAppInfo(),
+      _fetchVerificationStatus(),
     ]);
   }
 
@@ -73,12 +78,14 @@ class _AppDrawerState extends State<AppDrawer>
       if (_cachedUser == null) {
         _cachedUser = realUser;
         if (mounted) setState(() {});
+        await _fetchVerificationStatus();
         return;
       }
 
       if (!_isSameUser(_cachedUser!, realUser)) {
         _cachedUser = realUser;
         if (mounted) setState(() {});
+        await _fetchVerificationStatus();
       }
     } catch (_) {}
   }
@@ -101,6 +108,22 @@ class _AppDrawerState extends State<AppDrawer>
     }
   }
 
+  Future<void> _fetchVerificationStatus() async {
+    try {
+      if (!await _auth.isAuthenticated) {
+        if (mounted) setState(() => _trustStatus = TrustStatus.unknown);
+        return;
+      }
+
+      final data = await _verification.getMe();
+      if (!mounted) return;
+      setState(() => _trustStatus = data.status);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _trustStatus = TrustStatus.unknown);
+    }
+  }
+
   Future<void> _handleLogout() async {
     if (_loggingOut) return;
 
@@ -120,6 +143,7 @@ class _AppDrawerState extends State<AppDrawer>
     await _auth.logout();
 
     _cachedUser = null;
+    _trustStatus = TrustStatus.unknown;
 
     if (!mounted) return;
 
@@ -166,6 +190,7 @@ class _AppDrawerState extends State<AppDrawer>
                 appInfo: _cachedInfo,
                 colors: c,
                 isDark: isDark,
+                trustStatus: _trustStatus,
               )
             else
               _LoginPrompt(
@@ -309,12 +334,14 @@ class _ProfileHeader extends StatelessWidget {
   final PackageInfo? appInfo;
   final AppColor colors;
   final bool isDark;
+  final TrustStatus trustStatus;
 
   const _ProfileHeader({
     required this.user,
     required this.appInfo,
     required this.colors,
     required this.isDark,
+    required this.trustStatus,
   });
 
   @override
@@ -387,19 +414,19 @@ class _ProfileHeader extends StatelessWidget {
                 ),
               ),
 
-              // Verified badge
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+              if (trustStatus == TrustStatus.ready)
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    LucideIcons.checkCircle2,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                 ),
-                child: const Icon(
-                  LucideIcons.checkCircle2,
-                  color: Colors.green,
-                  size: 18,
-                ),
-              ),
             ],
           ),
         ],

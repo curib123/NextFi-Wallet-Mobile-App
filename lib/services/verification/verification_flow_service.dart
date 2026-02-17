@@ -66,10 +66,18 @@ class VerificationFlowService {
     required VerificationModel verification,
     required List<UserPaymentAccountModel> paymentAccounts,
   }) {
+    // Server status is authoritative once submitted/reviewed.
+    if (verification.status == TrustStatus.reviewing ||
+        verification.status == TrustStatus.ready ||
+        verification.status == TrustStatus.suspended) {
+      return VerificationStep.completed;
+    }
+
     final profileDone = profile?.isVerificationIdentityComplete == true;
     if (!profileDone) return VerificationStep.profile;
 
-    final selfieDone = verification.hasSubmittedSelfie || verification.isFinalReviewState;
+    // BASIC/UNKNOWN means user still needs to submit verification.
+    final selfieDone = verification.hasSubmittedSelfie;
     if (!selfieDone) return VerificationStep.selfieVerification;
 
     final hasActivePayment = paymentAccounts.any((account) => account.isActive);

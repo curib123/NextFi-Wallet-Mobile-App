@@ -981,7 +981,7 @@ Future<bool?> _confirmDelete(BuildContext context, String name) {
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
-          ),
+          ), 
         ),
       ],
     ),

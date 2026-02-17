@@ -1,4 +1,4 @@
-﻿class UpsertProfileRequest {
+class UpsertProfileRequest {
   final String? username;
   final String? displayName;
   final String? country;
@@ -17,13 +17,34 @@
     this.address,
   });
 
-  Map<String, dynamic> toJson() => {
-        if (username != null) 'username': username,
-        if (displayName != null) 'displayName': displayName,
-        if (country != null) 'country': country,
-        if (firstName != null) 'firstName': firstName,
-        if (middleName != null) 'middleName': middleName,
-        if (lastName != null) 'lastName': lastName,
-        if (address != null) 'address': address,
-      };
+  static String? _normalizeText(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  static String? _normalizeUsername(String? value) {
+    final normalized = _normalizeText(value);
+    return normalized?.toLowerCase();
+  }
+
+  Map<String, dynamic> toJson() {
+    final normalizedUsername = _normalizeUsername(username);
+    final normalizedDisplayName = _normalizeText(displayName);
+    final normalizedCountry = _normalizeText(country);
+    final normalizedFirstName = _normalizeText(firstName);
+    final normalizedMiddleName = _normalizeText(middleName);
+    final normalizedLastName = _normalizeText(lastName);
+    final normalizedAddress = _normalizeText(address);
+
+    return {
+      if (normalizedUsername != null) 'username': normalizedUsername,
+      if (normalizedDisplayName != null) 'displayName': normalizedDisplayName,
+      if (normalizedCountry != null) 'country': normalizedCountry,
+      if (normalizedFirstName != null) 'firstName': normalizedFirstName,
+      if (normalizedMiddleName != null) 'middleName': normalizedMiddleName,
+      if (normalizedLastName != null) 'lastName': normalizedLastName,
+      if (normalizedAddress != null) 'address': normalizedAddress,
+    };
+  }
 }

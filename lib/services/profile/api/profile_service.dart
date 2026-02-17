@@ -1,8 +1,9 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../../base_url/base_url.dart';
+import '../helpers/profile_exceptions.dart';
+import '../helpers/profile_helpers.dart';
 import '../models/profile_dtos.dart';
 import '../models/profile_models.dart';
 import 'profile_endpoints.dart';
@@ -18,95 +19,90 @@ class ProfileService {
   final TokenProvider tokenProvider;
   final http.Client _client;
 
-  Uri _uri(String path) {
-    final base = cetralized_baseUrl.endsWith('/')
-        ? cetralized_baseUrl.substring(0, cetralized_baseUrl.length - 1)
-        : cetralized_baseUrl;
-    return Uri.parse('$base$path');
-  }
-
   Future<Map<String, String>> _headers() async {
     final token = await tokenProvider();
     if (token == null || token.isEmpty) {
-      throw Exception('Missing JWT token');
+      throw ApiException(401, 'Missing JWT token');
     }
 
     return {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
       'Authorization': 'Bearer $token',
     };
   }
 
-  dynamic _decode(http.Response res) {
-    if (res.body.isEmpty) return null;
-    return jsonDecode(res.body);
-  }
-
-  void _ensureOk(http.Response res, String op) {
-    if (res.statusCode >= 200 && res.statusCode < 300) return;
-    throw Exception('$op failed (${res.statusCode}): ${res.body}');
-  }
-
   Future<ProfileModel?> getMe() async {
     final res = await _client.get(
-      _uri(ProfileEndpoints.me()),
+      ProfileHttp.uri(ProfileEndpoints.me()),
       headers: await _headers(),
     );
 
-    _ensureOk(res, 'GET /profile/me');
-    final data = _decode(res);
+    ProfileHttp.ensureOk(res);
+    final data = ProfileHttp.decodeJson<dynamic>(res);
 
-    if (data == null) return null;
+    if (data == null || data == '') return null;
+    if (data is Map<String, dynamic> && data.isEmpty) return null;
     if (data is Map<String, dynamic>) {
       return ProfileModel.fromJson(data);
     }
 
-    throw Exception('Unexpected response for GET /profile/me');
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for GET /profile/me',
+      body: res.body,
+    );
   }
 
   Future<ProfileModel> upsertMe(UpsertProfileRequest req) async {
     final res = await _client.put(
-      _uri(ProfileEndpoints.me()),
+      ProfileHttp.uri(ProfileEndpoints.me()),
       headers: await _headers(),
       body: jsonEncode(req.toJson()),
     );
 
-    _ensureOk(res, 'PUT /profile/me');
-    final data = _decode(res);
+    ProfileHttp.ensureOk(res);
+    final data = ProfileHttp.decodeJson<dynamic>(res);
 
     if (data is Map<String, dynamic>) {
       return ProfileModel.fromJson(data);
     }
 
-    throw Exception('Unexpected response for PUT /profile/me');
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for PUT /profile/me',
+      body: res.body,
+    );
   }
 
   Future<ProfileModel> patchMe(UpsertProfileRequest req) async {
     final res = await _client.patch(
-      _uri(ProfileEndpoints.me()),
+      ProfileHttp.uri(ProfileEndpoints.me()),
       headers: await _headers(),
       body: jsonEncode(req.toJson()),
     );
 
-    _ensureOk(res, 'PATCH /profile/me');
-    final data = _decode(res);
+    ProfileHttp.ensureOk(res);
+    final data = ProfileHttp.decodeJson<dynamic>(res);
 
     if (data is Map<String, dynamic>) {
       return ProfileModel.fromJson(data);
     }
 
-    throw Exception('Unexpected response for PATCH /profile/me');
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for PATCH /profile/me',
+      body: res.body,
+    );
   }
 
   Future<bool> deleteMe() async {
     final res = await _client.delete(
-      _uri(ProfileEndpoints.me()),
+      ProfileHttp.uri(ProfileEndpoints.me()),
       headers: await _headers(),
     );
 
-    _ensureOk(res, 'DELETE /profile/me');
-    final data = _decode(res);
+    ProfileHttp.ensureOk(res);
+    final data = ProfileHttp.decodeJson<dynamic>(res);
 
     if (data is Map<String, dynamic>) {
       return data['success'] == true;
