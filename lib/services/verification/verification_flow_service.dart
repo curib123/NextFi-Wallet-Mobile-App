@@ -8,8 +8,8 @@ import 'verification_core_service.dart';
 
 enum VerificationStep {
   profile,
-  selfieVerification,
   paymentMethodSetup,
+  selfieVerification,
   completed,
 }
 
@@ -42,9 +42,24 @@ class VerificationFlowService {
       PaymentMethodAndAccountsCoreService.I;
 
   Future<VerificationFlowSnapshot> getSnapshot() async {
-    final profile = await _profile.getMe();
+    // Verification status is required for this screen.
     final verification = await _verification.getMe();
-    final paymentAccounts = await _payments.listMyPaymentAccounts(activeOnly: true);
+
+    // Profile/payment are best-effort so the screen still works even if
+    // one dependency endpoint is temporarily unavailable.
+    ProfileModel? profile;
+    try {
+      profile = await _profile.getMe();
+    } catch (_) {
+      profile = null;
+    }
+
+    List<UserPaymentAccountModel> paymentAccounts;
+    try {
+      paymentAccounts = await _payments.listMyPaymentAccounts(activeOnly: true);
+    } catch (_) {
+      paymentAccounts = const [];
+    }
 
     final nextStep = _resolveStep(
       profile: profile,
@@ -66,22 +81,33 @@ class VerificationFlowService {
     required VerificationModel verification,
     required List<UserPaymentAccountModel> paymentAccounts,
   }) {
-    // Server status is authoritative once submitted/reviewed.
+    final profileDone = profile?.isVerificationIdentityComplete == true;
+    if (!profileDone) return VerificationStep.profile;
+
+    bool hasText(String? v) => v != null && v.trim().isNotEmpty;
+    final verificationUserId = verification.userId.trim();
+    final hasActivePayment = paymentAccounts.any(
+      (account) =>
+          account.isActive &&
+          hasText(account.id) &&
+          hasText(account.userId) &&
+          (!hasText(verificationUserId) ||
+              account.userId.trim() == verificationUserId) &&
+          hasText(account.paymentMethodId) &&
+          hasText(account.accountName),
+    );
+    if (!hasActivePayment) return VerificationStep.paymentMethodSetup;
+
+    // Step 3: selfie submission.
+    final selfieDone = verification.hasSubmittedSelfie;
+    if (!selfieDone) return VerificationStep.selfieVerification;
+
+    // Server status is authoritative after all required local steps are met.
     if (verification.status == TrustStatus.reviewing ||
         verification.status == TrustStatus.ready ||
         verification.status == TrustStatus.suspended) {
       return VerificationStep.completed;
     }
-
-    final profileDone = profile?.isVerificationIdentityComplete == true;
-    if (!profileDone) return VerificationStep.profile;
-
-    // BASIC/UNKNOWN means user still needs to submit verification.
-    final selfieDone = verification.hasSubmittedSelfie;
-    if (!selfieDone) return VerificationStep.selfieVerification;
-
-    final hasActivePayment = paymentAccounts.any((account) => account.isActive);
-    if (!hasActivePayment) return VerificationStep.paymentMethodSetup;
 
     return VerificationStep.completed;
   }
@@ -90,9 +116,9 @@ class VerificationFlowService {
     switch (step) {
       case VerificationStep.profile:
         return 1;
-      case VerificationStep.selfieVerification:
-        return 2;
       case VerificationStep.paymentMethodSetup:
+        return 2;
+      case VerificationStep.selfieVerification:
         return 3;
       case VerificationStep.completed:
         return 4;

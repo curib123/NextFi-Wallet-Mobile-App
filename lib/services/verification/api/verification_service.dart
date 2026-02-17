@@ -17,6 +17,12 @@ class VerificationService {
 
   final TokenProvider tokenProvider;
   final http.Client _client;
+  static const Set<String> _allowedExtensions = {
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+  };
 
   Future<Map<String, String>> _headers() async {
     final token = await tokenProvider();
@@ -38,23 +44,50 @@ class VerificationService {
     return token;
   }
 
-  Future<VerificationModel> getMe() async {
-    final res = await _client.get(
-      VerificationHttp.uri(VerificationEndpoints.me()),
-      headers: await _headers(),
-    );
-
-    VerificationHttp.ensureOk(res);
-    final data = VerificationHttp.decodeJson<dynamic>(res);
-
+  Map<String, dynamic>? _extractMap(dynamic data) {
+    if (data == null || data == '') return null;
+    if (data is String && data.trim().toLowerCase() == 'null') return null;
     if (data is Map<String, dynamic>) {
-      return VerificationModel.fromJson(data);
+      if (data.isEmpty) return null;
+      final wrappedData = data['data'];
+      final wrappedVerification = data['verification'];
+      if (wrappedData is Map<String, dynamic>) return wrappedData;
+      if (wrappedVerification is Map<String, dynamic>) return wrappedVerification;
+      if (data.length == 1 &&
+          (data.containsKey('data') || data.containsKey('verification')) &&
+          wrappedData == null &&
+          wrappedVerification == null) {
+        return null;
+      }
+      return data;
+    }
+    return null;
+  }
+
+  Future<VerificationModel> getMe() async {
+    try {
+      final res = await _client.get(
+        VerificationHttp.uri(VerificationEndpoints.me()),
+        headers: await _headers(),
+      );
+
+      VerificationHttp.ensureOk(res);
+      final data = VerificationHttp.decodeJson<dynamic>(res);
+      final map = _extractMap(data);
+
+      if (map != null) {
+        return VerificationModel.fromJson(map);
+      }
+    } on ApiException catch (e) {
+      // First-time users may not have a verification row yet.
+      if (e.statusCode != 404) rethrow;
     }
 
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for GET /verification/me',
-      body: res.body,
+    // First-time fallback: treat missing/empty response as BASIC.
+    return const VerificationModel(
+      id: '',
+      userId: '',
+      status: TrustStatus.basic,
     );
   }
 
@@ -62,6 +95,16 @@ class VerificationService {
     required File selfie,
     String? paymentAccountId,
   }) async {
+    final selfiePath = selfie.path.trim().toLowerCase();
+    final dot = selfiePath.lastIndexOf('.');
+    final ext = dot >= 0 ? selfiePath.substring(dot + 1) : '';
+    if (!_allowedExtensions.contains(ext)) {
+      throw ApiException(
+        400,
+        'Selfie must be an image file (JPG, JPEG, PNG, WEBP).',
+      );
+    }
+
     final token = await _tokenOrThrow();
 
     final req = http.MultipartRequest(
@@ -81,9 +124,10 @@ class VerificationService {
 
     VerificationHttp.ensureOk(res);
     final data = VerificationHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
 
-    if (data is Map<String, dynamic>) {
-      return VerificationModel.fromJson(data);
+    if (map != null) {
+      return VerificationModel.fromJson(map);
     }
 
     throw ApiException(

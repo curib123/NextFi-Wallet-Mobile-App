@@ -41,10 +41,26 @@ class ProfileService {
     final data = ProfileHttp.decodeJson<dynamic>(res);
 
     if (data == null || data == '') return null;
+    if (data is String && data.trim().toLowerCase() == 'null') return null;
     if (data is Map<String, dynamic> && data.isEmpty) return null;
     if (data is Map<String, dynamic>) {
+      final wrappedData = data['data'];
+      final wrappedProfile = data['profile'];
+      if (wrappedData is Map<String, dynamic>) {
+        return ProfileModel.fromJson(wrappedData);
+      }
+      if (wrappedProfile is Map<String, dynamic>) {
+        return ProfileModel.fromJson(wrappedProfile);
+      }
+      if (data.length == 1 &&
+          (data.containsKey('data') || data.containsKey('profile')) &&
+          wrappedData == null &&
+          wrappedProfile == null) {
+        return null;
+      }
       return ProfileModel.fromJson(data);
     }
+    if (data is List && data.isEmpty) return null;
 
     throw ApiException(
       res.statusCode,

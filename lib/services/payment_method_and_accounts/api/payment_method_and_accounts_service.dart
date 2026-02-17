@@ -19,6 +19,17 @@ class PaymentMethodAndAccountsService {
   final TokenProvider tokenProvider;
   final http.Client _client;
 
+  Future<Map<String, String>> _publicHeaders() async {
+    final token = await tokenProvider();
+    if (token == null || token.isEmpty) {
+      return const {'Content-Type': 'application/json'};
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<Map<String, String>> _headers() async {
     final token = await tokenProvider();
     if (token == null || token.isEmpty) {
@@ -31,6 +42,43 @@ class PaymentMethodAndAccountsService {
     };
   }
 
+  Map<String, dynamic>? _extractMap(
+    dynamic data, {
+    List<String> keys = const [],
+  }) {
+    if (data == null || data == '') return null;
+    if (data is String && data.trim().toLowerCase() == 'null') return null;
+    if (data is Map<String, dynamic>) {
+      if (data.isEmpty) return null;
+      for (final key in keys) {
+        final wrapped = data[key];
+        if (wrapped is Map<String, dynamic>) return wrapped;
+      }
+      if (keys.isNotEmpty &&
+          data.length == 1 &&
+          keys.contains(data.keys.first) &&
+          data.values.first == null) {
+        return null;
+      }
+      return data;
+    }
+    return null;
+  }
+
+  List<dynamic> _extractList(
+    dynamic data, {
+    List<String> keys = const [],
+  }) {
+    if (data is List) return data;
+    if (data is Map<String, dynamic>) {
+      for (final key in keys) {
+        final wrapped = data[key];
+        if (wrapped is List) return wrapped;
+      }
+    }
+    return const [];
+  }
+
   Future<List<PaymentMethodModel>> listPaymentMethods(
     PaymentMethodsQuery query,
   ) async {
@@ -39,20 +87,17 @@ class PaymentMethodAndAccountsService {
         PaymentMethodAndAccountsEndpoints.paymentMethods(),
         queryParams: query.toQueryMap(),
       ),
-      headers: await _headers(),
+      headers: await _publicHeaders(),
     );
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final list = _extractList(data, keys: const ['data', 'items', 'paymentMethods']);
 
-    if (data is List) {
-      return data
-          .whereType<Map<String, dynamic>>()
-          .map(PaymentMethodModel.fromJson)
-          .toList();
-    }
-
-    return const [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(PaymentMethodModel.fromJson)
+        .toList();
   }
 
   Future<PaymentMethodModel> getPaymentMethodById(String id) async {
@@ -60,14 +105,15 @@ class PaymentMethodAndAccountsService {
       PaymentMethodAndAccountsHttp.uri(
         PaymentMethodAndAccountsEndpoints.paymentMethodById(id),
       ),
-      headers: await _headers(),
+      headers: await _publicHeaders(),
     );
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'paymentMethod']);
 
-    if (data is Map<String, dynamic>) {
-      return PaymentMethodModel.fromJson(data);
+    if (map != null) {
+      return PaymentMethodModel.fromJson(map);
     }
 
     throw ApiException(
@@ -90,15 +136,13 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final list =
+        _extractList(data, keys: const ['data', 'items', 'paymentAccounts']);
 
-    if (data is List) {
-      return data
-          .whereType<Map<String, dynamic>>()
-          .map(UserPaymentAccountModel.fromJson)
-          .toList();
-    }
-
-    return const [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(UserPaymentAccountModel.fromJson)
+        .toList();
   }
 
   Future<UserPaymentAccountModel> getMyPaymentAccountById(String id) async {
@@ -111,9 +155,10 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'paymentAccount']);
 
-    if (data is Map<String, dynamic>) {
-      return UserPaymentAccountModel.fromJson(data);
+    if (map != null) {
+      return UserPaymentAccountModel.fromJson(map);
     }
 
     throw ApiException(
@@ -136,9 +181,10 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'paymentAccount']);
 
-    if (data is Map<String, dynamic>) {
-      return UserPaymentAccountModel.fromJson(data);
+    if (map != null) {
+      return UserPaymentAccountModel.fromJson(map);
     }
 
     throw ApiException(
@@ -162,9 +208,10 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'paymentAccount']);
 
-    if (data is Map<String, dynamic>) {
-      return UserPaymentAccountModel.fromJson(data);
+    if (map != null) {
+      return UserPaymentAccountModel.fromJson(map);
     }
 
     throw ApiException(
@@ -185,9 +232,10 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'paymentAccount']);
 
-    if (data is Map<String, dynamic>) {
-      return UserPaymentAccountModel.fromJson(data);
+    if (map != null) {
+      return UserPaymentAccountModel.fromJson(map);
     }
 
     throw ApiException(
@@ -209,6 +257,10 @@ class PaymentMethodAndAccountsService {
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
 
     if (data is Map<String, dynamic>) {
+      final wrapped = data['data'];
+      if (wrapped is Map<String, dynamic>) {
+        return wrapped['success'] == true;
+      }
       return data['success'] == true;
     }
 
