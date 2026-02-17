@@ -7,6 +7,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
+import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -206,6 +207,25 @@ class _AppDrawerState extends State<AppDrawer>
                         _redirectToLogin();
                       } else {
                         // Handle sell action
+                      }
+                    },
+                  ),
+                  _NavTile(
+                    icon: LucideIcons.checkCircle2,
+                    label: 'Verification',
+                    description: 'Complete identity steps',
+                    colors: c,
+                    onTap: () {
+                      if (user == null) {
+                        _redirectToLogin();
+                      } else {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const VerificationFlowScreen(),
+                          ),
+                        );
                       }
                     },
                   ),
