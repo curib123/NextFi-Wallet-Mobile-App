@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "353191669623",
+    "project_id": "nextfi-d6789",
+    "storage_bucket": "nextfi-d6789.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:353191669623:android:9c21c5bc6e1db0bf31fb72",
+        "android_client_info": {
+          "package_name": "com.nextfi.wallet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6dZV0yfHosuIO4AaPNiqYffisxTtvKz4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
