@@ -1,6 +1,8 @@
 // lib/common/components/alert/app_alert.dart
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
@@ -28,18 +30,16 @@ class AppAlertController {
         String? primaryText,
         VoidCallback? onPrimary,
       }) =>
-      _update(
-        type,
-        title: title,
-        subtitle: subtitle,
-        primaryText: primaryText,
-        onPrimary: onPrimary,
-      );
+      _update(type,
+          title: title,
+          subtitle: subtitle,
+          primaryText: primaryText,
+          onPrimary: onPrimary);
 
   void close() => _close();
 }
 
-/// Show a modern minimalist bottom-sheet modal.
+/// Show a modern minimalist bottom-sheet alert.
 AppAlertController showAppAlert(
     BuildContext context, {
       required AppAlertType type,
@@ -63,21 +63,27 @@ AppAlertController showAppAlert(
 
   showGeneralDialog(
     context: context,
-    barrierLabel: 'Modal',
+    barrierLabel: 'Alert',
     barrierDismissible: barrierDismissible,
     barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 380),
+    transitionDuration: const Duration(milliseconds: 420),
     pageBuilder: (_, __, ___) => _ModalScaffold(notifier: notifier),
     transitionBuilder: (ctx, anim, _, child) {
-      final slide = CurvedAnimation(parent: anim, curve: Curves.easeOutQuart);
-      final fade  = CurvedAnimation(parent: anim, curve: Curves.easeOut);
+      final curve = CurvedAnimation(
+        parent: anim,
+        curve: const Cubic(0.16, 1, 0.3, 1),
+      );
+      final fade = CurvedAnimation(
+        parent: anim,
+        curve: const Interval(0, 0.6, curve: Curves.easeOut),
+      );
       return FadeTransition(
         opacity: fade,
         child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.15),
+          position: Tween(
+            begin: const Offset(0, 0.12),
             end: Offset.zero,
-          ).animate(slide),
+          ).animate(curve),
           child: child,
         ),
       );
@@ -103,7 +109,7 @@ AppAlertController showAppAlert(
   return AppAlertController._(update, close);
 }
 
-/* ─────────────────────────── State ─────────────────────────── */
+/* ───────────────────── State ───────────────────── */
 
 class _AlertStateNotifier extends ChangeNotifier {
   _AlertStateNotifier({
@@ -121,7 +127,7 @@ class _AlertStateNotifier extends ChangeNotifier {
   VoidCallback? onPrimary;
 }
 
-/* ─────────────────────────── Backdrop scaffold ─────────────────────────── */
+/* ───────────────────── Backdrop ───────────────────── */
 
 class _ModalScaffold extends StatelessWidget {
   const _ModalScaffold({required this.notifier});
@@ -129,19 +135,22 @@ class _ModalScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final insets = MediaQuery.of(context).viewInsets;
+    final colors = AppColor.of(context);
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Frosted backdrop
+        // ── Blurred backdrop — theme-aware overlay ──
         IgnorePointer(
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(color: Colors.black.withOpacity(0.38)),
+            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Container(
+              color: colors.background.withOpacity(0.45),
+            ),
           ),
         ),
-        // Sheet pinned to bottom
+
         Positioned(
           left: 0,
           right: 0,
@@ -150,10 +159,12 @@ class _ModalScaffold extends StatelessWidget {
             top: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                12, 0, 12,
-                insets.bottom > 0 ? insets.bottom : 12,
+                16,
+                0,
+                16,
+                bottom > 0 ? bottom : 16,
               ),
-              child: _AppAlertSheet(notifier: notifier),
+              child: _AlertSheet(notifier: notifier),
             ),
           ),
         ),
@@ -162,15 +173,15 @@ class _ModalScaffold extends StatelessWidget {
   }
 }
 
-/* ─────────────────────────── Sheet ─────────────────────────── */
+/* ───────────────────── Sheet ───────────────────── */
 
-class _AppAlertSheet extends StatelessWidget {
-  const _AppAlertSheet({required this.notifier});
+class _AlertSheet extends StatelessWidget {
+  const _AlertSheet({required this.notifier});
   final _AlertStateNotifier notifier;
 
   @override
   Widget build(BuildContext context) {
-    final colors  = AppColor.of(context);
+    final colors = AppColor.of(context);
     final screenH = MediaQuery.of(context).size.height;
 
     return AnimatedBuilder(
@@ -179,82 +190,79 @@ class _AppAlertSheet extends StatelessWidget {
         final v = _visualFor(notifier.type, colors);
 
         return ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: screenH * 0.70),
+          constraints: BoxConstraints(maxHeight: screenH * 0.65),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
+                duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutCubic,
                 decoration: BoxDecoration(
                   color: colors.surface,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: v.color.withOpacity(0.15),
-                    width: 1.2,
+                    color: colors.border.withOpacity(0.12),
+                    width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.20),
-                      blurRadius: 48,
-                      spreadRadius: -4,
-                      offset: const Offset(0, 16),
+                      color: colors.background.withOpacity(0.18),
+                      blurRadius: 64,
+                      spreadRadius: -8,
+                      offset: const Offset(0, 20),
                     ),
                     BoxShadow(
-                      color: v.color.withOpacity(0.09),
-                      blurRadius: 28,
-                      offset: const Offset(0, 6),
+                      color: v.color.withOpacity(0.06),
+                      blurRadius: 40,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                // IntrinsicHeight avoids Expanded-in-unbounded-height issues.
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ── Accent header ──────────────────
-                    _SheetHeader(visual: v),
-
-                    // ── Scrollable body ─────────────────
+                    _DragHandle(colors: colors),
                     Flexible(
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                        padding: const EdgeInsets.fromLTRB(28, 8, 28, 4),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Title
+                            _AlertIcon(visual: v, colors: colors),
+                            const SizedBox(height: 20),
                             AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
+                              duration: const Duration(milliseconds: 240),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeIn,
                               child: Text(
                                 notifier.title,
                                 key: ValueKey(notifier.title),
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  fontSize: 21,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.4,
-                                  height: 1.2,
+                                  letterSpacing: -0.3,
+                                  height: 1.25,
                                   color: colors.textPrimary,
                                   decoration: TextDecoration.none,
                                 ),
                               ),
                             ),
-
-                            // Subtitle
                             if ((notifier.subtitle ?? '').isNotEmpty) ...[
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 8),
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 200),
                                 child: Text(
                                   notifier.subtitle!,
                                   key: ValueKey(notifier.subtitle),
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    height: 1.6,
-                                    color: colors.textSecondary,
+                                    height: 1.55,
+                                    color:
+                                    colors.textSecondary.withOpacity(0.75),
                                     decoration: TextDecoration.none,
                                   ),
                                 ),
@@ -264,9 +272,7 @@ class _AppAlertSheet extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                    // ── Footer / CTA ────────────────────
-                    _SheetFooter(notifier: notifier, visual: v),
+                    _SheetCTA(notifier: notifier, visual: v, colors: colors),
                   ],
                 ),
               ),
@@ -280,170 +286,122 @@ class _AppAlertSheet extends StatelessWidget {
   _Visual _visualFor(AppAlertType type, AppColor c) {
     switch (type) {
       case AppAlertType.loading:
-        return _Visual(type, c.info,    LucideIcons.loader2);
+        return _Visual(type, c.info, LucideIcons.loader2);
       case AppAlertType.success:
         return _Visual(type, c.success, LucideIcons.checkCircle2);
       case AppAlertType.error:
-        return _Visual(type, c.error,   LucideIcons.xCircle);
+        return _Visual(type, c.error, LucideIcons.xCircle);
       case AppAlertType.warning:
         return _Visual(type, c.warning, LucideIcons.alertTriangle);
       case AppAlertType.info:
-        return _Visual(type, c.info,    LucideIcons.info);
+        return _Visual(type, c.info, LucideIcons.info);
     }
   }
 }
 
-/* ─────────────────────────── Header ─────────────────────────── */
+/* ───────────────────── Drag Handle ───────────────────── */
 
-class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.visual});
-  final _Visual visual;
+class _DragHandle extends StatelessWidget {
+  const _DragHandle({required this.colors});
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            visual.color.withOpacity(0.12),
-            visual.color.withOpacity(0.03),
-          ],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: colors.border.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-        border: Border(
-          bottom: BorderSide(color: visual.color.withOpacity(0.10), width: 1),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Animated icon badge
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            switchInCurve: Curves.easeOutBack,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, anim) => ScaleTransition(
-              scale: anim,
-              child: FadeTransition(opacity: anim, child: child),
-            ),
-            child: _IconBadge(key: ValueKey(visual.type), visual: visual),
-          ),
-
-          const SizedBox(width: 14),
-
-          // Status label + decorative lines
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _statusLabel(visual.type),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                    color: visual.color,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      width: 32,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: visual.color.withOpacity(0.55),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      width: 18,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: visual.color.withOpacity(0.22),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOutCubic,
-                      width: 8,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: visual.color.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Drag pill in top-right
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: colors.border.withOpacity(0.35),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ],
       ),
     );
   }
-
-  String _statusLabel(AppAlertType t) {
-    switch (t) {
-      case AppAlertType.loading: return 'PROCESSING';
-      case AppAlertType.success: return 'COMPLETED';
-      case AppAlertType.error:   return 'ERROR';
-      case AppAlertType.warning: return 'WARNING';
-      case AppAlertType.info:    return 'NOTICE';
-    }
-  }
 }
 
-/* ─────────────────────────── Footer ─────────────────────────── */
+/* ───────────────────── Alert Icon ───────────────────── */
 
-class _SheetFooter extends StatelessWidget {
-  const _SheetFooter({required this.notifier, required this.visual});
-  final _AlertStateNotifier notifier;
+class _AlertIcon extends StatelessWidget {
+  const _AlertIcon({required this.visual, required this.colors});
   final _Visual visual;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colors.border.withOpacity(0.09), width: 1),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, anim) => ScaleTransition(
+        scale: anim,
+        child: FadeTransition(opacity: anim, child: child),
+      ),
+      child: Container(
+        key: ValueKey(visual.type),
+        width: 68,
+        height: 68,
+        decoration: BoxDecoration(
+          color: visual.color.withOpacity(0.06),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: visual.color.withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: visual.color.withOpacity(0.10),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: visual.type == AppAlertType.loading
+                ? WavingDotsLoader(
+              color: visual.color,
+              dotCount: 3,
+              dotSize: 4.5,
+              waveHeight: 4.5,
+              speed: const Duration(milliseconds: 1100),
+            )
+                : Icon(visual.icon, color: visual.color, size: 24),
+          ),
         ),
       ),
+    );
+  }
+}
+
+/* ───────────────────── CTA ───────────────────── */
+
+class _SheetCTA extends StatelessWidget {
+  const _SheetCTA({
+    required this.notifier,
+    required this.visual,
+    required this.colors,
+  });
+  final _AlertStateNotifier notifier;
+  final _Visual visual;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       child: Semantics(
         button: true,
         label: notifier.primaryText,
-        child: _PrimaryButton(
+        child: _SoftButton(
           label: notifier.primaryText,
           color: visual.color,
+          textColor: colors.surface,
           onTap: () {
+            HapticFeedback.lightImpact();
             final cb = notifier.onPrimary;
             if (cb != null) cb();
             Navigator.of(context).maybePop();
@@ -454,65 +412,35 @@ class _SheetFooter extends StatelessWidget {
   }
 }
 
-/* ─────────────────────────── Icon Badge ─────────────────────────── */
+/* ───────────────────── Soft Button ───────────────────── */
 
-class _IconBadge extends StatelessWidget {
-  const _IconBadge({super.key, required this.visual});
-  final _Visual visual;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: visual.color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: visual.color.withOpacity(0.20),
-          width: 1.2,
-        ),
-      ),
-      alignment: Alignment.center,
-      child: visual.type == AppAlertType.loading
-          ? WavingDotsLoader(
-        color: visual.color,
-        dotCount: 3,
-        dotSize: 5,
-        waveHeight: 5,
-        speed: const Duration(milliseconds: 1100),
-      )
-          : Icon(visual.icon, color: visual.color, size: 26),
-    );
-  }
-}
-
-/* ─────────────────────────── Primary Button ─────────────────────────── */
-
-class _PrimaryButton extends StatefulWidget {
-  const _PrimaryButton({
+class _SoftButton extends StatefulWidget {
+  const _SoftButton({
     required this.label,
     required this.color,
+    required this.textColor,
     required this.onTap,
   });
 
   final String label;
   final Color color;
+  final Color textColor;
   final VoidCallback onTap;
 
   @override
-  State<_PrimaryButton> createState() => _PrimaryButtonState();
+  State<_SoftButton> createState() => _SoftButtonState();
 }
 
-class _PrimaryButtonState extends State<_PrimaryButton>
+class _SoftButtonState extends State<_SoftButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 70),
-    reverseDuration: const Duration(milliseconds: 180),
+    duration: const Duration(milliseconds: 60),
+    reverseDuration: const Duration(milliseconds: 200),
   );
 
-  double get _scale => 1.0 - (_ctrl.value * 0.038);
+  double get _scale => 1.0 - (_ctrl.value * 0.03);
+  double get _opacity => 1.0 - (_ctrl.value * 0.12);
 
   @override
   void initState() {
@@ -521,7 +449,7 @@ class _PrimaryButtonState extends State<_PrimaryButton>
   }
 
   void _down(_) => _ctrl.forward();
-  void _up(_)   => _ctrl.reverse();
+  void _up(_) => _ctrl.reverse();
   void _cancel() => _ctrl.reverse();
 
   @override
@@ -537,42 +465,35 @@ class _PrimaryButtonState extends State<_PrimaryButton>
       onTapUp: _up,
       onTapCancel: _cancel,
       onTap: widget.onTap,
-      child: Transform.scale(
-        scale: _scale,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 54,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                widget.color,
-                Color.alphaBlend(
-                  Colors.black.withOpacity(0.10),
-                  widget.color,
+      child: Opacity(
+        opacity: _opacity,
+        child: Transform.scale(
+          scale: _scale,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            height: 52,
+            decoration: BoxDecoration(
+              color: widget.color,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.color.withOpacity(0.20),
+                  blurRadius: 24,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 10),
                 ),
               ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withOpacity(0.30),
-                blurRadius: 20,
-                spreadRadius: -2,
-                offset: const Offset(0, 8),
+            alignment: Alignment.center,
+            child: Text(
+              widget.label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.1,
+                decoration: TextDecoration.none,
               ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            widget.label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-              decoration: TextDecoration.none,
             ),
           ),
         ),
@@ -581,7 +502,7 @@ class _PrimaryButtonState extends State<_PrimaryButton>
   }
 }
 
-/* ─────────────────────────── Helpers ─────────────────────────── */
+/* ───────────────────── Helpers ───────────────────── */
 
 class _Visual {
   final AppAlertType type;
@@ -592,10 +513,15 @@ class _Visual {
 
 String _defaultTitle(AppAlertType t) {
   switch (t) {
-    case AppAlertType.loading: return 'Please wait…';
-    case AppAlertType.success: return 'Success';
-    case AppAlertType.error:   return 'Something went wrong';
-    case AppAlertType.warning: return 'Heads up';
-    case AppAlertType.info:    return 'Information';
+    case AppAlertType.loading:
+      return 'Please wait...';
+    case AppAlertType.success:
+      return 'Success';
+    case AppAlertType.error:
+      return 'Something went wrong';
+    case AppAlertType.warning:
+      return 'Heads up';
+    case AppAlertType.info:
+      return 'Information';
   }
 }

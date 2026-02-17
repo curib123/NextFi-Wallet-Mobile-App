@@ -2,18 +2,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/modal/edit_federation_modal.dart';
+import 'package:next_fi/common/components/modal/receive_qr_modal.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/price_chart/view/price_chart_card.dart';
-import 'package:next_fi/features/receive/model/receive_state.dart';
 import 'package:next_fi/features/receive/view_model/receive_vm.dart';
 import 'package:provider/provider.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'widgets/token_switch.dart';
 import 'widgets/qr_preview_card.dart';
 import 'widgets/address_row.dart';
 import 'widgets/safety_note.dart';
-import 'widgets/token_pill.dart';
 
 class ReceiveScreen extends StatelessWidget {
   const ReceiveScreen({
@@ -78,7 +78,7 @@ class ReceiveScreen extends StatelessWidget {
                 QrPreviewCard(
                   address: s.address,
                   token: token,
-                  onTap: () => _showQrDialog(context, s),
+                  onTap: () => showReceiveQrModal(context, s),
                 ),
                 const SizedBox(height: 16),
 
@@ -130,6 +130,12 @@ class ReceiveScreen extends StatelessWidget {
     }
 
     if (vm.federationAddresses.isEmpty) {
+      final domain = vm.federationDomain;
+      final hasDomain = domain != null && domain.trim().isNotEmpty;
+      final hasTypedAlias = vm.federationAliasDraft.trim().isNotEmpty;
+      final canGenerate =
+          !vm.generatingFederation &&
+          (!hasTypedAlias || vm.isAliasAvailable == true);
       return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -152,6 +158,77 @@ class ReceiveScreen extends StatelessWidget {
               'Generate one linked to this public address.',
               style: TextStyle(color: c.textSecondary, fontSize: 12.5),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              onChanged: vm.setFederationAliasDraft,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._-]')),
+              ],
+              decoration: InputDecoration(
+                hintText: 'Type alias (e.g. johnpaulcurib)',
+                suffixText: hasDomain ? '*$domain' : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (vm.federationAddressPreview.isNotEmpty)
+              Text(
+                vm.federationAddressPreview,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: vm.checkingAliasAvailability
+                    ? null
+                    : () => vm.checkAliasAvailability(),
+                icon: vm.checkingAliasAvailability
+                    ? SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: c.primary,
+                        ),
+                      )
+                    : Icon(LucideIcons.search, size: 16, color: c.primary),
+                label: Text(
+                  vm.checkingAliasAvailability
+                      ? 'Checking...'
+                      : 'Check availability',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.primary,
+                  side: BorderSide(color: c.primary.withOpacity(0.35)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            if (vm.aliasAvailabilityMessage != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                vm.aliasAvailabilityMessage!,
+                style: TextStyle(
+                  color: vm.isAliasAvailable == true
+                      ? c.success
+                      : (vm.isAliasAvailable == false
+                            ? c.error
+                            : c.textSecondary),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             if (vm.generateFederationError != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -167,19 +244,19 @@ class ReceiveScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: vm.generatingFederation
-                    ? null
-                    : () async {
+                onPressed: canGenerate
+                    ? () async {
                         final ok = await vm.generateFederationAddress();
                         if (!context.mounted) return;
                         if (ok) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Federation address generated'),
-                            ),
+                          showFloatingSnackBar(
+                            context,
+                            message: 'Federation address generated',
+                            type: SnackBarType.success,
                           );
                         }
-                      },
+                      }
+                    : null,
                 icon: vm.generatingFederation
                     ? const SizedBox(
                         height: 16,
@@ -246,110 +323,26 @@ class ReceiveScreen extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: c.textSecondary, fontSize: 12),
               ),
-              trailing: IconButton(
-                icon: Icon(LucideIcons.copy, size: 18, color: c.primary),
-                onPressed: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: item.federationAddress),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  void _showQrDialog(BuildContext context, ReceiveState s) {
-    final c = AppColor.of(context);
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: c.surface,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TokenPill(token: s.token),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  color: Colors.white,
-                  child: QrImageView(
-                    data: s.address,
-                    version: QrVersions.auto,
-                    size: 260,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SelectableText(
-                s.address,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontFamily: 'monospace',
-                  fontSize: 12.5,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: s.address));
-                        HapticFeedback.mediumImpact();
-                        Navigator.pop(context);
-                        // snackbar handled by AddressRow normally; here keep it quiet
-                      },
-                      icon: Icon(LucideIcons.copy, size: 18, color: c.primary),
-                      label: Text(
-                        'Copy',
-                        style: TextStyle(
-                          color: c.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: c.primary.withOpacity(0.35)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
+                  IconButton(
+                    icon: Icon(LucideIcons.edit2, size: 18, color: c.primary),
+                    onPressed: () =>
+                        showEditFederationModal(context, vm: vm, item: item),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        LucideIcons.x,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      label: const Text('Close'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: c.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        elevation: 0,
-                      ),
-                    ),
+                  IconButton(
+                    icon: Icon(LucideIcons.copy, size: 18, color: c.primary),
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: item.federationAddress),
+                      );
+                    },
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }

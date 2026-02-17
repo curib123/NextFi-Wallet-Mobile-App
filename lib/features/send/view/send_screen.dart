@@ -66,6 +66,8 @@ class _SendScreenState extends State<SendScreen> {
   FederationResolveResponse? _resolvedFederation;
   String? _federationError;
   int _federationResolveSeq = 0;
+  String? _federationDomain;
+  List<String> _federationSuggestions = const [];
 
   @override
   void didChangeDependencies() {
@@ -100,6 +102,8 @@ class _SendScreenState extends State<SendScreen> {
       _onRecipientChanged();
     });
 
+    _loadFederationDomain();
+
     _memoCtl.addListener(() {
       _memoBytes = utf8.encode(_memoCtl.text).length;
       setState(() {});
@@ -133,6 +137,8 @@ class _SendScreenState extends State<SendScreen> {
   bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
   bool _looksLikeFederation(String x) =>
       RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
+  bool _looksLikeFederationAliasInput(String x) =>
+      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(x);
 
   void _onRecipientChanged() {
     final vm = context.read<SendVM>();
@@ -146,6 +152,7 @@ class _SendScreenState extends State<SendScreen> {
         _resolvedFederation = null;
         _federationError = null;
         _federationLoading = false;
+        _federationSuggestions = const [];
       });
       return;
     }
@@ -156,6 +163,7 @@ class _SendScreenState extends State<SendScreen> {
         _resolvedFederation = null;
         _federationError = null;
         _federationLoading = false;
+        _federationSuggestions = const [];
       });
       _lookupRecipient(input);
       return;
@@ -165,11 +173,13 @@ class _SendScreenState extends State<SendScreen> {
       vm.setRecipient('');
       setState(() {
         _resolvedRecipient = null;
+        _federationSuggestions = const [];
       });
       _resolveFederation(input);
       return;
     }
 
+    _updateFederationSuggestions(input);
     vm.setRecipient(input);
     setState(() {
       _resolvedRecipient = null;
@@ -219,6 +229,53 @@ class _SendScreenState extends State<SendScreen> {
         _federationError = 'Federation not found or unavailable.';
       });
     }
+  }
+
+  Future<void> _loadFederationDomain() async {
+    try {
+      final toml = await FederationAddressCoreService.I.getStellarToml();
+      final match = RegExp(
+        r'FEDERATION_SERVER\s*=\s*"([^"]+)"',
+        caseSensitive: false,
+      ).firstMatch(toml);
+      final url = match?.group(1)?.trim();
+      if (url == null || url.isEmpty) return;
+
+      final host = Uri.tryParse(url)?.host.trim();
+      if (!mounted || host == null || host.isEmpty) return;
+      setState(() => _federationDomain = host);
+      _updateFederationSuggestions(_toCtl.text.trim());
+    } catch (_) {
+      // Keep manual federation input available even if domain auto-discovery fails.
+    }
+  }
+
+  void _updateFederationSuggestions(String input) {
+    final domain = _federationDomain?.trim();
+    if (domain == null ||
+        domain.isEmpty ||
+        input.isEmpty ||
+        input.contains('*') ||
+        !_looksLikeFederationAliasInput(input)) {
+      if (_federationSuggestions.isNotEmpty) {
+        setState(() => _federationSuggestions = const []);
+      }
+      return;
+    }
+
+    final candidate = '${input.toLowerCase()}*$domain';
+    if (_federationSuggestions.length == 1 &&
+        _federationSuggestions.first == candidate) {
+      return;
+    }
+    setState(() => _federationSuggestions = [candidate]);
+  }
+
+  void _applyFederationSuggestion(String value) {
+    _toCtl.text = value;
+    _toCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _toCtl.text.length),
+    );
   }
 
   Future<void> _lookupRecipient(String address) async {
@@ -865,12 +922,39 @@ class _SendScreenState extends State<SendScreen> {
             _buildNewRecipientChip(c, recipientLookupAddress)
           else
             _buildRecipientInputField(c, addr, isDark),
+          if (_federationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildFederationSuggestions(c),
+          ],
           if (hasFederationInput) ...[
             const SizedBox(height: 10),
             _buildFederationStatus(c),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildFederationSuggestions(AppColor c) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _federationSuggestions
+          .map(
+            (s) => ActionChip(
+              avatar: Icon(LucideIcons.atSign, size: 14, color: c.primary),
+              label: Text(s),
+              labelStyle: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+              side: BorderSide(color: c.primary.withOpacity(0.35)),
+              backgroundColor: c.primary.withOpacity(0.08),
+              onPressed: () => _applyFederationSuggestion(s),
+            ),
+          )
+          .toList(),
     );
   }
 
