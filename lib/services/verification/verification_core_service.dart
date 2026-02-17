@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 

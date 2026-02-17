@@ -1,4 +1,4 @@
-﻿class VerificationEndpoints {
+class VerificationEndpoints {
   static const String base = '/verification';
 
   static String me() => '$base/me';

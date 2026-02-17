@@ -33,6 +33,9 @@ class RecipientListWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
+    final mq = MediaQuery.of(context);
+    final compact = mq.size.width < 360;
+    final fabBottom = 16.0 + mq.padding.bottom;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -44,7 +47,7 @@ class RecipientListWidget extends StatelessWidget {
           'Recipients',
           style: TextStyle(
             color: colors.textPrimary,
-            fontSize: 20,
+            fontSize: compact ? 18 : 20,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.5,
           ),
@@ -96,6 +99,7 @@ class RecipientListWidget extends StatelessWidget {
 
           final fab = _ModernAddButton(
             colors: colors,
+            compact: compact,
             onPressed: () async {
               if (!prov.isAuthenticated) {
                 showFloatingSnackBar(
@@ -126,6 +130,8 @@ class RecipientListWidget extends StatelessWidget {
             onSelect: onSelect,
             xlmBalance: xlmBalance,
             usdcBalance: usdcBalance,
+            compact: compact,
+            bottomInset: fabBottom + (compact ? 72 : 84),
           );
 
           return Stack(
@@ -137,8 +143,8 @@ class RecipientListWidget extends StatelessWidget {
                 child: body,
               ),
               Positioned(
-                right: 20,
-                bottom: 20,
+                right: compact ? 14 : 20,
+                bottom: fabBottom,
                 child: fab,
               ),
             ],
@@ -161,8 +167,12 @@ class _NotAuthenticatedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: TweenAnimationBuilder<double>(
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeOutCubic,
@@ -276,6 +286,8 @@ class _NotAuthenticatedView extends StatelessWidget {
           ),
         ),
       ),
+        ),
+      ),
     );
   }
 }
@@ -284,10 +296,12 @@ class _NotAuthenticatedView extends StatelessWidget {
 class _ModernAddButton extends StatefulWidget {
   final AppColor colors;
   final VoidCallback onPressed;
+  final bool compact;
 
   const _ModernAddButton({
     required this.colors,
     required this.onPressed,
+    required this.compact,
   });
 
   @override
@@ -313,8 +327,8 @@ class _ModernAddButtonState extends State<_ModernAddButton> {
         duration: const Duration(milliseconds: 150),
         scale: _isPressed ? 0.95 : 1.0,
         child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          height: widget.compact ? 50 : 56,
+          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 16 : 24),
           decoration: BoxDecoration(
             color: widget.colors.primary,
             borderRadius: BorderRadius.circular(28),
@@ -331,24 +345,26 @@ class _ModernAddButtonState extends State<_ModernAddButton> {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
+              const Icon(
                 LucideIcons.userPlus,
                 color: Colors.white,
                 size: 20,
               ),
-              SizedBox(width: 12),
-              Text(
-                'Add Recipient',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
+              if (!widget.compact) ...[
+                const SizedBox(width: 12),
+                const Text(
+                  'Add Recipient',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -363,6 +379,8 @@ class _RecipientList extends StatelessWidget {
   final void Function(RecipientAddressModel)? onSelect;
   final double? xlmBalance;
   final double? usdcBalance;
+  final bool compact;
+  final double bottomInset;
 
   const _RecipientList({
     required this.colors,
@@ -370,15 +388,22 @@ class _RecipientList extends StatelessWidget {
     this.onSelect,
     this.xlmBalance,
     this.usdcBalance,
+    required this.compact,
+    required this.bottomInset,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 20,
+        16,
+        compact ? 12 : 20,
+        bottomInset,
+      ),
       itemCount: items.length,
       physics: const BouncingScrollPhysics(),
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => SizedBox(height: compact ? 10 : 12),
       itemBuilder: (context, i) {
         final r = items[i];
 
@@ -505,13 +530,14 @@ class _RecipientTileState extends State<RecipientTile> {
     if (s.length <= 20) return s;
     final left = s.substring(0, 10);
     final right = s.substring(s.length - 8);
-    return '$left…$right';
+    return '$left...$right';
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = Color(widget.recipient.color);
+    final compact = MediaQuery.of(context).size.width < 360;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
@@ -520,7 +546,7 @@ class _RecipientTileState extends State<RecipientTile> {
       onTap: widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compact ? 12 : 16),
         decoration: BoxDecoration(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(20),
@@ -535,19 +561,21 @@ class _RecipientTileState extends State<RecipientTile> {
           children: [
             _Avatar(
               color: accent,
+              compact: compact,
               initial: widget.recipient.name.isNotEmpty
                   ? widget.recipient.name[0].toUpperCase()
                   : '?',
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: compact ? 10 : 14),
             Expanded(
               child: _TitleSubtitle(
                 title: widget.recipient.name,
                 subtitle: _short(widget.recipient.address),
                 colors: widget.colors,
+                compact: compact,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: compact ? 4 : 8),
             _OverflowMenu(
               colors: widget.colors,
               recipient: widget.recipient,
@@ -562,15 +590,20 @@ class _RecipientTileState extends State<RecipientTile> {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.color, required this.initial});
+  const _Avatar({
+    required this.color,
+    required this.initial,
+    required this.compact,
+  });
   final Color color;
   final String initial;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 48,
-      height: 48,
+      width: compact ? 42 : 48,
+      height: compact ? 42 : 48,
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(14),
@@ -584,7 +617,7 @@ class _Avatar extends StatelessWidget {
         initial,
         style: TextStyle(
           color: color,
-          fontSize: 18,
+          fontSize: compact ? 15 : 18,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -597,10 +630,12 @@ class _TitleSubtitle extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.colors,
+    required this.compact,
   });
   final String title;
   final String subtitle;
   final AppColor colors;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -614,19 +649,19 @@ class _TitleSubtitle extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            fontSize: 15,
+            fontSize: compact ? 14 : 15,
             color: colors.textPrimary,
             letterSpacing: -0.3,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: compact ? 2 : 4),
         Text(
           subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: colors.textSecondary.withOpacity(0.7),
-            fontSize: 13,
+            fontSize: compact ? 12 : 13,
             fontFamily: 'monospace',
             letterSpacing: 0,
           ),
@@ -808,8 +843,12 @@ class _EmptyRecipients extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     final compact = size.width < 360;
 
-    return Center(
-      child: TweenAnimationBuilder<double>(
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.symmetric(vertical: compact ? 12 : 16),
+        child: Center(
+          child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeOutCubic,
@@ -870,6 +909,8 @@ class _EmptyRecipients extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
         ),
       ),
     );
@@ -946,3 +987,4 @@ Future<bool?> _confirmDelete(BuildContext context, String name) {
     ),
   );
 }
+

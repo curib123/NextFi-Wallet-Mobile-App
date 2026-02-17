@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -22,6 +22,7 @@ class VerificationService {
     final base = cetralized_baseUrl.endsWith('/')
         ? cetralized_baseUrl.substring(0, cetralized_baseUrl.length - 1)
         : cetralized_baseUrl;
+
     return Uri.parse('$base$path');
   }
 
