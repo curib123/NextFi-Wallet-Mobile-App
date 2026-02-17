@@ -6,7 +6,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
@@ -27,7 +26,8 @@ class AppBottomNavigationPremium extends StatefulWidget {
   const AppBottomNavigationPremium({super.key});
 
   @override
-  State<AppBottomNavigationPremium> createState() => _AppBottomNavigationPremiumState();
+  State<AppBottomNavigationPremium> createState() =>
+      _AppBottomNavigationPremiumState();
 }
 
 class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
@@ -55,11 +55,9 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
     final tabVM = context.watch<TabVM>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Consumer3<ActivityLogVM, ClaimableVM, TransactionsVM>(
-      builder: (context, activityVM, claimableVM, transactionsVM, _) {
+    return Consumer2<ClaimableVM, TransactionsVM>(
+      builder: (context, claimableVM, transactionsVM, _) {
         // Calculate notification counts
-        final failedActivityCount = activityVM.failedActivities.length;
-        final pendingActivityCount = activityVM.pendingActivities.length;
         final claimableReadyCount = claimableVM.receivedReadyCount;
         final reclaimableCount = claimableVM.sentExpiredCount;
         final totalClaimableCount = claimableReadyCount + reclaimableCount;
@@ -70,22 +68,19 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
           decoration: BoxDecoration(
             gradient: isDark
                 ? LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                colors.surface.withOpacity(0.92),
-                colors.surface.withOpacity(0.98),
-                colors.surface,
-              ],
-            )
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      colors.surface.withOpacity(0.92),
+                      colors.surface.withOpacity(0.98),
+                      colors.surface,
+                    ],
+                  )
                 : LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.white.withOpacity(0.95),
-                Colors.white,
-              ],
-            ),
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.white.withOpacity(0.95), Colors.white],
+                  ),
             boxShadow: [
               BoxShadow(
                 color: isDark
@@ -134,14 +129,19 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                         ),
                         _buildNavItem(
                           context: context,
-                          icon: LucideIcons.activity,
-                          label: 'Activity',
+                          icon: LucideIcons.history,
+                          label: 'History',
                           index: 1,
                           isSelected: tabVM.currentIndex == 1,
                           colors: colors,
-                          badgeCount: failedActivityCount,
-                          showDot: failedActivityCount == 0 && pendingActivityCount > 0,
-                          onTap: () => tabVM.setTab(1),
+                          badgeCount: unreadTxCount,
+                          showDot: unreadTxCount == 0 && pendingTxCount > 0,
+                          onTap: () {
+                            if (unreadTxCount > 0) {
+                              transactionsVM.markAllAsRead();
+                            }
+                            tabVM.setTab(1);
+                          },
                         ),
                         _build3DSwapButton(
                           context: context,
@@ -164,19 +164,12 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                         ),
                         _buildNavItem(
                           context: context,
-                          icon: LucideIcons.history,
-                          label: 'History',
+                          icon: LucideIcons.settings,
+                          label: 'Settings',
                           index: 4,
                           isSelected: tabVM.currentIndex == 4,
                           colors: colors,
-                          badgeCount: unreadTxCount,
-                          showDot: unreadTxCount == 0 && pendingTxCount > 0,
-                          onTap: () {
-                            if (unreadTxCount > 0) {
-                              transactionsVM.markAllAsRead();
-                            }
-                            tabVM.setTab(4);
-                          },
+                          onTap: () => tabVM.setTab(4),
                         ),
                       ],
                     ),
@@ -223,10 +216,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                   TweenAnimationBuilder<double>(
                     duration: const Duration(milliseconds: 350),
                     curve: Curves.elasticOut,
-                    tween: Tween(
-                      begin: 0.0,
-                      end: isSelected ? 1.0 : 0.0,
-                    ),
+                    tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
                     builder: (context, value, child) {
                       return Transform.scale(
                         scale: 1.0 + (value * 0.15),
@@ -251,9 +241,9 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                       child: showDot
                           ? _buildPulsingDot()
                           : _buildLiquidBadge(
-                        badgeCount!,
-                        badgeColor ?? Colors.red,
-                      ),
+                              badgeCount!,
+                              badgeColor ?? Colors.red,
+                            ),
                     ),
                 ],
               ),
@@ -272,7 +262,9 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                     label,
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: isSelected
                           ? colors.primary
                           : colors.textSecondary.withOpacity(0.6),
@@ -315,10 +307,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                 height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      colors.primary,
-                      colors.primary.withOpacity(0.8),
-                    ],
+                    colors: [colors.primary, colors.primary.withOpacity(0.8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -367,10 +356,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white,
-                width: 2,
-              ),
+              border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
                 BoxShadow(
                   color: color.withOpacity(0.3),
@@ -379,10 +365,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                 ),
               ],
             ),
-            constraints: const BoxConstraints(
-              minWidth: 22,
-              minHeight: 22,
-            ),
+            constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
             child: Text(
               count > 99 ? '99+' : count.toString(),
               style: const TextStyle(
@@ -414,13 +397,12 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
             decoration: BoxDecoration(
               color: Colors.orange,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: 2,
-              ),
+              border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.orange.withOpacity(0.3 * _pulseController.value),
+                  color: Colors.orange.withOpacity(
+                    0.3 * _pulseController.value,
+                  ),
                   blurRadius: 4 * _pulseController.value,
                   spreadRadius: 1 * _pulseController.value,
                 ),

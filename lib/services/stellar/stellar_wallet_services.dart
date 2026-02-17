@@ -1,7 +1,6 @@
 // lib/services/stellar/stellar_wallet_services.dart
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
@@ -19,11 +18,6 @@ import 'package:next_fi/services/stellar/stellar_claimable_balance_service.dart'
 import 'package:next_fi/services/stellar/stellar_dex_service.dart';
 import 'package:next_fi/services/stellar/stellar_fee_service.dart';
 import 'package:next_fi/services/stellar/stellar_stream_service.dart';
-
-// Import activity logging
-import 'package:next_fi/features/activity/model/activity_log.dart';
-import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
-import 'package:next_fi/features/activity/view/widgets/activity_notification.dart';
 
 // Export base service types
 export 'package:next_fi/services/stellar/stellar_base_service.dart'
@@ -58,10 +52,6 @@ class StellarWalletServices {
   final StellarSDK sdk;
   final TransactionFeeVaultSecureStorage configVault;
 
-  // Activity logging (optional)
-  ActivityLogVM? _activityVM;
-  BuildContext? _context;
-
   StellarWalletServices({
     required this.usdcIssuer,
     bool testnet = false,
@@ -73,12 +63,8 @@ class StellarWalletServices {
     String? sorobanUrlMainnet,
     String? sorobanUrlTestnet,
     Map<String, String>? sorobanDefaultHeaders,
-    ActivityLogVM? activityVM,
-    BuildContext? context,
   })  : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
         configVault = configVault ?? TransactionFeeVaultSecureStorage(),
-        _activityVM = activityVM,
-        _context = context,
         walletManager = StellarWalletManager(
           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
           sdkQuickNode: _createQuickNodeSdk(
@@ -221,59 +207,6 @@ class StellarWalletServices {
 
   bool get isTestnet => sdk == StellarSDK.TESTNET;
 
-  /// Enable activity logging (call this to activate logging features)
-  void enableActivityLogging(ActivityLogVM activityVM, {BuildContext? context}) {
-    _activityVM = activityVM;
-    _context = context;
-  }
-
-  /// Disable activity logging
-  void disableActivityLogging() {
-    _activityVM = null;
-    _context = null;
-  }
-
-  /// Check if activity logging is enabled
-  bool get isActivityLoggingEnabled => _activityVM != null;
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // ACTIVITY LOGGING HELPERS
-  // ══════════════════════════════════════════════════════════════════════════
-
-  void _showNotification(ActivityLog log) {
-    if (_context != null && _context!.mounted && _activityVM?.settings.showNotifications == true) {
-      ActivityNotificationManager.show(_context!, log);
-    }
-  }
-
-  Future<void> _logActivity(ActivityLog log) async {
-    if (_activityVM != null) {
-      await _activityVM!.addLog(log);
-    }
-  }
-
-  Future<void> _updateActivity(
-      String id, {
-        ActivityStatus? status,
-        String? txHash,
-        String? errorMessage,
-        String? errorAdvice,
-        String? description,
-      }) async {
-    if (_activityVM != null) {
-      await _activityVM!.updateLog(
-        id,
-        status: status,
-        txHash: txHash,
-        errorMessage: errorMessage,
-        errorAdvice: errorAdvice,
-        description: description,
-      );
-    }
-  }
-
-
-  // ══════════════════════════════════════════════════════════════════════════
   // MNEMONIC & WALLET MANAGEMENT
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -330,72 +263,8 @@ class StellarWalletServices {
       accountService.hasTrustline(accountId, asset);
 
   Future<String> createUsdcTrustline(
-      {required KeyPair keyPair, String limit = '922337203685.4775807'}) async {
-    String? activityId;
-
-    try {
-      // Log activity if enabled
-      if (_activityVM != null) {
-        final log = ActivityLog.trustline(
-          id: _activityVM!.generateId(),
-          isAdding: true,
-          assetCode: 'USDC',
-          issuer: usdcIssuer,
-          status: ActivityStatus.processing,
-        );
-        activityId = log.id;
-        await _logActivity(log);
-        _showNotification(log);
-      }
-
-      final hash = await accountService.createUsdcTrustline(
-        keyPair: keyPair,
-        limit: limit,
-      );
-
-      // Update activity on success
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'USDC enabled',
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      return hash;
-    } catch (e) {
-      // Update activity on error
-      if (activityId != null) {
-        String errorMsg = 'Failed to add USDC';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
+      {required KeyPair keyPair, String limit = '922337203685.4775807'}) =>
+      accountService.createUsdcTrustline(keyPair: keyPair, limit: limit);
 
   Future<String> createTrustline(
       {required KeyPair keyPair,
@@ -485,80 +354,14 @@ class StellarWalletServices {
     required double amount,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      // Log activity if enabled
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logPayment(
-          isSending: true,
-          amount: amount,
-          asset: 'XLM',
-          fromAddress: keyPair.accountId,
-          toAddress: destination,
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      // Execute payment with progress tracking
-      final hash = await paymentService.sendXlm(
+  }) =>
+      paymentService.sendXlm(
         keyPair: keyPair,
         destination: destination,
         amount: amount,
         memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
+        onProgress: onProgress,
       );
-
-      // Update activity on success
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Payment sent successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      // Update activity on error
-      if (activityId != null) {
-        String errorMsg = 'Payment failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
 
   Future<String> sendUsdc({
     required KeyPair keyPair,
@@ -566,79 +369,14 @@ class StellarWalletServices {
     required double usdcAmount,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      // Log activity if enabled
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logPayment(
-          isSending: true,
-          amount: usdcAmount,
-          asset: 'USDC',
-          fromAddress: keyPair.accountId,
-          toAddress: destination,
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await paymentService.sendUsdc(
+  }) =>
+      paymentService.sendUsdc(
         keyPair: keyPair,
         destination: destination,
         usdcAmount: usdcAmount,
         memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
+        onProgress: onProgress,
       );
-
-      // Update activity on success
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Payment sent successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      // Update activity on error
-      if (activityId != null) {
-        String errorMsg = 'Payment failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // SWAPS WITH ACTIVITY LOGGING
@@ -651,76 +389,15 @@ class StellarWalletServices {
     String? destination,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logSwap(
-          sendAmount: sendAmountXlm,
-          sendAsset: 'XLM',
-          receiveAmount: minUsdcOut,
-          receiveAsset: 'USDC',
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await swapService.swapXlmToUsdc(
+  }) =>
+      swapService.swapXlmToUsdc(
         keyPair: keyPair,
         sendAmountXlm: sendAmountXlm,
         minUsdcOut: minUsdcOut,
         destination: destination,
         memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
+        onProgress: onProgress,
       );
-
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Swap completed successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      if (activityId != null) {
-        String errorMsg = 'Swap failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
 
   Future<String> swapUsdcToXlm({
     required KeyPair keyPair,
@@ -729,76 +406,15 @@ class StellarWalletServices {
     String? destination,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logSwap(
-          sendAmount: sendAmountUsdc,
-          sendAsset: 'USDC',
-          receiveAmount: minXlmOut,
-          receiveAsset: 'XLM',
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await swapService.swapUsdcToXlm(
+  }) =>
+      swapService.swapUsdcToXlm(
         keyPair: keyPair,
         sendAmountUsdc: sendAmountUsdc,
         minXlmOut: minXlmOut,
         destination: destination,
         memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
+        onProgress: onProgress,
       );
-
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Swap completed successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      if (activityId != null) {
-        String errorMsg = 'Swap failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // CLAIMABLE BALANCES WITH ACTIVITY LOGGING
@@ -827,77 +443,14 @@ class StellarWalletServices {
     required double amount,
     required String recipientId,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      final assetCode = asset is AssetTypeCreditAlphaNum ? asset.code : 'XLM';
-
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logClaimable(
-          isCreating: true,
-          amount: amount,
-          asset: assetCode,
-          recipientAddress: recipientId,
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await claimableBalanceService.createUnconditionalClaimableBalance(
+  }) =>
+      claimableBalanceService.createUnconditionalClaimableBalance(
         keyPair: keyPair,
         asset: asset,
         amount: amount,
         recipientId: recipientId,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
+        onProgress: onProgress,
       );
-
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Claimable balance created',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      if (activityId != null) {
-        String errorMsg = 'Failed to create claimable balance';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
 
   Future<String> createTimeLockedPayment({
     required KeyPair keyPair,

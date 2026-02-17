@@ -27,7 +27,6 @@ import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 
-import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
@@ -168,11 +167,6 @@ List<SingleChildWidget> _buildProviders() {
     ChangeNotifierProxyProvider<CurrencyVM, PriceChartVM>(
       create: (ctx) => PriceChartVM(ctx.read<CurrencyVM>()),
       update: (ctx, currency, prev) => prev ?? PriceChartVM(currency),
-    ),
-
-    // 8) Activity Log VM (independent - initialize on create)
-    ChangeNotifierProvider<ActivityLogVM>(
-      create: (_) => ActivityLogVM()..init(),
     ),
 
     // 9) Base VMs (independent)
