@@ -39,6 +39,12 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
   late final TextEditingController _countryCtrl;
   late final TextEditingController _addressCtrl;
 
+  ProfileAvailability _availability = ProfileAvailability.available;
+  bool _isActive = true;
+  bool _autoUnavailable = false;
+  DateTime? _availableFrom;
+  DateTime? _availableTo;
+
   bool _saving = false;
   String? _error;
 
@@ -53,6 +59,13 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     _lastNameCtrl = TextEditingController(text: p?.lastName ?? '');
     _countryCtrl = TextEditingController(text: p?.country ?? '');
     _addressCtrl = TextEditingController(text: p?.address ?? '');
+    _availability = p?.availability == ProfileAvailability.unknown
+        ? ProfileAvailability.available
+        : (p?.availability ?? ProfileAvailability.available);
+    _isActive = p?.isActive ?? true;
+    _autoUnavailable = p?.autoUnavailable ?? false;
+    _availableFrom = p?.availableFrom;
+    _availableTo = p?.availableTo;
   }
 
   @override
@@ -83,6 +96,12 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
         lastName: _lastNameCtrl.text,
         country: _countryCtrl.text,
         address: _addressCtrl.text,
+        availability: _availability,
+        isActive: _isActive,
+        autoUnavailable: _autoUnavailable,
+        availableFrom: _availableFrom,
+        availableTo: _availableTo,
+        includeNulls: true,
       );
       await ProfileCoreService.I.upsertMe(req);
       if (!mounted) return;
@@ -96,11 +115,6 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     }
   }
 
-  String? _required(String? value, String label) {
-    if (value == null || value.trim().isEmpty) return '$label is required';
-    return null;
-  }
-
   String? _validateUsername(String? value) {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return null;
@@ -108,6 +122,61 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       return '3-30 chars, letters/numbers/underscore/dot only';
     }
     return null;
+  }
+
+  String _formatDateTime(DateTime? dt) {
+    if (dt == null) return 'Not set';
+    final local = dt.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
+  }
+
+  Future<void> _pickDateTime({required bool isFrom}) async {
+    final now = DateTime.now();
+    final seed = isFrom ? (_availableFrom ?? now) : (_availableTo ?? now);
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: seed,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(seed),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    final next = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+    setState(() {
+      if (isFrom) {
+        _availableFrom = next.toUtc();
+      } else {
+        _availableTo = next.toUtc();
+      }
+    });
+  }
+
+  void _clearDateTime({required bool isFrom}) {
+    setState(() {
+      if (isFrom) {
+        _availableFrom = null;
+      } else {
+        _availableTo = null;
+      }
+    });
   }
 
   @override
@@ -231,11 +300,9 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                         _FormField(
                           controller: _firstNameCtrl,
                           label: 'First Name',
-                          hint: 'Required',
+                          hint: 'Optional',
                           icon: Icons.person_outline_rounded,
                           action: TextInputAction.next,
-                          required: true,
-                          validator: (v) => _required(v, 'First name'),
                           c: c,
                         ),
                         const SizedBox(height: 10),
@@ -251,11 +318,9 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                         _FormField(
                           controller: _lastNameCtrl,
                           label: 'Last Name',
-                          hint: 'Required',
+                          hint: 'Optional',
                           icon: Icons.person_outline_rounded,
                           action: TextInputAction.next,
-                          required: true,
-                          validator: (v) => _required(v, 'Last name'),
                           c: c,
                         ),
 
@@ -270,21 +335,132 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                           hint: 'e.g. Philippines',
                           icon: Icons.public_rounded,
                           action: TextInputAction.next,
-                          required: true,
-                          validator: (v) => _required(v, 'Country'),
                           c: c,
                         ),
                         const SizedBox(height: 10),
                         _FormField(
                           controller: _addressCtrl,
                           label: 'Address',
-                          hint: 'Street, city, province…',
+                          hint: 'Street, city, province (optional)',
                           icon: Icons.location_on_outlined,
                           action: TextInputAction.done,
-                          required: true,
                           multiline: true,
-                          validator: (v) => _required(v, 'Address'),
                           c: c,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        _SectionHeader(label: 'TRADING AVAILABILITY', c: c),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<ProfileAvailability>(
+                          value: _availability == ProfileAvailability.unknown
+                              ? ProfileAvailability.available
+                              : _availability,
+                          items:
+                              const [
+                                    ProfileAvailability.available,
+                                    ProfileAvailability.unavailable,
+                                    ProfileAvailability.onBreak,
+                                  ]
+                                  .map(
+                                    (v) => DropdownMenuItem(
+                                      value: v,
+                                      child: Text(v.name.toUpperCase()),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: _saving
+                              ? null
+                              : (v) {
+                                  if (v == null) return;
+                                  setState(() => _availability = v);
+                                },
+                          decoration: InputDecoration(
+                            labelText: 'Availability',
+                            prefixIcon: Icon(
+                              Icons.schedule_outlined,
+                              color: c.textSecondary.withOpacity(0.6),
+                            ),
+                            filled: true,
+                            fillColor: c.border.withOpacity(0.05),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(13),
+                              borderSide: BorderSide(
+                                color: c.border.withOpacity(0.25),
+                                width: 1.2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(13),
+                              borderSide: BorderSide(
+                                color: c.border.withOpacity(0.25),
+                                width: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: c.surface,
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(
+                              color: c.border.withOpacity(0.25),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              SwitchListTile.adaptive(
+                                value: _isActive,
+                                onChanged: _saving
+                                    ? null
+                                    : (v) => setState(() => _isActive = v),
+                                title: const Text('Profile active'),
+                                subtitle: const Text(
+                                  'Enable or disable profile',
+                                ),
+                              ),
+                              Divider(
+                                height: 1,
+                                color: c.border.withOpacity(0.22),
+                              ),
+                              SwitchListTile.adaptive(
+                                value: _autoUnavailable,
+                                onChanged: _saving
+                                    ? null
+                                    : (v) =>
+                                          setState(() => _autoUnavailable = v),
+                                title: const Text('Auto unavailable'),
+                                subtitle: const Text(
+                                  'Auto-set unavailable outside window',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _AvailabilityDateField(
+                          c: c,
+                          label: 'Available From',
+                          value: _formatDateTime(_availableFrom),
+                          onPick: _saving
+                              ? null
+                              : () => _pickDateTime(isFrom: true),
+                          onClear: _saving
+                              ? null
+                              : () => _clearDateTime(isFrom: true),
+                        ),
+                        const SizedBox(height: 10),
+                        _AvailabilityDateField(
+                          c: c,
+                          label: 'Available To',
+                          value: _formatDateTime(_availableTo),
+                          onPick: _saving
+                              ? null
+                              : () => _pickDateTime(isFrom: false),
+                          onClear: _saving
+                              ? null
+                              : () => _clearDateTime(isFrom: false),
                         ),
 
                         // Error banner
@@ -355,6 +531,89 @@ class _FieldRow extends StatelessWidget {
   }
 }
 
+class _AvailabilityDateField extends StatelessWidget {
+  const _AvailabilityDateField({
+    required this.c,
+    required this.label,
+    required this.value,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final AppColor c;
+  final String label;
+  final String value;
+  final VoidCallback? onPick;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: c.border.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: AppOutlinedButton(
+                  onPressed: onPick,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.primary,
+                    side: BorderSide(color: c.primary.withOpacity(0.45)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Set'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppTextButton(
+                  onPressed: onClear,
+                  style: TextButton.styleFrom(
+                    foregroundColor: c.textSecondary,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Clear'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FORM FIELD  — flat, soft, modern
 // ─────────────────────────────────────────────────────────────────────────────
@@ -367,7 +626,6 @@ class _FormField extends StatefulWidget {
     required this.icon,
     required this.action,
     required this.c,
-    this.required = false,
     this.multiline = false,
     this.validator,
     this.inputFormatters,
@@ -379,7 +637,6 @@ class _FormField extends StatefulWidget {
   final IconData icon;
   final TextInputAction action;
   final AppColor c;
-  final bool required;
   final bool multiline;
   final String? Function(String?)? validator;
   final List<TextInputFormatter>? inputFormatters;
@@ -422,7 +679,7 @@ class _FormFieldState extends State<_FormField> {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          labelText: widget.required ? '${widget.label} *' : widget.label,
+          labelText: widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.45),

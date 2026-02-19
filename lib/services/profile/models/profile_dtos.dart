@@ -16,6 +16,7 @@ class UpsertProfileRequest {
   final bool? autoUnavailable;
   final DateTime? availableFrom;
   final DateTime? availableTo;
+  final bool includeNulls;
 
   const UpsertProfileRequest({
     this.username,
@@ -30,6 +31,7 @@ class UpsertProfileRequest {
     this.autoUnavailable,
     this.availableFrom,
     this.availableTo,
+    this.includeNulls = false,
   });
 
   static String? _normalizeText(String? value) {
@@ -58,22 +60,28 @@ class UpsertProfileRequest {
     final normalizedMiddleName = _normalizeText(middleName);
     final normalizedLastName = _normalizeText(lastName);
     final normalizedAddress = _normalizeText(address);
+    final availabilityApi = availability == null
+        ? null
+        : profileAvailabilityToApi(availability!);
 
     return {
-      if (normalizedUsername != null) 'username': normalizedUsername,
-      if (normalizedDisplayName != null) 'displayName': normalizedDisplayName,
-      if (normalizedCountry != null) 'country': normalizedCountry,
-      if (normalizedFirstName != null) 'firstName': normalizedFirstName,
-      if (normalizedMiddleName != null) 'middleName': normalizedMiddleName,
-      if (normalizedLastName != null) 'lastName': normalizedLastName,
-      if (normalizedAddress != null) 'address': normalizedAddress,
-      if (availability != null)
-        'availability': profileAvailabilityToApi(availability!),
-      if (isActive != null) 'isActive': isActive,
-      if (autoUnavailable != null) 'autoUnavailable': autoUnavailable,
-      if (availableFrom != null)
-        'availableFrom': availableFrom!.toIso8601String(),
-      if (availableTo != null) 'availableTo': availableTo!.toIso8601String(),
+      if (includeNulls || username != null) 'username': normalizedUsername,
+      if (includeNulls || displayName != null)
+        'displayName': normalizedDisplayName,
+      if (includeNulls || country != null) 'country': normalizedCountry,
+      if (includeNulls || firstName != null) 'firstName': normalizedFirstName,
+      if (includeNulls || middleName != null)
+        'middleName': normalizedMiddleName,
+      if (includeNulls || lastName != null) 'lastName': normalizedLastName,
+      if (includeNulls || address != null) 'address': normalizedAddress,
+      if (includeNulls || availability != null) 'availability': availabilityApi,
+      if (includeNulls || isActive != null) 'isActive': isActive,
+      if (includeNulls || autoUnavailable != null)
+        'autoUnavailable': autoUnavailable,
+      if (includeNulls || availableFrom != null)
+        'availableFrom': availableFrom?.toIso8601String(),
+      if (includeNulls || availableTo != null)
+        'availableTo': availableTo?.toIso8601String(),
     };
   }
 }

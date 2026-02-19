@@ -1,5 +1,7 @@
 // lib/features/app_drawer/view/app_drawer.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
@@ -43,6 +45,7 @@ class _AppDrawerState extends State<AppDrawer>
   bool _loading = true;
   bool _loggingOut = false;
   TrustStatus _trustStatus = TrustStatus.unknown;
+  StreamSubscription<void>? _profileChangesSub;
 
   late final AnimationController _entryCtrl;
   late final Animation<double> _fadeAnim;
@@ -60,11 +63,17 @@ class _AppDrawerState extends State<AppDrawer>
       begin: const Offset(-0.04, 0),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
-    _bootstrap();
+    _profileChangesSub = ProfileCoreService.changes.listen((_) {
+      if (!mounted) return;
+      _fetchProfileData();
+    });
+    _bootstrap(); 
   }
 
   @override
   void dispose() {
+    _profileChangesSub?.cancel();
+    _profileChangesSub = null;
     _entryCtrl.dispose();
     super.dispose();
   }
@@ -74,6 +83,7 @@ class _AppDrawerState extends State<AppDrawer>
     _entryCtrl.forward();
     await Future.wait([
       _fetchRealUser(),
+      _fetchProfileData(),
       _fetchAppInfo(),
       _fetchVerificationStatus(),
     ]);
@@ -83,19 +93,10 @@ class _AppDrawerState extends State<AppDrawer>
     try {
       if (!await _auth.isAuthenticated) return;
       final realUser = await _auth.currentUser;
-      final same = _cachedUser != null && _isSameUser(_cachedUser!, realUser);
       _cachedUser = realUser;
       if (mounted) setState(() {});
-      if (!same)
-        await Future.wait([_fetchProfileData(), _fetchVerificationStatus()]);
     } catch (_) {}
   }
-
-  bool _isSameUser(User a, User b) =>
-      a.id == b.id &&
-      a.name == b.name &&
-      a.email == b.email &&
-      a.avatarUrl == b.avatarUrl;
 
   Future<void> _fetchAppInfo() async {
     if (_cachedInfo != null) return;
@@ -331,6 +332,29 @@ class _ProfileHeader extends StatelessWidget {
   final AppColor colors;
 
   bool _hasValue(String? value) => value != null && value.trim().isNotEmpty;
+  String? _readValue(String? value) {
+    final v = value?.trim();
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  String? get _profileTitle {
+    final p = profile;
+    if (p == null) return null;
+
+    final displayName = _readValue(p.displayName);
+    if (displayName != null) return displayName;
+
+    final first = _readValue(p.firstName);
+    final middle = _readValue(p.middleName);
+    final last = _readValue(p.lastName);
+    final fullName = [first, middle, last].whereType<String>().join(' ').trim();
+    if (fullName.isNotEmpty) return fullName;
+
+    final username = _readValue(p.username);
+    if (username != null) return '@$username';
+
+    return null;
+  }
 
   bool get _hasProfileData {
     final p = profile;
@@ -354,6 +378,7 @@ class _ProfileHeader extends StatelessWidget {
     final connectedEmail = user.email.trim().isEmpty
         ? 'No connected email'
         : user.email.trim();
+    final profileTitle = _profileTitle;
 
     return Container(
       width: double.infinity,
@@ -413,16 +438,34 @@ class _ProfileHeader extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              connectedEmail,
-              style: TextStyle(
-                color: colors.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13.5,
-                letterSpacing: -0.2,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (profileTitle != null)
+                  Text(
+                    profileTitle,
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (profileTitle != null) const SizedBox(height: 1),
+                Text(
+                  connectedEmail,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    letterSpacing: -0.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
         ],
