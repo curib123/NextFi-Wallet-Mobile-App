@@ -67,7 +67,7 @@ class _AppDrawerState extends State<AppDrawer>
       if (!mounted) return;
       _fetchProfileData();
     });
-    _bootstrap(); 
+    _bootstrap();
   }
 
   @override
@@ -356,6 +356,23 @@ class _ProfileHeader extends StatelessWidget {
     return null;
   }
 
+  List<({String label, String value})> get _profileFields {
+    final p = profile;
+    if (p == null) return const [];
+
+    String readOrDefault(String? raw) => _readValue(raw) ?? 'Not set';
+
+    return [
+      (label: 'Username', value: readOrDefault(p.username)),
+      (label: 'Display Name', value: readOrDefault(p.displayName)),
+      (label: 'Country', value: readOrDefault(p.country)),
+      (label: 'First Name', value: readOrDefault(p.firstName)),
+      (label: 'Middle Name', value: readOrDefault(p.middleName)),
+      (label: 'Last Name', value: readOrDefault(p.lastName)),
+      (label: 'Address', value: readOrDefault(p.address)),
+    ];
+  }
+
   bool get _hasProfileData {
     final p = profile;
     if (p == null) return false;
@@ -379,6 +396,7 @@ class _ProfileHeader extends StatelessWidget {
         ? 'No connected email'
         : user.email.trim();
     final profileTitle = _profileTitle;
+    final profileFields = _profileFields;
 
     return Container(
       width: double.infinity,
@@ -389,87 +407,173 @@ class _ProfileHeader extends StatelessWidget {
           bottom: BorderSide(color: colors.border.withOpacity(0.18)),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            clipBehavior: Clip.none,
+          Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _hasProfileData
-                        ? colors.primary.withOpacity(0.2)
-                        : colors.border.withOpacity(0.4),
-                    width: 2.5,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _hasProfileData
+                            ? colors.primary.withOpacity(0.2)
+                            : colors.border.withOpacity(0.4),
+                        width: 2.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _hasProfileData
+                              ? colors.primary.withOpacity(0.08)
+                              : Colors.black.withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: UserAvatar(user: user, radius: 30, colors: colors),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _hasProfileData
-                          ? colors.primary.withOpacity(0.08)
-                          : Colors.black.withOpacity(0.04),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: colors.success,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: colors.surface, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.success.withOpacity(0.4),
+                            blurRadius: 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (profileTitle != null)
+                      Text(
+                        profileTitle,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (profileTitle != null) const SizedBox(height: 1),
+                    Text(
+                      connectedEmail,
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                        letterSpacing: -0.1,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                ),
-                child: UserAvatar(user: user, radius: 30, colors: colors),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: colors.success,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: colors.surface, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.success.withOpacity(0.4),
-                        blurRadius: 5,
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (profileTitle != null)
+          if (profileFields.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.border.withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    profileTitle,
+                    'PROFILE DATA',
                     style: TextStyle(
-                      color: colors.textPrimary,
+                      color: colors.textSecondary.withOpacity(0.7),
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w700,
-                      fontSize: 14.5,
-                      letterSpacing: -0.2,
+                      letterSpacing: 0.9,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                if (profileTitle != null) const SizedBox(height: 1),
-                Text(
-                  connectedEmail,
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12.5,
-                    letterSpacing: -0.1,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  ...List.generate(profileFields.length, (index) {
+                    final field = profileFields[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == profileFields.length - 1 ? 0 : 8,
+                      ),
+                      child: _ProfileDataRow(
+                        label: field.label,
+                        value: field.value,
+                        colors: colors,
+                      ),
+                    );
+                  }),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _ProfileDataRow extends StatelessWidget {
+  const _ProfileDataRow({
+    required this.label,
+    required this.value,
+    required this.colors,
+  });
+
+  final String label;
+  final String value;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: colors.textSecondary.withOpacity(0.78),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          value,
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontSize: 12.8,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.1,
+            height: 1.25,
+          ),
+        ),
+      ],
     );
   }
 }
