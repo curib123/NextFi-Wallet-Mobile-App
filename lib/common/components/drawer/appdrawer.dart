@@ -10,7 +10,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
+import 'package:next_fi/features/merchant_offers/view/merchant_offers_screen.dart';
 import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
+import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
 import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
@@ -34,22 +36,22 @@ class AppDrawer extends StatefulWidget {
 
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
-  final _auth         = AuthService();
-  final _profile      = ProfileCoreService.I;
+  final _auth = AuthService();
+  final _profile = ProfileCoreService.I;
   final _verification = VerificationCoreService.I;
 
-  static User?         _cachedUser;
-  static PackageInfo?  _cachedInfo;
+  static User? _cachedUser;
+  static PackageInfo? _cachedInfo;
   static ProfileModel? _cachedProfile;
 
-  bool        _loading    = true;
-  bool        _loggingOut = false;
+  bool _loading = true;
+  bool _loggingOut = false;
   TrustStatus _trustStatus = TrustStatus.unknown;
   StreamSubscription<void>? _profileChangesSub;
 
   late final AnimationController _entryCtrl;
-  late final Animation<double>   _fadeAnim;
-  late final Animation<Offset>   _slideAnim;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
 
   @override
   void initState() {
@@ -58,9 +60,11 @@ class _AppDrawerState extends State<AppDrawer>
       vsync: this,
       duration: const Duration(milliseconds: 360),
     );
-    _fadeAnim  = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(-0.04, 0), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+    _fadeAnim = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(-0.04, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
 
     _profileChangesSub = ProfileCoreService.changes.listen((_) {
       if (!mounted) return;
@@ -140,9 +144,9 @@ class _AppDrawerState extends State<AppDrawer>
     if (confirm != true || !mounted) return;
     setState(() => _loggingOut = true);
     await _auth.logout();
-    _cachedUser   = null;
+    _cachedUser = null;
     _cachedProfile = null;
-    _trustStatus  = TrustStatus.unknown;
+    _trustStatus = TrustStatus.unknown;
     if (!mounted) return;
     Navigator.pop(context);
     widget.onLogout?.call();
@@ -151,29 +155,77 @@ class _AppDrawerState extends State<AppDrawer>
 
   void _redirectToLogin() {
     Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
   }
 
   void _handleVerificationTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
     _push(const VerificationFlowScreen());
   }
 
   void _handleMerchantRequestTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
     _push(const MerchantRequestScreen());
   }
 
+  void _handleMerchantOffersTap() {
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
+    if (!_isVerifiedForTradeAccess) {
+      _push(const VerificationFlowScreen());
+      return;
+    }
+    if (_cachedProfile?.isMerchant != true) {
+      _push(const MerchantRequestScreen());
+      return;
+    }
+    _push(const MerchantOffersScreen());
+  }
+
+  void _handleMerchantTradesTap() {
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
+    if (!_isVerifiedForTradeAccess) {
+      _push(const VerificationFlowScreen());
+      return;
+    }
+    if (_cachedProfile?.isMerchant != true) {
+      _push(const MerchantRequestScreen());
+      return;
+    }
+    _push(const MerchantTradesScreen());
+  }
+
   bool get _isVerifiedForTradeAccess =>
-      _trustStatus == TrustStatus.ready || (_cachedProfile?.isVerified ?? false);
+      _trustStatus == TrustStatus.ready ||
+      (_cachedProfile?.isVerified ?? false);
 
   void _openTradeTemplate(TradeTemplateMode mode) {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
-    if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
+    if (!_isVerifiedForTradeAccess) {
+      _push(const VerificationFlowScreen());
+      return;
+    }
     _push(TradeTemplateScreen(mode: mode));
   }
 
-  void _handleBuyTradesTap()  => _openTradeTemplate(TradeTemplateMode.buy);
+  void _handleBuyTradesTap() => _openTradeTemplate(TradeTemplateMode.buy);
   void _handleSellTradesTap() => _openTradeTemplate(TradeTemplateMode.sell);
 
   void _push(Widget screen) {
@@ -183,10 +235,14 @@ class _AppDrawerState extends State<AppDrawer>
 
   @override
   Widget build(BuildContext context) {
-    final c    = AppColor.of(context);
-    final mq   = MediaQuery.of(context);
+    final c = AppColor.of(context);
+    final mq = MediaQuery.of(context);
     final user = _cachedUser;
-    final canMerchant = user != null && _isVerifiedForTradeAccess;
+    final canRequestMerchant =
+        user != null &&
+        _isVerifiedForTradeAccess &&
+        _cachedProfile?.isMerchant != true;
+    final isMerchant = user != null && _cachedProfile?.isMerchant == true;
 
     return Drawer(
       backgroundColor: c.background,
@@ -246,7 +302,7 @@ class _AppDrawerState extends State<AppDrawer>
                       onTap: _handleVerificationTap,
                       requiresAuth: user == null,
                     ),
-                    if (canMerchant)
+                    if (canRequestMerchant)
                       _NavTile(
                         icon: LucideIcons.store,
                         label: 'Merchant Request',
@@ -254,6 +310,24 @@ class _AppDrawerState extends State<AppDrawer>
                         colors: c,
                         onTap: _handleMerchantRequestTap,
                       ),
+                    if (isMerchant) ...[
+                      const SizedBox(height: 4),
+                      const _SectionLabel(label: 'MERCHANT'),
+                      _NavTile(
+                        icon: LucideIcons.badgeDollarSign,
+                        label: 'Manage Offers',
+                        description: 'Create and edit merchant offers',
+                        colors: c,
+                        onTap: _handleMerchantOffersTap,
+                      ),
+                      _NavTile(
+                        icon: LucideIcons.messageSquare,
+                        label: 'Merchant Trades',
+                        description: 'Incoming trades and chat inbox',
+                        colors: c,
+                        onTap: _handleMerchantTradesTap,
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     const _SectionLabel(label: 'SETTINGS'),
                     _NavTile(
@@ -334,10 +408,10 @@ class _ProfileHeader extends StatelessWidget {
     required this.colors,
   });
 
-  final User          user;
+  final User user;
   final ProfileModel? profile;
-  final TrustStatus   trustStatus;
-  final AppColor      colors;
+  final TrustStatus trustStatus;
+  final AppColor colors;
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -351,11 +425,11 @@ class _ProfileHeader extends StatelessWidget {
 
   // "Juan D. Cruz" — assembled from parts, never shown if displayName exists
   String? get _fullName {
-    final parts = [profile?.firstName, profile?.middleName, profile?.lastName]
-        .map(_s)
-        .whereType<String>()
-        .join(' ')
-        .trim();
+    final parts = [
+      profile?.firstName,
+      profile?.middleName,
+      profile?.lastName,
+    ].map(_s).whereType<String>().join(' ').trim();
     return parts.isEmpty ? null : parts;
   }
 
@@ -372,7 +446,7 @@ class _ProfileHeader extends StatelessWidget {
   String? get _country => _s(profile?.country);
 
   bool get _isMerchant => profile?.isMerchant ?? false;
-  bool get _isPending  => profile?.merchantRequestPending ?? false;
+  bool get _isPending => profile?.merchantRequestPending ?? false;
 
   // ── Resolve the three text lines with zero duplication ───────────────────
   //
@@ -380,7 +454,7 @@ class _ProfileHeader extends StatelessWidget {
   // line2  : @handle — only shown when a handle exists (never repeats line1)
   // line3  : email   — only shown when it wouldn't repeat line1
 
-  String  get _line1 => _displayName ?? _fullName ?? _email ?? 'Anonymous';
+  String get _line1 => _displayName ?? _fullName ?? _email ?? 'Anonymous';
 
   String? get _line2 => _handle; // null if no username
 
@@ -396,20 +470,40 @@ class _ProfileHeader extends StatelessWidget {
 
   ({Color color, IconData icon, String label}) get _trust =>
       switch (trustStatus) {
-        TrustStatus.ready     => (color: colors.success,       icon: LucideIcons.badgeCheck, label: 'Verified'),
-        TrustStatus.reviewing => (color: colors.warning,       icon: LucideIcons.clock,      label: 'In Review'),
-        TrustStatus.suspended => (color: colors.error,         icon: LucideIcons.shieldOff,  label: 'Suspended'),
-        TrustStatus.basic     => (color: colors.textSecondary, icon: LucideIcons.shield,     label: 'Basic'),
-        _                     => (color: colors.textSecondary, icon: LucideIcons.shield,     label: 'Unverified'),
+        TrustStatus.ready => (
+          color: colors.success,
+          icon: LucideIcons.badgeCheck,
+          label: 'Verified',
+        ),
+        TrustStatus.reviewing => (
+          color: colors.warning,
+          icon: LucideIcons.clock,
+          label: 'In Review',
+        ),
+        TrustStatus.suspended => (
+          color: colors.error,
+          icon: LucideIcons.shieldOff,
+          label: 'Suspended',
+        ),
+        TrustStatus.basic => (
+          color: colors.textSecondary,
+          icon: LucideIcons.shield,
+          label: 'Basic',
+        ),
+        _ => (
+          color: colors.textSecondary,
+          icon: LucideIcons.shield,
+          label: 'Unverified',
+        ),
       };
 
   @override
   Widget build(BuildContext context) {
-    final top  = MediaQuery.of(context).padding.top;
-    final l1   = _line1;
-    final l2   = _line2;
-    final l3   = _line3;
-    final tc   = _trust;
+    final top = MediaQuery.of(context).padding.top;
+    final l1 = _line1;
+    final l2 = _line2;
+    final l3 = _line3;
+    final tc = _trust;
     final ctry = _country;
 
     return Container(
@@ -419,7 +513,6 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           // ── Content block ────────────────────────────────────────────────
           Container(
             width: double.infinity,
@@ -428,7 +521,6 @@ class _ProfileHeader extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-
                 // ZONE A — Avatar
                 _DrawerAvatar(
                   user: user,
@@ -444,7 +536,6 @@ class _ProfileHeader extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-
                       // Line 1 — display name / full name / email
                       Text(
                         l1,
@@ -498,21 +589,20 @@ class _ProfileHeader extends StatelessWidget {
                         spacing: 6,
                         runSpacing: 6,
                         children: [
-
                           // Verification status — always shown
                           _MetaPill(
-                            icon:   tc.icon,
-                            label:  tc.label,
-                            color:  tc.color,
+                            icon: tc.icon,
+                            label: tc.label,
+                            color: tc.color,
                             colors: colors,
                           ),
 
                           // Country — shown once, here only
                           if (ctry != null)
                             _MetaPill(
-                              icon:   LucideIcons.mapPin,
-                              label:  ctry,
-                              color:  colors.textSecondary,
+                              icon: LucideIcons.mapPin,
+                              label: ctry,
+                              color: colors.textSecondary,
                               colors: colors,
                               subtle: true,
                             ),
@@ -520,16 +610,16 @@ class _ProfileHeader extends StatelessWidget {
                           // Merchant / Pending — mutually exclusive
                           if (_isMerchant)
                             _MetaPill(
-                              icon:   LucideIcons.store,
-                              label:  'Merchant',
-                              color:  colors.primary,
+                              icon: LucideIcons.store,
+                              label: 'Merchant',
+                              color: colors.primary,
                               colors: colors,
                             )
                           else if (_isPending)
                             _MetaPill(
-                              icon:   LucideIcons.hourglass,
-                              label:  'Pending',
-                              color:  colors.warning,
+                              icon: LucideIcons.hourglass,
+                              label: 'Pending',
+                              color: colors.warning,
                               colors: colors,
                               subtle: true,
                             ),
@@ -543,7 +633,11 @@ class _ProfileHeader extends StatelessWidget {
           ),
 
           // Hard rule — clean separation from nav list
-          Divider(height: 1, thickness: 1, color: colors.border.withOpacity(0.13)),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: colors.border.withOpacity(0.13),
+          ),
         ],
       ),
     );
@@ -561,8 +655,8 @@ class _DrawerAvatar extends StatelessWidget {
     required this.colors,
   });
 
-  final User     user;
-  final bool     isMerchant;
+  final User user;
+  final bool isMerchant;
   final AppColor colors;
 
   @override
@@ -591,15 +685,20 @@ class _DrawerAvatar extends StatelessWidget {
 
         // Online dot — bottom-right
         Positioned(
-          bottom: 1, right: 1,
+          bottom: 1,
+          right: 1,
           child: Container(
-            width: 12, height: 12,
+            width: 12,
+            height: 12,
             decoration: BoxDecoration(
               color: colors.success,
               shape: BoxShape.circle,
               border: Border.all(color: colors.surface, width: 2),
               boxShadow: [
-                BoxShadow(color: colors.success.withOpacity(0.4), blurRadius: 5),
+                BoxShadow(
+                  color: colors.success.withOpacity(0.4),
+                  blurRadius: 5,
+                ),
               ],
             ),
           ),
@@ -608,9 +707,11 @@ class _DrawerAvatar extends StatelessWidget {
         // Merchant crown — top-right
         if (isMerchant)
           Positioned(
-            top: -2, right: -2,
+            top: -2,
+            right: -2,
             child: Container(
-              width: 18, height: 18,
+              width: 18,
+              height: 18,
               decoration: BoxDecoration(
                 color: colors.primary,
                 shape: BoxShape.circle,
@@ -638,10 +739,10 @@ class _MetaPill extends StatelessWidget {
   });
 
   final IconData icon;
-  final String   label;
-  final Color    color;
+  final String label;
+  final Color color;
   final AppColor colors;
-  final bool     subtle;
+  final bool subtle;
 
   @override
   Widget build(BuildContext context) {
@@ -649,10 +750,14 @@ class _MetaPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color:  subtle ? colors.border.withOpacity(0.08) : color.withOpacity(0.10),
+        color: subtle
+            ? colors.border.withOpacity(0.08)
+            : color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
-          color: subtle ? colors.border.withOpacity(0.20) : color.withOpacity(0.22),
+          color: subtle
+              ? colors.border.withOpacity(0.20)
+              : color.withOpacity(0.22),
           width: 1,
         ),
       ),
@@ -687,8 +792,8 @@ class _LoginPrompt extends StatelessWidget {
     required this.topPadding,
     required this.onTap,
   });
-  final AppColor     colors;
-  final double       topPadding;
+  final AppColor colors;
+  final double topPadding;
   final VoidCallback onTap;
 
   @override
@@ -706,11 +811,15 @@ class _LoginPrompt extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 56, height: 56,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: colors.border.withOpacity(0.07),
-                    border: Border.all(color: colors.border.withOpacity(0.20), width: 1.5),
+                    border: Border.all(
+                      color: colors.border.withOpacity(0.20),
+                      width: 1.5,
+                    ),
                   ),
                   child: Icon(
                     LucideIcons.userCircle2,
@@ -726,15 +835,19 @@ class _LoginPrompt extends StatelessWidget {
                       Text(
                         'Guest',
                         style: TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.w700,
-                          color: colors.textPrimary, letterSpacing: -0.5, height: 1.2,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: colors.textPrimary,
+                          letterSpacing: -0.5,
+                          height: 1.2,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         'Sign in to unlock all features',
                         style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                           color: colors.textSecondary,
                         ),
                       ),
@@ -761,7 +874,9 @@ class _LoginPrompt extends StatelessWidget {
                               Text(
                                 'Sign In',
                                 style: TextStyle(
-                                  fontSize: 13.5, fontWeight: FontWeight.w600, letterSpacing: -0.1,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.1,
                                 ),
                               ),
                             ],
@@ -774,7 +889,11 @@ class _LoginPrompt extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 1, thickness: 1, color: colors.border.withOpacity(0.13)),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: colors.border.withOpacity(0.13),
+          ),
         ],
       ),
     );
@@ -822,13 +941,13 @@ class _NavTile extends StatelessWidget {
     this.requiresAuth = false,
   });
 
-  final IconData     icon;
-  final String       label;
-  final String       description;
-  final AppColor     colors;
+  final IconData icon;
+  final String label;
+  final String description;
+  final AppColor colors;
   final VoidCallback onTap;
-  final Widget?      trailing;
-  final bool         requiresAuth;
+  final Widget? trailing;
+  final bool requiresAuth;
 
   @override
   Widget build(BuildContext context) {
@@ -836,19 +955,24 @@ class _NavTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor:    colors.primary.withOpacity(0.06),
+        splashColor: colors.primary.withOpacity(0.06),
         highlightColor: colors.primary.withOpacity(0.03),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: Row(
             children: [
               Container(
-                width: 38, height: 38,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   color: colors.border.withOpacity(0.07),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(icon, color: colors.textPrimary.withOpacity(0.72), size: 18),
+                child: Icon(
+                  icon,
+                  color: colors.textPrimary.withOpacity(0.72),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -858,14 +982,19 @@ class _NavTile extends StatelessWidget {
                     Text(
                       label,
                       style: TextStyle(
-                        fontSize: 14.5, fontWeight: FontWeight.w600,
-                        color: colors.textPrimary, letterSpacing: -0.2,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textPrimary,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       description,
-                      style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -875,7 +1004,10 @@ class _NavTile extends StatelessWidget {
                 trailing!
               else if (requiresAuth)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: colors.border.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(6),
@@ -884,12 +1016,17 @@ class _NavTile extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.lock_outline_rounded, size: 10, color: colors.textSecondary.withOpacity(0.6)),
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 10,
+                        color: colors.textSecondary.withOpacity(0.6),
+                      ),
                       const SizedBox(width: 3),
                       Text(
                         'Sign in',
                         style: TextStyle(
-                          fontSize: 10, fontWeight: FontWeight.w600,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                           color: colors.textSecondary.withOpacity(0.6),
                         ),
                       ),
@@ -897,7 +1034,11 @@ class _NavTile extends StatelessWidget {
                   ),
                 )
               else
-                Icon(LucideIcons.chevronRight, color: colors.textSecondary.withOpacity(0.3), size: 16),
+                Icon(
+                  LucideIcons.chevronRight,
+                  color: colors.textSecondary.withOpacity(0.3),
+                  size: 16,
+                ),
             ],
           ),
         ),
@@ -913,22 +1054,29 @@ class _NavTile extends StatelessWidget {
 class _TrustStatusDot extends StatelessWidget {
   const _TrustStatusDot({required this.status, required this.colors});
   final TrustStatus status;
-  final AppColor    colors;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      TrustStatus.ready     => colors.success,
+      TrustStatus.ready => colors.success,
       TrustStatus.reviewing => colors.warning,
       TrustStatus.suspended => colors.error,
-      _                     => colors.textSecondary.withOpacity(0.35),
+      _ => colors.textSecondary.withOpacity(0.35),
     };
     return Container(
-      width: 8, height: 8,
+      width: 8,
+      height: 8,
       decoration: BoxDecoration(
-        color: color, shape: BoxShape.circle,
+        color: color,
+        shape: BoxShape.circle,
         boxShadow: status == TrustStatus.ready
-            ? [BoxShadow(color: colors.success.withOpacity(0.45), blurRadius: 6)]
+            ? [
+                BoxShadow(
+                  color: colors.success.withOpacity(0.45),
+                  blurRadius: 6,
+                ),
+              ]
             : null,
       ),
     );
@@ -942,7 +1090,7 @@ class _TrustStatusDot extends StatelessWidget {
 class _AppVersionInfo extends StatelessWidget {
   const _AppVersionInfo({required this.info, required this.colors});
   final PackageInfo info;
-  final AppColor    colors;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
@@ -950,12 +1098,17 @@ class _AppVersionInfo extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: Row(
         children: [
-          Icon(LucideIcons.info, size: 13, color: colors.textSecondary.withOpacity(0.45)),
+          Icon(
+            LucideIcons.info,
+            size: 13,
+            color: colors.textSecondary.withOpacity(0.45),
+          ),
           const SizedBox(width: 6),
           Text(
             '${info.appName} v${info.version}',
             style: TextStyle(
-              fontSize: 11.5, fontWeight: FontWeight.w500,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
               color: colors.textSecondary.withOpacity(0.55),
             ),
           ),
@@ -975,8 +1128,8 @@ class _LogoutButton extends StatelessWidget {
     required this.colors,
     required this.onTap,
   });
-  final bool         isLoading;
-  final AppColor     colors;
+  final bool isLoading;
+  final AppColor colors;
   final VoidCallback onTap;
 
   @override
@@ -985,7 +1138,7 @@ class _LogoutButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: isLoading ? null : onTap,
-        splashColor:    colors.error.withOpacity(0.06),
+        splashColor: colors.error.withOpacity(0.06),
         highlightColor: colors.error.withOpacity(0.03),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
@@ -995,10 +1148,20 @@ class _LogoutButton extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 child: isLoading
                     ? SizedBox(
-                  key: const ValueKey('l'), width: 18, height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(colors.error)),
-                )
-                    : Icon(key: const ValueKey('i'), LucideIcons.logOut, color: colors.error, size: 18),
+                        key: const ValueKey('l'),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(colors.error),
+                        ),
+                      )
+                    : Icon(
+                        key: const ValueKey('i'),
+                        LucideIcons.logOut,
+                        color: colors.error,
+                        size: 18,
+                      ),
               ),
               const SizedBox(width: 14),
               AnimatedSwitcher(
@@ -1007,8 +1170,10 @@ class _LogoutButton extends StatelessWidget {
                   isLoading ? 'Signing out…' : 'Sign Out',
                   key: ValueKey(isLoading),
                   style: TextStyle(
-                    fontSize: 14.5, fontWeight: FontWeight.w600,
-                    color: colors.error, letterSpacing: -0.2,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: colors.error,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ),
@@ -1026,7 +1191,7 @@ class _LogoutButton extends StatelessWidget {
 
 class _ProfileShimmer extends StatefulWidget {
   const _ProfileShimmer({required this.topPadding, required this.colors});
-  final double   topPadding;
+  final double topPadding;
   final AppColor colors;
 
   @override
@@ -1036,18 +1201,23 @@ class _ProfileShimmer extends StatefulWidget {
 class _ProfileShimmerState extends State<_ProfileShimmer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double>   _anim;
+  late final Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
-      ..repeat(reverse: true);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
     _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1063,38 +1233,79 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
             children: [
               Container(
                 color: c.primary.withOpacity(0.04),
-                padding: EdgeInsets.fromLTRB(20, widget.topPadding + 24, 20, 20),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  widget.topPadding + 24,
+                  20,
+                  20,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Avatar
-                    Container(width: 56, height: 56,
-                        decoration: BoxDecoration(color: s, shape: BoxShape.circle)),
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: s,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Line 1 — name
-                          Container(width: 120, height: 16,
-                              decoration: BoxDecoration(color: s, borderRadius: BorderRadius.circular(6))),
+                          Container(
+                            width: 120,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: s,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
                           const SizedBox(height: 7),
                           // Line 2 — handle
-                          Container(width: 88, height: 12,
-                              decoration: BoxDecoration(color: s.withOpacity(0.65), borderRadius: BorderRadius.circular(5))),
+                          Container(
+                            width: 88,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: s.withOpacity(0.65),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                          ),
                           const SizedBox(height: 5),
                           // Line 3 — email
-                          Container(width: 140, height: 11,
-                              decoration: BoxDecoration(color: s.withOpacity(0.45), borderRadius: BorderRadius.circular(5))),
+                          Container(
+                            width: 140,
+                            height: 11,
+                            decoration: BoxDecoration(
+                              color: s.withOpacity(0.45),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                          ),
                           const SizedBox(height: 10),
                           // Pills row
                           Row(
                             children: [
-                              Container(width: 68, height: 22,
-                                  decoration: BoxDecoration(color: s.withOpacity(0.5), borderRadius: BorderRadius.circular(100))),
+                              Container(
+                                width: 68,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: s.withOpacity(0.5),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                              ),
                               const SizedBox(width: 6),
-                              Container(width: 40, height: 22,
-                                  decoration: BoxDecoration(color: s.withOpacity(0.35), borderRadius: BorderRadius.circular(100))),
+                              Container(
+                                width: 40,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: s.withOpacity(0.35),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -1103,7 +1314,11 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
                   ],
                 ),
               ),
-              Divider(height: 1, thickness: 1, color: c.border.withOpacity(0.13)),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: c.border.withOpacity(0.13),
+              ),
             ],
           ),
         );
@@ -1135,7 +1350,8 @@ class _LogoutConfirmationModal extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
                   color: c.border.withOpacity(0.3),
@@ -1143,11 +1359,15 @@ class _LogoutConfirmationModal extends StatelessWidget {
                 ),
               ),
               Container(
-                width: 64, height: 64,
+                width: 64,
+                height: 64,
                 decoration: BoxDecoration(
                   color: c.error.withOpacity(0.08),
                   shape: BoxShape.circle,
-                  border: Border.all(color: c.error.withOpacity(0.15), width: 1.5),
+                  border: Border.all(
+                    color: c.error.withOpacity(0.15),
+                    width: 1.5,
+                  ),
                 ),
                 child: Icon(LucideIcons.logOut, color: c.error, size: 26),
               ),
@@ -1155,47 +1375,73 @@ class _LogoutConfirmationModal extends StatelessWidget {
               Text(
                 'Sign Out?',
                 style: TextStyle(
-                  fontSize: 21, fontWeight: FontWeight.w700,
-                  color: c.textPrimary, letterSpacing: -0.5,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w700,
+                  color: c.textPrimary,
+                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 "You'll need to sign in again\nto access your account.",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: c.textSecondary, height: 1.5),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: c.textSecondary,
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 24),
               SizedBox(
-                width: double.infinity, height: 50,
+                width: double.infinity,
+                height: 50,
                 child: AppElevatedButton(
-                  onPressed: () { HapticFeedback.lightImpact(); Navigator.pop(context, true); },
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context, true);
+                  },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: c.error, foregroundColor: Colors.white,
-                    elevation: 0, shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    backgroundColor: c.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: const Text(
                     'Sign Out',
-                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600, letterSpacing: -0.2),
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 10),
               SizedBox(
-                width: double.infinity, height: 50,
+                width: double.infinity,
+                height: 50,
                 child: AppTextButton(
-                  onPressed: () { HapticFeedback.lightImpact(); Navigator.pop(context, false); },
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context, false);
+                  },
                   style: TextButton.styleFrom(
                     backgroundColor: c.border.withOpacity(0.08),
                     foregroundColor: c.textPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: Text(
                     'Cancel',
                     style: TextStyle(
-                      fontSize: 15.5, fontWeight: FontWeight.w600,
-                      color: c.textPrimary, letterSpacing: -0.2,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      color: c.textPrimary,
+                      letterSpacing: -0.2,
                     ),
                   ),
                 ),
