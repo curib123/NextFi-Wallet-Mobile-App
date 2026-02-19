@@ -1,4 +1,8 @@
+import 'profile_models.dart';
+
 class UpsertProfileRequest {
+  static final RegExp usernamePattern = RegExp(r'^[a-zA-Z0-9_.]+$');
+
   final String? username;
   final String? displayName;
   final String? country;
@@ -6,6 +10,12 @@ class UpsertProfileRequest {
   final String? middleName;
   final String? lastName;
   final String? address;
+
+  final ProfileAvailability? availability;
+  final bool? isActive;
+  final bool? autoUnavailable;
+  final DateTime? availableFrom;
+  final DateTime? availableTo;
 
   const UpsertProfileRequest({
     this.username,
@@ -15,6 +25,11 @@ class UpsertProfileRequest {
     this.middleName,
     this.lastName,
     this.address,
+    this.availability,
+    this.isActive,
+    this.autoUnavailable,
+    this.availableFrom,
+    this.availableTo,
   });
 
   static String? _normalizeText(String? value) {
@@ -26,6 +41,13 @@ class UpsertProfileRequest {
   static String? _normalizeUsername(String? value) {
     final normalized = _normalizeText(value);
     return normalized?.toLowerCase();
+  }
+
+  static bool isValidUsername(String value) {
+    final normalized = value.trim();
+    return normalized.length >= 3 &&
+        normalized.length <= 30 &&
+        usernamePattern.hasMatch(normalized);
   }
 
   Map<String, dynamic> toJson() {
@@ -45,6 +67,26 @@ class UpsertProfileRequest {
       if (normalizedMiddleName != null) 'middleName': normalizedMiddleName,
       if (normalizedLastName != null) 'lastName': normalizedLastName,
       if (normalizedAddress != null) 'address': normalizedAddress,
+      if (availability != null)
+        'availability': profileAvailabilityToApi(availability!),
+      if (isActive != null) 'isActive': isActive,
+      if (autoUnavailable != null) 'autoUnavailable': autoUnavailable,
+      if (availableFrom != null)
+        'availableFrom': availableFrom!.toIso8601String(),
+      if (availableTo != null) 'availableTo': availableTo!.toIso8601String(),
+    };
+  }
+}
+
+class RequestMerchantAccessRequest {
+  final String? note;
+
+  const RequestMerchantAccessRequest({this.note});
+
+  Map<String, dynamic> toJson() {
+    final normalized = note?.trim();
+    return {
+      if (normalized != null && normalized.isNotEmpty) 'note': normalized,
     };
   }
 }

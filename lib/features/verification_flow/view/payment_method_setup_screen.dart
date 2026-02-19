@@ -330,7 +330,7 @@ class _StepHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Step 3 of 3 · Link your preferred account',
+                  'Step 2 of 3 · Link your preferred account',
                   style: TextStyle(color: c.textSecondary, fontSize: 12.5),
                 ),
               ],

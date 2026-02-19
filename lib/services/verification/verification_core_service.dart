@@ -26,8 +26,16 @@ class VerificationCoreService {
   Future<VerificationModel> getMe() async => _api.getMe();
 
   Future<VerificationModel> submit({
+    required String phoneNumber,
     required File selfie,
+    required File governmentIdFront,
+    required File governmentIdBack,
     String? paymentAccountId,
-  }) async =>
-      _api.submit(selfie: selfie, paymentAccountId: paymentAccountId);
+  }) async => _api.submit(
+    phoneNumber: phoneNumber,
+    selfie: selfie,
+    governmentIdFront: governmentIdFront,
+    governmentIdBack: governmentIdBack,
+    paymentAccountId: paymentAccountId,
+  );
 }

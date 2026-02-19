@@ -11,10 +11,8 @@ import 'profile_endpoints.dart';
 typedef TokenProvider = Future<String?> Function();
 
 class ProfileService {
-  ProfileService({
-    required this.tokenProvider,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  ProfileService({required this.tokenProvider, http.Client? client})
+    : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;
@@ -31,6 +29,27 @@ class ProfileService {
     };
   }
 
+  Map<String, dynamic>? _extractMap(
+    dynamic data, {
+    List<String> keys = const [],
+  }) {
+    if (data == null || data == '') return null;
+    if (data is String && data.trim().toLowerCase() == 'null') return null;
+
+    if (data is Map<String, dynamic>) {
+      if (data.isEmpty) return null;
+
+      for (final key in keys) {
+        final nested = data[key];
+        if (nested is Map<String, dynamic>) return nested;
+      }
+
+      return data;
+    }
+
+    return null;
+  }
+
   Future<ProfileModel?> getMe() async {
     final res = await _client.get(
       ProfileHttp.uri(ProfileEndpoints.me()),
@@ -40,26 +59,8 @@ class ProfileService {
     ProfileHttp.ensureOk(res);
     final data = ProfileHttp.decodeJson<dynamic>(res);
 
-    if (data == null || data == '') return null;
-    if (data is String && data.trim().toLowerCase() == 'null') return null;
-    if (data is Map<String, dynamic> && data.isEmpty) return null;
-    if (data is Map<String, dynamic>) {
-      final wrappedData = data['data'];
-      final wrappedProfile = data['profile'];
-      if (wrappedData is Map<String, dynamic>) {
-        return ProfileModel.fromJson(wrappedData);
-      }
-      if (wrappedProfile is Map<String, dynamic>) {
-        return ProfileModel.fromJson(wrappedProfile);
-      }
-      if (data.length == 1 &&
-          (data.containsKey('data') || data.containsKey('profile')) &&
-          wrappedData == null &&
-          wrappedProfile == null) {
-        return null;
-      }
-      return ProfileModel.fromJson(data);
-    }
+    final map = _extractMap(data, keys: const ['data', 'profile', 'item']);
+    if (map != null) return ProfileModel.fromJson(map);
     if (data is List && data.isEmpty) return null;
 
     throw ApiException(
@@ -79,9 +80,8 @@ class ProfileService {
     ProfileHttp.ensureOk(res);
     final data = ProfileHttp.decodeJson<dynamic>(res);
 
-    if (data is Map<String, dynamic>) {
-      return ProfileModel.fromJson(data);
-    }
+    final map = _extractMap(data, keys: const ['data', 'profile', 'item']);
+    if (map != null) return ProfileModel.fromJson(map);
 
     throw ApiException(
       res.statusCode,
@@ -100,9 +100,8 @@ class ProfileService {
     ProfileHttp.ensureOk(res);
     final data = ProfileHttp.decodeJson<dynamic>(res);
 
-    if (data is Map<String, dynamic>) {
-      return ProfileModel.fromJson(data);
-    }
+    final map = _extractMap(data, keys: const ['data', 'profile', 'item']);
+    if (map != null) return ProfileModel.fromJson(map);
 
     throw ApiException(
       res.statusCode,
@@ -121,9 +120,63 @@ class ProfileService {
     final data = ProfileHttp.decodeJson<dynamic>(res);
 
     if (data is Map<String, dynamic>) {
+      final wrapped = data['data'];
+      if (wrapped is Map<String, dynamic>) return wrapped['success'] == true;
       return data['success'] == true;
     }
 
     return true;
+  }
+
+  Future<MerchantRequestStatusModel> getMerchantRequestStatus() async {
+    final res = await _client.get(
+      ProfileHttp.uri(ProfileEndpoints.merchantRequestStatus()),
+      headers: await _headers(),
+    );
+
+    ProfileHttp.ensureOk(res);
+    final data = ProfileHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(
+      data,
+      keys: const ['data', 'merchantRequest', 'merchant_request'],
+    );
+
+    if (map != null) {
+      return MerchantRequestStatusModel.fromJson(map);
+    }
+
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for GET /profile/me/merchant-request',
+      body: res.body,
+    );
+  }
+
+  Future<MerchantRequestStatusModel> requestMerchantAccess({
+    String? note,
+  }) async {
+    final req = RequestMerchantAccessRequest(note: note);
+    final res = await _client.post(
+      ProfileHttp.uri(ProfileEndpoints.requestMerchantAccess()),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+
+    ProfileHttp.ensureOk(res);
+    final data = ProfileHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(
+      data,
+      keys: const ['data', 'merchantRequest', 'merchant_request'],
+    );
+
+    if (map != null) {
+      return MerchantRequestStatusModel.fromJson(map);
+    }
+
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for POST /profile/me/request-merchant',
+      body: res.body,
+    );
   }
 }

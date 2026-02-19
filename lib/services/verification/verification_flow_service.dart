@@ -1,4 +1,4 @@
-﻿import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
+import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
@@ -98,9 +98,9 @@ class VerificationFlowService {
     );
     if (!hasActivePayment) return VerificationStep.paymentMethodSetup;
 
-    // Step 3: selfie submission.
-    final selfieDone = verification.hasSubmittedSelfie;
-    if (!selfieDone) return VerificationStep.selfieVerification;
+    // Step 3: verification submission (phone + selfie + government IDs).
+    final submissionDone = verification.hasSubmittedRequiredDocuments;
+    if (!submissionDone) return VerificationStep.selfieVerification;
 
     // Server status is authoritative after all required local steps are met.
     if (verification.status == TrustStatus.reviewing ||

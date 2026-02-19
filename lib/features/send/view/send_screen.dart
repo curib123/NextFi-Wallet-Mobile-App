@@ -67,7 +67,7 @@ class _SendScreenState extends State<SendScreen> {
   FederationResolveResponse? _resolvedFederation;
   String? _federationError;
   int _federationResolveSeq = 0;
-  String? _federationDomain;
+  String _federationDomain = FederationAddressCoreService.defaultDomain;
   List<String> _federationSuggestions = const [];
 
   @override
@@ -206,6 +206,7 @@ class _SendScreenState extends State<SendScreen> {
     try {
       final resolved = await FederationAddressCoreService.I.resolveByName(
         federationAddress,
+        domain: _federationDomain,
       );
       if (!mounted || requestId != _federationResolveSeq) return;
 
@@ -233,28 +234,16 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   Future<void> _loadFederationDomain() async {
-    try {
-      final toml = await FederationAddressCoreService.I.getStellarToml();
-      final match = RegExp(
-        r'FEDERATION_SERVER\s*=\s*"([^"]+)"',
-        caseSensitive: false,
-      ).firstMatch(toml);
-      final url = match?.group(1)?.trim();
-      if (url == null || url.isEmpty) return;
-
-      final host = Uri.tryParse(url)?.host.trim();
-      if (!mounted || host == null || host.isEmpty) return;
-      setState(() => _federationDomain = host);
-      _updateFederationSuggestions(_toCtl.text.trim());
-    } catch (_) {
-      // Keep manual federation input available even if domain auto-discovery fails.
-    }
+    if (!mounted) return;
+    setState(
+      () => _federationDomain = FederationAddressCoreService.defaultDomain,
+    );
+    _updateFederationSuggestions(_toCtl.text.trim());
   }
 
   void _updateFederationSuggestions(String input) {
-    final domain = _federationDomain?.trim();
-    if (domain == null ||
-        domain.isEmpty ||
+    final domain = _federationDomain.trim();
+    if (domain.isEmpty ||
         input.isEmpty ||
         input.contains('*') ||
         !_looksLikeFederationAliasInput(input)) {
@@ -1240,7 +1229,7 @@ class _SendScreenState extends State<SendScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste G... or name*domain',
+          hintText: 'Paste G... or alias*$_federationDomain',
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.4),
             fontSize: 14,

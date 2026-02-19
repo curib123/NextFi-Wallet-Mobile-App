@@ -1,10 +1,4 @@
-enum TrustStatus {
-  basic,
-  reviewing,
-  ready,
-  suspended,
-  unknown,
-}
+enum TrustStatus { basic, reviewing, ready, suspended, unknown }
 
 enum VerificationLogAction {
   submitted,
@@ -87,8 +81,11 @@ class VerificationModel {
   final String id;
   final String userId;
   final TrustStatus status;
+  final String? phoneNumber;
   final DateTime? submittedAt;
   final String? selfieUrl;
+  final String? governmentIdFrontUrl;
+  final String? governmentIdBackUrl;
   final String? paymentAccountId;
   final DateTime? reviewedAt;
   final DateTime? approvedAt;
@@ -107,8 +104,11 @@ class VerificationModel {
     required this.id,
     required this.userId,
     required this.status,
+    this.phoneNumber,
     this.submittedAt,
     this.selfieUrl,
+    this.governmentIdFrontUrl,
+    this.governmentIdBackUrl,
     this.paymentAccountId,
     this.reviewedAt,
     this.approvedAt,
@@ -126,24 +126,45 @@ class VerificationModel {
   factory VerificationModel.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic v) =>
         v == null ? null : DateTime.tryParse(v.toString());
+    String? readString(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return null;
+    }
 
     final rawLogs = json['logs'];
 
     return VerificationModel(
-      id: json['id']?.toString() ?? '',
-      userId: json['userId']?.toString() ?? '',
+      id: readString(const ['id']) ?? '',
+      userId: readString(const ['userId', 'user_id']) ?? '',
       status: trustStatusFromValue(json['status']),
-      submittedAt: parseDate(json['submittedAt']),
-      selfieUrl: json['selfieUrl']?.toString(),
-      paymentAccountId: json['paymentAccountId']?.toString(),
-      reviewedAt: parseDate(json['reviewedAt']),
-      approvedAt: parseDate(json['approvedAt']),
-      rejectedAt: parseDate(json['rejectedAt']),
-      rejectReason: json['rejectReason']?.toString(),
-      suspendedAt: parseDate(json['suspendedAt']),
-      suspendReason: json['suspendReason']?.toString(),
-      createdAt: parseDate(json['createdAt']),
-      updatedAt: parseDate(json['updatedAt']),
+      phoneNumber: readString(const ['phoneNumber', 'phone_number']),
+      submittedAt: parseDate(json['submittedAt'] ?? json['submitted_at']),
+      selfieUrl: readString(const ['selfieUrl', 'selfie_url']),
+      governmentIdFrontUrl: readString(const [
+        'governmentIdFrontUrl',
+        'government_id_front_url',
+      ]),
+      governmentIdBackUrl: readString(const [
+        'governmentIdBackUrl',
+        'government_id_back_url',
+      ]),
+      paymentAccountId: readString(const [
+        'paymentAccountId',
+        'payment_account_id',
+      ]),
+      reviewedAt: parseDate(json['reviewedAt'] ?? json['reviewed_at']),
+      approvedAt: parseDate(json['approvedAt'] ?? json['approved_at']),
+      rejectedAt: parseDate(json['rejectedAt'] ?? json['rejected_at']),
+      rejectReason: readString(const ['rejectReason', 'reject_reason']),
+      suspendedAt: parseDate(json['suspendedAt'] ?? json['suspended_at']),
+      suspendReason: readString(const ['suspendReason', 'suspend_reason']),
+      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
+      updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
       user: json['user'] is Map<String, dynamic>
           ? (json['user'] as Map<String, dynamic>)
           : null,
@@ -152,15 +173,24 @@ class VerificationModel {
           : null,
       logs: rawLogs is List
           ? rawLogs
-              .whereType<Map<String, dynamic>>()
-              .map(VerificationLogModel.fromJson)
-              .toList()
+                .whereType<Map<String, dynamic>>()
+                .map(VerificationLogModel.fromJson)
+                .toList()
           : const [],
     );
   }
 
   bool get hasSubmittedSelfie =>
-      (selfieUrl != null && selfieUrl!.trim().isNotEmpty) || submittedAt != null;
+      (selfieUrl != null && selfieUrl!.trim().isNotEmpty) ||
+      submittedAt != null;
+
+  bool get hasSubmittedRequiredDocuments {
+    bool hasValue(String? value) => value != null && value.trim().isNotEmpty;
+    return hasValue(phoneNumber) &&
+        hasValue(selfieUrl) &&
+        hasValue(governmentIdFrontUrl) &&
+        hasValue(governmentIdBackUrl);
+  }
 
   bool get isFinalReviewState =>
       status == TrustStatus.reviewing ||

@@ -359,7 +359,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 12),
         Text(
-          'Manage your XLM & USDC pair — send, receive, claim balances, and trade seamlessly. Login is optional for buy & sell.',
+          'Manage your XLM & USDC pair — send, receive, claim balances, and trade seamlessly. Buy and sell trades require verified status.',
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w400,

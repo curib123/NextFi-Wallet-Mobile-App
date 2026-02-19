@@ -9,6 +9,7 @@ class FederationAddressCoreService {
 
   static final FederationAddressCoreService I =
       FederationAddressCoreService._();
+  static const String defaultDomain = 'nextfi.app';
 
   late final FederationAddressService _api = FederationAddressService(
     tokenProvider: _safeTokenProvider,
@@ -27,8 +28,13 @@ class FederationAddressCoreService {
     String federationAddress, {
     String? domain,
   }) async {
+    final effectiveDomain = _sanitizeDomain(domain);
     return _api.resolvePublic(
-      FederationLookupQuery(q: federationAddress, type: 'name', domain: domain),
+      FederationLookupQuery(
+        q: federationAddress,
+        type: 'name',
+        domain: effectiveDomain,
+      ),
     );
   }
 
@@ -36,8 +42,9 @@ class FederationAddressCoreService {
     String accountId, {
     String? domain,
   }) async {
+    final effectiveDomain = _sanitizeDomain(domain);
     return _api.resolvePublic(
-      FederationLookupQuery(q: accountId, type: 'id', domain: domain),
+      FederationLookupQuery(q: accountId, type: 'id', domain: effectiveDomain),
     );
   }
 
@@ -45,13 +52,32 @@ class FederationAddressCoreService {
 
   Future<List<FederationAddressModel>> listMine() => _api.listMine();
 
-  Future<FederationAddressModel> create(CreateFederationAddressRequest req) =>
-      _api.create(req);
+  Future<FederationAddressModel> create(CreateFederationAddressRequest req) {
+    final normalized = CreateFederationAddressRequest(
+      alias: req.alias,
+      domain: _sanitizeDomain(req.domain),
+      accountId: req.accountId,
+      memo: req.memo,
+      memoType: req.memoType,
+      isActive: req.isActive,
+    );
+    return _api.create(normalized);
+  }
 
   Future<FederationAddressModel> update(
     String id,
     UpdateFederationAddressRequest req,
-  ) => _api.update(id, req);
+  ) {
+    final normalized = UpdateFederationAddressRequest(
+      alias: req.alias,
+      domain: _sanitizeDomain(req.domain),
+      accountId: req.accountId,
+      memo: req.memo,
+      memoType: req.memoType,
+      isActive: req.isActive,
+    );
+    return _api.update(id, normalized);
+  }
 
   Future<bool> delete(String id) => _api.delete(id);
 
@@ -60,9 +86,20 @@ class FederationAddressCoreService {
     String? domain,
     bool useLegacyPath = false,
   }) {
+    final effectiveDomain = _sanitizeDomain(domain);
     return _api.resolveExternal(
-      FederationLookupQuery(q: federationAddress, type: 'name', domain: domain),
+      FederationLookupQuery(
+        q: federationAddress,
+        type: 'name',
+        domain: effectiveDomain,
+      ),
       useLegacyPath: useLegacyPath,
     );
+  }
+
+  String _sanitizeDomain(String? input) {
+    final d = input?.trim();
+    if (d == null || d.isEmpty) return defaultDomain;
+    return defaultDomain;
   }
 }

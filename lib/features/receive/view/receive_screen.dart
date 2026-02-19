@@ -312,7 +312,7 @@ class ReceiveScreen extends StatelessWidget {
             ListTile(
               dense: true,
               title: Text(
-                item.federationAddress,
+                '${item.alias}*${vm.federationDomain ?? item.domain}',
                 style: TextStyle(
                   color: c.textPrimary,
                   fontWeight: FontWeight.w600,

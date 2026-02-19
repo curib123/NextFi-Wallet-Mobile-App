@@ -8,6 +8,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
+import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
+import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
@@ -165,6 +167,34 @@ class _AppDrawerState extends State<AppDrawer>
     _push(const VerificationFlowScreen());
   }
 
+  void _handleMerchantRequestTap() {
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
+    _push(const MerchantRequestScreen());
+  }
+
+  bool get _isVerifiedForTradeAccess =>
+      _trustStatus == TrustStatus.ready ||
+      (_cachedProfile?.isVerified ?? false);
+
+  void _openTradeTemplate(TradeTemplateMode mode) {
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
+    if (!_isVerifiedForTradeAccess) {
+      _push(const VerificationFlowScreen());
+      return;
+    }
+    _push(TradeTemplateScreen(mode: mode));
+  }
+
+  void _handleBuyTradesTap() => _openTradeTemplate(TradeTemplateMode.buy);
+
+  void _handleSellTradesTap() => _openTradeTemplate(TradeTemplateMode.sell);
+
   void _push(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -175,6 +205,7 @@ class _AppDrawerState extends State<AppDrawer>
     final c = AppColor.of(context);
     final mq = MediaQuery.of(context);
     final user = _cachedUser;
+    final canOpenMerchantRequest = user != null && _isVerifiedForTradeAccess;
 
     return Drawer(
       backgroundColor: c.background,
@@ -188,12 +219,7 @@ class _AppDrawerState extends State<AppDrawer>
               if (_loading)
                 _ProfileShimmer(topPadding: mq.padding.top, colors: c)
               else if (user != null)
-                _ProfileHeader(
-                  user: user,
-                  profile: _cachedProfile,
-                  colors: c,
-                  trustStatus: _trustStatus,
-                )
+                _ProfileHeader(user: user, profile: _cachedProfile, colors: c)
               else
                 _LoginPrompt(
                   colors: c,
@@ -209,18 +235,18 @@ class _AppDrawerState extends State<AppDrawer>
                     const _SectionLabel(label: 'QUICK ACTIONS'),
                     _NavTile(
                       icon: LucideIcons.download,
-                      label: 'Buy XLM',
-                      description: 'Purchase Stellar lumens',
+                      label: 'Buy Trades',
+                      description: 'Open buy trades template',
                       colors: c,
-                      onTap: user == null ? _redirectToLogin : () {},
+                      onTap: _handleBuyTradesTap,
                       requiresAuth: user == null,
                     ),
                     _NavTile(
                       icon: LucideIcons.upload,
-                      label: 'Sell XLM',
-                      description: 'Convert lumens to cash',
+                      label: 'Sell Trades',
+                      description: 'Open sell trades template',
                       colors: c,
-                      onTap: user == null ? _redirectToLogin : () {},
+                      onTap: _handleSellTradesTap,
                       requiresAuth: user == null,
                     ),
                     _NavTile(
@@ -234,6 +260,14 @@ class _AppDrawerState extends State<AppDrawer>
                       onTap: _handleVerificationTap,
                       requiresAuth: user == null,
                     ),
+                    if (canOpenMerchantRequest)
+                      _NavTile(
+                        icon: LucideIcons.store,
+                        label: 'Merchant Request',
+                        description: 'Request merchant account access',
+                        colors: c,
+                        onTap: _handleMerchantRequestTap,
+                      ),
                     const SizedBox(height: 4),
                     const _SectionLabel(label: 'SETTINGS'),
                     _NavTile(
@@ -290,42 +324,37 @@ class _ProfileHeader extends StatelessWidget {
     required this.user,
     required this.profile,
     required this.colors,
-    required this.trustStatus,
   });
+
   final User user;
   final ProfileModel? profile;
   final AppColor colors;
-  final TrustStatus trustStatus;
 
-  String? get _identityLine {
-    final p = profile;
-    if (p == null) return null;
-    final fullName = [
-      p.firstName,
-      p.middleName,
-      p.lastName,
-    ].where((e) => e != null && e.trim().isNotEmpty).join(' ').trim();
-    if (fullName.isNotEmpty) return fullName;
-    final display = p.displayName?.trim();
-    if (display != null && display.isNotEmpty) return display;
-    final username = p.username?.trim();
-    if (username != null && username.isNotEmpty) return '@$username';
-    return null;
-  }
+  bool _hasValue(String? value) => value != null && value.trim().isNotEmpty;
 
-  String? get _locationLine {
+  bool get _hasProfileData {
     final p = profile;
-    if (p == null) return null;
-    final country = p.country?.trim();
-    if (country != null && country.isNotEmpty) return country;
-    final address = p.address?.trim();
-    if (address != null && address.isNotEmpty) return address;
-    return null;
+    if (p == null) return false;
+    return _hasValue(p.id) ||
+        _hasValue(p.userId) ||
+        _hasValue(p.username) ||
+        _hasValue(p.displayName) ||
+        _hasValue(p.country) ||
+        _hasValue(p.firstName) ||
+        _hasValue(p.middleName) ||
+        _hasValue(p.lastName) ||
+        _hasValue(p.address) ||
+        p.isMerchant ||
+        p.merchantRequestPending;
   }
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
+    final connectedEmail = user.email.trim().isEmpty
+        ? 'No connected email'
+        : user.email.trim();
+
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(20, top + 24, 20, 20),
@@ -335,10 +364,8 @@ class _ProfileHeader extends StatelessWidget {
           bottom: BorderSide(color: colors.border.withOpacity(0.18)),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // ── Avatar (top, left-anchored) ───────────────────────────
           Stack(
             clipBehavior: Clip.none,
             children: [
@@ -346,12 +373,16 @@ class _ProfileHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: colors.primary.withOpacity(0.2),
+                    color: _hasProfileData
+                        ? colors.primary.withOpacity(0.2)
+                        : colors.border.withOpacity(0.4),
                     width: 2.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: colors.primary.withOpacity(0.08),
+                      color: _hasProfileData
+                          ? colors.primary.withOpacity(0.08)
+                          : Colors.black.withOpacity(0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -380,138 +411,18 @@ class _ProfileHeader extends StatelessWidget {
               ),
             ],
           ),
-
-          const SizedBox(height: 12),
-
-          // ── Name + verification badge ─────────────────────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  user.name,
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    letterSpacing: -0.4,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              connectedEmail,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13.5,
+                letterSpacing: -0.2,
               ),
-              const SizedBox(width: 8),
-              _VerificationBadge(status: trustStatus, colors: colors),
-            ],
-          ),
-
-          const SizedBox(height: 3),
-
-          // ── Email ─────────────────────────────────────────────────
-          Text(
-            user.email,
-            style: TextStyle(color: colors.textSecondary, fontSize: 12.5),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          // ── Identity sub-line ─────────────────────────────────────
-          if (_identityLine != null) ...[
-            const SizedBox(height: 6),
-            _InfoRow(
-              icon: Icons.person_outline_rounded,
-              text: _identityLine!,
-              colors: colors,
-            ),
-          ],
-
-          // ── Location sub-line ─────────────────────────────────────
-          if (_locationLine != null) ...[
-            const SizedBox(height: 3),
-            _InfoRow(
-              icon: Icons.location_on_outlined,
-              text: _locationLine!,
-              colors: colors,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.text,
-    required this.colors,
-  });
-  final IconData icon;
-  final String text;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 11, color: colors.textSecondary.withOpacity(0.5)),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: colors.textSecondary.withOpacity(0.75),
-              fontSize: 12,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// VERIFICATION BADGE
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _VerificationBadge extends StatelessWidget {
-  const _VerificationBadge({required this.status, required this.colors});
-  final TrustStatus status;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      TrustStatus.ready => ('Verified', colors.success),
-      TrustStatus.reviewing => ('Review', colors.warning),
-      TrustStatus.suspended => ('Suspended', colors.error),
-      TrustStatus.basic => ('Basic', colors.textSecondary),
-      TrustStatus.unknown => ('Unverified', colors.textSecondary),
-    };
-    final isReady = status == TrustStatus.ready;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isReady) ...[
-            Icon(Icons.verified_rounded, color: color, size: 10),
-            const SizedBox(width: 3),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -519,10 +430,6 @@ class _VerificationBadge extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LOGIN PROMPT
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _LoginPrompt extends StatelessWidget {
   const _LoginPrompt({

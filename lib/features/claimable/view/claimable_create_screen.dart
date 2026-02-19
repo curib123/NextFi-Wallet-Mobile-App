@@ -18,10 +18,8 @@ import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dar
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
-
-import 'package:next_fi/features/send/view/widgets/recipient_badge.dart';
-import 'package:next_fi/features/send/view/widgets/recipient_add_template.dart';
-import 'package:next_fi/features/send/view/widgets/recipient_loading_line.dart';
+import 'package:next_fi/services/federation_address/federation_address_core_service.dart';
+import 'package:next_fi/services/federation_address/models/federation_address_models.dart';
 
 class ClaimableCreateScreen extends StatefulWidget {
   final String initialAsset;
@@ -50,6 +48,12 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
   bool _recipientLoading = false;
   RecipientAddressModel? _resolvedRecipient;
+  bool _federationLoading = false;
+  FederationResolveResponse? _resolvedFederation;
+  String? _federationError;
+  int _federationResolveSeq = 0;
+  final String _federationDomain = FederationAddressCoreService.defaultDomain;
+  List<String> _federationSuggestions = const [];
 
   static final _dateFmt = DateFormat('MMM d, yyyy');
 
@@ -69,21 +73,54 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   }
 
   bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
+  bool _looksLikeFederation(String x) =>
+      RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
+  bool _looksLikeFederationAliasInput(String x) =>
+      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(x);
 
   void _onRecipientChanged() {
     final addr = _recipientCtl.text.trim();
 
-    if (!_looksLikeStellarPk(addr)) {
-      if (_resolvedRecipient != null || _recipientLoading) {
-        setState(() {
-          _resolvedRecipient = null;
-          _recipientLoading = false;
-        });
-      }
+    if (addr.isEmpty) {
+      setState(() {
+        _resolvedRecipient = null;
+        _recipientLoading = false;
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+        _federationSuggestions = const [];
+      });
       return;
     }
 
-    _lookupRecipient(addr);
+    if (_looksLikeStellarPk(addr)) {
+      setState(() {
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+        _federationSuggestions = const [];
+      });
+      _lookupRecipient(addr);
+      return;
+    }
+
+    if (_looksLikeFederation(addr)) {
+      setState(() {
+        _resolvedRecipient = null;
+        _federationSuggestions = const [];
+      });
+      _resolveFederation(addr);
+      return;
+    }
+
+    _updateFederationSuggestions(addr);
+    setState(() {
+      _resolvedRecipient = null;
+      _recipientLoading = false;
+      _resolvedFederation = null;
+      _federationError = null;
+      _federationLoading = false;
+    });
   }
 
   Future<void> _lookupRecipient(String address) async {
@@ -108,6 +145,82 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         setState(() => _recipientLoading = false);
       }
     }
+  }
+
+  Future<void> _resolveFederation(String federationAddress) async {
+    final requestId = ++_federationResolveSeq;
+
+    setState(() {
+      _federationLoading = true;
+      _federationError = null;
+      _resolvedFederation = null;
+      _recipientLoading = true;
+      _resolvedRecipient = null;
+    });
+
+    try {
+      final resolved = await FederationAddressCoreService.I.resolveByName(
+        federationAddress,
+        domain: _federationDomain,
+      );
+      if (!mounted || requestId != _federationResolveSeq) return;
+
+      final accountId = resolved.accountId.trim();
+      if (accountId.isEmpty || !_looksLikeStellarPk(accountId)) {
+        throw StateError('Resolved federation has no valid Stellar account id');
+      }
+
+      setState(() {
+        _resolvedFederation = resolved;
+        _federationLoading = false;
+      });
+      await _lookupRecipient(accountId);
+    } catch (_) {
+      if (!mounted || requestId != _federationResolveSeq) return;
+      setState(() {
+        _federationLoading = false;
+        _recipientLoading = false;
+        _resolvedFederation = null;
+        _federationError = 'Federation not found or unavailable.';
+      });
+    }
+  }
+
+  void _updateFederationSuggestions(String input) {
+    final domain = _federationDomain.trim();
+    if (domain.isEmpty ||
+        input.isEmpty ||
+        input.contains('*') ||
+        !_looksLikeFederationAliasInput(input)) {
+      if (_federationSuggestions.isNotEmpty) {
+        setState(() => _federationSuggestions = const []);
+      }
+      return;
+    }
+
+    final candidate = '${input.toLowerCase()}*$domain';
+    if (_federationSuggestions.length == 1 &&
+        _federationSuggestions.first == candidate) {
+      return;
+    }
+    setState(() => _federationSuggestions = [candidate]);
+  }
+
+  void _applyFederationSuggestion(String value) {
+    _recipientCtl.text = value;
+    _recipientCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _recipientCtl.text.length),
+    );
+  }
+
+  String? _resolvedRecipientAddressForSubmit() {
+    final input = _recipientCtl.text.trim();
+    if (_looksLikeStellarPk(input)) return input;
+    if (_looksLikeFederation(input)) {
+      final resolved = _resolvedFederation?.accountId.trim();
+      if (resolved != null && _looksLikeStellarPk(resolved)) return resolved;
+    }
+    return null;
   }
 
   Future<void> _pickUnlockDate() async {
@@ -176,8 +289,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   }
 
   String? _validate() {
-    final addr = _recipientCtl.text.trim();
-    if (!_looksLikeStellarPk(addr)) return 'Enter a valid Stellar address (G…)';
+    final addr = _resolvedRecipientAddressForSubmit();
+    if (addr == null) {
+      return 'Enter a valid Stellar address or federation address.';
+    }
 
     final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amt <= 0) return 'Enter a valid amount';
@@ -233,7 +348,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
     try {
       final vm = context.read<ClaimableVM>();
-      final addr = _recipientCtl.text.trim();
+      final addr = _resolvedRecipientAddressForSubmit();
+      if (addr == null) {
+        throw StateError('Recipient must resolve to a valid Stellar account.');
+      }
       final amt = double.parse(_amountCtl.text.trim());
 
       String txHash;
@@ -273,7 +391,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       ctl.update(
         AppAlertType.success,
         title: 'Balance Created',
-        subtitle: 'Claimable balance created successfully',
+        subtitle: 'Claimable balance created successfully\n$txHash',
         onPrimary: () => Navigator.pop(context, true),
       );
     } catch (e) {
@@ -289,7 +407,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
     if (result != null && mounted) {
       _recipientCtl.text = result;
-      _lookupRecipient(result);
+      _onRecipientChanged();
     }
   }
 
@@ -308,7 +426,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
     if (selected != null && mounted) {
       _recipientCtl.text = selected.address;
-      setState(() => _resolvedRecipient = selected);
+      setState(() {
+        _resolvedRecipient = selected;
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+        _federationSuggestions = const [];
+      });
     }
   }
 
@@ -325,7 +449,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
   String _shortenAddress(String addr) {
     if (addr.length <= 16) return addr;
-    return '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
+    return '${addr.substring(0, 6)}â€¦${addr.substring(addr.length - 6)}';
   }
 
   @override
@@ -374,9 +498,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // MODERN HEADER
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildModernHeader(AppColor c) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 20, 12),
@@ -426,9 +550,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // MODE SELECTOR CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildModeCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -564,9 +688,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // AMOUNT CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildAmountCard(AppColor c, double currentBal) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -719,13 +843,23 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // RECIPIENT CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildRecipientCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final addr = _recipientCtl.text.trim();
-    final hasValidAddr = _looksLikeStellarPk(addr);
+    final resolvedAccountId = _resolvedFederation?.accountId.trim();
+    final hasValidAddr =
+        _looksLikeStellarPk(addr) ||
+        (_looksLikeFederation(addr) &&
+            resolvedAccountId != null &&
+            _looksLikeStellarPk(resolvedAccountId));
+    final hasFederationInput = _looksLikeFederation(addr);
+    final recipientLookupAddress = _looksLikeStellarPk(addr)
+        ? addr
+        : (resolvedAccountId ?? addr);
+    final isLoadingRecipient = _recipientLoading || _federationLoading;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -776,14 +910,22 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (_recipientLoading)
+          if (isLoadingRecipient)
             _buildRecipientLoadingState(c)
           else if (hasValidAddr && _resolvedRecipient != null)
             _buildSavedRecipientChip(c, _resolvedRecipient!)
           else if (hasValidAddr && _resolvedRecipient == null)
-            _buildNewRecipientChip(c, addr)
+            _buildNewRecipientChip(c, recipientLookupAddress)
           else
             _buildRecipientInputField(c, addr, isDark),
+          if (_federationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildFederationSuggestions(c),
+          ],
+          if (hasFederationInput) ...[
+            const SizedBox(height: 10),
+            _buildFederationStatus(c),
+          ],
         ],
       ),
     );
@@ -1026,7 +1168,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste or enter Stellar address',
+          hintText: 'Paste G... or alias*$_federationDomain',
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.4),
             fontSize: 14,
@@ -1047,7 +1189,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   child: IconButton(
                     onPressed: () {
                       _recipientCtl.clear();
-                      setState(() => _resolvedRecipient = null);
+                      setState(() {
+                        _resolvedRecipient = null;
+                        _resolvedFederation = null;
+                        _federationError = null;
+                        _federationLoading = false;
+                        _federationSuggestions = const [];
+                      });
                     },
                     icon: Icon(
                       LucideIcons.x,
@@ -1070,9 +1218,128 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildFederationSuggestions(AppColor c) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _federationSuggestions
+          .map(
+            (s) => ActionChip(
+              avatar: Icon(LucideIcons.atSign, size: 14, color: c.primary),
+              label: Text(s),
+              labelStyle: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+              side: BorderSide(color: c.primary.withOpacity(0.35)),
+              backgroundColor: c.primary.withOpacity(0.08),
+              onPressed: () => _applyFederationSuggestion(s),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildFederationStatus(AppColor c) {
+    if (_federationLoading) {
+      return _buildFederationBanner(
+        c,
+        icon: null,
+        title: 'Resolving federation address...',
+        color: c.primary,
+        showSpinner: true,
+      );
+    }
+
+    if (_federationError != null) {
+      return _buildFederationBanner(
+        c,
+        icon: LucideIcons.alertCircle,
+        title: _federationError!,
+        color: c.error,
+      );
+    }
+
+    final resolved = _resolvedFederation;
+    if (resolved != null && resolved.accountId.trim().isNotEmpty) {
+      return _buildFederationBanner(
+        c,
+        icon: LucideIcons.checkCircle2,
+        title: 'Resolved to ${_shortenAddress(resolved.accountId)}',
+        subtitle: resolved.stellarAddress,
+        color: c.success,
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildFederationBanner(
+    AppColor c, {
+    required IconData? icon,
+    required String title,
+    required Color color,
+    String? subtitle,
+    bool showSpinner = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.18), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showSpinner)
+            SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: color.withOpacity(0.85),
+              ),
+            )
+          else if (icon != null)
+            Icon(icon, size: 16, color: color.withOpacity(0.9)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color.withOpacity(0.95),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle.trim(),
+                    style: TextStyle(
+                      color: c.textSecondary.withOpacity(0.9),
+                      fontSize: 11.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // UNLOCK SCHEDULE CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildUnlockCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1173,9 +1440,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // EXPIRATION CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildExpirationCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1369,9 +1636,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // INFO CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildInfoCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isTimeLocked = _mode == ClaimableMode.timeLocked;
@@ -1444,9 +1711,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // FLOATING ACTION BAR
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildFloatingActionBar(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 

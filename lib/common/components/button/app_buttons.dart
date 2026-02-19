@@ -10,6 +10,7 @@ class AppElevatedButton extends StatelessWidget {
     this.autofocus = false,
     this.clipBehavior = Clip.none,
     this.fullWidth = false,
+    this.icon, this.label,
   });
 
   const AppElevatedButton.icon({
@@ -68,6 +69,7 @@ class AppOutlinedButton extends StatelessWidget {
     this.autofocus = false,
     this.clipBehavior = Clip.none,
     this.fullWidth = false,
+    this.icon, this.label,
   });
 
   const AppOutlinedButton.icon({
@@ -126,6 +128,7 @@ class AppTextButton extends StatelessWidget {
     this.autofocus = false,
     this.clipBehavior = Clip.none,
     this.fullWidth = false,
+    this.icon, this.label,
   });
 
   const AppTextButton.icon({
@@ -184,6 +187,7 @@ class AppFilledButton extends StatelessWidget {
     this.autofocus = false,
     this.clipBehavior = Clip.none,
     this.fullWidth = false,
+    this.icon, this.label,
   });
 
   const AppFilledButton.icon({

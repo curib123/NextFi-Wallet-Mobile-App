@@ -6,6 +6,7 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/receive/view_model/receive_vm.dart';
 import 'package:next_fi/services/federation_address/models/federation_address_models.dart';
+import 'package:next_fi/services/federation_address/federation_address_core_service.dart';
 
 Future<void> showEditFederationModal(
   BuildContext context, {
@@ -22,6 +23,9 @@ Future<void> showEditFederationModal(
     builder: (sheetContext) {
       return StatefulBuilder(
         builder: (context, setState) {
+          final fixedDomain = (vm.federationDomain ?? '').trim().isNotEmpty
+              ? vm.federationDomain!.trim()
+              : FederationAddressCoreService.defaultDomain;
           final rawAlias = aliasCtrl.text.trim();
           final normalizedAlias = rawAlias.toLowerCase().replaceAll(
             RegExp(r'[^a-z0-9._-]'),
@@ -124,7 +128,7 @@ Future<void> showEditFederationModal(
                           ],
                           decoration: InputDecoration(
                             hintText: 'Enter alias',
-                            suffixText: '*${item.domain}',
+                            suffixText: '*$fixedDomain',
                             isDense: true,
                             filled: true,
                             fillColor: c.background.withOpacity(0.55),
@@ -163,7 +167,7 @@ Future<void> showEditFederationModal(
                           child: Text(
                             normalizedAlias.isEmpty
                                 ? 'Preview unavailable'
-                                : '$normalizedAlias*${item.domain}',
+                                : '$normalizedAlias*$fixedDomain',
                             style: TextStyle(
                               color: c.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -215,7 +219,6 @@ Future<void> showEditFederationModal(
                                             .updateFederationAddress(
                                               id: item.id,
                                               alias: normalizedAlias,
-                                              domain: item.domain,
                                             );
                                         if (!context.mounted) return;
                                         if (ok) {

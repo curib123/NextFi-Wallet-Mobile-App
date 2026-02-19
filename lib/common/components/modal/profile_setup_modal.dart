@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/services/profile/models/profile_dtos.dart';
@@ -100,6 +101,15 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     return null;
   }
 
+  String? _validateUsername(String? value) {
+    final v = value?.trim() ?? '';
+    if (v.isEmpty) return null;
+    if (!UpsertProfileRequest.isValidUsername(v)) {
+      return '3-30 chars, letters/numbers/underscore/dot only';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -190,6 +200,12 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                                 hint: 'e.g. nextfi_user',
                                 icon: Icons.alternate_email_rounded,
                                 action: TextInputAction.next,
+                                validator: _validateUsername,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                    RegExp(r'[a-zA-Z0-9_.]'),
+                                  ),
+                                ],
                                 c: c,
                               ),
                             ),
@@ -354,6 +370,7 @@ class _FormField extends StatefulWidget {
     this.required = false,
     this.multiline = false,
     this.validator,
+    this.inputFormatters,
   });
 
   final TextEditingController controller;
@@ -365,6 +382,7 @@ class _FormField extends StatefulWidget {
   final bool required;
   final bool multiline;
   final String? Function(String?)? validator;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   State<_FormField> createState() => _FormFieldState();
@@ -397,6 +415,7 @@ class _FormFieldState extends State<_FormField> {
         minLines: widget.multiline ? 2 : 1,
         maxLines: widget.multiline ? 4 : 1,
         validator: widget.validator,
+        inputFormatters: widget.inputFormatters,
         style: TextStyle(
           color: c.textPrimary,
           fontSize: 14.5,

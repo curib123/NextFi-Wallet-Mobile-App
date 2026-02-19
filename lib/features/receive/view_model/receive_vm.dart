@@ -19,7 +19,7 @@ class ReceiveVM extends ChangeNotifier {
   bool _checkingAliasAvailability = false;
   bool? _isAliasAvailable;
   String? _aliasAvailabilityMessage;
-  String? _federationDomain;
+  String? _federationDomain = FederationAddressCoreService.defaultDomain;
   String? _editingFederationId;
   String? _editFederationError;
 
@@ -85,12 +85,11 @@ class ReceiveVM extends ChangeNotifier {
       _federationAddresses = items
           .where((e) => e.isActive && e.federationAddress.isNotEmpty)
           .toList();
-      _federationDomain = _resolveDomainFromList(_federationAddresses);
-      _federationDomain ??= await _resolveDomainFromToml();
+      _federationDomain = FederationAddressCoreService.defaultDomain;
     } catch (e) {
       _federationAddresses = const [];
       _federationError = '$e';
-      _federationDomain ??= await _resolveDomainFromToml();
+      _federationDomain = FederationAddressCoreService.defaultDomain;
     } finally {
       _federationLoading = false;
       notifyListeners();
@@ -180,7 +179,7 @@ class ReceiveVM extends ChangeNotifier {
         await FederationAddressCoreService.I.create(
           CreateFederationAddressRequest(
             alias: alias,
-            domain: _federationDomain,
+            domain: FederationAddressCoreService.defaultDomain,
             accountId: accountId,
             isActive: true,
           ),
@@ -207,10 +206,9 @@ class ReceiveVM extends ChangeNotifier {
   Future<bool> updateFederationAddress({
     required String id,
     required String alias,
-    String? domain,
   }) async {
     final normalizedAlias = _normalizeAlias(alias);
-    final normalizedDomain = (domain ?? _federationDomain ?? '').trim();
+    final normalizedDomain = FederationAddressCoreService.defaultDomain;
 
     if (normalizedAlias.isEmpty) {
       _editFederationError = 'Alias is required.';
@@ -263,30 +261,5 @@ class ReceiveVM extends ChangeNotifier {
     }
     if (normalized.isNotEmpty) return 'nf$normalized';
     return 'nfuser';
-  }
-
-  String? _resolveDomainFromList(List<FederationAddressModel> items) {
-    for (final item in items) {
-      final d = item.domain.trim();
-      if (d.isNotEmpty) return d;
-    }
-    return null;
-  }
-
-  Future<String?> _resolveDomainFromToml() async {
-    try {
-      final toml = await FederationAddressCoreService.I.getStellarToml();
-      final match = RegExp(
-        r'FEDERATION_SERVER\s*=\s*"([^"]+)"',
-        caseSensitive: false,
-      ).firstMatch(toml);
-      final url = match?.group(1)?.trim();
-      if (url == null || url.isEmpty) return null;
-      final uri = Uri.tryParse(url);
-      final host = uri?.host.trim();
-      return (host == null || host.isEmpty) ? null : host;
-    } catch (_) {
-      return null;
-    }
   }
 }

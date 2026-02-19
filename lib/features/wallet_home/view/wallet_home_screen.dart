@@ -10,7 +10,9 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
+import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
+import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/build_tab_bar.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/header_section.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/incoming_hints_strip.dart';
@@ -24,6 +26,8 @@ import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/verification/models/verification_models.dart';
+import 'package:next_fi/services/verification/verification_core_service.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
@@ -34,7 +38,10 @@ class WalletHomeScreen extends StatefulWidget {
 }
 
 class _WalletHomeScreenState extends State<WalletHomeScreen>
-    with WidgetsBindingObserver, TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with
+        WidgetsBindingObserver,
+        TickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin {
   late final AnimationController _livePulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -45,7 +52,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     duration: const Duration(seconds: 20),
   )..repeat();
 
-  final Map<String, AppAlertController> _hintAlertCtrls = <String, AppAlertController>{};
+  final Map<String, AppAlertController> _hintAlertCtrls =
+      <String, AppAlertController>{};
   AppAlertController? _bootBalancesCtl;
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
 
@@ -98,7 +106,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final vm = context.read<WalletHomeVM>();
     if (state == AppLifecycleState.resumed) {
       vm.onResumed();
-    } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       vm.onPausedOrInactive();
     }
   }
@@ -115,20 +124,27 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final assetsVM = context.watch<AssetVM>();
     final stellar = context.read<StellarWalletServices>();
 
-    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final currencyFmt = NumberFormat.simpleCurrency(
+      name: currency.fiat.toUpperCase(),
+    );
     final fxXlm = currency.xlmToFiat(s.xlm);
     final fxUsdc = currency.usdcToFiat(s.usdc);
-    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+    final totalFiat =
+        (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
     final assetList = assetsVM.assets;
     final logosById = {
-      for (final a in assetList) a.id: (a.primaryLogo.isNotEmpty ? a.primaryLogo : assetsVM.logoFor(a.symbol)),
+      for (final a in assetList)
+        a.id: (a.primaryLogo.isNotEmpty
+            ? a.primaryLogo
+            : assetsVM.logoFor(a.symbol)),
     };
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         backgroundColor: colors.surface,
+
         /// DRAWER HERE
         drawer: const AppDrawer(),
 
@@ -151,7 +167,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
             // Main content
             SafeArea(
               child: RefreshIndicator.adaptive(
-                onRefresh: () => context.read<WalletHomeVM>().refresh(force: true),
+                onRefresh: () =>
+                    context.read<WalletHomeVM>().refresh(force: true),
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
@@ -178,21 +195,24 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           livePulse: _livePulse,
                           incomingStrip: s.hasWallet
                               ? IncomingHintsStrip(
-                            colors: colors,
-                            stellarAddress: s.address ?? '',
-                            incomingHints: s.hints
-                                .map((h) => {
-                              'hash': h.id,
-                              'from': h.from,
-                              'to': h.to,
-                              'amount': h.amount.toStringAsFixed(6),
-                              'assetCode': h.assetCode,
-                            })
-                                .toList(),
-                            onAcknowledge: (tx) =>
-                                context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
-                            walletState: s,
-                          )
+                                  colors: colors,
+                                  stellarAddress: s.address ?? '',
+                                  incomingHints: s.hints
+                                      .map(
+                                        (h) => {
+                                          'hash': h.id,
+                                          'from': h.from,
+                                          'to': h.to,
+                                          'amount': h.amount.toStringAsFixed(6),
+                                          'assetCode': h.assetCode,
+                                        },
+                                      )
+                                      .toList(),
+                                  onAcknowledge: (tx) => context
+                                      .read<WalletHomeVM>()
+                                      .ackHint((tx['hash'] ?? '').toString()),
+                                  walletState: s,
+                                )
                               : const SizedBox.shrink(),
                           animateTotal: _animateTotal,
                         ),
@@ -217,11 +237,16 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                               xlmBalance: s.xlm,
                               usdcBalance: s.usdc,
                               address: s.address ?? '',
-                              loading: assetsVM.loading || currency.loading || s.loadingBalances,
+                              loading:
+                                  assetsVM.loading ||
+                                  currency.loading ||
+                                  s.loadingBalances,
                               onItemTap: (token) {
                                 vm.onReceivePressed(initialToken: token);
                               },
-                              hasUsdcTrustline: stellar.hasUsdcTrustline(s.address ?? ''),
+                              hasUsdcTrustline: stellar.hasUsdcTrustline(
+                                s.address ?? '',
+                              ),
                             ),
                           ),
                           TabKeepAlive(
@@ -245,9 +270,26 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
+  // ──────────────────────── Event handling (UI side effects) ────────────────────────
+  Future<bool> _ensureVerifiedForTradeAccess() async {
+    try {
+      final verification = await VerificationCoreService.I.getMe();
+      if (verification.status == TrustStatus.ready) return true;
+    } catch (_) {}
 
+    if (!mounted) return false;
+    showFloatingSnackBar(
+      context,
+      message: 'Verification READY is required for trades',
+      type: SnackBarType.warning,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VerificationFlowScreen()),
+    );
+    return false;
+  }
 
-// ──────────────────────── Event handling (UI side effects) ────────────────────────
   void _onUiEvent(WalletHomeUiEvent e) async {
     if (!mounted) return;
 
@@ -270,40 +312,38 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (e is NavigateToLogin) {
       Navigator.push(
         context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    /// ───────────────── BUY FLOW ─────────────────
+    if (e is StartBuyFlow) {
+      final allowed = await _ensureVerifiedForTradeAccess();
+      if (!allowed || !mounted) return;
+      Navigator.push(
+        context,
         MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
+          builder: (_) =>
+              const TradeTemplateScreen(mode: TradeTemplateMode.buy),
         ),
       );
       return;
     }
-    /// ───────────────── BUY FLOW (TEMP DISABLED) ─────────────────
-    if (e is StartBuyFlow) {
-      // TODO: Implement Buy flow screen
-      debugPrint('StartBuyFlow triggered — screen not implemented yet');
 
-      showFloatingSnackBar(
-        context,
-        message: 'Buy feature coming soon',
-        type: SnackBarType.info,
-      );
-
-      return;
-    }
-
-    /// ───────────────── SELL FLOW (TEMP DISABLED) ─────────────────
+    /// ───────────────── SELL FLOW ─────────────────
     if (e is StartSellFlow) {
-      // TODO: Implement Sell flow screen
-      debugPrint('StartSellFlow triggered — screen not implemented yet');
-
-      showFloatingSnackBar(
+      final allowed = await _ensureVerifiedForTradeAccess();
+      if (!allowed || !mounted) return;
+      Navigator.push(
         context,
-        message: 'Sell feature coming soon',
-        type: SnackBarType.info,
+        MaterialPageRoute(
+          builder: (_) =>
+              const TradeTemplateScreen(mode: TradeTemplateMode.sell),
+        ),
       );
-
       return;
     }
-
 
     /// ───────────────── TOAST ─────────────────
     if (e is ShowToastEvent) {
@@ -332,11 +372,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     /// ───────────────── BOOT READY ─────────────────
     if (e is BootBalancesReady) {
       final currency = context.read<CurrencyVM>();
-      final currencyFmt =
-      NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+      final currencyFmt = NumberFormat.simpleCurrency(
+        name: currency.fiat.toUpperCase(),
+      );
 
-      final totalFiat =
-          currency.xlmToFiat(e.xlm) + currency.usdcToFiat(e.usdc);
+      final totalFiat = currency.xlmToFiat(e.xlm) + currency.usdcToFiat(e.usdc);
 
       _bootBalancesCtl?.update(
         AppAlertType.success,
@@ -392,9 +432,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (e is NavigateToSwap) {
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => const SwapScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const SwapScreen()),
       );
       return;
     }
@@ -440,6 +478,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       onPrimary: () => vm.ackHint(h.id),
       barrierDismissible: true,
     );
+    _hintAlertCtrls[h.id.toString()] = ctl;
   }
 
   String _short(String addr) {

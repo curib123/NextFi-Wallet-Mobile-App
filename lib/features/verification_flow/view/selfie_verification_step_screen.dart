@@ -1,11 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
+import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
 
 class SelfieVerificationStepScreen extends StatefulWidget {
@@ -16,37 +17,71 @@ class SelfieVerificationStepScreen extends StatefulWidget {
       _SelfieVerificationStepScreenState();
 }
 
+enum _ImageSlot { selfie, idFront, idBack }
+
 class _SelfieVerificationStepScreenState
-    extends State<SelfieVerificationStepScreen>
-    with SingleTickerProviderStateMixin {
+    extends State<SelfieVerificationStepScreen> {
   final ImagePicker _picker = ImagePicker();
+  final TextEditingController _phoneCtrl = TextEditingController();
+
   static const Set<String> _allowedExtensions = {'jpg', 'jpeg', 'png', 'webp'};
 
-  File? _selectedSelfie;
+  File? _selfie;
+  File? _idFront;
+  File? _idBack;
+
   bool _picking = false;
   bool _submitting = false;
+  bool _loadingPayment = false;
 
-  late final AnimationController _previewCtrl;
-  late final Animation<double> _previewFade;
-  late final Animation<double> _previewScale;
+  String? _activePaymentAccountId;
+  String? _activePaymentLabel;
 
   @override
   void initState() {
     super.initState();
-    _previewCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-    );
-    _previewFade = CurvedAnimation(parent: _previewCtrl, curve: Curves.easeOut);
-    _previewScale = Tween<double>(begin: 0.94, end: 1.0).animate(
-      CurvedAnimation(parent: _previewCtrl, curve: Curves.easeOutCubic),
-    );
+    _loadActivePaymentAccount();
   }
 
   @override
   void dispose() {
-    _previewCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadActivePaymentAccount() async {
+    setState(() => _loadingPayment = true);
+    try {
+      final accounts = await PaymentMethodAndAccountsCoreService.I
+          .listMyPaymentAccounts(activeOnly: true);
+      if (!mounted) return;
+      if (accounts.isEmpty) {
+        setState(() {
+          _activePaymentAccountId = null;
+          _activePaymentLabel = null;
+          _loadingPayment = false;
+        });
+        return;
+      }
+
+      final account = accounts.first;
+      final method = account.paymentMethod?.name;
+      final accountNo = account.accountNo?.trim();
+      final preview = [
+        account.accountName.trim(),
+        if (method != null && method.trim().isNotEmpty) method.trim(),
+        if (accountNo != null && accountNo.isNotEmpty) accountNo,
+      ].join(' • ');
+
+      setState(() {
+        _activePaymentAccountId = account.id;
+        _activePaymentLabel = preview;
+        _loadingPayment = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingPayment = false);
+    }
   }
 
   bool _isSupportedImagePath(String path) {
@@ -57,47 +92,80 @@ class _SelfieVerificationStepScreenState
     return _allowedExtensions.contains(ext);
   }
 
-  Future<void> _pick(ImageSource source) async {
+  void _assignSlot(_ImageSlot slot, File file) {
+    setState(() {
+      if (slot == _ImageSlot.selfie) {
+        _selfie = file;
+      } else if (slot == _ImageSlot.idFront) {
+        _idFront = file;
+      } else {
+        _idBack = file;
+      }
+    });
+  }
+
+  Future<void> _pickForSlot(_ImageSlot slot, ImageSource source) async {
     if (_picking || _submitting) return;
     HapticFeedback.lightImpact();
     setState(() => _picking = true);
-
     try {
       final xFile = await _picker.pickImage(
         source: source,
-        imageQuality: 85,
+        imageQuality: 90,
         preferredCameraDevice: CameraDevice.front,
       );
       if (!mounted) return;
+
       if (xFile == null) {
         setState(() => _picking = false);
         return;
       }
+
       if (!_isSupportedImagePath(xFile.path)) {
         setState(() => _picking = false);
         _showSnack('Unsupported image type. Use JPG, PNG, or WEBP.');
         return;
       }
-      _previewCtrl.forward(from: 0);
-      setState(() {
-        _selectedSelfie = File(xFile.path);
-        _picking = false;
-      });
+
+      _assignSlot(slot, File(xFile.path));
+      setState(() => _picking = false);
     } catch (e) {
       if (!mounted) return;
       setState(() => _picking = false);
-      _showSnack('Failed to select image: $e');
+      _showSnack('Failed to pick image: $e');
     }
   }
 
-  Future<void> _submit() async {
-    final file = _selectedSelfie;
-    if (file == null) {
-      _showSnack('Select a selfie first.');
-      return;
+  void _clearSlot(_ImageSlot slot) {
+    setState(() {
+      if (slot == _ImageSlot.selfie) {
+        _selfie = null;
+      } else if (slot == _ImageSlot.idFront) {
+        _idFront = null;
+      } else {
+        _idBack = null;
+      }
+    });
+  }
+
+  String? _validateBeforeSubmit() {
+    if (_phoneCtrl.text.trim().isEmpty) return 'Phone number is required.';
+    if (_selfie == null) return 'Selfie image is required.';
+    if (_idFront == null) return 'Government ID front image is required.';
+    if (_idBack == null) return 'Government ID back image is required.';
+
+    if (!_isSupportedImagePath(_selfie!.path) ||
+        !_isSupportedImagePath(_idFront!.path) ||
+        !_isSupportedImagePath(_idBack!.path)) {
+      return 'Only JPG, PNG, or WEBP images are supported.';
     }
-    if (!_isSupportedImagePath(file.path)) {
-      _showSnack('Unsupported image type. Use JPG, PNG, or WEBP.');
+    return null;
+  }
+
+  Future<void> _submit() async {
+    final error = _validateBeforeSubmit();
+    if (error != null) {
+      _showSnack(error);
       return;
     }
 
@@ -105,13 +173,20 @@ class _SelfieVerificationStepScreenState
     setState(() => _submitting = true);
 
     try {
-      await VerificationCoreService.I.submit(selfie: file);
+      await VerificationCoreService.I.submit(
+        phoneNumber: _phoneCtrl.text.trim(),
+        selfie: _selfie!,
+        governmentIdFront: _idFront!,
+        governmentIdBack: _idBack!,
+        paymentAccountId: _activePaymentAccountId,
+      );
       if (!mounted) return;
 
       await showVerificationResultModal(
         context,
         title: 'Verification Submitted',
-        message: 'Your selfie was submitted and is now under review.',
+        message:
+            'Your documents were submitted successfully. We are now reviewing your verification.',
       );
 
       if (!mounted) return;
@@ -135,7 +210,6 @@ class _SelfieVerificationStepScreenState
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       ),
     );
   }
@@ -143,492 +217,137 @@ class _SelfieVerificationStepScreenState
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final hasFile = _selectedSelfie != null;
-
     return Scaffold(
       backgroundColor: c.background,
-      appBar: _buildAppBar(c),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        children: [
-          // ── Preview / Placeholder ──────────────────────────────────
-          _PreviewArea(
-            file: _selectedSelfie,
-            picking: _picking,
-            fadeAnim: _previewFade,
-            scaleAnim: _previewScale,
-            c: c,
+      appBar: AppBar(
+        backgroundColor: c.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleSpacing: 20,
+        title: Text(
+          'Identity Verification',
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            letterSpacing: -0.4,
           ),
-
-          const SizedBox(height: 16),
-
-          // ── Pick source buttons (shown when no image yet) ──────────
-          if (!hasFile) ...[
-            _PickRow(
-              picking: _picking,
-              submitting: _submitting,
-              onCamera: () => _pick(ImageSource.camera),
-              onGallery: () => _pick(ImageSource.gallery),
-              c: c,
-            ),
-            const SizedBox(height: 16),
-            _RequirementsCard(c: c),
-            const SizedBox(height: 16),
-          ],
-
-          // ── Replace row (shown when image already selected) ────────
-          if (hasFile) ...[
-            _ReplaceRow(
-              picking: _picking,
-              submitting: _submitting,
-              onCamera: () => _pick(ImageSource.camera),
-              onGallery: () => _pick(ImageSource.gallery),
-              c: c,
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // ── Submit button ──────────────────────────────────────────
-          _SubmitButton(
-            submitting: _submitting,
-            picking: _picking,
-            hasFile: hasFile,
-            onPressed: _submit,
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.textPrimary),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        children: [
+          _HeroCard(c: c),
+          const SizedBox(height: 14),
+          _PhoneField(controller: _phoneCtrl, c: c),
+          const SizedBox(height: 14),
+          _UploadCard(
             c: c,
+            title: 'Selfie',
+            subtitle: 'Clear face photo in good lighting',
+            file: _selfie,
+            busy: _picking || _submitting,
+            onCamera: () => _pickForSlot(_ImageSlot.selfie, ImageSource.camera),
+            onGallery: () =>
+                _pickForSlot(_ImageSlot.selfie, ImageSource.gallery),
+            onClear: () => _clearSlot(_ImageSlot.selfie),
+          ),
+          const SizedBox(height: 12),
+          _UploadCard(
+            c: c,
+            title: 'Government ID Front',
+            subtitle: 'Capture the front side of your ID',
+            file: _idFront,
+            busy: _picking || _submitting,
+            onCamera: () =>
+                _pickForSlot(_ImageSlot.idFront, ImageSource.camera),
+            onGallery: () =>
+                _pickForSlot(_ImageSlot.idFront, ImageSource.gallery),
+            onClear: () => _clearSlot(_ImageSlot.idFront),
+          ),
+          const SizedBox(height: 12),
+          _UploadCard(
+            c: c,
+            title: 'Government ID Back',
+            subtitle: 'Capture the back side of your ID',
+            file: _idBack,
+            busy: _picking || _submitting,
+            onCamera: () => _pickForSlot(_ImageSlot.idBack, ImageSource.camera),
+            onGallery: () =>
+                _pickForSlot(_ImageSlot.idBack, ImageSource.gallery),
+            onClear: () => _clearSlot(_ImageSlot.idBack),
+          ),
+          const SizedBox(height: 12),
+          _PaymentAccountHint(
+            c: c,
+            loading: _loadingPayment,
+            activePaymentLabel: _activePaymentLabel,
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 52,
+            child: AppElevatedButton(
+              onPressed: _submitting || _picking ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: c.primary.withOpacity(0.45),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: _submitting
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: const AlwaysStoppedAnimation(
+                              Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Submitting...',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    )
+                  : const Text(
+                      'Submit Verification',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+            ),
           ),
         ],
       ),
     );
   }
-
-  PreferredSizeWidget _buildAppBar(AppColor c) {
-    return AppBar(
-      backgroundColor: c.background,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      titleSpacing: 20,
-      title: Text(
-        'Selfie Verification',
-        style: TextStyle(
-          color: c.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
-        ),
-      ),
-      leading: Padding(
-        padding: const EdgeInsets.only(left: 8),
-        child: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: c.textPrimary,
-            size: 18,
-          ),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ),
-    );
-  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PREVIEW AREA
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PreviewArea extends StatelessWidget {
-  const _PreviewArea({
-    required this.file,
-    required this.picking,
-    required this.fadeAnim,
-    required this.scaleAnim,
-    required this.c,
-  });
-
-  final File? file;
-  final bool picking;
-  final Animation<double> fadeAnim;
-  final Animation<double> scaleAnim;
-  final AppColor c;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOut,
-      height: file != null ? 300 : 210,
-      decoration: BoxDecoration(
-        color: file != null ? Colors.black : c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: file != null ? Colors.transparent : c.border.withOpacity(0.22),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: file != null ? _buildImagePreview() : _buildEmptyState(),
-    );
-  }
-
-  Widget _buildImagePreview() {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Photo
-        FadeTransition(
-          opacity: fadeAnim,
-          child: ScaleTransition(
-            scale: scaleAnim,
-            child: Image.file(file!, fit: BoxFit.cover, width: double.infinity),
-          ),
-        ),
-        // Bottom gradient
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            height: 64,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [Colors.black.withOpacity(0.5), Colors.transparent],
-              ),
-            ),
-          ),
-        ),
-        // "Selfie selected" badge
-        Positioned(
-          bottom: 12,
-          right: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.55),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(
-                  Icons.check_circle_outline_rounded,
-                  color: Colors.white,
-                  size: 13,
-                ),
-                SizedBox(width: 5),
-                Text(
-                  'Selfie selected',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: Container(
-            key: ValueKey(picking),
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.08),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: c.primary.withOpacity(0.18),
-                width: 1.5,
-              ),
-            ),
-            child: Icon(
-              picking
-                  ? Icons.hourglass_top_rounded
-                  : Icons.face_retouching_natural_rounded,
-              color: c.primary,
-              size: 28,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          picking ? 'Opening picker…' : 'No selfie selected',
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Use the buttons below to add a photo',
-          style: TextStyle(color: c.textSecondary, fontSize: 13),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PICK ROW  (large — camera | gallery)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PickRow extends StatelessWidget {
-  const _PickRow({
-    required this.picking,
-    required this.submitting,
-    required this.onCamera,
-    required this.onGallery,
-    required this.c,
-  });
-
-  final bool picking;
-  final bool submitting;
-  final VoidCallback onCamera;
-  final VoidCallback onGallery;
-  final AppColor c;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = picking || submitting;
-    return Row(
-      children: [
-        Expanded(
-          child: _SourceButton(
-            icon: Icons.photo_camera_outlined,
-            label: 'Camera',
-            disabled: disabled,
-            onTap: onCamera,
-            c: c,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _SourceButton(
-            icon: Icons.photo_library_outlined,
-            label: 'Gallery',
-            disabled: disabled,
-            onTap: onGallery,
-            c: c,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// REPLACE ROW  (compact chips, shown after image is selected)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ReplaceRow extends StatelessWidget {
-  const _ReplaceRow({
-    required this.picking,
-    required this.submitting,
-    required this.onCamera,
-    required this.onGallery,
-    required this.c,
-  });
-
-  final bool picking;
-  final bool submitting;
-  final VoidCallback onCamera;
-  final VoidCallback onGallery;
-  final AppColor c;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = picking || submitting;
-    return Row(
-      children: [
-        Icon(
-          Icons.refresh_rounded,
-          size: 13,
-          color: c.textSecondary.withOpacity(0.55),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          'Replace with:',
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(width: 10),
-        _CompactChip(
-          icon: Icons.photo_camera_outlined,
-          label: 'Camera',
-          disabled: disabled,
-          onTap: onCamera,
-          c: c,
-        ),
-        const SizedBox(width: 8),
-        _CompactChip(
-          icon: Icons.photo_library_outlined,
-          label: 'Gallery',
-          disabled: disabled,
-          onTap: onGallery,
-          c: c,
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SOURCE BUTTON  (tall card, empty state)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SourceButton extends StatelessWidget {
-  const _SourceButton({
-    required this.icon,
-    required this.label,
-    required this.disabled,
-    required this.onTap,
-    required this.c,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool disabled;
-  final VoidCallback onTap;
-  final AppColor c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: disabled ? null : onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: c.primary.withOpacity(0.07),
-        highlightColor: c.primary.withOpacity(0.04),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: c.border.withOpacity(0.25)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 22,
-                color: disabled
-                    ? c.textSecondary.withOpacity(0.3)
-                    : c.textPrimary.withOpacity(0.75),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: disabled
-                      ? c.textSecondary.withOpacity(0.3)
-                      : c.textPrimary,
-                  letterSpacing: -0.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPACT CHIP  (pill, replace row)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CompactChip extends StatelessWidget {
-  const _CompactChip({
-    required this.icon,
-    required this.label,
-    required this.disabled,
-    required this.onTap,
-    required this.c,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool disabled;
-  final VoidCallback onTap;
-  final AppColor c;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: c.border.withOpacity(0.07),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: c.border.withOpacity(0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 13,
-              color: disabled
-                  ? c.textSecondary.withOpacity(0.3)
-                  : c.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: disabled
-                    ? c.textSecondary.withOpacity(0.3)
-                    : c.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// REQUIREMENTS CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _RequirementsCard extends StatelessWidget {
-  const _RequirementsCard({required this.c});
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.c});
 
   final AppColor c;
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      (Icons.lightbulb_outline_rounded, 'Good lighting, face fully visible'),
-      (Icons.do_not_disturb_on_outlined, 'No sunglasses or face coverings'),
-      (Icons.image_outlined, 'JPG, PNG, or WebP format'),
-    ];
-
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
@@ -637,41 +356,27 @@ class _RequirementsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'REQUIREMENTS',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              color: c.textSecondary.withOpacity(0.6),
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: c.border.withOpacity(0.07),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(item.$1, size: 15, color: c.textSecondary),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    item.$2,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+          Row(
+            children: [
+              Icon(Icons.verified_user_outlined, color: c.primary, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Step 3 of 3',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Submit your phone number, selfie, and both sides of your government ID.',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.5,
+              height: 1.35,
             ),
           ),
         ],
@@ -680,105 +385,255 @@ class _RequirementsCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUBMIT BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
+class _PhoneField extends StatelessWidget {
+  const _PhoneField({required this.controller, required this.c});
 
-class _SubmitButton extends StatelessWidget {
-  const _SubmitButton({
-    required this.submitting,
-    required this.picking,
-    required this.hasFile,
-    required this.onPressed,
-    required this.c,
-  });
-
-  final bool submitting;
-  final bool picking;
-  final bool hasFile;
-  final VoidCallback onPressed;
+  final TextEditingController controller;
   final AppColor c;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = submitting || picking || !hasFile;
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.phone,
+      textInputAction: TextInputAction.next,
+      style: TextStyle(
+        color: c.textPrimary,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w500,
+      ),
+      decoration: InputDecoration(
+        labelText: 'Phone Number *',
+        hintText: 'e.g. +639171234567',
+        filled: true,
+        fillColor: c.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.primary, width: 1.4),
+        ),
+        prefixIcon: Icon(Icons.phone_outlined, color: c.textSecondary),
+      ),
+    );
+  }
+}
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      height: 52,
+class _UploadCard extends StatelessWidget {
+  const _UploadCard({
+    required this.c,
+    required this.title,
+    required this.subtitle,
+    required this.file,
+    required this.busy,
+    required this.onCamera,
+    required this.onGallery,
+    required this.onClear,
+  });
+
+  final AppColor c;
+  final String title;
+  final String subtitle;
+  final File? file;
+  final bool busy;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = file != null;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: disabled
-            ? null
-            : [
-                BoxShadow(
-                  color: c.primary.withOpacity(0.28),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
+        border: Border.all(color: c.border.withOpacity(0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasFile)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.success.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Added',
+                    style: TextStyle(
+                      color: c.success,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              height: 164,
+              color: hasFile ? Colors.black : c.border.withOpacity(0.08),
+              child: hasFile
+                  ? Image.file(file!, fit: BoxFit.cover)
+                  : Center(
+                      child: Icon(
+                        Icons.image_outlined,
+                        color: c.textSecondary.withOpacity(0.45),
+                        size: 28,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: AppOutlinedButton(
+                    onPressed: busy ? null : onCamera,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border.withOpacity(0.3)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Camera'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: AppOutlinedButton(
+                    onPressed: busy ? null : onGallery,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border.withOpacity(0.3)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Gallery'),
+                  ),
+                ),
+              ),
+              if (hasFile) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 40,
+                  child: AppOutlinedButton(
+                    onPressed: busy ? null : onClear,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.error,
+                      side: BorderSide(color: c.error.withOpacity(0.3)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Icon(Icons.delete_outline_rounded, size: 18),
+                  ),
                 ),
               ],
-      ),
-      child: AppElevatedButton(
-        onPressed: disabled ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: c.primary,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: c.primary.withOpacity(0.35),
-          disabledForegroundColor: Colors.white54,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            ],
           ),
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          child: submitting
-              ? Row(
-                  key: const ValueKey('loading'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(Colors.white70),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Submitting…',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  key: const ValueKey('idle'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      hasFile
-                          ? Icons.cloud_upload_outlined
-                          : Icons.add_photo_alternate_outlined,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      hasFile ? 'Submit Selfie' : 'Select a Photo First',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentAccountHint extends StatelessWidget {
+  const _PaymentAccountHint({
+    required this.c,
+    required this.loading,
+    required this.activePaymentLabel,
+  });
+
+  final AppColor c;
+  final bool loading;
+  final String? activePaymentLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Text(
+        'Checking active payment account...',
+        style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+      );
+    }
+
+    if (activePaymentLabel == null) {
+      return Text(
+        'No active payment account selected. Submission will still continue.',
+        style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            color: c.primary,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Linked payment account: $activePaymentLabel',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

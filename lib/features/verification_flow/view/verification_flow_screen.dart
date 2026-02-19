@@ -3,8 +3,10 @@ import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/profile_setup_modal.dart';
+import 'package:next_fi/common/components/modal/verification_consent_modal.dart';
 import 'package:next_fi/features/verification_flow/view/payment_method_setup_screen.dart';
 import 'package:next_fi/features/verification_flow/view/selfie_verification_step_screen.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_flow_service.dart';
 
@@ -26,6 +28,10 @@ class VerificationFlowScreen extends StatefulWidget {
 
 class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     with TickerProviderStateMixin {
+  static const String _kVerificationConsentKey = 'verification.user_consent.v1';
+  static const String _kVerificationConsentAtKey =
+      'verification.user_consent_at.v1';
+
   VerificationFlowSnapshot? _snapshot;
   String? _error;
   bool _loading = true;
@@ -208,8 +214,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
                 ),
                 (
                   icon: Icons.camera_alt_outlined,
-                  title: 'Selfie Verification',
-                  subtitle: 'Submit a selfie for review',
+                  title: 'Identity Verification',
+                  subtitle: 'Phone number + selfie + government ID front/back',
                 ),
               ],
             ),
@@ -300,6 +306,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   }
 
   Future<void> _continueFromSnapshot(VerificationFlowSnapshot snapshot) async {
+    final consentGranted = await _ensureVerificationConsent(snapshot);
+    if (!consentGranted) return;
+
     final step = snapshot.nextStepIndex > 3 ? 3 : snapshot.nextStepIndex;
     final handler = switch (step) {
       1 => widget.onOpenProfileStep,
@@ -335,6 +344,38 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     // step == 1 → profile modal
     await showProfileSetupModal(context, initial: snapshot.profile);
     if (mounted) await _load();
+  }
+
+  Future<bool> _ensureVerificationConsent(
+    VerificationFlowSnapshot snapshot,
+  ) async {
+    final status = snapshot.verification.status;
+    final needsConsent =
+        (status == TrustStatus.basic || status == TrustStatus.unknown) &&
+        !snapshot.isCompleted;
+    if (!needsConsent) return true;
+
+    try {
+      final stored = await SecurityStorage.read(_kVerificationConsentKey);
+      if (stored == 'accepted') return true;
+    } catch (_) {
+      // Fall back to asking consent now if secure storage read fails.
+    }
+
+    if (!mounted) return false;
+    final accepted = await showVerificationConsentModal(context);
+    if (accepted != true) return false;
+
+    try {
+      await SecurityStorage.save(_kVerificationConsentKey, 'accepted');
+      await SecurityStorage.save(
+        _kVerificationConsentAtKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
+    } catch (_) {
+      // If persistence fails we still allow the current user flow.
+    }
+    return true;
   }
 }
 
