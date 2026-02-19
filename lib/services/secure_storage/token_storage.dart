@@ -8,10 +8,11 @@ class TokenStorage {
   final FlutterSecureStorage _storage;
 
   TokenStorage({FlutterSecureStorage? storage})
-      : _storage = storage ??
-      const FlutterSecureStorage(
-        aOptions: AndroidOptions(encryptedSharedPreferences: true),
-      );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+          );
 
   Future<void> saveTokens({
     required String accessToken,
@@ -33,5 +34,8 @@ class TokenStorage {
     ]);
   }
 
-  Future<bool> get hasTokens async => (await accessToken) != null;
+  Future<bool> get hasTokens async {
+    final values = await Future.wait([accessToken, refreshToken]);
+    return values[0] != null && values[1] != null;
+  }
 }
