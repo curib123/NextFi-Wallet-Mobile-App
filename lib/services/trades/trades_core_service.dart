@@ -40,14 +40,27 @@ class TradesCoreService {
 
   Future<TradeModel> getMyTradeById(String id) async => _api.getMyTradeById(id);
 
-  Future<TradeModel> markPaid(String id) async {
-    final trade = await _api.markPaid(id);
+  Future<TradeModel> markPaid(
+    String id, {
+    required String idempotencyKey,
+  }) async {
+    final trade = await _api.markPaid(id, idempotencyKey: idempotencyKey);
     _emitChanged();
     return trade;
   }
 
-  Future<TradeModel> cancelMyTrade(String id, {String? reason}) async {
-    final trade = await _api.cancelMyTrade(id, reason: reason);
+  Future<TradeModel> cancelMyTrade(
+    String id, {
+    required String idempotencyKey,
+    String? txHash,
+    String? reason,
+  }) async {
+    final trade = await _api.cancelMyTrade(
+      id,
+      idempotencyKey: idempotencyKey,
+      txHash: txHash,
+      reason: reason,
+    );
     _emitChanged();
     return trade;
   }
@@ -81,14 +94,32 @@ class TradesCoreService {
   Future<TradeModel> getSellerTradeById(String id) async =>
       _api.getSellerTradeById(id);
 
-  Future<TradeModel> releaseSellerTrade(String id) async {
-    final trade = await _api.releaseSellerTrade(id);
+  Future<TradeModel> releaseSellerTrade(
+    String id, {
+    required String idempotencyKey,
+    String? txHash,
+  }) async {
+    final trade = await _api.releaseSellerTrade(
+      id,
+      idempotencyKey: idempotencyKey,
+      txHash: txHash,
+    );
     _emitChanged();
     return trade;
   }
 
-  Future<TradeModel> cancelSellerTrade(String id, {String? reason}) async {
-    final trade = await _api.cancelSellerTrade(id, reason: reason);
+  Future<TradeModel> cancelSellerTrade(
+    String id, {
+    required String idempotencyKey,
+    String? txHash,
+    String? reason,
+  }) async {
+    final trade = await _api.cancelSellerTrade(
+      id,
+      idempotencyKey: idempotencyKey,
+      txHash: txHash,
+      reason: reason,
+    );
     _emitChanged();
     return trade;
   }

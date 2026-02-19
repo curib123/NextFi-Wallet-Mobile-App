@@ -105,9 +105,51 @@ class OfferPaymentMethodRef {
   }
 }
 
+class OfferWalletRef {
+  final String id;
+  final String publicAddress;
+  final String network;
+  final String? label;
+
+  const OfferWalletRef({
+    required this.id,
+    required this.publicAddress,
+    required this.network,
+    this.label,
+  });
+
+  factory OfferWalletRef.fromJson(Map<String, dynamic> json) {
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return fallback;
+    }
+
+    return OfferWalletRef(
+      id: readString(const ['id', 'walletId', 'wallet_id']),
+      publicAddress: readString(const [
+        'publicAddress',
+        'public_address',
+        'address',
+      ]),
+      network: readString(const ['network'], fallback: 'stellar'),
+      label: (() {
+        final text = readString(const ['label']);
+        return text.isEmpty ? null : text;
+      })(),
+    );
+  }
+}
+
 class OfferModel {
   final String id;
   final String? merchantUserId;
+  final String? sellerWalletId;
+  final OfferWalletRef? sellerWallet;
   final OfferType type;
   final OfferAsset asset;
   final String fiatCurrency;
@@ -130,6 +172,8 @@ class OfferModel {
   const OfferModel({
     required this.id,
     this.merchantUserId,
+    this.sellerWalletId,
+    this.sellerWallet,
     this.type = OfferType.unknown,
     this.asset = OfferAsset.unknown,
     this.fiatCurrency = '',
@@ -251,6 +295,24 @@ class OfferModel {
       return const [];
     }
 
+    OfferWalletRef? readSellerWallet() {
+      final candidates = [
+        json['sellerWallet'],
+        json['seller_wallet'],
+        json['wallet'],
+      ];
+      for (final raw in candidates) {
+        if (raw is! Map<String, dynamic>) continue;
+        final wallet = OfferWalletRef.fromJson(raw);
+        if (wallet.id.isNotEmpty || wallet.publicAddress.isNotEmpty) {
+          return wallet;
+        }
+      }
+      return null;
+    }
+
+    final sellerWallet = readSellerWallet();
+
     return OfferModel(
       id: readString(const ['id']),
       merchantUserId: (() {
@@ -262,6 +324,18 @@ class OfferModel {
         ]);
         return userId.isEmpty ? null : userId;
       })(),
+      sellerWalletId: (() {
+        final walletId = readString(const [
+          'sellerWalletId',
+          'seller_wallet_id',
+          'walletId',
+          'wallet_id',
+        ]);
+        if (walletId.isNotEmpty) return walletId;
+        final nested = sellerWallet?.id.trim() ?? '';
+        return nested.isEmpty ? null : nested;
+      })(),
+      sellerWallet: sellerWallet,
       type: offerTypeFromApi(json['type']),
       asset: offerAssetFromApi(json['asset']),
       fiatCurrency: readString(const [

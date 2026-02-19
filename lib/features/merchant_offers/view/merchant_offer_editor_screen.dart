@@ -6,6 +6,8 @@ import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/wallet/models/wallet_models.dart';
+import 'package:next_fi/services/wallet/wallet_core_service.dart';
 
 class MerchantOfferEditorScreen extends StatefulWidget {
   const MerchantOfferEditorScreen({super.key, this.initialOffer});
@@ -22,6 +24,7 @@ class MerchantOfferEditorScreen extends StatefulWidget {
 class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
   final _offers = OffersCoreService.I;
   final _payments = PaymentMethodAndAccountsCoreService.I;
+  final _wallets = WalletCoreService.I;
 
   final _fiatCtrl = TextEditingController(text: 'PHP');
   final _fixedPriceCtrl = TextEditingController();
@@ -39,11 +42,15 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
   bool _isActive = true;
 
   bool _loadingMethods = true;
+  bool _loadingWallets = true;
   bool _saving = false;
   String? _error;
 
   List<PaymentMethodModel> _methods = const [];
   final Set<String> _selectedMethodIds = <String>{};
+  List<WalletAddress> _sellerWallets = const [];
+  WalletAddress? _selectedSellerWallet;
+  String? _initialSellerWalletId;
 
   bool get _isEdit => widget.isEdit;
   OfferModel? get _initial => widget.initialOffer;
@@ -52,7 +59,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
   void initState() {
     super.initState();
     _hydrateFromInitial();
-    _loadMethods();
+    _loadDependencies();
   }
 
   @override
@@ -90,6 +97,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
     _totalCtrl.text = (offer.totalQty ?? offer.maxAmount).toString();
     _windowCtrl.text = offer.paymentWindow.toString();
     _autoReplyCtrl.text = offer.autoReply ?? '';
+    _initialSellerWalletId = offer.sellerWalletId?.trim();
 
     for (final method in offer.paymentMethods) {
       final id = method.id.trim();
@@ -99,23 +107,56 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
     }
   }
 
-  Future<void> _loadMethods() async {
+  Future<void> _loadDependencies() async {
     setState(() {
       _loadingMethods = true;
+      _loadingWallets = true;
       _error = null;
     });
     try {
-      final methods = await _payments.listPaymentMethods(activeOnly: true);
+      final results = await Future.wait<dynamic>([
+        _payments.listPaymentMethods(activeOnly: true),
+        _wallets.list(),
+      ]);
+      final methods = results[0] as List<PaymentMethodModel>;
+      final wallets = results[1] as List<WalletAddress>;
       methods.sort((a, b) => a.name.compareTo(b.name));
+      final sellerWallets = wallets
+          .where((w) => w.network.trim().toLowerCase() == 'stellar')
+          .toList();
+      WalletAddress? selectedWallet;
+      if (_initialSellerWalletId != null &&
+          _initialSellerWalletId!.isNotEmpty) {
+        for (final wallet in sellerWallets) {
+          if (wallet.id == _initialSellerWalletId) {
+            selectedWallet = wallet;
+            break;
+          }
+        }
+      }
+      if (selectedWallet == null && _initial?.sellerWallet != null) {
+        final initialAddress = _initial!.sellerWallet!.publicAddress.trim();
+        for (final wallet in sellerWallets) {
+          if (wallet.publicAddress.trim() == initialAddress) {
+            selectedWallet = wallet;
+            break;
+          }
+        }
+      }
+      selectedWallet ??= sellerWallets.isNotEmpty ? sellerWallets.first : null;
       if (!mounted) return;
       setState(() {
         _methods = methods;
+        _sellerWallets = sellerWallets;
+        _selectedSellerWallet = selectedWallet;
         _loadingMethods = false;
+        _loadingWallets = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loadingMethods = false;
+        _loadingWallets = false;
         _error = e.toString();
       });
     }
@@ -175,6 +216,10 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
       _showSnack('Select at least one payment method.');
       return;
     }
+    if (_selectedSellerWallet == null) {
+      _showSnack('Select your escrow settlement wallet.');
+      return;
+    }
 
     setState(() {
       _saving = true;
@@ -198,6 +243,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
             requiredReady: _requiredReady,
             isActive: _isActive,
             paymentMethodIds: _selectedMethodIds.toList(),
+            sellerWalletId: _selectedSellerWallet!.id,
             autoReply: _autoReplyCtrl.text.trim(),
           ),
         );
@@ -218,6 +264,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
             paymentWindow: paymentWindow,
             requiredReady: _requiredReady,
             paymentMethodIds: _selectedMethodIds.toList(),
+            sellerWalletId: _selectedSellerWallet!.id,
             autoReply: _autoReplyCtrl.text.trim().isEmpty
                 ? null
                 : _autoReplyCtrl.text.trim(),
@@ -241,9 +288,48 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _shortAddress(String address) {
+    final value = address.trim();
+    if (value.length <= 18) return value;
+    return '${value.substring(0, 8)}...${value.substring(value.length - 8)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final minAmount = double.tryParse(_minCtrl.text.trim());
+    final maxAmount = double.tryParse(_maxCtrl.text.trim());
+    final totalQty = double.tryParse(_totalCtrl.text.trim());
+    final paymentWindow = int.tryParse(_windowCtrl.text.trim());
+    final fixedPrice = double.tryParse(_fixedPriceCtrl.text.trim());
+    final marginPercent = double.tryParse(_marginCtrl.text.trim());
+
+    final marketReady = _fiatCtrl.text.trim().toUpperCase().length >= 3;
+    final priceReady = _priceType == OfferPriceType.fixed
+        ? (fixedPrice != null && fixedPrice > 0)
+        : (marginPercent != null);
+    final limitsReady =
+        minAmount != null &&
+        maxAmount != null &&
+        totalQty != null &&
+        paymentWindow != null &&
+        minAmount > 0 &&
+        maxAmount > 0 &&
+        totalQty > 0 &&
+        minAmount <= maxAmount &&
+        maxAmount <= totalQty &&
+        paymentWindow >= 5 &&
+        paymentWindow <= 120;
+    final paymentMethodsReady = _selectedMethodIds.isNotEmpty;
+    final walletReady = _selectedSellerWallet != null;
+    final readinessChecks = [
+      marketReady,
+      priceReady,
+      limitsReady,
+      paymentMethodsReady,
+      walletReady,
+    ];
+    final readyCount = readinessChecks.where((e) => e).length;
 
     return Scaffold(
       backgroundColor: c.background,
@@ -283,6 +369,16 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
             subtitle:
                 'Use active payment methods and valid limits. Changes apply to your trade listing immediately.',
             badge: _isEdit ? 'EDIT MODE' : 'CREATE MODE',
+          ),
+          const SizedBox(height: 10),
+          _OfferReadinessCard(
+            c: c,
+            readyCount: readyCount,
+            marketReady: marketReady,
+            pricingReady: priceReady,
+            limitsReady: limitsReady,
+            methodsReady: paymentMethodsReady,
+            walletReady: walletReady,
           ),
           const SizedBox(height: 18),
           _SectionLabel(c: c, label: 'MARKET'),
@@ -503,6 +599,64 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
                   ),
           ),
           const SizedBox(height: 18),
+          _SectionLabel(c: c, label: 'ESCROW WALLET'),
+          const SizedBox(height: 8),
+          _SurfaceCard(
+            c: c,
+            child: _loadingWallets
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : _sellerWallets.isEmpty
+                ? Text(
+                    'No Stellar wallet found. Create or sync a wallet first before publishing offers.',
+                    style: TextStyle(color: c.textSecondary, fontSize: 12.4),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<WalletAddress>(
+                        value: _selectedSellerWallet,
+                        isExpanded: true,
+                        items: _sellerWallets
+                            .map(
+                              (wallet) => DropdownMenuItem<WalletAddress>(
+                                value: wallet,
+                                child: Text(
+                                  '${wallet.label?.trim().isNotEmpty == true ? wallet.label!.trim() : 'Stellar Wallet'} | ${_shortAddress(wallet.publicAddress)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(() {
+                                _selectedSellerWallet = value;
+                              }),
+                        decoration: InputDecoration(
+                          labelText: 'Seller settlement wallet',
+                          filled: true,
+                          fillColor: c.background,
+                          border: _fieldBorder(c),
+                          enabledBorder: _fieldBorder(c),
+                          focusedBorder: _fieldFocusedBorder(c),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Escrow funding for this offer will use the selected wallet. Keep trustline and balance ready for ${offerAssetToApi(_asset)}.',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12.1,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 18),
           _SectionLabel(c: c, label: 'SAFETY'),
           const SizedBox(height: 8),
           _SurfaceCard(
@@ -636,6 +790,124 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
       borderSide: BorderSide(color: c.primary.withOpacity(0.42), width: 1.2),
+    );
+  }
+}
+
+class _OfferReadinessCard extends StatelessWidget {
+  const _OfferReadinessCard({
+    required this.c,
+    required this.readyCount,
+    required this.marketReady,
+    required this.pricingReady,
+    required this.limitsReady,
+    required this.methodsReady,
+    required this.walletReady,
+  });
+
+  final AppColor c;
+  final int readyCount;
+  final bool marketReady;
+  final bool pricingReady;
+  final bool limitsReady;
+  final bool methodsReady;
+  final bool walletReady;
+
+  Widget _item(String label, bool ready) {
+    return Row(
+      children: [
+        Icon(
+          ready
+              ? Icons.check_circle_rounded
+              : Icons.radio_button_unchecked_rounded,
+          size: 14,
+          color: ready ? c.success : c.textSecondary,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 12.1,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = readyCount / 5;
+    final accent = readyCount == 5 ? c.success : c.primary;
+    final summary = readyCount == 5
+        ? 'All required sections are ready.'
+        : 'Complete the unchecked sections before publishing.';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border.withOpacity(0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Offer Readiness',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 13.2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$readyCount/5',
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 12.6,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: c.border.withOpacity(0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(accent),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _item('Market details', marketReady),
+          const SizedBox(height: 5),
+          _item('Pricing configuration', pricingReady),
+          const SizedBox(height: 5),
+          _item('Limits and payment window', limitsReady),
+          const SizedBox(height: 5),
+          _item('At least one payment method', methodsReady),
+          const SizedBox(height: 5),
+          _item('Seller escrow wallet selected', walletReady),
+          const SizedBox(height: 8),
+          Text(
+            summary,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11.8,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

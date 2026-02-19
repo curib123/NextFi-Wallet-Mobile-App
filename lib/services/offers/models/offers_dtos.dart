@@ -43,6 +43,7 @@ class CreateOfferRequest {
   final int paymentWindow;
   final bool requiredReady;
   final List<String> paymentMethodIds;
+  final String sellerWalletId;
   final String? autoReply;
 
   const CreateOfferRequest({
@@ -58,6 +59,7 @@ class CreateOfferRequest {
     required this.paymentWindow,
     required this.requiredReady,
     required this.paymentMethodIds,
+    required this.sellerWalletId,
     this.autoReply,
   });
 
@@ -74,6 +76,7 @@ class CreateOfferRequest {
     'paymentWindow': paymentWindow,
     'requiredReady': requiredReady,
     'paymentMethodIds': paymentMethodIds,
+    'sellerWalletId': sellerWalletId.trim(),
     if (autoReply != null && autoReply!.trim().isNotEmpty)
       'autoReply': autoReply!.trim(),
   };
@@ -90,6 +93,7 @@ class UpdateOfferRequest {
   final bool? requiredReady;
   final bool? isActive;
   final List<String>? paymentMethodIds;
+  final String? sellerWalletId;
   final String? autoReply;
 
   const UpdateOfferRequest({
@@ -103,6 +107,7 @@ class UpdateOfferRequest {
     this.requiredReady,
     this.isActive,
     this.paymentMethodIds,
+    this.sellerWalletId,
     this.autoReply,
   });
 
@@ -118,6 +123,8 @@ class UpdateOfferRequest {
     if (requiredReady != null) 'requiredReady': requiredReady,
     if (isActive != null) 'isActive': isActive,
     if (paymentMethodIds != null) 'paymentMethodIds': paymentMethodIds,
+    if (sellerWalletId != null && sellerWalletId!.trim().isNotEmpty)
+      'sellerWalletId': sellerWalletId!.trim(),
     if (autoReply != null) 'autoReply': autoReply,
   };
 }

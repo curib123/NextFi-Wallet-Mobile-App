@@ -199,11 +199,15 @@ class TradesService {
     );
   }
 
-  Future<TradeModel> markPaid(String id) async {
+  Future<TradeModel> markPaid(
+    String id, {
+    required String idempotencyKey,
+  }) async {
+    final req = MarkPaidTradeRequest(idempotencyKey: idempotencyKey);
     final res = await _client.patch(
       TradesHttp.uri(TradesEndpoints.markPaid(id)),
       headers: await _headers(),
-      body: jsonEncode(<String, dynamic>{}),
+      body: jsonEncode(req.toJson()),
     );
 
     TradesHttp.ensureOk(res);
@@ -218,8 +222,17 @@ class TradesService {
     );
   }
 
-  Future<TradeModel> cancelMyTrade(String id, {String? reason}) async {
-    final req = CancelTradeRequest(reason: reason);
+  Future<TradeModel> cancelMyTrade(
+    String id, {
+    required String idempotencyKey,
+    String? txHash,
+    String? reason,
+  }) async {
+    final req = CancelTradeRequest(
+      idempotencyKey: idempotencyKey,
+      txHash: txHash,
+      reason: reason,
+    );
     final res = await _client.patch(
       TradesHttp.uri(TradesEndpoints.cancelMyTrade(id)),
       headers: await _headers(),
@@ -336,11 +349,19 @@ class TradesService {
     );
   }
 
-  Future<TradeModel> releaseSellerTrade(String id) async {
+  Future<TradeModel> releaseSellerTrade(
+    String id, {
+    required String idempotencyKey,
+    String? txHash,
+  }) async {
+    final req = ReleaseTradeRequest(
+      idempotencyKey: idempotencyKey,
+      txHash: txHash,
+    );
     final res = await _client.patch(
       TradesHttp.uri(TradesEndpoints.releaseSellerTrade(id)),
       headers: await _headers(),
-      body: jsonEncode(<String, dynamic>{}),
+      body: jsonEncode(req.toJson()),
     );
 
     TradesHttp.ensureOk(res);
@@ -355,8 +376,17 @@ class TradesService {
     );
   }
 
-  Future<TradeModel> cancelSellerTrade(String id, {String? reason}) async {
-    final req = CancelTradeRequest(reason: reason);
+  Future<TradeModel> cancelSellerTrade(
+    String id, {
+    required String idempotencyKey,
+    String? txHash,
+    String? reason,
+  }) async {
+    final req = CancelTradeRequest(
+      idempotencyKey: idempotencyKey,
+      txHash: txHash,
+      reason: reason,
+    );
     final res = await _client.patch(
       TradesHttp.uri(TradesEndpoints.cancelSellerTrade(id)),
       headers: await _headers(),

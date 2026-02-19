@@ -1,4 +1,6 @@
 // lib/app/home.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
@@ -19,6 +21,8 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
+  Timer? _splashTimer;
+
   bool _showSplash = true;
   bool _isLoading = true;
   bool _hasMnemonic = false;
@@ -40,6 +44,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _splashTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -60,9 +65,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   Future<void> _boot() async {
-    final minSplash = Future.delayed(const Duration(seconds: 5));
+    final splashCompleter = Completer<void>();
+    _splashTimer?.cancel();
+    _splashTimer = Timer(const Duration(seconds: 5), splashCompleter.complete);
+
     final check = _checkMnemonic();
-    await Future.wait([minSplash, check]);
+    await Future.wait([splashCompleter.future, check]);
     if (!mounted) return;
     setState(() => _showSplash = false);
   }

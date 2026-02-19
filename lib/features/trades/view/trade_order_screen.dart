@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -66,6 +67,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     joined: false,
   );
   String? _chatError;
+  final Map<String, String> _idempotencyKeys = <String, String>{};
 
   @override
   void initState() {
@@ -155,7 +157,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     if (_busy || _trade == null) return;
     setState(() => _busy = true);
     try {
-      await _trades.markPaid(_trade!.id);
+      await _trades.markPaid(
+        _trade!.id,
+        idempotencyKey: _idempotencyKey('mark-paid'),
+      );
       await _loadTrade(showLoader: false);
       _showSnack('Trade marked as paid.');
     } catch (e) {
@@ -173,13 +178,29 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       confirm: 'Cancel trade',
     );
     if (reason == null) return;
+    final txHash = await _promptText(
+      title: 'Refund Tx Hash',
+      hint: 'Optional in virtual mode, required in stellar mode',
+      confirm: 'Continue',
+    );
+    if (txHash == null) return;
 
     setState(() => _busy = true);
     try {
       if (widget.asSeller) {
-        await _trades.cancelSellerTrade(_trade!.id, reason: reason.trim());
+        await _trades.cancelSellerTrade(
+          _trade!.id,
+          idempotencyKey: _idempotencyKey('seller-cancel'),
+          txHash: txHash.trim().isEmpty ? null : txHash.trim(),
+          reason: reason.trim(),
+        );
       } else {
-        await _trades.cancelMyTrade(_trade!.id, reason: reason.trim());
+        await _trades.cancelMyTrade(
+          _trade!.id,
+          idempotencyKey: _idempotencyKey('buyer-cancel'),
+          txHash: txHash.trim().isEmpty ? null : txHash.trim(),
+          reason: reason.trim(),
+        );
       }
       await _loadTrade(showLoader: false);
       _showSnack('Trade cancelled.');
@@ -199,10 +220,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       confirmLabel: 'Release',
     );
     if (ok != true) return;
+    final txHash = await _promptText(
+      title: 'Release Tx Hash',
+      hint: 'Required in stellar mode',
+      confirm: 'Continue',
+    );
+    if (txHash == null) return;
 
     setState(() => _busy = true);
     try {
-      await _trades.releaseSellerTrade(_trade!.id);
+      await _trades.releaseSellerTrade(
+        _trade!.id,
+        idempotencyKey: _idempotencyKey('release'),
+        txHash: txHash.trim().isEmpty ? null : txHash.trim(),
+      );
       await _loadTrade(showLoader: false);
       _showSnack('Escrow released successfully.');
     } catch (e) {
@@ -565,6 +596,100 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     }
   }
 
+  String _escrowStateLabel(TradeEscrowState state) {
+    switch (state) {
+      case TradeEscrowState.unfunded:
+        return 'UNFUNDED';
+      case TradeEscrowState.funded:
+        return 'FUNDED';
+      case TradeEscrowState.released:
+        return 'RELEASED';
+      case TradeEscrowState.refunded:
+        return 'REFUNDED';
+      case TradeEscrowState.unknown:
+        return 'UNKNOWN';
+    }
+  }
+
+  ({String title, String message, IconData icon, Color color}) _nextActionHint(
+    AppColor c,
+    TradeModel trade,
+  ) {
+    if (widget.asSeller) {
+      if (trade.status == TradeStatus.paid) {
+        return (
+          title: 'Action required',
+          message:
+              'Buyer marked paid. Verify funds in your payment account, then release escrow.',
+          icon: Icons.verified_rounded,
+          color: c.success,
+        );
+      }
+      if (trade.status == TradeStatus.awaitingPayment ||
+          trade.status == TradeStatus.created) {
+        return (
+          title: 'Waiting for buyer payment',
+          message:
+              'Keep chat active and monitor payment proof uploads before taking action.',
+          icon: Icons.hourglass_bottom_rounded,
+          color: c.warning,
+        );
+      }
+    } else {
+      if (trade.isOpenForBuyerPayment) {
+        return (
+          title: 'Action required',
+          message:
+              'Send fiat payment using seller account details, then tap Mark Paid and upload proof.',
+          icon: Icons.payments_outlined,
+          color: c.primary,
+        );
+      }
+      if (trade.status == TradeStatus.paid) {
+        return (
+          title: 'Waiting for release',
+          message:
+              'Seller is expected to release escrow once payment is confirmed.',
+          icon: Icons.lock_clock_outlined,
+          color: c.warning,
+        );
+      }
+    }
+
+    if (trade.status == TradeStatus.released) {
+      return (
+        title: 'Trade completed',
+        message: 'Escrow released successfully. You can now leave a review.',
+        icon: Icons.check_circle_rounded,
+        color: c.success,
+      );
+    }
+    if (trade.status == TradeStatus.cancelled) {
+      return (
+        title: 'Trade cancelled',
+        message: 'Review escrow tracking below for refund details.',
+        icon: Icons.cancel_outlined,
+        color: c.textSecondary,
+      );
+    }
+    if (trade.status == TradeStatus.disputed) {
+      return (
+        title: 'Dispute in progress',
+        message:
+            'Keep all communication and evidence inside this trade chat and proof flows.',
+        icon: Icons.gavel_rounded,
+        color: c.error,
+      );
+    }
+    return (
+      title: 'Order active',
+      message:
+          'Follow the guided flow in this screen only. External chats are not protected.',
+      icon: Icons.shield_rounded,
+      color: c.primary,
+    );
+  }
+
   Color _statusColor(AppColor c, TradeStatus status) {
     switch (status) {
       case TradeStatus.paid:
@@ -591,6 +716,19 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     }
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  String _idempotencyKey(String action) {
+    final existing = _idempotencyKeys[action];
+    if (existing != null) return existing;
+    final millis = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final randomPart = math.Random().nextInt(1 << 32).toRadixString(16);
+    final tradePart = widget.tradeId.length > 12
+        ? widget.tradeId.substring(0, 12)
+        : widget.tradeId;
+    final key = '$action-$tradePart-$millis-$randomPart';
+    _idempotencyKeys[action] = key;
+    return key;
   }
 
   void _scrollChatToBottom() {
@@ -673,6 +811,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final canCancel =
         !trade.isFinalStatus && trade.status != TradeStatus.released;
     final canReview = trade.status == TradeStatus.released;
+    final nextHint = _nextActionHint(c, trade);
 
     return DefaultTabController(
       length: 2,
@@ -853,6 +992,58 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                     ],
                   ),
                 ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  decoration: BoxDecoration(
+                    color: nextHint.color.withOpacity(0.09),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: nextHint.color.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: nextHint.color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          nextHint.icon,
+                          color: nextHint.color,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              nextHint.title,
+                              style: TextStyle(
+                                color: nextHint.color,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              nextHint.message,
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 12.2,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 18),
                 Text(
                   'ORDER DETAILS',
@@ -909,6 +1100,27 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                           value:
                               '${_money.format(trade.fiatAmount)} ${trade.fiatCurrency}',
                         ),
+                      _SummaryRow(
+                        c: c,
+                        label: 'Escrow state',
+                        value: _escrowStateLabel(trade.escrowState),
+                      ),
+                      if (trade.paymentDueAt != null)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Pay by',
+                          value: DateFormat(
+                            'MMM d, HH:mm',
+                          ).format(trade.paymentDueAt!.toLocal()),
+                        ),
+                      if (trade.releaseDueAt != null)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Release by',
+                          value: DateFormat(
+                            'MMM d, HH:mm',
+                          ).format(trade.releaseDueAt!.toLocal()),
+                        ),
                     ],
                   ),
                 ),
@@ -944,6 +1156,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                         value:
                             '${trade.buyerPaymentAccount?.paymentMethod?.name ?? 'Method'} | ${trade.buyerPaymentAccount?.accountName ?? 'N/A'}',
                       ),
+                      if (trade.sellerWallet?.publicAddress.trim().isNotEmpty ??
+                          false)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Seller wallet',
+                          value: trade.sellerWallet!.publicAddress.trim(),
+                        ),
+                      if (trade.buyerWallet?.publicAddress.trim().isNotEmpty ??
+                          false)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Buyer wallet',
+                          value: trade.buyerWallet!.publicAddress.trim(),
+                        ),
                     ],
                   ),
                 ),
@@ -999,6 +1225,52 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                     ),
                   ),
                 ],
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                  decoration: BoxDecoration(
+                    color: c.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: c.border.withOpacity(0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Escrow Tracking',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _SummaryRow(
+                        c: c,
+                        label: 'Claimable ID',
+                        value: trade.claimableBalanceId ?? 'Not assigned yet',
+                      ),
+                      if ((trade.fundedTxHash ?? '').trim().isNotEmpty)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Fund tx',
+                          value: trade.fundedTxHash!,
+                        ),
+                      if ((trade.releasedTxHash ?? '').trim().isNotEmpty)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Release tx',
+                          value: trade.releasedTxHash!,
+                        ),
+                      if ((trade.refundTxHash ?? '').trim().isNotEmpty)
+                        _SummaryRow(
+                          c: c,
+                          label: 'Refund tx',
+                          value: trade.refundTxHash!,
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),

@@ -17,10 +17,12 @@ TradeStatus tradeStatusFromApi(dynamic raw) {
   final value = raw?.toString().trim().toUpperCase();
   switch (value) {
     case 'CREATED':
+    case 'PENDING':
       return TradeStatus.created;
     case 'OPEN':
     case 'AWAITING_PAYMENT':
     case 'PENDING_PAYMENT':
+    case 'FUNDED':
       return TradeStatus.awaitingPayment;
     case 'PAID':
       return TradeStatus.paid;
@@ -61,6 +63,62 @@ String tradeStatusToApi(TradeStatus status) {
       return 'REFUNDED';
     case TradeStatus.unknown:
       return 'UNKNOWN';
+  }
+}
+
+enum TradeEscrowState { unfunded, funded, released, refunded, unknown }
+
+TradeEscrowState tradeEscrowStateFromApi(dynamic raw) {
+  final value = raw?.toString().trim().toUpperCase();
+  switch (value) {
+    case 'UNFUNDED':
+      return TradeEscrowState.unfunded;
+    case 'FUNDED':
+      return TradeEscrowState.funded;
+    case 'RELEASED':
+      return TradeEscrowState.released;
+    case 'REFUNDED':
+      return TradeEscrowState.refunded;
+    default:
+      return TradeEscrowState.unknown;
+  }
+}
+
+class TradeWalletRef {
+  final String id;
+  final String publicAddress;
+  final String network;
+  final String? label;
+
+  const TradeWalletRef({
+    required this.id,
+    required this.publicAddress,
+    required this.network,
+    this.label,
+  });
+
+  factory TradeWalletRef.fromJson(Map<String, dynamic> json) {
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return fallback;
+    }
+
+    final label = readString(const ['label']);
+    return TradeWalletRef(
+      id: readString(const ['id', 'walletId', 'wallet_id']),
+      publicAddress: readString(const [
+        'publicAddress',
+        'public_address',
+        'address',
+      ]),
+      network: readString(const ['network'], fallback: 'stellar'),
+      label: label.isEmpty ? null : label,
+    );
   }
 }
 
@@ -161,10 +219,23 @@ class TradeModel {
   final DateTime? expiresAt;
   final String? note;
   final String? cancelReason;
+  final TradeEscrowState escrowState;
   final String? claimableBalanceId;
+  final String? fundedTxHash;
+  final String? releasedTxHash;
+  final String? refundTxHash;
+  final DateTime? escrowFundedAt;
+  final DateTime? escrowReleasedAt;
+  final DateTime? escrowRefundedAt;
+  final DateTime? escrowExpiryAt;
+  final DateTime? paymentDueAt;
+  final DateTime? releaseDueAt;
+  final String? buyerWalletId;
+  final String? sellerWalletId;
+  final TradeWalletRef? buyerWallet;
+  final TradeWalletRef? sellerWallet;
   final String? escrowTxHash;
   final String? releaseTxHash;
-  final String? refundTxHash;
   final UserPaymentAccountModel? buyerPaymentAccount;
   final UserPaymentAccountModel? sellerPaymentAccount;
   final List<TradeMessageModel> messages;
@@ -188,10 +259,23 @@ class TradeModel {
     this.expiresAt,
     this.note,
     this.cancelReason,
+    this.escrowState = TradeEscrowState.unknown,
     this.claimableBalanceId,
+    this.fundedTxHash,
+    this.releasedTxHash,
+    this.refundTxHash,
+    this.escrowFundedAt,
+    this.escrowReleasedAt,
+    this.escrowRefundedAt,
+    this.escrowExpiryAt,
+    this.paymentDueAt,
+    this.releaseDueAt,
+    this.buyerWalletId,
+    this.sellerWalletId,
+    this.buyerWallet,
+    this.sellerWallet,
     this.escrowTxHash,
     this.releaseTxHash,
-    this.refundTxHash,
     this.buyerPaymentAccount,
     this.sellerPaymentAccount,
     this.messages = const [],
@@ -303,7 +387,34 @@ class TradeModel {
       return null;
     }
 
+    TradeWalletRef? readWallet(List<String> keys) {
+      for (final key in keys) {
+        final raw = json[key];
+        if (raw is! Map<String, dynamic>) continue;
+        final wallet = TradeWalletRef.fromJson(raw);
+        if (wallet.id.isNotEmpty || wallet.publicAddress.isNotEmpty) {
+          return wallet;
+        }
+      }
+      return null;
+    }
+
     final statusRaw = readString(const ['status'], fallback: 'UNKNOWN');
+    final fundedTxHash = readNullableString(const [
+      'fundedTxHash',
+      'funded_tx_hash',
+      'escrowTxHash',
+      'escrow_tx_hash',
+    ]);
+    final releasedTxHash = readNullableString(const [
+      'releasedTxHash',
+      'released_tx_hash',
+      'releaseTxHash',
+      'release_tx_hash',
+    ]);
+    final buyerWallet = readWallet(const ['buyerWallet', 'buyer_wallet']);
+    final sellerWallet = readWallet(const ['sellerWallet', 'seller_wallet']);
+
     return TradeModel(
       id: readString(const ['id']),
       offerId: readString(const ['offerId', 'offer_id']),
@@ -326,22 +437,45 @@ class TradeModel {
       expiresAt: parseDate(json['expiresAt'] ?? json['expires_at']),
       note: readNullableString(const ['note']),
       cancelReason: readNullableString(const ['cancelReason', 'cancel_reason']),
+      escrowState: tradeEscrowStateFromApi(
+        json['escrowState'] ?? json['escrow_state'],
+      ),
       claimableBalanceId: readNullableString(const [
         'claimableBalanceId',
         'claimable_balance_id',
       ]),
-      escrowTxHash: readNullableString(const [
-        'escrowTxHash',
-        'escrow_tx_hash',
-      ]),
-      releaseTxHash: readNullableString(const [
-        'releaseTxHash',
-        'release_tx_hash',
-      ]),
+      fundedTxHash: fundedTxHash,
+      releasedTxHash: releasedTxHash,
       refundTxHash: readNullableString(const [
         'refundTxHash',
         'refund_tx_hash',
       ]),
+      escrowFundedAt: parseDate(
+        json['escrowFundedAt'] ?? json['escrow_funded_at'],
+      ),
+      escrowReleasedAt: parseDate(
+        json['escrowReleasedAt'] ?? json['escrow_released_at'],
+      ),
+      escrowRefundedAt: parseDate(
+        json['escrowRefundedAt'] ?? json['escrow_refunded_at'],
+      ),
+      escrowExpiryAt: parseDate(
+        json['escrowExpiryAt'] ?? json['escrow_expiry_at'],
+      ),
+      paymentDueAt: parseDate(json['paymentDueAt'] ?? json['payment_due_at']),
+      releaseDueAt: parseDate(json['releaseDueAt'] ?? json['release_due_at']),
+      buyerWalletId: readNullableString(const [
+        'buyerWalletId',
+        'buyer_wallet_id',
+      ]),
+      sellerWalletId: readNullableString(const [
+        'sellerWalletId',
+        'seller_wallet_id',
+      ]),
+      buyerWallet: buyerWallet,
+      sellerWallet: sellerWallet,
+      escrowTxHash: fundedTxHash,
+      releaseTxHash: releasedTxHash,
       buyerPaymentAccount: readPaymentAccount(const [
         'buyerPaymentAccount',
         'buyer_payment_account',
@@ -358,6 +492,7 @@ class TradeModel {
   }
 
   DateTime? get paymentDeadline {
+    if (paymentDueAt != null) return paymentDueAt;
     if (expiresAt != null) return expiresAt;
     if (createdAt == null) return null;
     return createdAt!.add(Duration(minutes: paymentWindow));
