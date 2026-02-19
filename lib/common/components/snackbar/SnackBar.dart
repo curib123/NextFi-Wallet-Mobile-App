@@ -1,26 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
 enum SnackBarType { info, success, warning, error }
+
 enum SnackBarPosition { bottom, top }
 
 /// Keep a single top toast at a time.
 OverlayEntry? _currentTopSnack;
 
 void showFloatingSnackBar(
-    BuildContext context, {
-      required String message,
-      SnackBarType type = SnackBarType.info,
-      SnackBarPosition position = SnackBarPosition.top,
-      Duration duration = const Duration(milliseconds: 2500),
-      String? actionLabel,
-      VoidCallback? onAction,
-      VoidCallback? onTap,
-      bool haptics = true,
-      String? semanticsLabel,
-    }) {
+  BuildContext context, {
+  required String message,
+  SnackBarType type = SnackBarType.info,
+  SnackBarPosition position = SnackBarPosition.top,
+  Duration duration = const Duration(milliseconds: 2500),
+  String? actionLabel,
+  VoidCallback? onAction,
+  VoidCallback? onTap,
+  bool haptics = true,
+  String? semanticsLabel,
+}) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
 
@@ -84,9 +86,7 @@ void showFloatingSnackBar(
       margin: EdgeInsets.fromLTRB(16, 0, 16, 20 + bottomSafe),
       elevation: 0,
       padding: const EdgeInsets.all(0),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       backgroundColor: Colors.transparent,
       duration: duration,
       dismissDirection: DismissDirection.horizontal,
@@ -106,29 +106,20 @@ void showFloatingSnackBar(
   );
 }
 
-(Color, Color, IconData) _getTypeStyles(
-    AppColor colors, SnackBarType type) {
+(Color, Color, IconData) _getTypeStyles(AppColor colors, SnackBarType type) {
   return switch (type) {
     SnackBarType.success => (
-    colors.success,
-    Colors.white,
-    LucideIcons.checkCircle2,
+      colors.success,
+      Colors.white,
+      LucideIcons.checkCircle2,
     ),
     SnackBarType.warning => (
-    colors.warning,
-    Colors.white,
-    LucideIcons.alertTriangle,
+      colors.warning,
+      Colors.white,
+      LucideIcons.alertTriangle,
     ),
-    SnackBarType.error => (
-    colors.error,
-    Colors.white,
-    LucideIcons.xCircle,
-    ),
-    SnackBarType.info => (
-    colors.primary,
-    Colors.white,
-    LucideIcons.info,
-    ),
+    SnackBarType.error => (colors.error, Colors.white, LucideIcons.xCircle),
+    SnackBarType.info => (colors.primary, Colors.white, LucideIcons.info),
   };
 }
 
@@ -177,19 +168,12 @@ class _SnackContent extends StatelessWidget {
         ],
 
         /// Subtle border
-        border: Border.all(
-          color: Colors.white.withOpacity(0.06),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.06), width: 1),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-
           /// Icon chip
           Container(
             width: 32,
@@ -209,8 +193,7 @@ class _SnackContent extends StatelessWidget {
               label: semanticsLabel,
               child: Text(
                 message,
-                style: (textStyle ?? const TextStyle())
-                    .copyWith(
+                style: (textStyle ?? const TextStyle()).copyWith(
                   color: fg,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
@@ -224,24 +207,19 @@ class _SnackContent extends StatelessWidget {
           /// Action
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(width: 8),
-            TextButton(
+            AppTextButton(
               onPressed: onAction,
               style: TextButton.styleFrom(
                 foregroundColor: fg,
-                backgroundColor:
-                Colors.black.withOpacity(0.12),
-                padding:
-                const EdgeInsets.symmetric(
+                backgroundColor: Colors.black.withOpacity(0.12),
+                padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 6,
                 ),
                 minimumSize: Size.zero,
-                tapTargetSize:
-                MaterialTapTargetSize
-                    .shrinkWrap,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 shape: RoundedRectangleBorder(
-                  borderRadius:
-                  BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
               child: Text(
@@ -264,25 +242,24 @@ class _SnackContent extends StatelessWidget {
 /// TOP OVERLAY
 /// ─────────────────────────────────────────
 void _showTopOverlayToast(
-    BuildContext context, {
-      required double top,
-      required double left,
-      required double right,
-      required AppColor colors,
-      required Color bg,
-      required Color fg,
-      required IconData icon,
-      required String message,
-      required TextStyle? textStyle,
-      required Duration duration,
-      required SnackBarType type,
-      VoidCallback? onTap,
-      String? actionLabel,
-      VoidCallback? onAction,
-      String? semanticsLabel,
-    }) {
-  final overlay =
-  Overlay.maybeOf(context, rootOverlay: true);
+  BuildContext context, {
+  required double top,
+  required double left,
+  required double right,
+  required AppColor colors,
+  required Color bg,
+  required Color fg,
+  required IconData icon,
+  required String message,
+  required TextStyle? textStyle,
+  required Duration duration,
+  required SnackBarType type,
+  VoidCallback? onTap,
+  String? actionLabel,
+  VoidCallback? onAction,
+  String? semanticsLabel,
+}) {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
 
   _currentTopSnack?.remove();
@@ -354,35 +331,25 @@ class _TopSnackAnimated extends StatefulWidget {
   final String? semanticsLabel;
 
   @override
-  State<_TopSnackAnimated> createState() =>
-      _TopSnackAnimatedState();
+  State<_TopSnackAnimated> createState() => _TopSnackAnimatedState();
 }
 
-class _TopSnackAnimatedState
-    extends State<_TopSnackAnimated>
+class _TopSnackAnimatedState extends State<_TopSnackAnimated>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ac =
-  AnimationController(
+  late final AnimationController _ac = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 400),
   );
 
-  late final Animation<double> _fade =
-  CurvedAnimation(
+  late final Animation<double> _fade = CurvedAnimation(
     parent: _ac,
     curve: Curves.easeOutCubic,
   );
 
-  late final Animation<Offset> _slide =
-  Tween(
+  late final Animation<Offset> _slide = Tween(
     begin: const Offset(0, -1),
     end: Offset.zero,
-  ).animate(
-    CurvedAnimation(
-      parent: _ac,
-      curve: Curves.easeOutCubic,
-    ),
-  );
+  ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
 
   @override
   void initState() {
@@ -419,51 +386,31 @@ class _TopSnackAnimatedState
             position: _slide,
             child: Dismissible(
               key: const ValueKey('top_snack'),
-              direction:
-              DismissDirection.horizontal,
-              onDismissed: (_) =>
-                  widget.onClose(),
+              direction: DismissDirection.horizontal,
+              onDismissed: (_) => widget.onClose(),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap:
-                  widget.onTap ?? _dismiss,
-                  borderRadius:
-                  BorderRadius.circular(
-                      14),
+                  onTap: widget.onTap ?? _dismiss,
+                  borderRadius: BorderRadius.circular(14),
                   child: Container(
-                    constraints:
-                    const BoxConstraints(
-                      maxWidth:
-                      maxCardWidth,
-                    ),
-                    decoration:
-                    BoxDecoration(
+                    constraints: const BoxConstraints(maxWidth: maxCardWidth),
+                    decoration: BoxDecoration(
                       color: widget.bg,
-                      borderRadius:
-                      BorderRadius
-                          .circular(14),
+                      borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black
-                              .withOpacity(
-                              0.15),
+                          color: Colors.black.withOpacity(0.15),
                           blurRadius: 16,
-                          offset:
-                          const Offset(
-                              0, 6),
+                          offset: const Offset(0, 6),
                         ),
                       ],
                       border: Border.all(
-                        color: Colors.white
-                            .withOpacity(
-                            0.06),
+                        color: Colors.white.withOpacity(0.06),
                         width: 1,
                       ),
                     ),
-                    padding:
-                    const EdgeInsets
-                        .symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 14,
                     ),
@@ -472,33 +419,19 @@ class _TopSnackAnimatedState
                         Container(
                           width: 32,
                           height: 32,
-                          decoration:
-                          BoxDecoration(
-                            color: Colors
-                                .black
-                                .withOpacity(
-                                0.12),
-                            shape: BoxShape
-                                .circle,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.12),
+                            shape: BoxShape.circle,
                           ),
-                          child: Icon(
-                            widget.icon,
-                            size: 18,
-                            color:
-                            widget.fg,
-                          ),
+                          child: Icon(widget.icon, size: 18, color: widget.fg),
                         ),
-                        const SizedBox(
-                            width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             widget.message,
                             style: TextStyle(
-                              color:
-                              widget.fg,
-                              fontWeight:
-                              FontWeight
-                                  .w600,
+                              color: widget.fg,
+                              fontWeight: FontWeight.w600,
                               fontSize: 14,
                             ),
                           ),

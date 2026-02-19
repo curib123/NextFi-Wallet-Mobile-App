@@ -1,5 +1,6 @@
 // lib/Screen/WalletHomeScreenWidgets/incoming_payment_hints.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -10,16 +11,17 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 /// Minimalist incoming payment hint with clean modern design
 Widget incomingPaymentHint(
-    Map<String, dynamic> tx,
-    String me, {
-      VoidCallback? onAcknowledge,
-      WalletHomeState? walletState,
-    }) {
+  Map<String, dynamic> tx,
+  String me, {
+  VoidCallback? onAcknowledge,
+  WalletHomeState? walletState,
+}) {
   return Builder(
     builder: (context) {
       final colors = AppColor.of(context);
 
-      final String txId = (tx['hash'] ?? tx['transactionHash'] ?? _randKey()).toString();
+      final String txId = (tx['hash'] ?? tx['transactionHash'] ?? _randKey())
+          .toString();
       final String from = (tx['from'] ?? 'Unknown').toString();
       final String to = (tx['to'] ?? 'Unknown').toString();
 
@@ -27,10 +29,13 @@ Widget incomingPaymentHint(
       final String symbol = _resolveSymbol(tx['assetCode'], assetType);
 
       final double amount = _toHumanAmount(tx['amount']);
-      final int tsMs = _parseMillis(tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time']);
+      final int tsMs = _parseMillis(
+        tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time'],
+      );
 
       // Check if this creates a new trustline (reserve impact)
-      final isNewAsset = walletState != null &&
+      final isNewAsset =
+          walletState != null &&
           symbol != 'XLM' &&
           !_hasExistingTrustline(walletState, symbol);
 
@@ -43,21 +48,26 @@ Widget incomingPaymentHint(
         builder: (context, value, child) {
           return Transform.translate(
             offset: Offset(0, 8 * (1 - value)),
-            child: Opacity(
-              opacity: value,
-              child: child,
-            ),
+            child: Opacity(opacity: value, child: child),
           );
         },
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showTxDetailsSheet(context, tx, me,
-                onAcknowledge: onAcknowledge,
-                reserveImpact: reserveImpact),
+            onTap: () => _showTxDetailsSheet(
+              context,
+              tx,
+              me,
+              onAcknowledge: onAcknowledge,
+              reserveImpact: reserveImpact,
+            ),
             onLongPress: () async {
               await Clipboard.setData(ClipboardData(text: txId));
-              showFloatingSnackBar(context, message: 'Transaction ID copied', type: SnackBarType.success);
+              showFloatingSnackBar(
+                context,
+                message: 'Transaction ID copied',
+                type: SnackBarType.success,
+              );
             },
             borderRadius: BorderRadius.circular(12),
             child: Container(
@@ -107,7 +117,10 @@ Widget incomingPaymentHint(
                                 if (isNewAsset) ...[
                                   const SizedBox(width: 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: colors.warning.withOpacity(.1),
                                       borderRadius: BorderRadius.circular(4),
@@ -140,9 +153,9 @@ Widget incomingPaymentHint(
                       ),
                       const SizedBox(width: 8),
                       Icon(
-                          LucideIcons.chevronRight,
-                          size: 16,
-                          color: colors.textSecondary.withOpacity(0.5)
+                        LucideIcons.chevronRight,
+                        size: 16,
+                        color: colors.textSecondary.withOpacity(0.5),
                       ),
                     ],
                   ),
@@ -151,7 +164,10 @@ Widget incomingPaymentHint(
                   if (reserveImpact > 0) ...[
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
                         color: colors.warning.withOpacity(.06),
                         borderRadius: BorderRadius.circular(8),
@@ -196,15 +212,16 @@ Widget incomingPaymentHint(
 
 // Enhanced bottom sheet with clean minimal design
 void _showTxDetailsSheet(
-    BuildContext context,
-    Map<String, dynamic> tx,
-    String me, {
-      VoidCallback? onAcknowledge,
-      double reserveImpact = 0.0,
-    }) {
+  BuildContext context,
+  Map<String, dynamic> tx,
+  String me, {
+  VoidCallback? onAcknowledge,
+  double reserveImpact = 0.0,
+}) {
   final colors = AppColor.of(context);
 
-  final String txId = (tx['hash'] ?? tx['transactionHash'] ?? _randKey()).toString();
+  final String txId = (tx['hash'] ?? tx['transactionHash'] ?? _randKey())
+      .toString();
   final String from = (tx['from'] ?? 'Unknown').toString();
   final String to = (tx['to'] ?? 'Unknown').toString();
 
@@ -213,9 +230,13 @@ void _showTxDetailsSheet(
 
   final double amount = _toHumanAmount(tx['amount']);
 
-  final int tsMs = _parseMillis(tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time']);
+  final int tsMs = _parseMillis(
+    tx['createdAt'] ?? tx['created_at'] ?? tx['timestamp'] ?? tx['time'],
+  );
   final String when = tsMs > 0
-      ? DateFormat('MMM d, y • HH:mm').format(DateTime.fromMillisecondsSinceEpoch(tsMs))
+      ? DateFormat(
+          'MMM d, y • HH:mm',
+        ).format(DateTime.fromMillisecondsSinceEpoch(tsMs))
       : '—';
 
   showModalBottomSheet(
@@ -249,7 +270,11 @@ void _showTxDetailsSheet(
                   color: colors.success.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(LucideIcons.arrowDownLeft, color: colors.success, size: 22),
+                child: Icon(
+                  LucideIcons.arrowDownLeft,
+                  color: colors.success,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -285,7 +310,13 @@ void _showTxDetailsSheet(
           // Details
           _flatRow(ctx, 'From', _short(from), fullValue: from, colors: colors),
           _divider(colors),
-          _flatRow(ctx, 'To', to == me ? 'You' : _short(to), fullValue: to, colors: colors),
+          _flatRow(
+            ctx,
+            'To',
+            to == me ? 'You' : _short(to),
+            fullValue: to,
+            colors: colors,
+          ),
           _divider(colors),
           _flatRow(ctx, 'When', when, colors: colors),
           _divider(colors),
@@ -342,19 +373,25 @@ void _showTxDetailsSheet(
           // Mark as received button
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            child: AppElevatedButton.icon(
               icon: const Icon(LucideIcons.check, size: 18),
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.success,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 elevation: 0,
               ),
               onPressed: () {
                 Navigator.pop(ctx);
                 if (onAcknowledge != null) onAcknowledge();
-                showFloatingSnackBar(context, message: 'Marked as received', type: SnackBarType.success);
+                showFloatingSnackBar(
+                  context,
+                  message: 'Marked as received',
+                  type: SnackBarType.success,
+                );
               },
               label: const Text(
                 'Mark as received',
@@ -379,12 +416,12 @@ Widget _divider(AppColor colors) => Container(
 );
 
 Widget _flatRow(
-    BuildContext context,
-    String label,
-    String value, {
-      String? fullValue,
-      required AppColor colors,
-    }) {
+  BuildContext context,
+  String label,
+  String value, {
+  String? fullValue,
+  required AppColor colors,
+}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(
@@ -421,9 +458,16 @@ Widget _flatRow(
             splashRadius: 18,
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: fullValue));
-              showFloatingSnackBar(context, message: '$label copied', type: SnackBarType.success);
+              showFloatingSnackBar(
+                context,
+                message: '$label copied',
+                type: SnackBarType.success,
+              );
             },
-            icon: Icon(LucideIcons.copy, color: colors.textSecondary.withOpacity(0.5)),
+            icon: Icon(
+              LucideIcons.copy,
+              color: colors.textSecondary.withOpacity(0.5),
+            ),
           ),
       ],
     ),
@@ -480,7 +524,8 @@ String _short(String s) {
 String _resolveSymbol(dynamic assetCode, String assetType) {
   final code = (assetCode ?? '').toString().trim();
   if (code.isNotEmpty) return code.toUpperCase();
-  if (assetType == Asset.TYPE_NATIVE || assetType.toLowerCase() == 'native') return 'XLM';
+  if (assetType == Asset.TYPE_NATIVE || assetType.toLowerCase() == 'native')
+    return 'XLM';
   return 'ASSET';
 }
 

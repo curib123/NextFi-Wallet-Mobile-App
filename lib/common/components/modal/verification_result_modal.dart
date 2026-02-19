@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
 Future<void> showVerificationResultModal(
-    BuildContext context, {
-      required String title,
-      required String message,
-      bool isError = false,
-    }) {
+  BuildContext context, {
+  required String title,
+  required String message,
+  bool isError = false,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -49,9 +50,10 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
       vsync: this,
       duration: const Duration(milliseconds: 380),
     );
-    _scaleAnim = Tween<double>(begin: 0.72, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut),
-    );
+    _scaleAnim = Tween<double>(
+      begin: 0.72,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _fadeAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
 
     // Haptic on appear
@@ -67,7 +69,7 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
 
   @override
   Widget build(BuildContext context) {
-    final c      = AppColor.of(context);
+    final c = AppColor.of(context);
     final accent = widget.isError ? c.error : c.success;
 
     return FadeTransition(
@@ -99,7 +101,11 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
                 // ── Animated icon ────────────────────────────────────
                 ScaleTransition(
                   scale: _scaleAnim,
-                  child: _ResultIcon(isError: widget.isError, accent: accent, c: c),
+                  child: _ResultIcon(
+                    isError: widget.isError,
+                    accent: accent,
+                    c: c,
+                  ),
                 ),
 
                 const SizedBox(height: 20),
@@ -175,7 +181,9 @@ class _ResultIcon extends StatelessWidget {
         ],
       ),
       child: Icon(
-        isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+        isError
+            ? Icons.error_outline_rounded
+            : Icons.check_circle_outline_rounded,
         color: accent,
         size: 34,
       ),
@@ -208,7 +216,7 @@ class _OkButton extends StatelessWidget {
           ),
         ],
       ),
-      child: ElevatedButton(
+      child: AppElevatedButton(
         onPressed: () {
           HapticFeedback.lightImpact();
           Navigator.of(ctx).pop();

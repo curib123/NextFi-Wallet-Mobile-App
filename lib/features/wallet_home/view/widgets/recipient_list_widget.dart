@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
@@ -41,24 +42,28 @@ class RecipientListWidget extends StatelessWidget {
       backgroundColor: Colors.transparent,
       appBar: canPop
           ? AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'Recipients',
-          style: TextStyle(
-            color: colors.textPrimary,
-            fontSize: compact ? 18 : 20,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
-        ),
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: Icon(LucideIcons.arrowLeft, color: colors.textPrimary, size: 22),
-        ),
-      )
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              title: Text(
+                'Recipients',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: compact ? 18 : 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              scrolledUnderElevation: 0,
+              centerTitle: false,
+              leading: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(
+                  LucideIcons.arrowLeft,
+                  color: colors.textPrimary,
+                  size: 22,
+                ),
+              ),
+            )
           : null,
       body: Consumer<RecipientAddressVM>(
         builder: (context, prov, _) {
@@ -125,14 +130,14 @@ class RecipientListWidget extends StatelessWidget {
           final Widget body = prov.items.isEmpty
               ? _EmptyRecipients(colors: colors)
               : _RecipientList(
-            colors: colors,
-            items: prov.items,
-            onSelect: onSelect,
-            xlmBalance: xlmBalance,
-            usdcBalance: usdcBalance,
-            compact: compact,
-            bottomInset: fabBottom + (compact ? 72 : 84),
-          );
+                  colors: colors,
+                  items: prov.items,
+                  onSelect: onSelect,
+                  xlmBalance: xlmBalance,
+                  usdcBalance: usdcBalance,
+                  compact: compact,
+                  bottomInset: fabBottom + (compact ? 72 : 84),
+                );
 
           return Stack(
             children: [
@@ -160,10 +165,7 @@ class _NotAuthenticatedView extends StatelessWidget {
   final AppColor colors;
   final VoidCallback? onLoginPressed;
 
-  const _NotAuthenticatedView({
-    required this.colors,
-    this.onLoginPressed,
-  });
+  const _NotAuthenticatedView({required this.colors, this.onLoginPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -173,119 +175,119 @@ class _NotAuthenticatedView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Center(
           child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOutCubic,
-        builder: (context, value, child) {
-          return Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, 30 * (1 - value)),
-              child: child,
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Lock icon
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: colors.warning.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: colors.warning.withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Icon(
-                    LucideIcons.lock,
-                    size: 56,
-                    color: colors.warning,
-                  ),
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 30 * (1 - value)),
+                  child: child,
                 ),
-                const SizedBox(height: 28),
-                Text(
-                  'Login Required',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.8,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Please login first to view and manage your saved recipient addresses',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colors.textSecondary.withOpacity(0.7),
-                    fontSize: 15,
-                    height: 1.5,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                // Login button
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.mediumImpact();
-                    if (onLoginPressed != null) {
-                      onLoginPressed!();
-                    } else {
-                      // Default: navigate to login screen
-                      Navigator.pushNamed(context, '/login');
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: colors.primaryGradient,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colors.primary.withOpacity(0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Lock icon
+                    Container(
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: colors.warning.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colors.warning.withOpacity(0.3),
+                          width: 2,
                         ),
-                      ],
+                      ),
+                      child: Icon(
+                        LucideIcons.lock,
+                        size: 56,
+                        color: colors.warning,
+                      ),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          LucideIcons.logIn,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Login to Continue',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 28),
+                    Text(
+                      'Login Required',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.8,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Please login first to view and manage your saved recipient addresses',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.textSecondary.withOpacity(0.7),
+                        fontSize: 15,
+                        height: 1.5,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Login button
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        if (onLoginPressed != null) {
+                          onLoginPressed!();
+                        } else {
+                          // Default: navigate to login screen
+                          Navigator.pushNamed(context, '/login');
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: colors.primaryGradient,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.primary.withOpacity(0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.logIn,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Login to Continue',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
         ),
       ),
     );
@@ -348,11 +350,7 @@ class _ModernAddButtonState extends State<_ModernAddButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                LucideIcons.userPlus,
-                color: Colors.white,
-                size: 20,
-              ),
+              const Icon(LucideIcons.userPlus, color: Colors.white, size: 20),
               if (!widget.compact) ...[
                 const SizedBox(width: 12),
                 const Text(
@@ -414,10 +412,7 @@ class _RecipientList extends StatelessWidget {
           builder: (context, value, child) {
             return Transform.translate(
               offset: Offset(0, 20 * (1 - value)),
-              child: Opacity(
-                opacity: value,
-                child: child,
-              ),
+              child: Opacity(opacity: value, child: child),
             );
           },
           child: RecipientTile(
@@ -458,10 +453,7 @@ class _RecipientList extends StatelessWidget {
               );
             },
             onEdit: () async {
-              final saved = await showRecipientUpsertSheet(
-                context,
-                initial: r,
-              );
+              final saved = await showRecipientUpsertSheet(context, initial: r);
               if (saved == true && context.mounted) {
                 await context.read<RecipientAddressVM>().refresh();
                 showFloatingSnackBar(
@@ -607,10 +599,7 @@ class _Avatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 1.5,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -746,7 +735,8 @@ class _OverflowMenu extends StatelessWidget {
                 onTap: () async {
                   Navigator.pop(ctx);
                   await Clipboard.setData(
-                      ClipboardData(text: recipient.address));
+                    ClipboardData(text: recipient.address),
+                  );
                   if (context.mounted) {
                     showFloatingSnackBar(
                       context,
@@ -849,68 +839,68 @@ class _EmptyRecipients extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: compact ? 12 : 16),
         child: Center(
           child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.0, end: 1.0),
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOutCubic,
-        builder: (context, value, child) {
-          return Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, 30 * (1 - value)),
-              child: child,
-            ),
-          );
-        },
-        child: Padding(
-          padding: EdgeInsets.all(compact ? 20 : 32),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    LucideIcons.users,
-                    size: compact ? 48 : 56,
-                    color: colors.primary.withOpacity(0.6),
-                  ),
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 30 * (1 - value)),
+                  child: child,
                 ),
-                SizedBox(height: compact ? 24 : 28),
-                Text(
-                  'No recipients yet',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: compact ? 22 : 24,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.8,
-                  ),
+              );
+            },
+            child: Padding(
+              padding: EdgeInsets.all(compact ? 20 : 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: colors.primary.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        LucideIcons.users,
+                        size: compact ? 48 : 56,
+                        color: colors.primary.withOpacity(0.6),
+                      ),
+                    ),
+                    SizedBox(height: compact ? 24 : 28),
+                    Text(
+                      'No recipients yet',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: compact ? 22 : 24,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.8,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 10 : 12),
+                    Text(
+                      'Save frequently used addresses for faster sends',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.textSecondary.withOpacity(0.7),
+                        fontSize: compact ? 14 : 15,
+                        height: 1.5,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(height: compact ? 10 : 12),
-                Text(
-                  'Save frequently used addresses for faster sends',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: colors.textSecondary.withOpacity(0.7),
-                    fontSize: compact ? 14 : 15,
-                    height: 1.5,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
         ),
       ),
     );
@@ -947,7 +937,7 @@ Future<bool?> _confirmDelete(BuildContext context, String name) {
         ),
       ),
       actions: [
-        TextButton(
+        AppTextButton(
           onPressed: () => Navigator.pop(ctx, false),
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -964,7 +954,7 @@ Future<bool?> _confirmDelete(BuildContext context, String name) {
             ),
           ),
         ),
-        ElevatedButton(
+        AppElevatedButton(
           onPressed: () => Navigator.pop(ctx, true),
           style: ElevatedButton.styleFrom(
             backgroundColor: colors.error.withOpacity(0.12),
@@ -977,14 +967,10 @@ Future<bool?> _confirmDelete(BuildContext context, String name) {
           ),
           child: const Text(
             'Remove',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-            ),
-          ), 
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+          ),
         ),
       ],
     ),
   );
 }
-

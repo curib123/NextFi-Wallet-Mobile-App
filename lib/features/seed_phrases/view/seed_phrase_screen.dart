@@ -1,6 +1,7 @@
 // lib/features/seed_phrases/view/seed_phrase_screen.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
@@ -142,10 +143,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(
-          bottom: BorderSide(
-            color: colors.border.withOpacity(0.1),
-            width: 1,
-          ),
+          bottom: BorderSide(color: colors.border.withOpacity(0.1), width: 1),
         ),
       ),
       child: Row(
@@ -203,7 +201,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-  Widget _buildWordCountSelector(AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+  Widget _buildWordCountSelector(
+    AppColor colors,
+    SeedPhraseVM vm,
+    SeedPhraseState s,
+  ) {
     return Row(
       children: [
         _buildWordCountChip(colors, vm, s, 12),
@@ -215,25 +217,30 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-  Widget _buildWordCountChip(AppColor colors, SeedPhraseVM vm, SeedPhraseState s, int count) {
+  Widget _buildWordCountChip(
+    AppColor colors,
+    SeedPhraseVM vm,
+    SeedPhraseState s,
+    int count,
+  ) {
     final isSelected = vm.wordCount == count;
     final isEnabled = !s.loading;
 
     return Expanded(
       child: GestureDetector(
-        onTap: isEnabled ? () async {
-          HapticFeedback.selectionClick();
-          if (vm.wordCount != count) {
-            await _confirmWordCountChange(context, vm, count);
-          }
-        } : null,
+        onTap: isEnabled
+            ? () async {
+                HapticFeedback.selectionClick();
+                if (vm.wordCount != count) {
+                  await _confirmWordCountChange(context, vm, count);
+                }
+              }
+            : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: isSelected
-                ? colors.primary
-                : colors.surface,
+            color: isSelected ? colors.primary : colors.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
@@ -256,7 +263,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-  Widget _buildPhraseSection(AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+  Widget _buildPhraseSection(
+    AppColor colors,
+    SeedPhraseVM vm,
+    SeedPhraseState s,
+  ) {
     return Column(
       children: [
         // Action bar (only show when revealed)
@@ -277,18 +288,13 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 colors,
                 LucideIcons.copy,
                 'Copy',
-                    () => _showCopyConfirmation(context, colors, s),
+                () => _showCopyConfirmation(context, colors, s),
               ),
               const SizedBox(width: 8),
-              _buildActionButton(
-                colors,
-                LucideIcons.eyeOff,
-                'Hide',
-                    () {
-                  HapticFeedback.lightImpact();
-                  vm.toggleObscure();
-                },
-              ),
+              _buildActionButton(colors, LucideIcons.eyeOff, 'Hide', () {
+                HapticFeedback.lightImpact();
+                vm.toggleObscure();
+              }),
             ],
           ),
           const SizedBox(height: 16),
@@ -307,7 +313,12 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-  Widget _buildActionButton(AppColor colors, IconData icon, String label, VoidCallback onTap) {
+  Widget _buildActionButton(
+    AppColor colors,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -315,10 +326,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: colors.border.withOpacity(0.15),
-            width: 1,
-          ),
+          border: Border.all(color: colors.border.withOpacity(0.15), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -345,18 +353,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.warning.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colors.warning.withOpacity(0.15),
-          width: 1,
-        ),
+        border: Border.all(color: colors.warning.withOpacity(0.15), width: 1),
       ),
       child: Row(
         children: [
-          Icon(
-            LucideIcons.alertTriangle,
-            color: colors.warning,
-            size: 20,
-          ),
+          Icon(LucideIcons.alertTriangle, color: colors.warning, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -373,84 +374,85 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, AppColor colors, SeedPhraseVM vm, SeedPhraseState s) {
+  Widget _buildActionButtons(
+    BuildContext context,
+    AppColor colors,
+    SeedPhraseVM vm,
+    SeedPhraseState s,
+  ) {
     final canProceed = !s.obscured && !s.loading;
 
     return Column(
       children: [
-      // Primary action
-      SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: ElevatedButton(
-        onPressed: canProceed ? () => _handleSecureAndContinue(context, vm, s) : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: colors.border.withOpacity(0.2),
-          disabledForegroundColor: colors.textSecondary.withOpacity(0.5),
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+        // Primary action
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: AppElevatedButton(
+            onPressed: canProceed
+                ? () => _handleSecureAndContinue(context, vm, s)
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: colors.border.withOpacity(0.2),
+              disabledForegroundColor: colors.textSecondary.withOpacity(0.5),
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: s.loading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    " 'I've saved it",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
           ),
         ),
-        child: s.loading
-            ? SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        const SizedBox(height: 12),
+        // Secondary action
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: AppTextButton(
+            onPressed: s.loading ? null : () => _handleRegenerate(context, vm),
+            style: TextButton.styleFrom(
+              foregroundColor: colors.textPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(LucideIcons.refreshCw, size: 18),
+                const SizedBox(width: 8),
+                const Text(
+                  'Generate new phrase',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
           ),
-        )
-            : const Text(
-         " 'I've saved it",
-        style: TextStyle(
-        fontSize: 16,
-          fontWeight: FontWeight.w600,
         ),
-      ),
-    ),
-    ),
-    const SizedBox(height: 12),
-    // Secondary action
-    SizedBox(
-    width: double.infinity,
-    height: 54,
-    child: TextButton(
-    onPressed: s.loading ? null : () => _handleRegenerate(context, vm),
-    style: TextButton.styleFrom(
-    foregroundColor: colors.textPrimary,
-    shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(14),
-    ),
-    ),
-    child: Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-    Icon(LucideIcons.refreshCw, size: 18),
-    const SizedBox(width: 8),
-    const Text(
-    'Generate new phrase',
-    style: TextStyle(
-    fontSize: 15,
-    fontWeight: FontWeight.w500,
-    ),
-    ),
-    ],
-    ),
-    ),
-    ),
-    ],
+      ],
     );
   }
 
   Future<void> _handleSecureAndContinue(
-      BuildContext context,
-      SeedPhraseVM vm,
-      SeedPhraseState s,
-      ) async {
+    BuildContext context,
+    SeedPhraseVM vm,
+    SeedPhraseState s,
+  ) async {
     HapticFeedback.mediumImpact();
 
     final confirmed = await _showConfirmationSheet(context, s);
@@ -458,6 +460,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
 
     await _startAuthFlow(context, vm);
   }
+
   Future<void> _startAuthFlow(BuildContext context, SeedPhraseVM vm) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -501,7 +504,6 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     );
   }
 
-
   Future<void> _handleRegenerate(BuildContext context, SeedPhraseVM vm) async {
     final confirmed = await _showRegenerateSheet(context);
     if (confirmed == true && context.mounted) {
@@ -518,10 +520,10 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   }
 
   Future<void> _showCopyConfirmation(
-      BuildContext context,
-      AppColor colors,
-      SeedPhraseState s,
-      ) async {
+    BuildContext context,
+    AppColor colors,
+    SeedPhraseState s,
+  ) async {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -530,7 +532,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
         colors,
         icon: LucideIcons.copy,
         title: 'Copy recovery phrase?',
-        description: 'Make sure no one can see your screen. Never share this phrase with anyone.',
+        description:
+            'Make sure no one can see your screen. Never share this phrase with anyone.',
         confirmText: 'Copy phrase',
         confirmColor: colors.primary,
       ),
@@ -541,7 +544,10 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     }
   }
 
-  Future<bool?> _showConfirmationSheet(BuildContext context, SeedPhraseState s) {
+  Future<bool?> _showConfirmationSheet(
+    BuildContext context,
+    SeedPhraseState s,
+  ) {
     final colors = AppColor.of(context);
     return showModalBottomSheet<bool>(
       context: context,
@@ -619,7 +625,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 Expanded(
                   child: SizedBox(
                     height: 50,
-                    child: OutlinedButton(
+                    child: AppOutlinedButton(
                       onPressed: () => Navigator.pop(context, false),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: colors.border.withOpacity(0.2)),
@@ -642,7 +648,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 Expanded(
                   child: SizedBox(
                     height: 50,
-                    child: ElevatedButton(
+                    child: AppElevatedButton(
                       onPressed: () => Navigator.pop(context, true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colors.primary,
@@ -676,18 +682,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colors.border.withOpacity(0.1),
-          width: 1,
-        ),
+        border: Border.all(color: colors.border.withOpacity(0.1), width: 1),
       ),
       child: Row(
         children: [
-          Icon(
-            LucideIcons.checkCircle2,
-            color: colors.success,
-            size: 20,
-          ),
+          Icon(LucideIcons.checkCircle2, color: colors.success, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -728,7 +727,8 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
         colors,
         icon: LucideIcons.refreshCw,
         title: 'Generate new phrase?',
-        description: 'This will create a completely new recovery phrase. Your current phrase will be replaced.',
+        description:
+            'This will create a completely new recovery phrase. Your current phrase will be replaced.',
         confirmText: 'Generate new',
         confirmColor: colors.warning,
       ),
@@ -811,7 +811,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
             SizedBox(
               width: double.infinity,
               height: 50,
-              child: ElevatedButton(
+              child: AppElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colors.primary,
@@ -823,10 +823,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 ),
                 child: const Text(
                   'Got it',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -863,14 +860,14 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   }
 
   Widget _buildBottomSheet(
-      BuildContext context,
-      AppColor colors, {
-        required IconData icon,
-        required String title,
-        required String description,
-        required String confirmText,
-        required Color confirmColor,
-      }) {
+    BuildContext context,
+    AppColor colors, {
+    required IconData icon,
+    required String title,
+    required String description,
+    required String confirmText,
+    required Color confirmColor,
+  }) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -923,7 +920,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
               Expanded(
                 child: SizedBox(
                   height: 50,
-                  child: OutlinedButton(
+                  child: AppOutlinedButton(
                     onPressed: () => Navigator.pop(context, false),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: colors.border.withOpacity(0.2)),
@@ -946,7 +943,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
               Expanded(
                 child: SizedBox(
                   height: 50,
-                  child: ElevatedButton(
+                  child: AppElevatedButton(
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: confirmColor,
@@ -974,10 +971,10 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   }
 
   Future<void> _confirmWordCountChange(
-      BuildContext context,
-      SeedPhraseVM vm,
-      int newCount,
-      ) async {
+    BuildContext context,
+    SeedPhraseVM vm,
+    int newCount,
+  ) async {
     final colors = AppColor.of(context);
     final confirmed = await showModalBottomSheet<bool>(
       context: context,

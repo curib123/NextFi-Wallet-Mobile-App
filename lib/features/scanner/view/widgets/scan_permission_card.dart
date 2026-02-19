@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 class ScanPermissionCard extends StatelessWidget {
@@ -74,7 +75,7 @@ class ScanPermissionCard extends StatelessWidget {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
+              child: AppFilledButton.icon(
                 onPressed: onTryAgain,
                 icon: const Icon(LucideIcons.settings, size: 20),
                 label: const Text('Open Settings'),

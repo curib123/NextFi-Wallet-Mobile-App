@@ -1,6 +1,7 @@
 // lib/features/app_drawer/view/app_drawer.dart
 
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -29,30 +30,33 @@ class AppDrawer extends StatefulWidget {
 
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
-  final _auth         = AuthService();
-  final _profile      = ProfileCoreService.I;
+  final _auth = AuthService();
+  final _profile = ProfileCoreService.I;
   final _verification = VerificationCoreService.I;
 
-  static User?         _cachedUser;
-  static PackageInfo?  _cachedInfo;
+  static User? _cachedUser;
+  static PackageInfo? _cachedInfo;
   static ProfileModel? _cachedProfile;
 
-  bool        _loading    = true;
-  bool        _loggingOut = false;
+  bool _loading = true;
+  bool _loggingOut = false;
   TrustStatus _trustStatus = TrustStatus.unknown;
 
   late final AnimationController _entryCtrl;
-  late final Animation<double>   _fadeAnim;
-  late final Animation<Offset>   _slideAnim;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
 
   @override
   void initState() {
     super.initState();
     _entryCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 360));
-    _fadeAnim  = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+    );
+    _fadeAnim = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
-      begin: const Offset(-0.04, 0), end: Offset.zero,
+      begin: const Offset(-0.04, 0),
+      end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
     _bootstrap();
   }
@@ -67,7 +71,9 @@ class _AppDrawerState extends State<AppDrawer>
     setState(() => _loading = false);
     _entryCtrl.forward();
     await Future.wait([
-      _fetchRealUser(), _fetchAppInfo(), _fetchVerificationStatus(),
+      _fetchRealUser(),
+      _fetchAppInfo(),
+      _fetchVerificationStatus(),
     ]);
   }
 
@@ -78,13 +84,16 @@ class _AppDrawerState extends State<AppDrawer>
       final same = _cachedUser != null && _isSameUser(_cachedUser!, realUser);
       _cachedUser = realUser;
       if (mounted) setState(() {});
-      if (!same) await Future.wait([_fetchProfileData(), _fetchVerificationStatus()]);
+      if (!same)
+        await Future.wait([_fetchProfileData(), _fetchVerificationStatus()]);
     } catch (_) {}
   }
 
   bool _isSameUser(User a, User b) =>
-      a.id == b.id && a.name == b.name &&
-          a.email == b.email && a.avatarUrl == b.avatarUrl;
+      a.id == b.id &&
+      a.name == b.name &&
+      a.email == b.email &&
+      a.avatarUrl == b.avatarUrl;
 
   Future<void> _fetchAppInfo() async {
     if (_cachedInfo != null) return;
@@ -130,7 +139,8 @@ class _AppDrawerState extends State<AppDrawer>
     if (confirm != true || !mounted) return;
     setState(() => _loggingOut = true);
     await _auth.logout();
-    _cachedUser = null; _cachedProfile = null;
+    _cachedUser = null;
+    _cachedProfile = null;
     _trustStatus = TrustStatus.unknown;
     if (!mounted) return;
     Navigator.pop(context);
@@ -140,12 +150,18 @@ class _AppDrawerState extends State<AppDrawer>
 
   void _redirectToLogin() {
     Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
   }
 
   // Fixed: redirects unauthenticated users to login
   void _handleVerificationTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
     _push(const VerificationFlowScreen());
   }
 
@@ -156,8 +172,8 @@ class _AppDrawerState extends State<AppDrawer>
 
   @override
   Widget build(BuildContext context) {
-    final c    = AppColor.of(context);
-    final mq   = MediaQuery.of(context);
+    final c = AppColor.of(context);
+    final mq = MediaQuery.of(context);
     final user = _cachedUser;
 
     return Drawer(
@@ -172,11 +188,18 @@ class _AppDrawerState extends State<AppDrawer>
               if (_loading)
                 _ProfileShimmer(topPadding: mq.padding.top, colors: c)
               else if (user != null)
-                _ProfileHeader(user: user, profile: _cachedProfile,
-                    colors: c, trustStatus: _trustStatus)
+                _ProfileHeader(
+                  user: user,
+                  profile: _cachedProfile,
+                  colors: c,
+                  trustStatus: _trustStatus,
+                )
               else
-                _LoginPrompt(colors: c, topPadding: mq.padding.top,
-                    onTap: _redirectToLogin),
+                _LoginPrompt(
+                  colors: c,
+                  topPadding: mq.padding.top,
+                  onTap: _redirectToLogin,
+                ),
 
               Expanded(
                 child: ListView(
@@ -185,20 +208,26 @@ class _AppDrawerState extends State<AppDrawer>
                     const SizedBox(height: 8),
                     const _SectionLabel(label: 'QUICK ACTIONS'),
                     _NavTile(
-                      icon: LucideIcons.download, label: 'Buy XLM',
-                      description: 'Purchase Stellar lumens', colors: c,
+                      icon: LucideIcons.download,
+                      label: 'Buy XLM',
+                      description: 'Purchase Stellar lumens',
+                      colors: c,
                       onTap: user == null ? _redirectToLogin : () {},
                       requiresAuth: user == null,
                     ),
                     _NavTile(
-                      icon: LucideIcons.upload, label: 'Sell XLM',
-                      description: 'Convert lumens to cash', colors: c,
+                      icon: LucideIcons.upload,
+                      label: 'Sell XLM',
+                      description: 'Convert lumens to cash',
+                      colors: c,
                       onTap: user == null ? _redirectToLogin : () {},
                       requiresAuth: user == null,
                     ),
                     _NavTile(
-                      icon: LucideIcons.checkCircle2, label: 'Verification',
-                      description: 'Complete identity steps', colors: c,
+                      icon: LucideIcons.checkCircle2,
+                      label: 'Verification',
+                      description: 'Complete identity steps',
+                      colors: c,
                       trailing: user != null
                           ? _TrustStatusDot(status: _trustStatus, colors: c)
                           : null,
@@ -208,13 +237,17 @@ class _AppDrawerState extends State<AppDrawer>
                     const SizedBox(height: 4),
                     const _SectionLabel(label: 'SETTINGS'),
                     _NavTile(
-                      icon: LucideIcons.wallet, label: 'Manage Wallet',
-                      description: 'Keys & backup', colors: c,
+                      icon: LucideIcons.wallet,
+                      label: 'Manage Wallet',
+                      description: 'Keys & backup',
+                      colors: c,
                       onTap: () => _push(const WalletScreenSettings()),
                     ),
                     _NavTile(
-                      icon: LucideIcons.settings, label: 'Preferences',
-                      description: 'App settings', colors: c,
+                      icon: LucideIcons.settings,
+                      label: 'Preferences',
+                      description: 'App settings',
+                      colors: c,
                       onTap: () => _push(const SettingsScreen()),
                     ),
                     if (_cachedInfo != null) ...[
@@ -226,10 +259,17 @@ class _AppDrawerState extends State<AppDrawer>
               ),
 
               if (user != null) ...[
-                Divider(color: c.border.withOpacity(0.18),
-                    height: 1, indent: 20, endIndent: 20),
-                _LogoutButton(isLoading: _loggingOut,
-                    colors: c, onTap: _handleLogout),
+                Divider(
+                  color: c.border.withOpacity(0.18),
+                  height: 1,
+                  indent: 20,
+                  endIndent: 20,
+                ),
+                _LogoutButton(
+                  isLoading: _loggingOut,
+                  colors: c,
+                  onTap: _handleLogout,
+                ),
               ],
 
               SizedBox(height: mq.padding.bottom + 8),
@@ -247,16 +287,24 @@ class _AppDrawerState extends State<AppDrawer>
 
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
-    required this.user, required this.profile,
-    required this.colors, required this.trustStatus,
+    required this.user,
+    required this.profile,
+    required this.colors,
+    required this.trustStatus,
   });
-  final User user; final ProfileModel? profile;
-  final AppColor colors; final TrustStatus trustStatus;
+  final User user;
+  final ProfileModel? profile;
+  final AppColor colors;
+  final TrustStatus trustStatus;
 
   String? get _identityLine {
-    final p = profile; if (p == null) return null;
-    final fullName = [p.firstName, p.middleName, p.lastName]
-        .where((e) => e != null && e.trim().isNotEmpty).join(' ').trim();
+    final p = profile;
+    if (p == null) return null;
+    final fullName = [
+      p.firstName,
+      p.middleName,
+      p.lastName,
+    ].where((e) => e != null && e.trim().isNotEmpty).join(' ').trim();
     if (fullName.isNotEmpty) return fullName;
     final display = p.displayName?.trim();
     if (display != null && display.isNotEmpty) return display;
@@ -266,7 +314,8 @@ class _ProfileHeader extends StatelessWidget {
   }
 
   String? get _locationLine {
-    final p = profile; if (p == null) return null;
+    final p = profile;
+    if (p == null) return null;
     final country = p.country?.trim();
     if (country != null && country.isNotEmpty) return country;
     final address = p.address?.trim();
@@ -282,7 +331,9 @@ class _ProfileHeader extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20, top + 24, 20, 20),
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border(bottom: BorderSide(color: colors.border.withOpacity(0.18))),
+        border: Border(
+          bottom: BorderSide(color: colors.border.withOpacity(0.18)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,23 +346,35 @@ class _ProfileHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: colors.primary.withOpacity(0.2), width: 2.5),
-                  boxShadow: [BoxShadow(
-                    color: colors.primary.withOpacity(0.08),
-                    blurRadius: 12, offset: const Offset(0, 4),
-                  )],
+                    color: colors.primary.withOpacity(0.2),
+                    width: 2.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.primary.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: UserAvatar(user: user, radius: 30, colors: colors),
               ),
               Positioned(
-                bottom: 0, right: 0,
+                bottom: 0,
+                right: 0,
                 child: Container(
-                  width: 12, height: 12,
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(
-                    color: colors.success, shape: BoxShape.circle,
+                    color: colors.success,
+                    shape: BoxShape.circle,
                     border: Border.all(color: colors.surface, width: 2),
-                    boxShadow: [BoxShadow(
-                        color: colors.success.withOpacity(0.4), blurRadius: 5)],
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors.success.withOpacity(0.4),
+                        blurRadius: 5,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -355,15 +418,21 @@ class _ProfileHeader extends StatelessWidget {
           // ── Identity sub-line ─────────────────────────────────────
           if (_identityLine != null) ...[
             const SizedBox(height: 6),
-            _InfoRow(icon: Icons.person_outline_rounded,
-                text: _identityLine!, colors: colors),
+            _InfoRow(
+              icon: Icons.person_outline_rounded,
+              text: _identityLine!,
+              colors: colors,
+            ),
           ],
 
           // ── Location sub-line ─────────────────────────────────────
           if (_locationLine != null) ...[
             const SizedBox(height: 3),
-            _InfoRow(icon: Icons.location_on_outlined,
-                text: _locationLine!, colors: colors),
+            _InfoRow(
+              icon: Icons.location_on_outlined,
+              text: _locationLine!,
+              colors: colors,
+            ),
           ],
         ],
       ),
@@ -372,18 +441,34 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.text, required this.colors});
-  final IconData icon; final String text; final AppColor colors;
+  const _InfoRow({
+    required this.icon,
+    required this.text,
+    required this.colors,
+  });
+  final IconData icon;
+  final String text;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Icon(icon, size: 11, color: colors.textSecondary.withOpacity(0.5)),
-      const SizedBox(width: 4),
-      Expanded(child: Text(text,
-          style: TextStyle(color: colors.textSecondary.withOpacity(0.75), fontSize: 12),
-          maxLines: 1, overflow: TextOverflow.ellipsis)),
-    ]);
+    return Row(
+      children: [
+        Icon(icon, size: 11, color: colors.textSecondary.withOpacity(0.5)),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: colors.textSecondary.withOpacity(0.75),
+              fontSize: 12,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -393,32 +478,44 @@ class _InfoRow extends StatelessWidget {
 
 class _VerificationBadge extends StatelessWidget {
   const _VerificationBadge({required this.status, required this.colors});
-  final TrustStatus status; final AppColor colors;
+  final TrustStatus status;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      TrustStatus.ready     => ('Verified',   colors.success),
-      TrustStatus.reviewing => ('Review',     colors.warning),
-      TrustStatus.suspended => ('Suspended',  colors.error),
-      TrustStatus.basic     => ('Basic',      colors.textSecondary),
-      TrustStatus.unknown   => ('Unverified', colors.textSecondary),
+      TrustStatus.ready => ('Verified', colors.success),
+      TrustStatus.reviewing => ('Review', colors.warning),
+      TrustStatus.suspended => ('Suspended', colors.error),
+      TrustStatus.basic => ('Basic', colors.textSecondary),
+      TrustStatus.unknown => ('Unverified', colors.textSecondary),
     };
     final isReady = status == TrustStatus.ready;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (isReady) ...[
-          Icon(Icons.verified_rounded, color: color, size: 10),
-          const SizedBox(width: 3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isReady) ...[
+            Icon(Icons.verified_rounded, color: color, size: 10),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
         ],
-        Text(label, style: TextStyle(color: color, fontSize: 10,
-            fontWeight: FontWeight.w700, letterSpacing: 0.2)),
-      ]),
+      ),
     );
   }
 }
@@ -429,9 +526,13 @@ class _VerificationBadge extends StatelessWidget {
 
 class _LoginPrompt extends StatelessWidget {
   const _LoginPrompt({
-    required this.colors, required this.topPadding, required this.onTap,
+    required this.colors,
+    required this.topPadding,
+    required this.onTap,
   });
-  final AppColor colors; final double topPadding; final VoidCallback onTap;
+  final AppColor colors;
+  final double topPadding;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -440,47 +541,93 @@ class _LoginPrompt extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20, topPadding + 24, 20, 22),
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border(bottom: BorderSide(color: colors.border.withOpacity(0.18))),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 60, height: 60,
-            decoration: BoxDecoration(
-              color: colors.border.withOpacity(0.07), shape: BoxShape.circle,
-              border: Border.all(color: colors.border.withOpacity(0.18), width: 1.5),
-            ),
-            child: Icon(LucideIcons.userCircle2,
-                color: colors.textSecondary.withOpacity(0.6), size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Guest Mode', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
-                color: colors.textPrimary, letterSpacing: -0.3)),
-            const SizedBox(height: 3),
-            Text('Sign in to unlock all features',
-                style: TextStyle(fontSize: 12.5, color: colors.textSecondary)),
-          ])),
-        ]),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity, height: 44,
-          child: ElevatedButton(
-            onPressed: onTap,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colors.primary, foregroundColor: Colors.white,
-              elevation: 0, shadowColor: Colors.transparent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-              Icon(Icons.login_rounded, size: 16),
-              SizedBox(width: 7),
-              Text('Sign In', style: TextStyle(fontSize: 14.5,
-                  fontWeight: FontWeight.w600, letterSpacing: -0.2)),
-            ]),
-          ),
+        border: Border(
+          bottom: BorderSide(color: colors.border.withOpacity(0.18)),
         ),
-      ]),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: colors.border.withOpacity(0.07),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: colors.border.withOpacity(0.18),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(
+                  LucideIcons.userCircle2,
+                  color: colors.textSecondary.withOpacity(0.6),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Guest Mode',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Sign in to unlock all features',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: AppElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shadowColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.login_rounded, size: 16),
+                  SizedBox(width: 7),
+                  Text(
+                    'Sign In',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -498,8 +645,15 @@ class _SectionLabel extends StatelessWidget {
     final c = AppColor.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-      child: Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700,
-          color: c.textSecondary.withOpacity(0.6), letterSpacing: 1.0)),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          color: c.textSecondary.withOpacity(0.6),
+          letterSpacing: 1.0,
+        ),
+      ),
     );
   }
 }
@@ -510,13 +664,21 @@ class _SectionLabel extends StatelessWidget {
 
 class _NavTile extends StatelessWidget {
   const _NavTile({
-    required this.icon, required this.label, required this.description,
-    required this.colors, required this.onTap,
-    this.trailing, this.requiresAuth = false,
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.colors,
+    required this.onTap,
+    this.trailing,
+    this.requiresAuth = false,
   });
-  final IconData icon; final String label; final String description;
-  final AppColor colors; final VoidCallback onTap;
-  final Widget? trailing; final bool requiresAuth;
+  final IconData icon;
+  final String label;
+  final String description;
+  final AppColor colors;
+  final VoidCallback onTap;
+  final Widget? trailing;
+  final bool requiresAuth;
 
   @override
   Widget build(BuildContext context) {
@@ -524,51 +686,93 @@ class _NavTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor:    colors.primary.withOpacity(0.06),
+        splashColor: colors.primary.withOpacity(0.06),
         highlightColor: colors.primary.withOpacity(0.03),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(children: [
-            Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(
-                color: colors.border.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(icon, color: colors.textPrimary.withOpacity(0.72), size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600,
-                  color: colors.textPrimary, letterSpacing: -0.2)),
-              const SizedBox(height: 1),
-              Text(description, style: TextStyle(fontSize: 12, color: colors.textSecondary)),
-            ])),
-            const SizedBox(width: 6),
-            if (trailing != null)
-              trailing!
-            else if (requiresAuth)
-            // Lock chip — subtle hint that sign-in is needed
+          child: Row(
+            children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: colors.border.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: colors.border.withOpacity(0.2)),
+                  color: colors.border.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.lock_outline_rounded, size: 10,
-                      color: colors.textSecondary.withOpacity(0.6)),
-                  const SizedBox(width: 3),
-                  Text('Sign in', style: TextStyle(fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textSecondary.withOpacity(0.6))),
-                ]),
-              )
-            else
-              Icon(LucideIcons.chevronRight,
-                  color: colors.textSecondary.withOpacity(0.3), size: 16),
-          ]),
+                child: Icon(
+                  icon,
+                  color: colors.textPrimary.withOpacity(0.72),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textPrimary,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (trailing != null)
+                trailing!
+              else if (requiresAuth)
+                // Lock chip — subtle hint that sign-in is needed
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.border.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: colors.border.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 10,
+                        color: colors.textSecondary.withOpacity(0.6),
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        'Sign in',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: colors.textSecondary.withOpacity(0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Icon(
+                  LucideIcons.chevronRight,
+                  color: colors.textSecondary.withOpacity(0.3),
+                  size: 16,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -581,22 +785,30 @@ class _NavTile extends StatelessWidget {
 
 class _TrustStatusDot extends StatelessWidget {
   const _TrustStatusDot({required this.status, required this.colors});
-  final TrustStatus status; final AppColor colors;
+  final TrustStatus status;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      TrustStatus.ready     => colors.success,
+      TrustStatus.ready => colors.success,
       TrustStatus.reviewing => colors.warning,
       TrustStatus.suspended => colors.error,
-      _                     => colors.textSecondary.withOpacity(0.35),
+      _ => colors.textSecondary.withOpacity(0.35),
     };
     return Container(
-      width: 8, height: 8,
+      width: 8,
+      height: 8,
       decoration: BoxDecoration(
-        color: color, shape: BoxShape.circle,
+        color: color,
+        shape: BoxShape.circle,
         boxShadow: status == TrustStatus.ready
-            ? [BoxShadow(color: colors.success.withOpacity(0.45), blurRadius: 6)]
+            ? [
+                BoxShadow(
+                  color: colors.success.withOpacity(0.45),
+                  blurRadius: 6,
+                ),
+              ]
             : null,
       ),
     );
@@ -609,19 +821,31 @@ class _TrustStatusDot extends StatelessWidget {
 
 class _AppVersionInfo extends StatelessWidget {
   const _AppVersionInfo({required this.info, required this.colors});
-  final PackageInfo info; final AppColor colors;
+  final PackageInfo info;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-      child: Row(children: [
-        Icon(LucideIcons.info, size: 13, color: colors.textSecondary.withOpacity(0.45)),
-        const SizedBox(width: 6),
-        Text('${info.appName} v${info.version}',
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500,
-                color: colors.textSecondary.withOpacity(0.55))),
-      ]),
+      child: Row(
+        children: [
+          Icon(
+            LucideIcons.info,
+            size: 13,
+            color: colors.textSecondary.withOpacity(0.45),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${info.appName} v${info.version}',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: colors.textSecondary.withOpacity(0.55),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -632,9 +856,13 @@ class _AppVersionInfo extends StatelessWidget {
 
 class _LogoutButton extends StatelessWidget {
   const _LogoutButton({
-    required this.isLoading, required this.colors, required this.onTap,
+    required this.isLoading,
+    required this.colors,
+    required this.onTap,
   });
-  final bool isLoading; final AppColor colors; final VoidCallback onTap;
+  final bool isLoading;
+  final AppColor colors;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -642,29 +870,47 @@ class _LogoutButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: isLoading ? null : onTap,
-        splashColor:    colors.error.withOpacity(0.06),
+        splashColor: colors.error.withOpacity(0.06),
         highlightColor: colors.error.withOpacity(0.03),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          child: Row(children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: isLoading
-                  ? SizedBox(key: const ValueKey('loader'), width: 18, height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(colors.error)))
-                  : Icon(key: const ValueKey('icon'),
-                  LucideIcons.logOut, color: colors.error, size: 18),
-            ),
-            const SizedBox(width: 14),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 150),
-              child: Text(isLoading ? 'Signing out…' : 'Sign Out',
+          child: Row(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: isLoading
+                    ? SizedBox(
+                        key: const ValueKey('loader'),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(colors.error),
+                        ),
+                      )
+                    : Icon(
+                        key: const ValueKey('icon'),
+                        LucideIcons.logOut,
+                        color: colors.error,
+                        size: 18,
+                      ),
+              ),
+              const SizedBox(width: 14),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 150),
+                child: Text(
+                  isLoading ? 'Signing out…' : 'Sign Out',
                   key: ValueKey(isLoading),
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600,
-                      color: colors.error, letterSpacing: -0.2)),
-            ),
-          ]),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: colors.error,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -677,7 +923,8 @@ class _LogoutButton extends StatelessWidget {
 
 class _ProfileShimmer extends StatefulWidget {
   const _ProfileShimmer({required this.topPadding, required this.colors});
-  final double topPadding; final AppColor colors;
+  final double topPadding;
+  final AppColor colors;
 
   @override
   State<_ProfileShimmer> createState() => _ProfileShimmerState();
@@ -686,18 +933,23 @@ class _ProfileShimmer extends StatefulWidget {
 class _ProfileShimmerState extends State<_ProfileShimmer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double>   _anim;
+  late final Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this,
-        duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
     _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -709,25 +961,55 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
         return Container(
           width: double.infinity,
           padding: EdgeInsets.fromLTRB(20, widget.topPadding + 24, 20, 22),
-          decoration: BoxDecoration(color: c.surface,
-              border: Border(bottom: BorderSide(color: c.border.withOpacity(0.18)))),
-          child: Row(children: [
-            Container(width: 60, height: 60,
-                decoration: BoxDecoration(color: s, shape: BoxShape.circle)),
-            const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(width: 130, height: 15,
-                  decoration: BoxDecoration(color: s, borderRadius: BorderRadius.circular(5))),
-              const SizedBox(height: 9),
-              Container(width: 175, height: 11,
-                  decoration: BoxDecoration(color: s.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(5))),
-              const SizedBox(height: 7),
-              Container(width: 110, height: 10,
-                  decoration: BoxDecoration(color: s.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(5))),
-            ])),
-          ]),
+          decoration: BoxDecoration(
+            color: c.surface,
+            border: Border(
+              bottom: BorderSide(color: c.border.withOpacity(0.18)),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(color: s, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 130,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: s,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    Container(
+                      width: 175,
+                      height: 11,
+                      decoration: BoxDecoration(
+                        color: s.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Container(
+                      width: 110,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: s.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -746,57 +1028,122 @@ class _LogoutConfirmationModal extends StatelessWidget {
     final c = AppColor.of(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      decoration: BoxDecoration(color: c.surface,
-          borderRadius: BorderRadius.circular(28)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 36, height: 4,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(color: c.border.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2))),
-
-            Container(width: 64, height: 64,
                 decoration: BoxDecoration(
-                  color: c.error.withOpacity(0.08), shape: BoxShape.circle,
-                  border: Border.all(color: c.error.withOpacity(0.15), width: 1.5),
+                  color: c.border.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                child: Icon(LucideIcons.logOut, color: c.error, size: 26)),
+              ),
 
-            const SizedBox(height: 16),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: c.error.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: c.error.withOpacity(0.15),
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(LucideIcons.logOut, color: c.error, size: 26),
+              ),
 
-            Text('Sign Out?', style: TextStyle(fontSize: 21,
-                fontWeight: FontWeight.w700, color: c.textPrimary, letterSpacing: -0.5)),
-            const SizedBox(height: 8),
-            Text("You'll need to sign in again\nto access your account.",
+              const SizedBox(height: 16),
+
+              Text(
+                'Sign Out?',
+                style: TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w700,
+                  color: c.textPrimary,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "You'll need to sign in again\nto access your account.",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: c.textSecondary, height: 1.5)),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: c.textSecondary,
+                  height: 1.5,
+                ),
+              ),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            SizedBox(width: double.infinity, height: 50,
-                child: ElevatedButton(
-                    onPressed: () { HapticFeedback.lightImpact(); Navigator.pop(context, true); },
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: c.error, foregroundColor: Colors.white,
-                        elevation: 0, shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    child: const Text('Sign Out', style: TextStyle(fontSize: 15.5,
-                        fontWeight: FontWeight.w600, letterSpacing: -0.2)))),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: AppElevatedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context, true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: c.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Sign Out',
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ),
 
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
-            SizedBox(width: double.infinity, height: 50,
-                child: TextButton(
-                    onPressed: () { HapticFeedback.lightImpact(); Navigator.pop(context, false); },
-                    style: TextButton.styleFrom(
-                        backgroundColor: c.border.withOpacity(0.08),
-                        foregroundColor: c.textPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    child: Text('Cancel', style: TextStyle(fontSize: 15.5,
-                        fontWeight: FontWeight.w600, color: c.textPrimary, letterSpacing: -0.2)))),
-          ]),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: AppTextButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context, false);
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: c.border.withOpacity(0.08),
+                    foregroundColor: c.textPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      color: c.textPrimary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

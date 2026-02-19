@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -19,15 +20,10 @@ class _SelfieVerificationStepScreenState
     extends State<SelfieVerificationStepScreen>
     with SingleTickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
-  static const Set<String> _allowedExtensions = {
-    'jpg',
-    'jpeg',
-    'png',
-    'webp',
-  };
+  static const Set<String> _allowedExtensions = {'jpg', 'jpeg', 'png', 'webp'};
 
   File? _selectedSelfie;
-  bool _picking    = false;
+  bool _picking = false;
   bool _submitting = false;
 
   late final AnimationController _previewCtrl;
@@ -41,7 +37,7 @@ class _SelfieVerificationStepScreenState
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
-    _previewFade  = CurvedAnimation(parent: _previewCtrl, curve: Curves.easeOut);
+    _previewFade = CurvedAnimation(parent: _previewCtrl, curve: Curves.easeOut);
     _previewScale = Tween<double>(begin: 0.94, end: 1.0).animate(
       CurvedAnimation(parent: _previewCtrl, curve: Curves.easeOutCubic),
     );
@@ -85,7 +81,7 @@ class _SelfieVerificationStepScreenState
       _previewCtrl.forward(from: 0);
       setState(() {
         _selectedSelfie = File(xFile.path);
-        _picking        = false;
+        _picking = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -146,7 +142,7 @@ class _SelfieVerificationStepScreenState
 
   @override
   Widget build(BuildContext context) {
-    final c       = AppColor.of(context);
+    final c = AppColor.of(context);
     final hasFile = _selectedSelfie != null;
 
     return Scaffold(
@@ -155,7 +151,6 @@ class _SelfieVerificationStepScreenState
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         children: [
-
           // ── Preview / Placeholder ──────────────────────────────────
           _PreviewArea(
             file: _selectedSelfie,
@@ -172,7 +167,7 @@ class _SelfieVerificationStepScreenState
             _PickRow(
               picking: _picking,
               submitting: _submitting,
-              onCamera:  () => _pick(ImageSource.camera),
+              onCamera: () => _pick(ImageSource.camera),
               onGallery: () => _pick(ImageSource.gallery),
               c: c,
             ),
@@ -186,7 +181,7 @@ class _SelfieVerificationStepScreenState
             _ReplaceRow(
               picking: _picking,
               submitting: _submitting,
-              onCamera:  () => _pick(ImageSource.camera),
+              onCamera: () => _pick(ImageSource.camera),
               onGallery: () => _pick(ImageSource.gallery),
               c: c,
             ),
@@ -225,8 +220,11 @@ class _SelfieVerificationStepScreenState
       leading: Padding(
         padding: const EdgeInsets.only(left: 8),
         child: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: c.textPrimary, size: 18),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: c.textPrimary,
+            size: 18,
+          ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -263,9 +261,7 @@ class _PreviewArea extends StatelessWidget {
         color: file != null ? Colors.black : c.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: file != null
-              ? Colors.transparent
-              : c.border.withOpacity(0.22),
+          color: file != null ? Colors.transparent : c.border.withOpacity(0.22),
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -287,24 +283,24 @@ class _PreviewArea extends StatelessWidget {
         ),
         // Bottom gradient
         Positioned(
-          bottom: 0, left: 0, right: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
           child: Container(
             height: 64,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [
-                  Colors.black.withOpacity(0.5),
-                  Colors.transparent,
-                ],
+                colors: [Colors.black.withOpacity(0.5), Colors.transparent],
               ),
             ),
           ),
         ),
         // "Selfie selected" badge
         Positioned(
-          bottom: 12, right: 12,
+          bottom: 12,
+          right: 12,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -315,8 +311,11 @@ class _PreviewArea extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.check_circle_outline_rounded,
-                    color: Colors.white, size: 13),
+                Icon(
+                  Icons.check_circle_outline_rounded,
+                  color: Colors.white,
+                  size: 13,
+                ),
                 SizedBox(width: 5),
                 Text(
                   'Selfie selected',
@@ -348,7 +347,9 @@ class _PreviewArea extends StatelessWidget {
               color: c.primary.withOpacity(0.08),
               shape: BoxShape.circle,
               border: Border.all(
-                  color: c.primary.withOpacity(0.18), width: 1.5),
+                color: c.primary.withOpacity(0.18),
+                width: 1.5,
+              ),
             ),
             child: Icon(
               picking
@@ -451,8 +452,11 @@ class _ReplaceRow extends StatelessWidget {
     final disabled = picking || submitting;
     return Row(
       children: [
-        Icon(Icons.refresh_rounded,
-            size: 13, color: c.textSecondary.withOpacity(0.55)),
+        Icon(
+          Icons.refresh_rounded,
+          size: 13,
+          color: c.textSecondary.withOpacity(0.55),
+        ),
         const SizedBox(width: 5),
         Text(
           'Replace with:',
@@ -581,11 +585,13 @@ class _CompactChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 13,
-                color: disabled
-                    ? c.textSecondary.withOpacity(0.3)
-                    : c.textSecondary),
+            Icon(
+              icon,
+              size: 13,
+              color: disabled
+                  ? c.textSecondary.withOpacity(0.3)
+                  : c.textSecondary,
+            ),
             const SizedBox(width: 4),
             Text(
               label,
@@ -616,9 +622,9 @@ class _RequirementsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      (Icons.lightbulb_outline_rounded,  'Good lighting, face fully visible'),
+      (Icons.lightbulb_outline_rounded, 'Good lighting, face fully visible'),
       (Icons.do_not_disturb_on_outlined, 'No sunglasses or face coverings'),
-      (Icons.image_outlined,             'JPG, PNG, or WebP format'),
+      (Icons.image_outlined, 'JPG, PNG, or WebP format'),
     ];
 
     return Container(
@@ -642,7 +648,7 @@ class _RequirementsCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ...items.map(
-                (item) => Padding(
+            (item) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(
                 children: [
@@ -705,14 +711,14 @@ class _SubmitButton extends StatelessWidget {
         boxShadow: disabled
             ? null
             : [
-          BoxShadow(
-            color: c.primary.withOpacity(0.28),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+                BoxShadow(
+                  color: c.primary.withOpacity(0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
       ),
-      child: ElevatedButton(
+      child: AppElevatedButton(
         onPressed: disabled ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
@@ -729,47 +735,49 @@ class _SubmitButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: submitting
               ? Row(
-            key: const ValueKey('loading'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white70),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Submitting…',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2),
-              ),
-            ],
-          )
+                  key: const ValueKey('loading'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white70),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Submitting…',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                )
               : Row(
-            key: const ValueKey('idle'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                hasFile
-                    ? Icons.cloud_upload_outlined
-                    : Icons.add_photo_alternate_outlined,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                hasFile ? 'Submit Selfie' : 'Select a Photo First',
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2),
-              ),
-            ],
-          ),
+                  key: const ValueKey('idle'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      hasFile
+                          ? Icons.cloud_upload_outlined
+                          : Icons.add_photo_alternate_outlined,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      hasFile ? 'Submit Selfie' : 'Select a Photo First',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

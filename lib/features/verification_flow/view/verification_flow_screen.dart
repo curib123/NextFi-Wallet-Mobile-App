@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/profile_setup_modal.dart';
@@ -55,20 +56,20 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error   = null;
+      _error = null;
     });
     try {
       final snapshot = await VerificationFlowService.I.getSnapshot();
       if (!mounted) return;
       setState(() {
         _snapshot = snapshot;
-        _loading  = false;
+        _loading = false;
       });
       _fadeController.forward(from: 0);
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error   = e.toString();
+        _error = e.toString();
         _loading = false;
       });
     }
@@ -103,8 +104,11 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
       leading: Padding(
         padding: const EdgeInsets.only(left: 8),
         child: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: c.textPrimary, size: 18),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: c.textPrimary,
+            size: 18,
+          ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -120,7 +124,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     final snapshot = _snapshot;
     if (snapshot == null) return const SizedBox.shrink();
 
-    final status     = snapshot.verification.status;
+    final status = snapshot.verification.status;
     final canContinue =
         status == TrustStatus.basic || status == TrustStatus.unknown;
     final isVerified = status == TrustStatus.ready;
@@ -145,7 +149,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
                 c: c,
                 icon: Icons.hourglass_top_rounded,
                 title: 'Under Review',
-                body: 'Your verification is being processed. We\'ll notify you when it\'s ready.',
+                body:
+                    'Your verification is being processed. We\'ll notify you when it\'s ready.',
                 accent: c.warning,
               ),
             if (isVerified)
@@ -153,7 +158,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
                 c: c,
                 icon: Icons.verified_rounded,
                 title: 'Account Verified',
-                body: 'All steps are complete. You can now access verified features.',
+                body:
+                    'All steps are complete. You can now access verified features.',
                 accent: c.success,
               ),
             if (status == TrustStatus.suspended)
@@ -161,7 +167,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
                 c: c,
                 icon: Icons.block_rounded,
                 title: 'Verification Suspended',
-                body: snapshot.verification.suspendReason?.trim().isNotEmpty == true
+                body:
+                    snapshot.verification.suspendReason?.trim().isNotEmpty ==
+                        true
                     ? snapshot.verification.suspendReason!
                     : 'Your verification was suspended. Please contact support.',
                 accent: c.error,
@@ -189,19 +197,19 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
               nextStepIndex: snapshot.nextStepIndex,
               steps: const [
                 (
-                icon: Icons.person_outline_rounded,
-                title: 'Profile',
-                subtitle: 'Fill in your identity details',
+                  icon: Icons.person_outline_rounded,
+                  title: 'Profile',
+                  subtitle: 'Fill in your identity details',
                 ),
                 (
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'Payment Method',
-                subtitle: 'Set up your payment account',
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Payment Method',
+                  subtitle: 'Set up your payment account',
                 ),
                 (
-                icon: Icons.camera_alt_outlined,
-                title: 'Selfie Verification',
-                subtitle: 'Submit a selfie for review',
+                  icon: Icons.camera_alt_outlined,
+                  title: 'Selfie Verification',
+                  subtitle: 'Submit a selfie for review',
                 ),
               ],
             ),
@@ -235,7 +243,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 56, height: 56,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: c.error.withOpacity(0.08),
                 shape: BoxShape.circle,
@@ -246,8 +255,10 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
             Text(
               'Couldn\'t Load Status',
               style: TextStyle(
-                color: c.textPrimary, fontSize: 16,
-                fontWeight: FontWeight.w700, letterSpacing: -0.3,
+                color: c.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 6),
@@ -255,19 +266,24 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
               _error!,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: c.textSecondary, fontSize: 13, height: 1.5,
+                color: c.textSecondary,
+                fontSize: 13,
+                height: 1.5,
               ),
             ),
             const SizedBox(height: 20),
-            FilledButton.icon(
+            AppFilledButton.icon(
               onPressed: _load,
               icon: const Icon(Icons.refresh_rounded, size: 16),
               label: const Text('Try Again'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 12),
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -277,14 +293,14 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   }
 
   Future<void> _openPaymentSetup() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PaymentMethodSetupScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PaymentMethodSetupScreen()));
     if (mounted) await _load();
   }
 
   Future<void> _continueFromSnapshot(VerificationFlowSnapshot snapshot) async {
-    final step    = snapshot.nextStepIndex > 3 ? 3 : snapshot.nextStepIndex;
+    final step = snapshot.nextStepIndex > 3 ? 3 : snapshot.nextStepIndex;
     final handler = switch (step) {
       1 => widget.onOpenProfileStep,
       2 => widget.onOpenPaymentStep,
@@ -310,8 +326,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
 
     if (step == 3) {
       await Navigator.of(context).push(
-        MaterialPageRoute(
-            builder: (_) => const SelfieVerificationStepScreen()),
+        MaterialPageRoute(builder: (_) => const SelfieVerificationStepScreen()),
       );
       if (mounted) await _load();
       return;
@@ -335,9 +350,9 @@ class _StatusHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status   = snapshot.verification.status;
-    final accent   = _accentColor(status);
-    final label    = _statusLabel(status);
+    final status = snapshot.verification.status;
+    final accent = _accentColor(status);
+    final label = _statusLabel(status);
     final progress = _computeProgress(snapshot);
 
     return Container(
@@ -361,7 +376,9 @@ class _StatusHeroCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: accent.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -369,8 +386,10 @@ class _StatusHeroCard extends StatelessWidget {
                 child: Text(
                   label,
                   style: TextStyle(
-                    color: accent, fontSize: 11,
-                    fontWeight: FontWeight.w700, letterSpacing: 0.8,
+                    color: accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ),
@@ -378,7 +397,8 @@ class _StatusHeroCard extends StatelessWidget {
               Text(
                 '${(progress * 100).round()}%',
                 style: TextStyle(
-                  color: c.textSecondary, fontSize: 13,
+                  color: c.textSecondary,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -390,8 +410,10 @@ class _StatusHeroCard extends StatelessWidget {
                 ? 'All steps completed'
                 : 'Step ${snapshot.nextStepIndex} of 3',
             style: TextStyle(
-              color: c.textPrimary, fontSize: 20,
-              fontWeight: FontWeight.w700, letterSpacing: -0.5,
+              color: c.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 4),
@@ -399,9 +421,7 @@ class _StatusHeroCard extends StatelessWidget {
             snapshot.isCompleted
                 ? 'Your verification is complete.'
                 : 'Complete the remaining steps to get verified.',
-            style: TextStyle(
-              color: c.textSecondary, fontSize: 13, height: 1.4,
-            ),
+            style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 16),
           ClipRRect(
@@ -426,21 +446,30 @@ class _StatusHeroCard extends StatelessWidget {
 
   Color _accentColor(TrustStatus status) {
     switch (status) {
-      case TrustStatus.ready:     return c.success;
-      case TrustStatus.reviewing: return c.warning;
-      case TrustStatus.suspended: return c.error;
+      case TrustStatus.ready:
+        return c.success;
+      case TrustStatus.reviewing:
+        return c.warning;
+      case TrustStatus.suspended:
+        return c.error;
       case TrustStatus.basic:
-      case TrustStatus.unknown:   return c.primary;
+      case TrustStatus.unknown:
+        return c.primary;
     }
   }
 
   String _statusLabel(TrustStatus status) {
     switch (status) {
-      case TrustStatus.basic:     return 'BASIC';
-      case TrustStatus.reviewing: return 'REVIEWING';
-      case TrustStatus.ready:     return 'VERIFIED';
-      case TrustStatus.suspended: return 'SUSPENDED';
-      case TrustStatus.unknown:   return 'PENDING';
+      case TrustStatus.basic:
+        return 'BASIC';
+      case TrustStatus.reviewing:
+        return 'REVIEWING';
+      case TrustStatus.ready:
+        return 'VERIFIED';
+      case TrustStatus.suspended:
+        return 'SUSPENDED';
+      case TrustStatus.unknown:
+        return 'PENDING';
     }
   }
 }
@@ -477,7 +506,8 @@ class _NoticeBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 34, height: 34,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: accent.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
@@ -489,16 +519,24 @@ class _NoticeBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(
-                      color: accent, fontWeight: FontWeight.w700,
-                      fontSize: 13, letterSpacing: -0.1,
-                    )),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    letterSpacing: -0.1,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(body,
-                    style: TextStyle(
-                      color: c.textSecondary, fontSize: 12.5, height: 1.45,
-                    )),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12.5,
+                    height: 1.45,
+                  ),
+                ),
               ],
             ),
           ),
@@ -527,10 +565,10 @@ class _StepList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: List.generate(steps.length, (i) {
-        final index     = i + 1;
-        final isDone    = nextStepIndex > index;
+        final index = i + 1;
+        final isDone = nextStepIndex > index;
         final isCurrent = nextStepIndex == index;
-        final isLast    = index == steps.length;
+        final isLast = index == steps.length;
         return _StepRow(
           c: c,
           index: index,
@@ -581,8 +619,9 @@ class _StepRow extends StatelessWidget {
         ? c.primary
         : c.textSecondary.withOpacity(0.12);
 
-    final fgColor =
-    (isDone || isCurrent) ? Colors.white : c.textSecondary.withOpacity(0.5);
+    final fgColor = (isDone || isCurrent)
+        ? Colors.white
+        : c.textSecondary.withOpacity(0.5);
 
     return IntrinsicHeight(
       child: Row(
@@ -593,25 +632,34 @@ class _StepRow extends StatelessWidget {
             child: Column(
               children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: bgColor,
                     shape: BoxShape.circle,
                     boxShadow: isCurrent
-                        ? [BoxShadow(
-                      color: c.primary.withOpacity(0.28),
-                      blurRadius: 8, offset: const Offset(0, 3),
-                    )]
+                        ? [
+                            BoxShadow(
+                              color: c.primary.withOpacity(0.28),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
                         : isDone
-                        ? [BoxShadow(
-                      color: c.success.withOpacity(0.2),
-                      blurRadius: 6,
-                    )]
+                        ? [
+                            BoxShadow(
+                              color: c.success.withOpacity(0.2),
+                              blurRadius: 6,
+                            ),
+                          ]
                         : null,
                   ),
                   child: isDone
-                      ? const Icon(Icons.check_rounded,
-                      color: Colors.white, size: 16)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 16,
+                        )
                       : Icon(icon, color: fgColor, size: 16),
                 ),
                 if (!isLast)
@@ -638,11 +686,11 @@ class _StepRow extends StatelessWidget {
               padding: EdgeInsets.only(bottom: isLast ? 0 : 16, top: 6),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
-                  color: isCurrent
-                      ? c.primary.withOpacity(0.04)
-                      : c.surface,
+                  color: isCurrent ? c.primary.withOpacity(0.04) : c.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isCurrent
@@ -656,18 +704,24 @@ class _StepRow extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title,
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14, letterSpacing: -0.2,
-                              )),
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text(subtitle,
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontSize: 12, height: 1.4,
-                              )),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -704,10 +758,14 @@ class _StatusChip extends StatelessWidget {
           color: c.success.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text('Done',
-            style: TextStyle(
-              color: c.success, fontSize: 11, fontWeight: FontWeight.w700,
-            )),
+        child: Text(
+          'Done',
+          style: TextStyle(
+            color: c.success,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       );
     }
     if (isCurrent) {
@@ -717,10 +775,14 @@ class _StatusChip extends StatelessWidget {
           color: c.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text('Now',
-            style: TextStyle(
-              color: c.primary, fontSize: 11, fontWeight: FontWeight.w700,
-            )),
+        child: Text(
+          'Now',
+          style: TextStyle(
+            color: c.primary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       );
     }
     return Container(
@@ -729,10 +791,14 @@ class _StatusChip extends StatelessWidget {
         color: c.border.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text('Pending',
-          style: TextStyle(
-            color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600,
-          )),
+      child: Text(
+        'Pending',
+        style: TextStyle(
+          color: c.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -756,7 +822,7 @@ class _CtaButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label    = _label();
+    final label = _label();
     final isActive = canContinue && !snapshot.isCompleted;
 
     return AnimatedContainer(
@@ -765,32 +831,38 @@ class _CtaButton extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: isActive
-            ? [BoxShadow(
-          color: c.primary.withOpacity(0.3),
-          blurRadius: 16, offset: const Offset(0, 6),
-        )]
+            ? [
+                BoxShadow(
+                  color: c.primary.withOpacity(0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ]
             : null,
       ),
-      child: ElevatedButton(
+      child: AppElevatedButton(
         onPressed: isActive ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isActive ? c.primary : c.border.withOpacity(0.15),
+          backgroundColor: isActive ? c.primary : c.border.withOpacity(0.15),
           foregroundColor: isActive ? Colors.white : c.textSecondary,
           disabledBackgroundColor: c.border.withOpacity(0.12),
           disabledForegroundColor: c.textSecondary.withOpacity(0.5),
           elevation: 0,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15, letterSpacing: -0.2,
-                )),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                letterSpacing: -0.2,
+              ),
+            ),
             if (isActive) ...[
               const SizedBox(width: 6),
               const Icon(Icons.arrow_forward_rounded, size: 17),
@@ -803,9 +875,12 @@ class _CtaButton extends StatelessWidget {
 
   String _label() {
     switch (snapshot.verification.status) {
-      case TrustStatus.reviewing: return 'Under Review';
-      case TrustStatus.ready:     return 'Account Verified ✓';
-      case TrustStatus.suspended: return 'Verification Suspended';
+      case TrustStatus.reviewing:
+        return 'Under Review';
+      case TrustStatus.ready:
+        return 'Account Verified ✓';
+      case TrustStatus.suspended:
+        return 'Verification Suspended';
       case TrustStatus.basic:
       case TrustStatus.unknown:
         return snapshot.isCompleted
@@ -829,19 +904,23 @@ class _AddPaymentButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 48,
-      child: OutlinedButton(
+      child: AppOutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: c.textPrimary,
           side: BorderSide(color: c.border.withOpacity(0.35), width: 1.2),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_card_rounded, size: 17,
-                color: c.textPrimary.withOpacity(0.75)),
+            Icon(
+              Icons.add_card_rounded,
+              size: 17,
+              color: c.textPrimary.withOpacity(0.75),
+            ),
             const SizedBox(width: 8),
             Text(
               'Add Payment Account',

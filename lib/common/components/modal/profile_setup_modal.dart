@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/services/profile/models/profile_dtos.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 
 Future<bool?> showProfileSetupModal(
-    BuildContext context, {
-      ProfileModel? initial,
-    }) {
+  BuildContext context, {
+  ProfileModel? initial,
+}) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -44,13 +45,13 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
   void initState() {
     super.initState();
     final p = widget.initial;
-    _usernameCtrl    = TextEditingController(text: p?.username    ?? '');
+    _usernameCtrl = TextEditingController(text: p?.username ?? '');
     _displayNameCtrl = TextEditingController(text: p?.displayName ?? '');
-    _firstNameCtrl   = TextEditingController(text: p?.firstName   ?? '');
-    _middleNameCtrl  = TextEditingController(text: p?.middleName  ?? '');
-    _lastNameCtrl    = TextEditingController(text: p?.lastName    ?? '');
-    _countryCtrl     = TextEditingController(text: p?.country     ?? '');
-    _addressCtrl     = TextEditingController(text: p?.address     ?? '');
+    _firstNameCtrl = TextEditingController(text: p?.firstName ?? '');
+    _middleNameCtrl = TextEditingController(text: p?.middleName ?? '');
+    _lastNameCtrl = TextEditingController(text: p?.lastName ?? '');
+    _countryCtrl = TextEditingController(text: p?.country ?? '');
+    _addressCtrl = TextEditingController(text: p?.address ?? '');
   }
 
   @override
@@ -69,18 +70,18 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _saving = true;
-      _error  = null;
+      _error = null;
     });
 
     try {
       final req = UpsertProfileRequest(
-        username:    _usernameCtrl.text,
+        username: _usernameCtrl.text,
         displayName: _displayNameCtrl.text,
-        firstName:   _firstNameCtrl.text,
-        middleName:  _middleNameCtrl.text,
-        lastName:    _lastNameCtrl.text,
-        country:     _countryCtrl.text,
-        address:     _addressCtrl.text,
+        firstName: _firstNameCtrl.text,
+        middleName: _middleNameCtrl.text,
+        lastName: _lastNameCtrl.text,
+        country: _countryCtrl.text,
+        address: _addressCtrl.text,
       );
       await ProfileCoreService.I.upsertMe(req);
       if (!mounted) return;
@@ -89,7 +90,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error  = e.toString();
+        _error = e.toString();
       });
     }
   }
@@ -101,7 +102,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
 
   @override
   Widget build(BuildContext context) {
-    final c     = AppColor.of(context);
+    final c = AppColor.of(context);
     final inset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
@@ -377,13 +378,16 @@ class _FormFieldState extends State<_FormField> {
     final c = widget.c;
     final border = _focused
         ? OutlineInputBorder(
-      borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(color: c.primary, width: 1.5),
-    )
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(color: c.primary, width: 1.5),
+          )
         : OutlineInputBorder(
-      borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(color: c.border.withOpacity(0.3), width: 1.2),
-    );
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(
+              color: c.border.withOpacity(0.3),
+              width: 1.2,
+            ),
+          );
 
     return Focus(
       onFocusChange: (v) => setState(() => _focused = v),
@@ -401,7 +405,10 @@ class _FormFieldState extends State<_FormField> {
         decoration: InputDecoration(
           labelText: widget.required ? '${widget.label} *' : widget.label,
           hintText: widget.hint,
-          hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.45), fontSize: 13.5),
+          hintStyle: TextStyle(
+            color: c.textSecondary.withOpacity(0.45),
+            fontSize: 13.5,
+          ),
           labelStyle: TextStyle(
             color: _focused ? c.primary : c.textSecondary,
             fontSize: 13.5,
@@ -420,7 +427,10 @@ class _FormFieldState extends State<_FormField> {
               color: _focused ? c.primary : c.textSecondary.withOpacity(0.5),
             ),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
           filled: true,
           fillColor: _focused
               ? c.primary.withOpacity(0.03)
@@ -432,7 +442,10 @@ class _FormFieldState extends State<_FormField> {
           border: border,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.border.withOpacity(0.25), width: 1.2),
+            borderSide: BorderSide(
+              color: c.border.withOpacity(0.25),
+              width: 1.2,
+            ),
           ),
           focusedBorder: border,
           errorBorder: OutlineInputBorder(
@@ -471,11 +484,7 @@ class _CloseButton extends StatelessWidget {
           color: c.border.withOpacity(0.1),
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          Icons.close_rounded,
-          size: 17,
-          color: c.textSecondary,
-        ),
+        child: Icon(Icons.close_rounded, size: 17, color: c.textSecondary),
       ),
     );
   }
@@ -509,11 +518,7 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               error,
-              style: TextStyle(
-                color: c.error,
-                fontSize: 12.5,
-                height: 1.4,
-              ),
+              style: TextStyle(color: c.error, fontSize: 12.5, height: 1.4),
             ),
           ),
         ],
@@ -547,14 +552,14 @@ class _SaveButton extends StatelessWidget {
         boxShadow: saving
             ? null
             : [
-          BoxShadow(
-            color: c.primary.withOpacity(0.28),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+                BoxShadow(
+                  color: c.primary.withOpacity(0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
       ),
-      child: ElevatedButton(
+      child: AppElevatedButton(
         onPressed: saving ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
@@ -571,44 +576,44 @@ class _SaveButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: saving
               ? Row(
-            key: const ValueKey('saving'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white70),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Saving…',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          )
+                  key: const ValueKey('saving'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white70),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Saving…',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                )
               : Row(
-            key: const ValueKey('save'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.check_rounded, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Save Profile',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                  key: const ValueKey('save'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.check_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Save Profile',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );

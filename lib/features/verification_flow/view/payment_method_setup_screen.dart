@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
@@ -19,23 +20,23 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     with SingleTickerProviderStateMixin {
   final _core = PaymentMethodAndAccountsCoreService.I;
 
-  final _accountNameCtrl  = TextEditingController();
-  final _accountNoCtrl    = TextEditingController();
-  final _labelCtrl        = TextEditingController();
+  final _accountNameCtrl = TextEditingController();
+  final _accountNoCtrl = TextEditingController();
+  final _labelCtrl = TextEditingController();
   final _instructionsCtrl = TextEditingController();
 
-  bool _loading       = true;
-  bool _saving        = false;
+  bool _loading = true;
+  bool _saving = false;
   bool _settingActive = false;
-  bool _setAsActive   = true;
+  bool _setAsActive = true;
 
-  List<PaymentMethodModel>      _methods  = const [];
+  List<PaymentMethodModel> _methods = const [];
   List<UserPaymentAccountModel> _accounts = const [];
-  PaymentMethodModel?           _selectedMethod;
-  String?                       _activeAccountId;
+  PaymentMethodModel? _selectedMethod;
+  String? _activeAccountId;
 
   late final AnimationController _fadeCtrl;
-  late final Animation<double>   _fadeAnim;
+  late final Animation<double> _fadeAnim;
 
   @override
   void initState() {
@@ -61,13 +62,13 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
   Future<void> _loadAll() async {
     setState(() => _loading = true);
     try {
-      final methods  = await _core.listPaymentMethods(activeOnly: true);
+      final methods = await _core.listPaymentMethods(activeOnly: true);
       final accounts = await _core.listMyPaymentAccounts();
       if (!mounted) return;
       setState(() {
-        _methods         = methods;
-        _accounts        = accounts;
-        _selectedMethod  = methods.isNotEmpty ? methods.first : null;
+        _methods = methods;
+        _accounts = accounts;
+        _selectedMethod = methods.isNotEmpty ? methods.first : null;
         _activeAccountId = accounts
             .where((a) => a.isActive)
             .map((a) => a.id)
@@ -84,20 +85,30 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
 
   Future<void> _createAccount() async {
     final method = _selectedMethod;
-    if (method == null) { _showSnack('Please select a payment method.'); return; }
+    if (method == null) {
+      _showSnack('Please select a payment method.');
+      return;
+    }
     final accountName = _accountNameCtrl.text.trim();
-    if (accountName.isEmpty) { _showSnack('Account name is required.'); return; }
+    if (accountName.isEmpty) {
+      _showSnack('Account name is required.');
+      return;
+    }
 
     HapticFeedback.mediumImpact();
     setState(() => _saving = true);
     try {
       final req = CreateUserPaymentAccountRequest(
         paymentMethodId: method.id,
-        accountName:  accountName,
-        accountNo:    _accountNoCtrl.text.trim().isEmpty ? null : _accountNoCtrl.text.trim(),
-        label:        _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim(),
-        instructions: _instructionsCtrl.text.trim().isEmpty ? null : _instructionsCtrl.text.trim(),
-        isActive:     _setAsActive,
+        accountName: accountName,
+        accountNo: _accountNoCtrl.text.trim().isEmpty
+            ? null
+            : _accountNoCtrl.text.trim(),
+        label: _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim(),
+        instructions: _instructionsCtrl.text.trim().isEmpty
+            ? null
+            : _instructionsCtrl.text.trim(),
+        isActive: _setAsActive,
       );
       await _core.createMyPaymentAccount(req);
       _accountNameCtrl.clear();
@@ -184,8 +195,11 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
       leading: Padding(
         padding: const EdgeInsets.only(left: 8),
         child: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: c.textPrimary, size: 18),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: c.textPrimary,
+            size: 18,
+          ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -214,32 +228,32 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
             const SizedBox(height: 10),
             _methods.isEmpty
                 ? _EmptyCard(
-              icon: Icons.payment_outlined,
-              title: 'No Payment Methods',
-              body: 'No active payment methods are available right now.',
-              c: c,
-            )
+                    icon: Icons.payment_outlined,
+                    title: 'No Payment Methods',
+                    body: 'No active payment methods are available right now.',
+                    c: c,
+                  )
                 : _MethodGrid(
-              methods: _methods,
-              selected: _selectedMethod,
-              onSelect: (m) => setState(() => _selectedMethod = m),
-              c: c,
-            ),
+                    methods: _methods,
+                    selected: _selectedMethod,
+                    onSelect: (m) => setState(() => _selectedMethod = m),
+                    c: c,
+                  ),
 
             const SizedBox(height: 28),
 
             _SectionLabel(label: 'ADD NEW ACCOUNT', c: c),
             const SizedBox(height: 10),
             _AccountForm(
-              accountNameCtrl:      _accountNameCtrl,
-              accountNoCtrl:        _accountNoCtrl,
-              labelCtrl:            _labelCtrl,
-              instructionsCtrl:     _instructionsCtrl,
-              setAsActive:          _setAsActive,
-              saving:               _saving,
+              accountNameCtrl: _accountNameCtrl,
+              accountNoCtrl: _accountNoCtrl,
+              labelCtrl: _labelCtrl,
+              instructionsCtrl: _instructionsCtrl,
+              setAsActive: _setAsActive,
+              saving: _saving,
               onSetAsActiveChanged: (v) => setState(() => _setAsActive = v),
-              onSubmit:             _createAccount,
-              c:                    c,
+              onSubmit: _createAccount,
+              c: c,
             ),
 
             const SizedBox(height: 28),
@@ -248,18 +262,18 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
             const SizedBox(height: 10),
             _accounts.isEmpty
                 ? _EmptyCard(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'No Accounts Yet',
-              body: 'Add your first payment account above.',
-              c: c,
-            )
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'No Accounts Yet',
+                    body: 'Add your first payment account above.',
+                    c: c,
+                  )
                 : _AccountList(
-              accounts:      _accounts,
-              activeId:      _activeAccountId,
-              settingActive: _settingActive,
-              onSetActive:   _setActiveAccount,
-              c:             c,
-            ),
+                    accounts: _accounts,
+                    activeId: _activeAccountId,
+                    settingActive: _settingActive,
+                    onSetActive: _setActiveAccount,
+                    c: c,
+                  ),
           ],
         ),
       ),
@@ -287,28 +301,38 @@ class _StepHero extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 46, height: 46,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               color: c.primary.withOpacity(0.1),
               shape: BoxShape.circle,
               border: Border.all(color: c.primary.withOpacity(0.2), width: 1.5),
             ),
-            child: Icon(Icons.account_balance_wallet_outlined,
-                color: c.primary, size: 22),
+            child: Icon(
+              Icons.account_balance_wallet_outlined,
+              color: c.primary,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Payment Account',
-                    style: TextStyle(
-                      color: c.textPrimary, fontSize: 15,
-                      fontWeight: FontWeight.w700, letterSpacing: -0.3,
-                    )),
+                Text(
+                  'Payment Account',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text('Step 3 of 3 · Link your preferred account',
-                    style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+                Text(
+                  'Step 3 of 3 · Link your preferred account',
+                  style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                ),
               ],
             ),
           ),
@@ -329,11 +353,15 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(label,
-        style: TextStyle(
-          fontSize: 10.5, fontWeight: FontWeight.w700,
-          color: c.textSecondary.withOpacity(0.6), letterSpacing: 1.0,
-        ));
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        color: c.textSecondary.withOpacity(0.6),
+        letterSpacing: 1.0,
+      ),
+    );
   }
 }
 
@@ -365,28 +393,40 @@ class _EmptyCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: c.border.withOpacity(0.07),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 17, color: c.textSecondary.withOpacity(0.45)),
+            child: Icon(
+              icon,
+              size: 17,
+              color: c.textSecondary.withOpacity(0.45),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(
-                      color: c.textPrimary, fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                    )),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(body,
-                    style: TextStyle(
-                      color: c.textSecondary, fontSize: 12.5, height: 1.4,
-                    )),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12.5,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),
@@ -449,7 +489,8 @@ class _MethodGrid extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        width: 28, height: 28,
+                        width: 28,
+                        height: 28,
                         decoration: BoxDecoration(
                           color: isSelected
                               ? c.primary.withOpacity(0.12)
@@ -457,32 +498,43 @@ class _MethodGrid extends StatelessWidget {
                           borderRadius: BorderRadius.circular(7),
                         ),
                         child: Icon(
-                          Icons.account_balance_outlined, size: 14,
+                          Icons.account_balance_outlined,
+                          size: 14,
                           color: isSelected ? c.primary : c.textSecondary,
                         ),
                       ),
                       const Spacer(),
                       if (isSelected)
-                        Icon(Icons.check_circle_rounded,
-                            size: 16, color: c.primary),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: c.primary,
+                        ),
                     ],
                   ),
                   const Spacer(),
-                  Text(m.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: c.textPrimary, fontWeight: FontWeight.w600,
-                        fontSize: 13, letterSpacing: -0.2,
-                      )),
+                  Text(
+                    m.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(m.code,
-                      style: TextStyle(
-                        color: isSelected
-                            ? c.primary.withOpacity(0.8)
-                            : c.textSecondary,
-                        fontSize: 11.5, fontWeight: FontWeight.w500,
-                      )),
+                  Text(
+                    m.code,
+                    style: TextStyle(
+                      color: isSelected
+                          ? c.primary.withOpacity(0.8)
+                          : c.textSecondary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -524,27 +576,41 @@ class _AccountForm extends StatelessWidget {
     return Column(
       children: [
         _FocusField(
-          controller: accountNameCtrl, label: 'Account Name',
-          hint: 'e.g. Juan Dela Cruz', icon: Icons.person_outline_rounded,
-          required: true, action: TextInputAction.next, c: c,
+          controller: accountNameCtrl,
+          label: 'Account Name',
+          hint: 'e.g. Juan Dela Cruz',
+          icon: Icons.person_outline_rounded,
+          required: true,
+          action: TextInputAction.next,
+          c: c,
         ),
         const SizedBox(height: 10),
         _FocusField(
-          controller: accountNoCtrl, label: 'Account Number',
-          hint: 'Optional', icon: Icons.tag_rounded,
-          action: TextInputAction.next, c: c,
+          controller: accountNoCtrl,
+          label: 'Account Number',
+          hint: 'Optional',
+          icon: Icons.tag_rounded,
+          action: TextInputAction.next,
+          c: c,
         ),
         const SizedBox(height: 10),
         _FocusField(
-          controller: labelCtrl, label: 'Label',
-          hint: 'e.g. My GCash', icon: Icons.label_outline_rounded,
-          action: TextInputAction.next, c: c,
+          controller: labelCtrl,
+          label: 'Label',
+          hint: 'e.g. My GCash',
+          icon: Icons.label_outline_rounded,
+          action: TextInputAction.next,
+          c: c,
         ),
         const SizedBox(height: 10),
         _FocusField(
-          controller: instructionsCtrl, label: 'Instructions',
-          hint: 'Optional payment notes', icon: Icons.notes_rounded,
-          action: TextInputAction.done, multiline: true, c: c,
+          controller: instructionsCtrl,
+          label: 'Instructions',
+          hint: 'Optional payment notes',
+          icon: Icons.notes_rounded,
+          action: TextInputAction.done,
+          multiline: true,
+          c: c,
         ),
         const SizedBox(height: 12),
 
@@ -562,15 +628,18 @@ class _AccountForm extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Set as active account',
-                        style: TextStyle(
-                          color: c.textPrimary, fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        )),
-                    Text('Only one account can be active at a time',
-                        style: TextStyle(
-                          color: c.textSecondary, fontSize: 12,
-                        )),
+                    Text(
+                      'Set as active account',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Only one account can be active at a time',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -616,7 +685,8 @@ class _AccountList extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _AccountTile(
-            account: a, isActive: isActive,
+            account: a,
+            isActive: isActive,
             settingActive: settingActive,
             onSetActive: () => onSetActive(a),
             c: c,
@@ -655,14 +725,17 @@ class _AccountTile extends StatelessWidget {
         color: isActive ? c.primary.withOpacity(0.04) : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isActive ? c.primary.withOpacity(0.25) : c.border.withOpacity(0.22),
+          color: isActive
+              ? c.primary.withOpacity(0.25)
+              : c.border.withOpacity(0.22),
           width: isActive ? 1.5 : 1.2,
         ),
       ),
       child: Row(
         children: [
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: isActive
                   ? c.primary.withOpacity(0.1)
@@ -682,18 +755,24 @@ class _AccountTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(account.accountName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textPrimary, fontWeight: FontWeight.w600,
-                      fontSize: 14, letterSpacing: -0.2,
-                    )),
+                Text(
+                  account.accountName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    letterSpacing: -0.2,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(parts.join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                Text(
+                  parts.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: c.textSecondary, fontSize: 12),
+                ),
               ],
             ),
           ),
@@ -705,10 +784,14 @@ class _AccountTile extends StatelessWidget {
                 color: c.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text('Active',
-                  style: TextStyle(
-                    color: c.primary, fontSize: 11, fontWeight: FontWeight.w700,
-                  )),
+              child: Text(
+                'Active',
+                style: TextStyle(
+                  color: c.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             )
           else
             GestureDetector(
@@ -720,13 +803,16 @@ class _AccountTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: c.border.withOpacity(0.2)),
                 ),
-                child: Text(settingActive ? '…' : 'Set Active',
-                    style: TextStyle(
-                      color: settingActive
-                          ? c.textSecondary.withOpacity(0.3)
-                          : c.textSecondary,
-                      fontSize: 11, fontWeight: FontWeight.w600,
-                    )),
+                child: Text(
+                  settingActive ? '…' : 'Set Active',
+                  style: TextStyle(
+                    color: settingActive
+                        ? c.textSecondary.withOpacity(0.3)
+                        : c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
         ],
@@ -768,7 +854,7 @@ class _FocusFieldState extends State<_FocusField> {
 
   @override
   Widget build(BuildContext context) {
-    final c      = widget.c;
+    final c = widget.c;
     final active = _focused;
 
     final activeBorder = OutlineInputBorder(
@@ -788,34 +874,46 @@ class _FocusFieldState extends State<_FocusField> {
         minLines: widget.multiline ? 2 : 1,
         maxLines: widget.multiline ? 4 : 1,
         style: TextStyle(
-          color: c.textPrimary, fontSize: 14.5, fontWeight: FontWeight.w500,
+          color: c.textPrimary,
+          fontSize: 14.5,
+          fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
           labelText: widget.required ? '${widget.label} *' : widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.4), fontSize: 13.5,
+            color: c.textSecondary.withOpacity(0.4),
+            fontSize: 13.5,
           ),
           labelStyle: TextStyle(
             color: active ? c.primary : c.textSecondary,
-            fontSize: 13.5, fontWeight: FontWeight.w500,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
           ),
           floatingLabelStyle: TextStyle(
             color: active ? c.primary : c.textSecondary,
-            fontSize: 12, fontWeight: FontWeight.w600,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 12, right: 8),
-            child: Icon(widget.icon, size: 17,
-                color: active ? c.primary : c.textSecondary.withOpacity(0.5)),
+            child: Icon(
+              widget.icon,
+              size: 17,
+              color: active ? c.primary : c.textSecondary.withOpacity(0.5),
+            ),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
           filled: true,
           fillColor: active
               ? c.primary.withOpacity(0.03)
               : c.border.withOpacity(0.05),
           contentPadding: EdgeInsets.symmetric(
-            horizontal: 14, vertical: widget.multiline ? 14 : 0,
+            horizontal: 14,
+            vertical: widget.multiline ? 14 : 0,
           ),
           border: idleBorder,
           enabledBorder: idleBorder,
@@ -858,14 +956,14 @@ class _CreateButton extends StatelessWidget {
         boxShadow: saving
             ? null
             : [
-          BoxShadow(
-            color: c.primary.withOpacity(0.28),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+                BoxShadow(
+                  color: c.primary.withOpacity(0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
       ),
-      child: ElevatedButton(
+      child: AppElevatedButton(
         onPressed: saving ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
@@ -875,43 +973,51 @@ class _CreateButton extends StatelessWidget {
           elevation: 0,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
           child: saving
               ? Row(
-            key: const ValueKey('saving'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 16, height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white70),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text('Creating…',
-                  style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
-                  )),
-            ],
-          )
+                  key: const ValueKey('saving'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white70),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Creating…',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                )
               : Row(
-            key: const ValueKey('idle'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.add_rounded, size: 18),
-              SizedBox(width: 8),
-              Text('Create Payment Account',
-                  style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
-                  )),
-            ],
-          ),
+                  key: const ValueKey('idle'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.add_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Create Payment Account',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -920,4 +1026,4 @@ class _CreateButton extends StatelessWidget {
 
 extension<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
-} 
+}

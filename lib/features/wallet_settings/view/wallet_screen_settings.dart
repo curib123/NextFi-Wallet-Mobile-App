@@ -1,5 +1,6 @@
 // lib/features/wallet_settings/view/wallet_screen_settings_refined.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
@@ -66,7 +67,8 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       if (mounted) context.read<WalletSettingsVM>().forceHide();
     }
   }
@@ -102,7 +104,10 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     HapticFeedback.mediumImpact();
   }
 
-  Future<void> _copySeedPhrase(BuildContext context, WalletSettingsVM vm) async {
+  Future<void> _copySeedPhrase(
+    BuildContext context,
+    WalletSettingsVM vm,
+  ) async {
     if (!vm.state.hasSeed) return;
 
     final ok = await _requireAuth(context, vm);
@@ -129,13 +134,16 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
   }
 
   Future<void> _goToImport(BuildContext context, WalletSettingsVM vm) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ImportWalletScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ImportWalletScreen()));
     await vm.refresh();
   }
 
-  Future<void> _openRenameSheet(BuildContext context, WalletSettingsVM vm) async {
+  Future<void> _openRenameSheet(
+    BuildContext context,
+    WalletSettingsVM vm,
+  ) async {
     final colors = AppColor.of(context);
     final ctrl = TextEditingController(text: vm.state.walletName);
 
@@ -144,10 +152,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _RenameBottomSheet(
-        controller: ctrl,
-        colors: colors,
-      ),
+      builder: (ctx) => _RenameBottomSheet(controller: ctrl, colors: colors),
     );
 
     if (newName == null) return;
@@ -239,64 +244,72 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
           body: s.loading
               ? _buildLoading()
               : Column(
-            children: [
-              Expanded(
-                child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: MediaQuery.of(context).padding.top + 60,
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(_pad, 12, _pad, 12),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          FadeInDown(
-                            duration: const Duration(milliseconds: 300),
-                            child: HeaderCard(
-                              walletName: s.walletName,
-                              obscured: s.obscured,
-                              onImport: () => _goToImport(context, vm),
-                              onSwitch: () => _handleSwitch(context, vm),
-                              onRename: () => _openRenameSheet(context, vm),
+                  children: [
+                    Expanded(
+                      child: CustomScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: SizedBox(
+                              height: MediaQuery.of(context).padding.top + 60,
                             ),
                           ),
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(
+                              _pad,
+                              12,
+                              _pad,
+                              12,
+                            ),
+                            sliver: SliverList(
+                              delegate: SliverChildListDelegate([
+                                FadeInDown(
+                                  duration: const Duration(milliseconds: 300),
+                                  child: HeaderCard(
+                                    walletName: s.walletName,
+                                    obscured: s.obscured,
+                                    onImport: () => _goToImport(context, vm),
+                                    onSwitch: () => _handleSwitch(context, vm),
+                                    onRename: () =>
+                                        _openRenameSheet(context, vm),
+                                  ),
+                                ),
 
-                          const SizedBox(height: 24),
-                          FadeInUp(
-                            duration: const Duration(milliseconds: 400),
-                            child: MetaHeaderSettings(wordCount: s.wordCount),
-                          ),
-                          const SizedBox(height: 12),
-                          FadeInUp(
-                            duration: const Duration(milliseconds: 450),
-                            child: PhraseCardHoldReveal(
-                              words: s.words,
-                              obscured: s.obscured,
-                              onRevealHold: () => _toggleObscure(context, vm),
+                                const SizedBox(height: 24),
+                                FadeInUp(
+                                  duration: const Duration(milliseconds: 400),
+                                  child: MetaHeaderSettings(
+                                    wordCount: s.wordCount,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                FadeInUp(
+                                  duration: const Duration(milliseconds: 450),
+                                  child: PhraseCardHoldReveal(
+                                    words: s.words,
+                                    obscured: s.obscured,
+                                    onRevealHold: () =>
+                                        _toggleObscure(context, vm),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _buildTipSection(colors),
+                                if (s.error != null && s.error!.isNotEmpty) ...[
+                                  const SizedBox(height: 16),
+                                  _buildErrorMessage(s.error!, colors),
+                                ],
+                                const SizedBox(height: 16),
+                              ]),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          _buildTipSection(colors),
-                          if (s.error != null && s.error!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            _buildErrorMessage(s.error!, colors),
-                          ],
-                          const SizedBox(height: 16),
-
-                        ]),
-
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
           floatingActionButton: _buildFloatingActions(context, vm, s, colors),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerFloat,
         );
       },
     );
@@ -387,18 +400,11 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colors.primary.withOpacity(0.12),
-          width: 1.5,
-        ),
+        border: Border.all(color: colors.primary.withOpacity(0.12), width: 1.5),
       ),
       child: Row(
         children: [
-          Icon(
-            LucideIcons.lightbulb,
-            size: 20,
-            color: colors.primary,
-          ),
+          Icon(LucideIcons.lightbulb, size: 20, color: colors.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -423,18 +429,11 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       decoration: BoxDecoration(
         color: colors.error.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colors.error.withOpacity(0.3),
-          width: 1.5,
-        ),
+        border: Border.all(color: colors.error.withOpacity(0.3), width: 1.5),
       ),
       child: Row(
         children: [
-          Icon(
-            LucideIcons.alertCircle,
-            color: colors.error,
-            size: 18,
-          ),
+          Icon(LucideIcons.alertCircle, color: colors.error, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -452,16 +451,13 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
   }
 
   Widget _buildFloatingActions(
-      BuildContext context,
-      WalletSettingsVM vm,
-      state,
-      AppColor colors,
-      ) {
+    BuildContext context,
+    WalletSettingsVM vm,
+    state,
+    AppColor colors,
+  ) {
     return ScaleTransition(
-      scale: CurvedAnimation(
-        parent: _fabController,
-        curve: Curves.easeOut,
-      ),
+      scale: CurvedAnimation(parent: _fabController, curve: Curves.easeOut),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: _pad),
         padding: const EdgeInsets.all(6),
@@ -469,10 +465,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              colors.surface,
-              colors.surface.withOpacity(0.95),
-            ],
+            colors: [colors.surface, colors.surface.withOpacity(0.95)],
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
@@ -561,41 +554,41 @@ class _ModernActionButtonState extends State<_ModernActionButton> {
         decoration: BoxDecoration(
           gradient: widget.isPrimary
               ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: _isPressed
-                ? [
-              widget.colors.primary.withOpacity(0.9),
-              widget.colors.primary.withOpacity(0.8),
-            ]
-                : [
-              widget.colors.primary,
-              widget.colors.primary.withOpacity(0.9),
-            ],
-          )
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: _isPressed
+                      ? [
+                          widget.colors.primary.withOpacity(0.9),
+                          widget.colors.primary.withOpacity(0.8),
+                        ]
+                      : [
+                          widget.colors.primary,
+                          widget.colors.primary.withOpacity(0.9),
+                        ],
+                )
               : null,
           color: !widget.isPrimary
               ? (_isPressed
-              ? widget.colors.background.withOpacity(0.8)
-              : widget.colors.background.withOpacity(0.5))
+                    ? widget.colors.background.withOpacity(0.8)
+                    : widget.colors.background.withOpacity(0.5))
               : null,
           borderRadius: BorderRadius.circular(14),
           border: !widget.isPrimary
               ? Border.all(
-            color: widget.colors.border.withOpacity(0.25),
-            width: 1.5,
-          )
+                  color: widget.colors.border.withOpacity(0.25),
+                  width: 1.5,
+                )
               : null,
           boxShadow: _isPressed
               ? []
               : [
-            if (widget.isPrimary)
-              BoxShadow(
-                color: widget.colors.primary.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-          ],
+                  if (widget.isPrimary)
+                    BoxShadow(
+                      color: widget.colors.primary.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -627,10 +620,7 @@ class _ModernActionButtonState extends State<_ModernActionButton> {
 }
 
 class _RenameBottomSheet extends StatelessWidget {
-  const _RenameBottomSheet({
-    required this.controller,
-    required this.colors,
-  });
+  const _RenameBottomSheet({required this.controller, required this.colors});
 
   final TextEditingController controller;
   final AppColor colors;
@@ -642,16 +632,10 @@ class _RenameBottomSheet extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            colors.surface,
-            colors.surface.withOpacity(0.98),
-          ],
+          colors: [colors.surface, colors.surface.withOpacity(0.98)],
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(
-          color: colors.border.withOpacity(0.15),
-          width: 1.5,
-        ),
+        border: Border.all(color: colors.border.withOpacity(0.15), width: 1.5),
       ),
       child: Padding(
         padding: EdgeInsets.only(
@@ -722,10 +706,7 @@ class _RenameBottomSheet extends StatelessWidget {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: colors.primary,
-                    width: 2,
-                  ),
+                  borderSide: BorderSide(color: colors.primary, width: 2),
                 ),
               ),
             ),
@@ -782,7 +763,7 @@ class _SheetButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
+    return AppElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: isPrimary
             ? colors.primary
@@ -794,10 +775,7 @@ class _SheetButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           side: isPrimary
               ? BorderSide.none
-              : BorderSide(
-            color: colors.border.withOpacity(0.25),
-            width: 1.5,
-          ),
+              : BorderSide(color: colors.border.withOpacity(0.25), width: 1.5),
         ),
       ),
       onPressed: onPressed,

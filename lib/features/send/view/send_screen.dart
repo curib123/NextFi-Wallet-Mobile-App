@@ -3,6 +3,7 @@ import 'dart:convert' show utf8;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -1701,7 +1702,7 @@ class _SendScreenState extends State<SendScreen> {
         top: false,
         child: SizedBox(
           height: 56,
-          child: ElevatedButton(
+          child: AppElevatedButton(
             onPressed: canSubmit
                 ? () async {
                     HapticFeedback.mediumImpact();
@@ -2018,7 +2019,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
+                      child: AppOutlinedButton(
                         onPressed: _sending
                             ? null
                             : () => Navigator.pop(context),
@@ -2046,7 +2047,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
-                      child: ElevatedButton(
+                      child: AppElevatedButton(
                         onPressed: _sending
                             ? null
                             : () => _confirm(vm, context),
@@ -2251,7 +2252,7 @@ class _ErrorState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 28),
-            ElevatedButton.icon(
+            AppElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(LucideIcons.refreshCw, size: 18),
               label: const Text('Retry'),

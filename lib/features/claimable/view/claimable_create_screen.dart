@@ -1,6 +1,7 @@
 // lib/features/claimable/view/claimable_create_screen.dart
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -25,10 +26,7 @@ import 'package:next_fi/features/send/view/widgets/recipient_loading_line.dart';
 class ClaimableCreateScreen extends StatefulWidget {
   final String initialAsset;
 
-  const ClaimableCreateScreen({
-    super.key,
-    this.initialAsset = 'XLM',
-  });
+  const ClaimableCreateScreen({super.key, this.initialAsset = 'XLM'});
 
   @override
   State<ClaimableCreateScreen> createState() => _ClaimableCreateScreenState();
@@ -70,8 +68,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     super.dispose();
   }
 
-  bool _looksLikeStellarPk(String x) =>
-      RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
+  bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
 
   void _onRecipientChanged() {
     final addr = _recipientCtl.text.trim();
@@ -135,7 +132,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   DateTime? get _combinedUnlockDateTime {
     if (_unlockDate == null) return null;
     final t = _unlockTime ?? const TimeOfDay(hour: 0, minute: 0);
-    return DateTime(_unlockDate!.year, _unlockDate!.month, _unlockDate!.day, t.hour, t.minute);
+    return DateTime(
+      _unlockDate!.year,
+      _unlockDate!.month,
+      _unlockDate!.day,
+      t.hour,
+      t.minute,
+    );
   }
 
   Future<void> _pickExpiryDate() async {
@@ -163,7 +166,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   DateTime? get _combinedExpiryDateTime {
     if (_expiryDate == null) return null;
     final t = _expiryTime ?? const TimeOfDay(hour: 23, minute: 59);
-    return DateTime(_expiryDate!.year, _expiryDate!.month, _expiryDate!.day, t.hour, t.minute);
+    return DateTime(
+      _expiryDate!.year,
+      _expiryDate!.month,
+      _expiryDate!.day,
+      t.hour,
+      t.minute,
+    );
   }
 
   String? _validate() {
@@ -181,13 +190,15 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     if (_mode == ClaimableMode.timeLocked) {
       final dt = _combinedUnlockDateTime;
       if (dt == null) return 'Pick an unlock date';
-      if (dt.isBefore(DateTime.now())) return 'Unlock time must be in the future';
+      if (dt.isBefore(DateTime.now()))
+        return 'Unlock time must be in the future';
     }
 
     if (_hasExpiry) {
       final dt = _combinedExpiryDateTime;
       if (dt == null) return 'Pick an expiry date';
-      if (dt.isBefore(DateTime.now())) return 'Expiry time must be in the future';
+      if (dt.isBefore(DateTime.now()))
+        return 'Expiry time must be in the future';
 
       if (_mode == ClaimableMode.timeLocked) {
         final unlock = _combinedUnlockDateTime;
@@ -267,11 +278,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ctl.update(
-        AppAlertType.error,
-        title: 'Error',
-        subtitle: e.toString(),
-      );
+      ctl.update(AppAlertType.error, title: 'Error', subtitle: e.toString());
     }
   }
 
@@ -376,10 +383,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       decoration: BoxDecoration(
         color: c.background,
         border: Border(
-          bottom: BorderSide(
-            color: c.border.withOpacity(0.06),
-            width: 1,
-          ),
+          bottom: BorderSide(color: c.border.withOpacity(0.06), width: 1),
         ),
       ),
       child: Row(
@@ -477,13 +481,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   }
 
   Widget _buildModeOption(
-      AppColor c, {
-        required IconData icon,
-        required String label,
-        required String subtitle,
-        required bool isSelected,
-        required VoidCallback onTap,
-      }) {
+    AppColor c, {
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -497,15 +501,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              c.primary.withOpacity(0.12),
-              c.primary.withOpacity(0.06),
-            ],
-          )
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    c.primary.withOpacity(0.12),
+                    c.primary.withOpacity(0.06),
+                  ],
+                )
               : null,
-          color: isSelected ? null : (isDark ? c.background : c.surface.withOpacity(0.3)),
+          color: isSelected
+              ? null
+              : (isDark ? c.background : c.surface.withOpacity(0.3)),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
@@ -527,7 +533,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               child: Icon(
                 icon,
                 size: 20,
-                color: isSelected ? c.primary : c.textSecondary.withOpacity(0.6),
+                color: isSelected
+                    ? c.primary
+                    : c.textSecondary.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 10),
@@ -622,9 +630,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Expanded(
                 child: TextField(
                   controller: _amountCtl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,7}$'),
+                    ),
                   ],
                   style: TextStyle(
                     fontSize: 40,
@@ -666,14 +678,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       _amountCtl.text = currentBal > 0
-                          ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
+                          ? currentBal
+                                .toStringAsFixed(7)
+                                .replaceFirst(RegExp(r'\.?0+$'), '')
                           : '';
                       _amountCtl.selection = TextSelection.fromPosition(
                         TextPosition(offset: _amountCtl.text.length),
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: c.primary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -745,9 +762,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 ),
               ),
               const Spacer(),
-              _buildQuickActionButton(c, icon: LucideIcons.qrCode, onTap: _scanQR),
+              _buildQuickActionButton(
+                c,
+                icon: LucideIcons.qrCode,
+                onTap: _scanQR,
+              ),
               const SizedBox(width: 8),
-              _buildQuickActionButton(c, icon: LucideIcons.users, onTap: _selectRecipient),
+              _buildQuickActionButton(
+                c,
+                icon: LucideIcons.users,
+                onTap: _selectRecipient,
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -756,15 +781,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           else if (hasValidAddr && _resolvedRecipient != null)
             _buildSavedRecipientChip(c, _resolvedRecipient!)
           else if (hasValidAddr && _resolvedRecipient == null)
-              _buildNewRecipientChip(c, addr)
-            else
-              _buildRecipientInputField(c, addr, isDark),
+            _buildNewRecipientChip(c, addr)
+          else
+            _buildRecipientInputField(c, addr, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionButton(AppColor c, {required IconData icon, required VoidCallback onTap}) {
+  Widget _buildQuickActionButton(
+    AppColor c, {
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -790,10 +819,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       decoration: BoxDecoration(
         color: c.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.primary.withOpacity(0.1),
-          width: 1,
-        ),
+        border: Border.all(color: c.primary.withOpacity(0.1), width: 1),
       ),
       child: Center(
         child: SizedBox(
@@ -833,7 +859,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             ),
             child: Center(
               child: Text(
-                recipient.name.isNotEmpty ? recipient.name[0].toUpperCase() : '?',
+                recipient.name.isNotEmpty
+                    ? recipient.name[0].toUpperCase()
+                    : '?',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
@@ -910,7 +938,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               color: c.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
+            child: Icon(
+              LucideIcons.userPlus,
+              size: 18,
+              color: c.primary.withOpacity(0.7),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -942,7 +974,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () async {
-              final saved = await showRecipientUpsertSheet(context, address: addr);
+              final saved = await showRecipientUpsertSheet(
+                context,
+                address: addr,
+              );
               if (saved == true && mounted) _lookupRecipient(addr);
             },
             child: Container(
@@ -999,24 +1034,35 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 16, right: 12),
-            child: Icon(LucideIcons.wallet, color: c.textSecondary.withOpacity(0.5), size: 18),
+            child: Icon(
+              LucideIcons.wallet,
+              color: c.textSecondary.withOpacity(0.5),
+              size: 18,
+            ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           suffixIcon: addr.isNotEmpty
               ? Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              onPressed: () {
-                _recipientCtl.clear();
-                setState(() => _resolvedRecipient = null);
-              },
-              icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
-              splashRadius: 20,
-            ),
-          )
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    onPressed: () {
+                      _recipientCtl.clear();
+                      setState(() => _resolvedRecipient = null);
+                    },
+                    icon: Icon(
+                      LucideIcons.x,
+                      size: 18,
+                      color: c.textSecondary.withOpacity(0.5),
+                    ),
+                    splashRadius: 20,
+                  ),
+                )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
         ),
         onChanged: (_) => setState(() {}),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
@@ -1078,9 +1124,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: true)),
+              Expanded(
+                child: _buildDateTimePicker(c, isDate: true, isUnlock: true),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: true)),
+              Expanded(
+                child: _buildDateTimePicker(c, isDate: false, isUnlock: true),
+              ),
             ],
           ),
           if (_combinedUnlockDateTime != null) ...[
@@ -1097,7 +1147,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(LucideIcons.checkCircle2, size: 16, color: c.primary.withOpacity(0.7)),
+                  Icon(
+                    LucideIcons.checkCircle2,
+                    size: 16,
+                    color: c.primary.withOpacity(0.7),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1193,9 +1247,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: false)),
+                Expanded(
+                  child: _buildDateTimePicker(c, isDate: true, isUnlock: false),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: false)),
+                Expanded(
+                  child: _buildDateTimePicker(
+                    c,
+                    isDate: false,
+                    isUnlock: false,
+                  ),
+                ),
               ],
             ),
             if (_combinedExpiryDateTime != null) ...[
@@ -1212,7 +1274,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(LucideIcons.alertTriangle, size: 16, color: c.warning.withOpacity(0.7)),
+                    Icon(
+                      LucideIcons.alertTriangle,
+                      size: 16,
+                      color: c.warning.withOpacity(0.7),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -1235,7 +1301,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildDateTimePicker(AppColor c, {required bool isDate, required bool isUnlock}) {
+  Widget _buildDateTimePicker(
+    AppColor c, {
+    required bool isDate,
+    required bool isUnlock,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final icon = isDate ? LucideIcons.calendar : LucideIcons.clock;
     final color = isUnlock ? c.primary : c.warning;
@@ -1244,7 +1314,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         : (isUnlock ? _unlockTime : _expiryTime);
     final text = isDate
         ? (value != null ? _dateFmt.format(value as DateTime) : 'Select date')
-        : (value != null ? (value as TimeOfDay).format(context) : 'Select time');
+        : (value != null
+              ? (value as TimeOfDay).format(context)
+              : 'Select time');
 
     final onTap = isDate
         ? (isUnlock ? _pickUnlockDate : _pickExpiryDate)
@@ -1272,14 +1344,18 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             Icon(
               icon,
               size: 16,
-              color: value != null ? color.withOpacity(0.8) : c.textSecondary.withOpacity(0.5),
+              color: value != null
+                  ? color.withOpacity(0.8)
+                  : c.textSecondary.withOpacity(0.5),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
-                  color: value != null ? c.textPrimary : c.textSecondary.withOpacity(0.5),
+                  color: value != null
+                      ? c.textPrimary
+                      : c.textSecondary.withOpacity(0.5),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,
@@ -1302,13 +1378,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
     String message;
     if (isTimeLocked && _hasExpiry) {
-      message = 'Funds locked until unlock time. Recipient can claim between unlock and expiry. You can reclaim after expiry if unclaimed.';
+      message =
+          'Funds locked until unlock time. Recipient can claim between unlock and expiry. You can reclaim after expiry if unclaimed.';
     } else if (isTimeLocked) {
-      message = 'Funds locked until unlock time. Recipient can claim anytime after that.';
+      message =
+          'Funds locked until unlock time. Recipient can claim anytime after that.';
     } else if (_hasExpiry) {
-      message = 'Recipient can claim immediately but must do so before expiry. You can reclaim if unclaimed.';
+      message =
+          'Recipient can claim immediately but must do so before expiry. You can reclaim if unclaimed.';
     } else {
-      message = 'Recipient can claim anytime. Balance held on Stellar network until claimed.';
+      message =
+          'Recipient can claim anytime. Balance held on Stellar network until claimed.';
     }
 
     return Container(
@@ -1395,7 +1475,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         top: false,
         child: SizedBox(
           height: 56,
-          child: ElevatedButton(
+          child: AppElevatedButton(
             onPressed: () {
               HapticFeedback.mediumImpact();
               _submit();

@@ -1,5 +1,6 @@
 // lib/features/claimable/view/widgets/sent_claimable_card.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -63,13 +64,15 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
   }
 
   bool get _hasSavedName => _recipient != null && _recipient!.name.isNotEmpty;
-  Color get _recipientColor => _recipient != null ? Color(_recipient!.color) : Colors.grey;
+  Color get _recipientColor =>
+      _recipient != null ? Color(_recipient!.color) : Colors.grey;
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final isLocked = widget.item.unlockTime != null && !widget.item.canClaimNow;
-    final isExpired = widget.item.expiryTime != null &&
+    final isExpired =
+        widget.item.expiryTime != null &&
         DateTime.now().isAfter(widget.item.expiryTime!);
 
     return Container(
@@ -100,10 +103,7 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
                 width: 1,
               ),
             ),
-            child: AssetLogo(
-              keyOrSymbol: widget.item.displayAsset,
-              size: 24,
-            ),
+            child: AssetLogo(keyOrSymbol: widget.item.displayAsset, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -129,7 +129,11 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Icon(LucideIcons.arrowUpRight, size: 12, color: c.textSecondary),
+                    Icon(
+                      LucideIcons.arrowUpRight,
+                      size: 12,
+                      color: c.textSecondary,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'To',
@@ -187,7 +191,8 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
                       ),
                   ],
                 ),
-                if (widget.item.unlockTime != null || widget.item.expiryTime != null)
+                if (widget.item.unlockTime != null ||
+                    widget.item.expiryTime != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: _compactTimeInfo(c, isLocked, isExpired),
@@ -226,10 +231,7 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -280,7 +282,9 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
     if (widget.item.expiryTime != null) {
       if (items.isNotEmpty) {
         items.add(const SizedBox(width: 8));
-        items.add(Text('•', style: TextStyle(color: c.textSecondary, fontSize: 11)));
+        items.add(
+          Text('•', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+        );
         items.add(const SizedBox(width: 8));
       }
 
@@ -316,17 +320,14 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
       return SizedBox(
         width: 28,
         height: 28,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: c.primary,
-        ),
+        child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
       );
     }
 
     if (isExpired) {
       return SizedBox(
         height: 36,
-        child: ElevatedButton(
+        child: AppElevatedButton(
           onPressed: widget.onClaim,
           style: ElevatedButton.styleFrom(
             backgroundColor: c.warning,
@@ -344,10 +345,7 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
               SizedBox(width: 6),
               Text(
                 'Reclaim',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
             ],
           ),

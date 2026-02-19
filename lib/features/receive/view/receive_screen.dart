@@ -1,5 +1,6 @@
 // lib/features/receive/view/receive_screen.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/modal/edit_federation_modal.dart';
@@ -186,7 +187,7 @@ class ReceiveScreen extends StatelessWidget {
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
+              child: AppOutlinedButton.icon(
                 onPressed: vm.checkingAliasAvailability
                     ? null
                     : () => vm.checkAliasAvailability(),
@@ -243,7 +244,7 @@ class ReceiveScreen extends StatelessWidget {
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: AppElevatedButton.icon(
                 onPressed: canGenerate
                     ? () async {
                         final ok = await vm.generateFederationAddress();
