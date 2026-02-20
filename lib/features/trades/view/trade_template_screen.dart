@@ -54,6 +54,7 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
   String? _error;
   List<OfferModel> _items = const [];
   Timer? _inboxRefreshTimer;
+  Timer? _retryTimer;
 
   bool get _isBuy => widget.mode == TradeTemplateMode.buy;
   String get _title => _isBuy ? 'Buy Crypto' : 'Sell Crypto';
@@ -74,8 +75,17 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
   void dispose() {
     _inboxRefreshTimer?.cancel();
     _inboxRefreshTimer = null;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _error != null) _loadOffers();
+    });
   }
 
   Future<void> _loadOffers() async {
@@ -120,6 +130,7 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
         _loading = false;
         _error = e.toString();
       });
+      _scheduleRetry();
     }
   }
 

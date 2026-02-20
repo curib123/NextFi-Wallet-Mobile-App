@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -54,6 +55,7 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
   String? _createIdempotencyKey;
   double? _walletXlmBalance;
   bool _fetchingBalance = false;
+  Timer? _retryTimer;
 
   bool _loading = true;
   bool _submitting = false;
@@ -70,10 +72,19 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     _buyerAddressCtrl.dispose();
     super.dispose();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _error != null) _bootstrap();
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -118,6 +129,7 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
         _loading = false;
         _error = e.toString();
       });
+      _scheduleRetry();
     }
   }
 

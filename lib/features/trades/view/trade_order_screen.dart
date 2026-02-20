@@ -57,6 +57,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Duration _remaining = Duration.zero;
   Timer? _refreshTimer;
   Timer? _tickTimer;
+  Timer? _retryTimer;
   TradeChatSocketService? _chatSocket;
   StreamSubscription<TradeChatSocketStatus>? _chatStatusSub;
   StreamSubscription<TradeMessageModel>? _chatMessageSub;
@@ -80,10 +81,18 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   void dispose() {
     _refreshTimer?.cancel();
     _tickTimer?.cancel();
+    _retryTimer?.cancel();
     _disposeChatSocket();
     _msgCtrl.dispose();
     _chatScroll.dispose();
     super.dispose();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _error != null) _loadTrade(showLoader: false);
+    });
   }
 
   Future<void> _bootstrap() async {

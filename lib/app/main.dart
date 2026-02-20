@@ -17,6 +17,8 @@ import 'package:provider/single_child_widget.dart';
 // ─────────────────────────── App core ─────────────────────────
 import 'package:next_fi/app/home.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart' hide ThemeBridge;
+import 'package:next_fi/common/services/network_monitor.dart';
+import 'package:next_fi/common/components/network_status_overlay.dart';
 
 // ─────────────────────────── Services ─────────────────────────
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
@@ -105,6 +107,9 @@ List<SingleChildWidget> _buildProviders() {
       'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
   return [
+    // 0) Network connectivity monitor
+    ChangeNotifierProvider(create: (_) => NetworkMonitor()),
+
     // 1) Boot an initial Stellar service
     Provider<StellarWalletServices>(
       create: (_) => StellarWalletServices(
@@ -358,6 +363,9 @@ class _MyAppState extends State<MyApp> {
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),
+          builder: (context, child) => NetworkStatusOverlay(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );

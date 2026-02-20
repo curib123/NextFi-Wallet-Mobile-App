@@ -262,7 +262,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                         maxLines: 3,
                         decoration: InputDecoration(
                           labelText: 'Note (optional)',
-                          hintText: 'Hi! I'd like to connect with you.',
+                          hintText: 'Hi! I d like to connect with you.',
                           filled: true,
                           fillColor: c.background,
                           border: OutlineInputBorder(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -33,6 +35,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
   bool _isMerchant = false;
   String? _error;
   String? _busyOfferId;
+  Timer? _retryTimer;
   List<OfferModel> _items = const [];
 
   @override
@@ -43,8 +46,17 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _error != null) _bootstrap();
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -74,6 +86,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
         _loading = false;
         _error = e.toString();
       });
+      _scheduleRetry();
     }
   }
 
@@ -111,6 +124,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
         _loading = false;
         _error = e.toString();
       });
+      _scheduleRetry();
     }
   }
 
