@@ -337,17 +337,6 @@ class _WalletSwitcher extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Wallet',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 10.2,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      Text(
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
