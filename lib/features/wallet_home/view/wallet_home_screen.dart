@@ -273,7 +273,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           loadingBalances: s.loadingBalances,
                           totalFiat: totalFiat,
                           lastBalancesAt: s.lastBalancesAt,
-                          onSwap: () => vm.onSwapPressed(),
+                          onSwap: _openHeaderScanner,
                           onSend: () => vm.onSendPressed(),
                           onReceive: () => vm.onReceivePressed(),
                           onBuy: () => vm.onBuyPressed(),
@@ -465,6 +465,56 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     if (mounted) {
       await _refreshUnreadChatCount();
+    }
+  }
+
+  Future<void> _openHeaderScanner() async {
+    final vm = context.read<WalletHomeVM>();
+    final state = vm.state;
+    final address = (state.address ?? '').trim();
+    if (address.isEmpty) {
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Wallet not ready',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+
+    final xlmBalance = state.xlm;
+    final usdcBalance = state.usdc;
+
+    try {
+      await showTokenSelector(
+        context,
+        address,
+        xlmBalance,
+        usdcBalance,
+        title: 'Select Coin',
+        screenBuilder: (addr, token, balance) => SendScreen(
+          address: addr,
+          token: token,
+          balance: balance,
+          autoOpenScanner: true,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          builder: (_) => SendScreen(
+            address: address,
+            token: 'XLM',
+            balance: xlmBalance,
+            autoOpenScanner: true,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        await vm.refresh(force: true);
+      }
     }
   }
 

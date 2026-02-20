@@ -10,16 +10,12 @@ import 'package:next_fi/reusable_model/asset_model.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
-import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_guide_footer.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-
 
 class AssetWidget extends StatelessWidget {
   const AssetWidget({
@@ -48,10 +44,10 @@ class AssetWidget extends StatelessWidget {
   final void Function(String token)? onItemTap;
 
   double _liveBalance(
-      BuildContext ctx,
-      String symbolUpper, {
-        bool reactive = false,
-      }) {
+    BuildContext ctx,
+    String symbolUpper, {
+    bool reactive = false,
+  }) {
     WalletHomeVM? vm;
     try {
       vm = Provider.of<WalletHomeVM?>(ctx, listen: reactive);
@@ -123,11 +119,11 @@ class AssetWidget extends StatelessWidget {
   }
 
   String formatTokenAmount(
-      double v, {
-        int bigMaxDecimals = 4,
-        int smallMaxDecimals = 7,
-        double tinyCutoff = 1e-7,
-      }) {
+    double v, {
+    int bigMaxDecimals = 4,
+    int smallMaxDecimals = 7,
+    double tinyCutoff = 1e-7,
+  }) {
     if (v == 0 || v.isNaN) return '0';
     if (v.abs() < tinyCutoff) return '< 0.0000001';
 
@@ -187,61 +183,6 @@ class AssetWidget extends StatelessWidget {
     );
   }
 
-  Future<void> _openSendSelector(BuildContext context, AssetModel a) async {
-    final addr = address.trim();
-    if (addr.isEmpty) {
-      showFloatingSnackBar(
-        context,
-        message: 'Wallet not ready',
-        type: SnackBarType.warning,
-      );
-      return;
-    }
-
-    WalletHomeVM? homeVm;
-    try {
-      homeVm = context.read<WalletHomeVM?>();
-    } catch (_) {
-      homeVm = null;
-    }
-
-    final sym = a.symbol.toUpperCase();
-    final defaultToken = (sym == 'USDC') ? 'USDC' : 'XLM';
-    final xlmBal = _liveBalance(context, 'XLM');
-    final usdcBal = _liveBalance(context, 'USDC');
-
-    try {
-      await showTokenSelector(
-        context,
-        addr,
-        xlmBal,
-        usdcBal,
-        title: 'Select Coin',
-        screenBuilder: (address, token, balance) => SendScreen(
-          address: address,
-          token: token,
-          balance: balance,
-          autoOpenScanner: true,
-        ),
-      );
-    } catch (e) {
-      await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => SendScreen(
-            address: addr,
-            token: defaultToken,
-            balance: defaultToken == 'USDC' ? usdcBal : xlmBal,
-            autoOpenScanner: true,
-          ),
-        ),
-      );
-    } finally {
-      try {
-        await homeVm?.refresh(force: true);
-      } catch (_) {}
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final cur = context.watch<CurrencyVM>();
@@ -288,10 +229,7 @@ class AssetWidget extends StatelessWidget {
                   const SizedBox(width: 12),
                   // Reserve Balance Card - Right side
                   Expanded(
-                    child: _ReserveBalanceCard(
-                      colors: colors,
-                      money: money,
-                    ),
+                    child: _ReserveBalanceCard(colors: colors, money: money),
                   ),
                 ],
               ),
@@ -299,7 +237,11 @@ class AssetWidget extends StatelessWidget {
           );
         } else if (index <= assets.length) {
           final a = assets[index - 1];
-          final balance = _liveBalance(context, a.symbol.toUpperCase(), reactive: true);
+          final balance = _liveBalance(
+            context,
+            a.symbol.toUpperCase(),
+            reactive: true,
+          );
           final pct = _pctFor(a, window);
           final coinPrice = _coinPriceFor(cur, a.symbol.toUpperCase());
 
@@ -314,13 +256,10 @@ class AssetWidget extends StatelessWidget {
               pct: pct,
               coinPriceNow: coinPrice,
               fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), balance),
-              priceDelta: _priceDeltaPerCoin(
-                coinPriceNow: coinPrice,
-                pct: pct,
-              ),
+              priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
               money: money,
               onTap: () => _openReceive(context, a),
-              formatTokenAmount: formatTokenAmount,
+              formatTokenAmount: formatTokenAmount, 
               formatSignedMoney: _formatSignedMoney,
             ),
           );
@@ -337,43 +276,15 @@ class AssetWidget extends StatelessWidget {
       },
     );
 
-    final Widget scrollable = onRefresh != null
+    return onRefresh != null
         ? RefreshIndicator(
-      onRefresh: onRefresh!,
-      color: colors.primary,
-      strokeWidth: 2.5,
-      displacement: 50,
-      child: listView,
-    )
+            onRefresh: onRefresh!,
+            color: colors.primary,
+            strokeWidth: 2.5,
+            displacement: 50,
+            child: listView,
+          )
         : listView;
-
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-
-    return Stack(
-      children: [
-        Positioned.fill(child: scrollable),
-        Positioned(
-          right: 20,
-          bottom: 20 + bottomInset,
-          child: _ModernFAB(
-            colors: colors,
-            onPressed: () async {
-              if (assets.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('No assets available')),
-                );
-                return;
-              }
-              final a = assets.firstWhere(
-                    (x) => x.symbol.toUpperCase() == 'XLM',
-                orElse: () => assets.first,
-              );
-              await _openSendSelector(context, a);
-            },
-          ),
-        )
-      ],
-    );
   }
 
   Widget _shimmerTile(BuildContext context) {
@@ -393,9 +304,7 @@ class AssetWidget extends StatelessWidget {
     );
 
     return Shimmer.fromColors(
-      baseColor: isDark
-          ? const Color(0xFF1A1A1A)
-          : const Color(0xFFE6E8EB),
+      baseColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFE6E8EB),
       highlightColor: isDark
           ? const Color(0xFF242424)
           : const Color(0xFFF2F3F5),
@@ -445,8 +354,6 @@ class AssetWidget extends StatelessWidget {
       ),
     );
   }
-
-
 }
 
 // Price Window Selector Widget - with visible horizontal wave shimmer
@@ -522,12 +429,12 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
             ),
             boxShadow: _isHovered
                 ? [
-              BoxShadow(
-                color: widget.colors.primary.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ]
+                    BoxShadow(
+                      color: widget.colors.primary.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
                 : null,
           ),
           child: Stack(
@@ -546,7 +453,9 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
                             end: Alignment.centerRight,
                             colors: [
                               Colors.transparent,
-                              widget.colors.primary.withOpacity(_isHovered ? 0.2 : 0.12),
+                              widget.colors.primary.withOpacity(
+                                _isHovered ? 0.2 : 0.12,
+                              ),
                               Colors.transparent,
                             ],
                             stops: [
@@ -563,7 +472,10 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
               ),
               // Content
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Icon(
@@ -600,10 +512,7 @@ class _ReserveBalanceCard extends StatefulWidget {
   final AppColor colors;
   final NumberFormat money;
 
-  const _ReserveBalanceCard({
-    required this.colors,
-    required this.money,
-  });
+  const _ReserveBalanceCard({required this.colors, required this.money});
 
   @override
   State<_ReserveBalanceCard> createState() => _ReserveBalanceCardState();
@@ -667,12 +576,12 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
             ),
             boxShadow: _isHovered
                 ? [
-              BoxShadow(
-                color: widget.colors.primary.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ]
+                    BoxShadow(
+                      color: widget.colors.primary.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
                 : null,
           ),
           child: Stack(
@@ -691,7 +600,9 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
                             end: Alignment.centerRight,
                             colors: [
                               Colors.transparent,
-                              widget.colors.textSecondary.withOpacity(_isHovered ? 0.15 : 0.08),
+                              widget.colors.textSecondary.withOpacity(
+                                _isHovered ? 0.15 : 0.08,
+                              ),
                               Colors.transparent,
                             ],
                             stops: [
@@ -708,7 +619,10 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
               ),
               // Content
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Icon(
@@ -733,94 +647,6 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Modern FAB with cleaner design
-class _ModernFAB extends StatefulWidget {
-  final AppColor colors;
-  final VoidCallback onPressed;
-
-  const _ModernFAB({
-    required this.colors,
-    required this.onPressed,
-  });
-
-  @override
-  State<_ModernFAB> createState() => _ModernFABState();
-}
-
-class _ModernFABState extends State<_ModernFAB> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onPressed();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                widget.colors.primary,
-                widget.colors.primary.withOpacity(0.85),
-              ],
-            ),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: widget.colors.primary.withOpacity(isDark ? 0.35 : 0.25),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-                spreadRadius: 0,
-              ),
-              BoxShadow(
-                color: widget.colors.primary.withOpacity(0.12),
-                blurRadius: 32,
-                offset: const Offset(0, 12),
-                spreadRadius: 4,
-              ),
-            ],
-          ),
-          child: const Icon(
-            LucideIcons.scanLine,
-            color: Colors.white,
-            size: 26,
           ),
         ),
       ),

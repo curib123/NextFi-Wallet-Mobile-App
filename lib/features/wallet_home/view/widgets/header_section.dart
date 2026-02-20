@@ -294,9 +294,9 @@ class _HeaderSectionState extends State<HeaderSection> {
                     elevation: 1,
                   ),
                   onPressed: widget.onSwap,
-                  icon: const Icon(LucideIcons.shuffle, size: 20),
+                  icon: const Icon(LucideIcons.scanLine, size: 20),
                   label: const Text(
-                    'Swap',
+                    'Scanner',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.2,
