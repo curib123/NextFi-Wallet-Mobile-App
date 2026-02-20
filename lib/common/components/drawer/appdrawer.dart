@@ -10,6 +10,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
+import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
 import 'package:next_fi/features/merchant_offers/view/merchant_offers_screen.dart';
 import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
 import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
@@ -21,6 +22,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/services/chat/chat_core_service.dart';
+import 'package:next_fi/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
@@ -37,6 +40,7 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
   final _auth = AuthService();
+  final _chat = ChatCoreService.I;
   final _profile = ProfileCoreService.I;
   final _verification = VerificationCoreService.I;
 
@@ -47,6 +51,7 @@ class _AppDrawerState extends State<AppDrawer>
   bool _loading = true;
   bool _loggingOut = false;
   TrustStatus _trustStatus = TrustStatus.unknown;
+  int _unreadChatCount = 0;
   StreamSubscription<void>? _profileChangesSub;
 
   late final AnimationController _entryCtrl;
@@ -89,6 +94,7 @@ class _AppDrawerState extends State<AppDrawer>
       _fetchProfileData(),
       _fetchAppInfo(),
       _fetchVerificationStatus(),
+      _fetchUnreadChatCount(),
     ]);
   }
 
@@ -129,6 +135,25 @@ class _AppDrawerState extends State<AppDrawer>
       if (mounted) setState(() => _cachedProfile = p);
     } catch (_) {
       if (mounted) setState(() => _cachedProfile = null);
+    }
+  }
+
+  Future<void> _fetchUnreadChatCount() async {
+    try {
+      if (!await _auth.isAuthenticated) {
+        if (mounted) setState(() => _unreadChatCount = 0);
+        return;
+      }
+      final threads = await _chat.listThreads(
+        const ChatListQuery(page: 1, limit: 50),
+      );
+      final unread = threads.items.fold<int>(
+        0,
+        (sum, thread) => sum + thread.unreadCount,
+      );
+      if (mounted) setState(() => _unreadChatCount = unread);
+    } catch (_) {
+      if (mounted) setState(() => _unreadChatCount = 0);
     }
   }
 
@@ -228,6 +253,14 @@ class _AppDrawerState extends State<AppDrawer>
   void _handleBuyTradesTap() => _openTradeTemplate(TradeTemplateMode.buy);
   void _handleSellTradesTap() => _openTradeTemplate(TradeTemplateMode.sell);
 
+  void _handleMessengerTap() {
+    if (_cachedUser == null) {
+      _redirectToLogin();
+      return;
+    }
+    _push(const ChatHubScreen());
+  }
+
   void _push(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -289,6 +322,17 @@ class _AppDrawerState extends State<AppDrawer>
                       description: 'Open sell trades template',
                       colors: c,
                       onTap: _handleSellTradesTap,
+                      requiresAuth: user == null,
+                    ),
+                    _NavTile(
+                      icon: LucideIcons.messageSquare,
+                      label: 'Messenger',
+                      description: 'Friends, threads, and secure direct chat',
+                      colors: c,
+                      trailing: user != null && _unreadChatCount > 0
+                          ? _UnreadBadge(count: _unreadChatCount, colors: c)
+                          : null,
+                      onTap: _handleMessengerTap,
                       requiresAuth: user == null,
                     ),
                     _NavTile(
@@ -1078,6 +1122,33 @@ class _TrustStatusDot extends StatelessWidget {
                 ),
               ]
             : null,
+      ),
+    );
+  }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count, required this.colors});
+
+  final int count;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.primary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.primary,
+          fontSize: 10.6,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

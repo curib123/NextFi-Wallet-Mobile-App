@@ -9,6 +9,7 @@ import 'package:next_fi/features/merchant_request/view/merchant_request_screen.d
 import 'package:next_fi/features/trades/view/trade_order_screen.dart';
 import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
+import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/models/trades_models.dart';
@@ -22,6 +23,7 @@ class MerchantTradesScreen extends StatefulWidget {
 }
 
 class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
+  final _auth = AuthService();
   final _profile = ProfileCoreService.I;
   final _trades = TradesCoreService.I;
   final _searchCtrl = TextEditingController();
@@ -30,6 +32,7 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
   bool _loading = true;
   bool _isMerchant = false;
   String? _error;
+  String? _currentUserId;
   String? _statusFilter;
   List<TradeModel> _items = const [];
   Timer? _refreshTimer;
@@ -56,6 +59,11 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
       _error = null;
     });
     try {
+      try {
+        _currentUserId = (await _auth.currentUser).id;
+      } catch (_) {
+        _currentUserId = null;
+      }
       final me = await _profile.getMe();
       final isMerchant = me?.isMerchant == true;
       if (!mounted) return;
@@ -177,6 +185,49 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
       _items.where((e) => e.status == TradeStatus.paid).length;
   int get _disputedCount =>
       _items.where((e) => e.status == TradeStatus.disputed).length;
+  int get _pendingChatCount {
+    final me = _currentUserId?.trim() ?? '';
+    if (me.isEmpty) return 0;
+    var count = 0;
+    for (final trade in _items) {
+      if (trade.isFinalStatus || trade.messages.isEmpty) continue;
+      final last = trade.messages.last;
+      if (last.senderId.trim().isNotEmpty && last.senderId != me) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  String _counterpartyTitle(TradeModel trade) {
+    final party = trade.counterpartyFor(_currentUserId);
+    if (party != null) {
+      final display = party.displayName?.trim() ?? '';
+      if (display.isNotEmpty) return display;
+      final name = party.name.trim();
+      if (name.isNotEmpty) return name;
+      final username = party.username?.trim() ?? '';
+      if (username.isNotEmpty) return '@$username';
+      final email = party.email.trim();
+      if (email.isNotEmpty) return email;
+    }
+
+    final isSeller = trade.sellerId == (_currentUserId?.trim() ?? '');
+    final fallbackId = isSeller ? trade.buyerId : trade.sellerId;
+    if (fallbackId.isNotEmpty) return fallbackId;
+    return 'Counterparty';
+  }
+
+  String _counterpartySubtitle(TradeModel trade) {
+    final party = trade.counterpartyFor(_currentUserId);
+    if (party == null) return '';
+    final username = party.username?.trim() ?? '';
+    final email = party.email.trim();
+    if (username.isNotEmpty && email.isNotEmpty) return '@$username | $email';
+    if (username.isNotEmpty) return '@$username';
+    if (email.isNotEmpty) return email;
+    return '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +293,7 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
                     openCount: _openCount,
                     paidCount: _paidCount,
                     disputedCount: _disputedCount,
+                    pendingChatCount: _pendingChatCount,
                   ),
                   const SizedBox(height: 18),
                   _SectionLabel(c: c, label: 'FILTERS'),
@@ -276,6 +328,13 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
                             trade.statusRaw,
                           ),
                           statusColor: _statusColor(c, trade.status),
+                          counterpartyTitle: _counterpartyTitle(trade),
+                          counterpartySubtitle: _counterpartySubtitle(trade),
+                          hasUnread:
+                              !trade.isFinalStatus &&
+                              trade.messages.isNotEmpty &&
+                              trade.messages.last.senderId !=
+                                  (_currentUserId ?? ''),
                           onOpen: () => _openTrade(trade),
                         ),
                       ),
@@ -364,12 +423,14 @@ class _HeroCard extends StatelessWidget {
     required this.openCount,
     required this.paidCount,
     required this.disputedCount,
+    required this.pendingChatCount,
   });
 
   final AppColor c;
   final int openCount;
   final int paidCount;
   final int disputedCount;
+  final int pendingChatCount;
 
   @override
   Widget build(BuildContext context) {
@@ -441,6 +502,14 @@ class _HeroCard extends StatelessWidget {
                   c: c,
                   label: 'Disputed',
                   value: '$disputedCount',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MetricPill(
+                  c: c,
+                  label: 'Chat',
+                  value: '$pendingChatCount',
                 ),
               ),
             ],
@@ -660,6 +729,9 @@ class _TradeCard extends StatelessWidget {
     required this.priceLabel,
     required this.statusLabel,
     required this.statusColor,
+    required this.counterpartyTitle,
+    required this.counterpartySubtitle,
+    required this.hasUnread,
     required this.onOpen,
   });
 
@@ -668,6 +740,9 @@ class _TradeCard extends StatelessWidget {
   final String priceLabel;
   final String statusLabel;
   final Color statusColor;
+  final String counterpartyTitle;
+  final String counterpartySubtitle;
+  final bool hasUnread;
   final VoidCallback onOpen;
 
   @override
@@ -707,6 +782,27 @@ class _TradeCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (hasUnread)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.error.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: c.error.withOpacity(0.25)),
+                  ),
+                  child: Text(
+                    'New',
+                    style: TextStyle(
+                      color: c.error,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               Text(
                 '#$shortTrade',
                 style: TextStyle(
@@ -726,6 +822,26 @@ class _TradeCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(height: 2),
+          Text(
+            counterpartyTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 13.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (counterpartySubtitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 1),
+            Text(
+              counterpartySubtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: c.textSecondary, fontSize: 11.7),
+            ),
+          ],
           const SizedBox(height: 2),
           Text(
             '${trade.amount.toStringAsFixed(2)} ${trade.fiatCurrency}',
@@ -752,7 +868,7 @@ class _TradeCard extends StatelessWidget {
                 border: Border.all(color: c.border.withOpacity(0.22)),
               ),
               child: Text(
-                latestMessage.message,
+                '${hasUnread ? '$counterpartyTitle: ' : ''}${latestMessage.message}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -6,10 +8,13 @@ import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/features/merchant_offers/view/merchant_offers_screen.dart';
 import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
 import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
+import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
+import 'package:next_fi/services/trades/models/trades_dtos.dart';
+import 'package:next_fi/services/trades/trades_core_service.dart';
 
 import 'trade_offer_detail_screen.dart';
 
@@ -25,8 +30,10 @@ class TradeTemplateScreen extends StatefulWidget {
 }
 
 class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
+  final _auth = AuthService();
   final _offers = OffersCoreService.I;
   final _profile = ProfileCoreService.I;
+  final _trades = TradesCoreService.I;
   final _searchCtrl = TextEditingController();
   final _fiatCtrl = TextEditingController(text: 'PHP');
 
@@ -40,8 +47,11 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
   bool _loading = true;
   bool _merchantLoading = true;
   bool _isMerchant = false;
+  int _tradeInboxPending = 0;
+  String? _currentUserId;
   String? _error;
   List<OfferModel> _items = const [];
+  Timer? _inboxRefreshTimer;
 
   bool get _isBuy => widget.mode == TradeTemplateMode.buy;
   String get _title => _isBuy ? 'Buy Trades' : 'Sell Trades';
@@ -59,6 +69,8 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
 
   @override
   void dispose() {
+    _inboxRefreshTimer?.cancel();
+    _inboxRefreshTimer = null;
     _searchCtrl.dispose();
     _fiatCtrl.dispose();
     super.dispose();
@@ -111,17 +123,62 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
 
   Future<void> _loadMerchantStatus() async {
     try {
+      try {
+        _currentUserId = (await _auth.currentUser).id;
+      } catch (_) {
+        _currentUserId = null;
+      }
       final me = await _profile.getMe();
       if (!mounted) return;
       setState(() {
         _isMerchant = me?.isMerchant == true;
         _merchantLoading = false;
       });
+      if (_isMerchant) {
+        await _refreshTradeInboxPendingCount();
+        _inboxRefreshTimer?.cancel();
+        _inboxRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+          _refreshTradeInboxPendingCount();
+        });
+      } else {
+        if (_tradeInboxPending != 0 && mounted) {
+          setState(() => _tradeInboxPending = 0);
+        }
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _merchantLoading = false;
+        _tradeInboxPending = 0;
       });
+    }
+  }
+
+  Future<void> _refreshTradeInboxPendingCount() async {
+    if (!_isMerchant) return;
+    try {
+      final me = _currentUserId?.trim() ?? '';
+      final trades = await _trades.listSellerTrades(
+        const TradesQuery(page: 1, limit: 100),
+      );
+      var pending = 0;
+      for (final trade in trades) {
+        if (trade.isFinalStatus || trade.messages.isEmpty) continue;
+        final last = trade.messages.last;
+        if (me.isEmpty ||
+            (last.senderId.trim().isNotEmpty && last.senderId != me)) {
+          pending++;
+        }
+      }
+      if (!mounted) return;
+      if (pending != _tradeInboxPending) {
+        setState(() => _tradeInboxPending = pending);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (_tradeInboxPending != 0) {
+        setState(() => _tradeInboxPending = 0);
+      }
     }
   }
 
@@ -153,10 +210,12 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
     ).push(MaterialPageRoute(builder: (_) => const MerchantOffersScreen()));
   }
 
-  void _openMerchantTrades() {
-    Navigator.of(
+  Future<void> _openMerchantTrades() async {
+    await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const MerchantTradesScreen()));
+    if (!mounted) return;
+    await _refreshTradeInboxPendingCount();
   }
 
   void _openMerchantRequest() {
@@ -282,7 +341,41 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
                                   Icons.chat_bubble_outline_rounded,
                                   size: 16,
                                 ),
-                                label: const Text('Trade Inbox'),
+                                label: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('Trade Inbox'),
+                                    if (_tradeInboxPending > 0) ...[
+                                      const SizedBox(width: 7),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: c.error.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(
+                                            99,
+                                          ),
+                                          border: Border.all(
+                                            color: c.error.withOpacity(0.24),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _tradeInboxPending > 99
+                                              ? '99+'
+                                              : _tradeInboxPending.toString(),
+                                          style: TextStyle(
+                                            color: c.error,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: c.textPrimary,
                                   side: BorderSide(

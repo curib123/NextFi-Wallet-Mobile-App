@@ -28,6 +28,7 @@ class WalletService {
     'limit',
     'total',
     'totalPages',
+    'total_pages',
     'success',
     'ok',
     'status',
@@ -38,7 +39,6 @@ class WalletService {
 
   Future<Map<String, String>> _headers() async {
     final token = await tokenProvider();
-
     if (token == null || token.isEmpty) {
       throw ApiException(401, 'Missing JWT token');
     }
@@ -47,6 +47,14 @@ class WalletService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
+  }
+
+  Map<String, dynamic>? _asStringKeyMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return null;
   }
 
   bool _isEnvelopeMap(Map<String, dynamic> map) =>
@@ -69,21 +77,20 @@ class WalletService {
       return null;
     }
 
-    if (data is Map<String, dynamic>) {
-      if (data.isEmpty) return null;
+    final map = _asStringKeyMap(data);
+    if (map == null || map.isEmpty) return null;
 
-      for (final key in keys) {
-        if (!data.containsKey(key)) continue;
-        final extracted = _extractMap(data[key], keys: keys, depth: depth + 1);
-        if (extracted != null) return extracted;
-      }
+    for (final key in keys) {
+      if (!map.containsKey(key)) continue;
+      final extracted = _extractMap(map[key], keys: keys, depth: depth + 1);
+      if (extracted != null) return extracted;
+    }
 
-      if (!_isEnvelopeMap(data)) return data;
+    if (!_isEnvelopeMap(map)) return map;
 
-      for (final value in data.values) {
-        final extracted = _extractMap(value, keys: keys, depth: depth + 1);
-        if (extracted != null) return extracted;
-      }
+    for (final value in map.values) {
+      final extracted = _extractMap(value, keys: keys, depth: depth + 1);
+      if (extracted != null) return extracted;
     }
 
     return null;
@@ -97,8 +104,12 @@ class WalletService {
     if (depth > 8 || data == null) return const [];
 
     if (data is List) {
-      final items = data.whereType<Map<String, dynamic>>().toList();
+      final items = data
+          .map(_asStringKeyMap)
+          .whereType<Map<String, dynamic>>()
+          .toList();
       if (items.isNotEmpty) return items;
+
       for (final item in data) {
         final nested = _extractListMaps(item, keys: keys, depth: depth + 1);
         if (nested.isNotEmpty) return nested;
@@ -106,29 +117,57 @@ class WalletService {
       return const [];
     }
 
-    if (data is Map<String, dynamic>) {
-      for (final key in keys) {
-        if (!data.containsKey(key)) continue;
-        final nested = _extractListMaps(
-          data[key],
-          keys: keys,
-          depth: depth + 1,
-        );
-        if (nested.isNotEmpty) return nested;
-      }
-      for (final value in data.values) {
-        final nested = _extractListMaps(value, keys: keys, depth: depth + 1);
-        if (nested.isNotEmpty) return nested;
-      }
+    final map = _asStringKeyMap(data);
+    if (map == null) return const [];
+
+    for (final key in keys) {
+      if (!map.containsKey(key)) continue;
+      final nested = _extractListMaps(map[key], keys: keys, depth: depth + 1);
+      if (nested.isNotEmpty) return nested;
+    }
+
+    for (final value in map.values) {
+      final nested = _extractListMaps(value, keys: keys, depth: depth + 1);
+      if (nested.isNotEmpty) return nested;
     }
 
     return const [];
   }
 
-  /// ── GET /wallets ─────────────────────────────
-  Future<List<WalletAddress>> list() async {
+  WalletPaginationMeta _extractMeta(
+    dynamic data, {
+    required int fallbackCount,
+  }) {
+    final map = _asStringKeyMap(data);
+    if (map != null) {
+      final meta = _asStringKeyMap(map['meta']);
+      if (meta != null) return WalletPaginationMeta.fromJson(meta);
+
+      final pagination = _asStringKeyMap(map['pagination']);
+      if (pagination != null) return WalletPaginationMeta.fromJson(pagination);
+
+      if (map.containsKey('page') ||
+          map.containsKey('limit') ||
+          map.containsKey('total') ||
+          map.containsKey('totalPages') ||
+          map.containsKey('total_pages')) {
+        return WalletPaginationMeta.fromJson(map);
+      }
+    }
+
+    return WalletPaginationMeta(
+      total: fallbackCount,
+      page: 1,
+      limit: fallbackCount == 0 ? 20 : fallbackCount,
+      totalPages: 1,
+    );
+  }
+
+  Future<WalletPagedResponse> listPaged({
+    WalletListQuery query = const WalletListQuery(),
+  }) async {
     final res = await _client.get(
-      WalletHttp.uri(WalletEndpoints.list()),
+      WalletHttp.uri(WalletEndpoints.list(), queryParams: query.toQueryMap()),
       headers: await _headers(),
     );
 
@@ -136,28 +175,23 @@ class WalletService {
 
     final data = WalletHttp.decodeJson<dynamic>(res);
 
-    if (data is List) {
-      return data
-          .whereType<Map<String, dynamic>>()
-          .map(WalletAddress.fromJson)
-          .toList();
-    }
     final items = _extractListMaps(
       data,
       keys: const ['items', 'data', 'wallets', 'list'],
     );
-    if (items.isNotEmpty) {
-      return items.map(WalletAddress.fromJson).toList();
-    }
+    final parsedItems = items.map(WalletAddress.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: parsedItems.length);
 
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for GET /wallets',
-      body: res.body,
-    );
+    return WalletPagedResponse(items: parsedItems, meta: meta);
   }
 
-  /// ── POST /wallets ────────────────────────────
+  Future<List<WalletAddress>> list({
+    WalletListQuery query = const WalletListQuery(),
+  }) async {
+    final page = await listPaged(query: query);
+    return page.items;
+  }
+
   Future<WalletAddress> create(CreateWalletRequest req) async {
     final res = await _client.post(
       WalletHttp.uri(WalletEndpoints.create()),
@@ -168,7 +202,6 @@ class WalletService {
     WalletHttp.ensureOk(res);
 
     final data = WalletHttp.decodeJson<dynamic>(res);
-
     final map = _extractMap(data, keys: const ['data', 'item', 'wallet']);
     if (map != null) return WalletAddress.fromJson(map);
 
@@ -179,18 +212,16 @@ class WalletService {
     );
   }
 
-  /// ── PATCH /wallets/:id ───────────────────────
-  Future<WalletAddress> updateLabel(String id, {required String label}) async {
+  Future<WalletAddress> update(String id, UpdateWalletRequest req) async {
     final res = await _client.patch(
       WalletHttp.uri(WalletEndpoints.update(id)),
       headers: await _headers(),
-      body: jsonEncode(UpdateWalletRequest(label: label).toJson()),
+      body: jsonEncode(req.toJson()),
     );
 
     WalletHttp.ensureOk(res);
 
     final data = WalletHttp.decodeJson<dynamic>(res);
-
     final map = _extractMap(data, keys: const ['data', 'item', 'wallet']);
     if (map != null) return WalletAddress.fromJson(map);
 
@@ -201,13 +232,34 @@ class WalletService {
     );
   }
 
-  /// ── DELETE /wallets/:id ──────────────────────
-  Future<void> remove(String id) async {
+  Future<WalletAddress> updateLabel(String id, {required String label}) {
+    return update(id, UpdateWalletRequest(label: label));
+  }
+
+  Future<WalletAddress> remove(String id) async {
     final res = await _client.delete(
       WalletHttp.uri(WalletEndpoints.remove(id)),
       headers: await _headers(),
     );
 
     WalletHttp.ensureOk(res);
+
+    if (res.body.isEmpty) {
+      return WalletAddress(id: id, publicAddress: '', network: 'stellar');
+    }
+
+    final data = WalletHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'wallet']);
+    if (map != null) return WalletAddress.fromJson(map);
+
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for DELETE /wallets/$id',
+      body: res.body,
+    );
+  }
+
+  void dispose() {
+    _client.close();
   }
 }

@@ -5,9 +5,9 @@ import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
+import 'package:next_fi/features/profile/view/profile_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
-import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/services/oath2.0/api/auth_http_client.dart';
 import 'package:next_fi/services/oath2.0/api/endpoints.dart';
@@ -132,9 +132,7 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
               } else {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const WalletScreenSettings(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
                 );
               }
               await _refreshProfile();
@@ -286,27 +284,92 @@ class _WalletSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: colors.border.withOpacity(0.08),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              walletName,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: colors.textPrimary,
+    final title = walletName.trim().isEmpty ? 'My Wallet' : walletName.trim();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.border.withOpacity(0.35)),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  colors.primary.withOpacity(0.12),
+                  colors.surface.withOpacity(0.55),
+                ],
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            const SizedBox(width: 6),
-            Icon(LucideIcons.chevronDown, size: 18, color: colors.textPrimary),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    LucideIcons.wallet2,
+                    size: 14,
+                    color: colors.primary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Wallet',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 10.2,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 12.9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  LucideIcons.chevronDown,
+                  size: 17,
+                  color: colors.textPrimary,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

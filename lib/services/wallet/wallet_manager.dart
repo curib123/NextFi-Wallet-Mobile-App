@@ -1,6 +1,7 @@
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/wallet/wallet_core_service.dart';
-import 'package:next_fi/reusable_model/wallet_meta_model.dart';
+import 'package:next_fi/services/wallet/models/wallet_dtos.dart';
+import 'package:next_fi/services/wallet/models/wallet_models.dart';
 
 /// Unified wallet manager that coordinates local seed storage with backend sync.
 ///
@@ -18,6 +19,32 @@ class WalletManager {
   static final WalletManager I = WalletManager._();
 
   final _api = WalletCoreService.I;
+
+  Future<List<WalletAddress>> _listBackendWallets({
+    String? q,
+    String? network,
+  }) async {
+    final wallets = <WalletAddress>[];
+    var page = 1;
+
+    while (true) {
+      final response = await _api.listPaged(
+        query: WalletListQuery(q: q, network: network, page: page, limit: 100),
+      );
+
+      wallets.addAll(response.items);
+
+      final totalPages = response.meta.totalPages < 1
+          ? 1
+          : response.meta.totalPages;
+      if (page >= totalPages || response.items.isEmpty) {
+        break;
+      }
+      page += 1;
+    }
+
+    return wallets;
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // CREATE / IMPORT WALLET
@@ -62,16 +89,21 @@ class WalletManager {
 
         try {
           // Try to find existing wallet with this address
-          final backendWallets = await _api.list();
+          final backendWallets = await _listBackendWallets(
+            q: publicAddress,
+            network: 'stellar',
+          );
           final existing = backendWallets.firstWhereOrNull(
-                (w) => w.publicAddress == publicAddress,
+            (w) => w.publicAddress == publicAddress,
           );
 
           if (existing != null) {
             // Wallet already exists in backend - reconnect to it
             backendId = existing.id;
             reconnected = true;
-            print('[WalletManager] Reconnected to existing backend wallet: ${existing.label}');
+            print(
+              '[WalletManager] Reconnected to existing backend wallet: ${existing.label}',
+            );
 
             // Optionally update the label if it's different
             if (name != null && name != existing.label) {
@@ -125,9 +157,9 @@ class WalletManager {
     final localWallets = await SeedStorage.listWallets();
 
     // Get backend wallets (for sync status)
-    List<dynamic>? backendWallets;
+    List<WalletAddress>? backendWallets;
     try {
-      backendWallets = await _api.list();
+      backendWallets = await _listBackendWallets();
     } catch (e) {
       print('[WalletManager] Backend fetch failed: $e');
       // Continue with local-only data
@@ -139,7 +171,7 @@ class WalletManager {
     return localWallets.map((local) {
       // Find matching backend wallet by public address
       final backend = backendWallets?.firstWhereOrNull(
-            (b) => b.publicAddress == local.publicAddress,
+        (b) => b.publicAddress == local.publicAddress,
       );
 
       return WalletViewModel(
@@ -175,16 +207,13 @@ class WalletManager {
 
       // Update backend (best effort)
       try {
-        final backendWallets = await _api.list();
+        final backendWallets = await _listBackendWallets();
         final backendWallet = backendWallets.firstWhereOrNull(
-              (w) => w.publicAddress == meta!.publicAddress,
+          (w) => w.publicAddress == meta!.publicAddress,
         );
 
         if (backendWallet != null) {
-          await _api.updateLabel(
-            walletId: backendWallet.id,
-            label: newName,
-          );
+          await _api.updateLabel(walletId: backendWallet.id, label: newName);
         }
       } catch (e) {
         print('[WalletManager] Backend update failed: $e');
@@ -201,15 +230,11 @@ class WalletManager {
   // ─────────────────────────────────────────────────────────────────────────
 
   /// Delete wallet (local + backend)
-  Future<bool> deleteWallet({
-    required String localId,
-  }) async {
+  Future<bool> deleteWallet({required String localId}) async {
     try {
       // Get wallet info before deletion
       final wallets = await listWallets();
-      final wallet = wallets.firstWhereOrNull(
-            (w) => w.localId == localId,
-      );
+      final wallet = wallets.firstWhereOrNull((w) => w.localId == localId);
 
       if (wallet == null) {
         throw WalletException('Wallet not found');
@@ -238,18 +263,14 @@ class WalletManager {
   // ─────────────────────────────────────────────────────────────────────────
 
   /// Switch active wallet
-  Future<bool> switchWallet({
-    required String localId,
-  }) async {
+  Future<bool> switchWallet({required String localId}) async {
     return await SeedStorage.setActiveWallet(localId);
   }
 
   /// Get active wallet
   Future<WalletViewModel?> getActiveWallet() async {
     final wallets = await listWallets();
-    return wallets.firstWhereOrNull(
-          (w) => w.isActive,
-    );
+    return wallets.firstWhereOrNull((w) => w.isActive);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -264,14 +285,14 @@ class WalletManager {
 
     try {
       final localWallets = await SeedStorage.listWallets();
-      final backendWallets = await _api.list();
+      final backendWallets = await _listBackendWallets();
 
       for (final local in localWallets) {
         if (local.publicAddress == null) continue;
 
         // Check if already exists in backend
         final exists = backendWallets.any(
-              (b) => b.publicAddress == local.publicAddress,
+          (b) => b.publicAddress == local.publicAddress,
         );
 
         if (!exists) {
@@ -290,15 +311,12 @@ class WalletManager {
         } else {
           // Update label if different
           final backend = backendWallets.firstWhere(
-                (b) => b.publicAddress == local.publicAddress,
+            (b) => b.publicAddress == local.publicAddress,
           );
 
           if (backend.label != local.name) {
             try {
-              await _api.updateLabel(
-                walletId: backend.id,
-                label: local.name,
-              );
+              await _api.updateLabel(walletId: backend.id, label: local.name);
               updated++;
             } catch (e) {
               print('[WalletManager] Update failed for ${local.name}: $e');
@@ -323,7 +341,7 @@ class WalletManager {
   /// WARNING: This does NOT sync seeds (they never leave the device)
   Future<List<CloudWallet>> pullFromBackend() async {
     try {
-      final backendWallets = await _api.list();
+      final backendWallets = await _listBackendWallets();
       final localWallets = await SeedStorage.listWallets();
 
       final cloudOnlyWallets = <CloudWallet>[];
@@ -331,17 +349,19 @@ class WalletManager {
       for (final backend in backendWallets) {
         // Check if this public address exists locally
         final exists = localWallets.any(
-              (l) => l.publicAddress == backend.publicAddress,
+          (l) => l.publicAddress == backend.publicAddress,
         );
 
         if (!exists) {
           // This wallet exists on backend but not locally
-          cloudOnlyWallets.add(CloudWallet(
-            backendId: backend.id,
-            publicAddress: backend.publicAddress,
-            label: backend.label ?? 'Wallet',
-            needsImport: true,
-          ));
+          cloudOnlyWallets.add(
+            CloudWallet(
+              backendId: backend.id,
+              publicAddress: backend.publicAddress,
+              label: backend.label ?? 'Wallet',
+              needsImport: true,
+            ),
+          );
         }
       }
 
@@ -386,9 +406,9 @@ class WalletManager {
       final localWallets = await SeedStorage.listWallets();
 
       // Get existing backend wallets
-      List<dynamic> backendWallets = [];
+      List<WalletAddress> backendWallets = [];
       try {
-        backendWallets = await _api.list();
+        backendWallets = await _listBackendWallets();
       } catch (e) {
         print('[WalletManager] Backend list failed during auto-sync: $e');
         return; // Can't sync if we can't fetch backend wallets
@@ -400,7 +420,7 @@ class WalletManager {
 
         // Check if already exists in backend
         final exists = backendWallets.any(
-              (b) => b.publicAddress == local.publicAddress,
+          (b) => b.publicAddress == local.publicAddress,
         );
 
         if (!exists) {
@@ -504,7 +524,8 @@ class CloudWallet {
 /// Complete overview of all wallets (local + cloud-only)
 class WalletOverview {
   final List<WalletViewModel> localWallets; // Wallets with seeds
-  final List<CloudWallet> cloudOnlyWallets; // Wallets without seeds (need import)
+  final List<CloudWallet>
+  cloudOnlyWallets; // Wallets without seeds (need import)
   final bool hasLocalWallets;
   final bool hasCloudOnlyWallets;
 

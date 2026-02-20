@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/common/components/drawer/appdrawer.dart';
+import 'package:next_fi/common/components/modal/chat_consent_modal.dart';
 import 'package:next_fi/features/auth/view/login.dart';
+import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
+import 'package:next_fi/features/chat/view/chat_thread_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +28,11 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/chat/chat_core_service.dart';
+import 'package:next_fi/services/chat/models/chat_dtos.dart';
+import 'package:next_fi/services/chat/models/chat_models.dart';
+import 'package:next_fi/services/oath2.0/auth_service.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
@@ -37,11 +45,73 @@ class WalletHomeScreen extends StatefulWidget {
   State<WalletHomeScreen> createState() => _WalletHomeScreenState();
 }
 
+class _ChatFloatingButton extends StatelessWidget {
+  const _ChatFloatingButton({
+    required this.colors,
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  final AppColor colors;
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final badgeText = unreadCount > 99 ? '99+' : unreadCount.toString();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        FloatingActionButton(
+          heroTag: 'wallet_home_chat_fab',
+          onPressed: onTap,
+          tooltip: 'Messenger',
+          elevation: 0,
+          backgroundColor: colors.primary,
+          foregroundColor: Colors.white,
+          child: const Icon(Icons.chat_bubble_outline_rounded, size: 22),
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.error,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 1.6),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                badgeText,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.3,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _WalletHomeScreenState extends State<WalletHomeScreen>
     with
         WidgetsBindingObserver,
         TickerProviderStateMixin,
         AutomaticKeepAliveClientMixin {
+  static const String _kChatConsentKey = 'chat.user_consent.v1';
+  static const String _kChatConsentAtKey = 'chat.user_consent_at.v1';
+
+  final _auth = AuthService();
+  final _chat = ChatCoreService.I;
+
   late final AnimationController _livePulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -56,6 +126,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       <String, AppAlertController>{};
   AppAlertController? _bootBalancesCtl;
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
+  Timer? _chatRefreshTimer;
+  int _unreadChatCount = 0;
 
   // First open: no counting animation; enabled only after the FIRST ready has passed.
   bool _animateTotal = false;
@@ -78,6 +150,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       vm.attachConfirmedTxStream(txVm.incomingStream);
 
       unawaited(vm.boot());
+      unawaited(_refreshUnreadChatCount());
+    });
+
+    _chatRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      unawaited(_refreshUnreadChatCount());
     });
   }
 
@@ -89,6 +166,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     _uiSub?.cancel();
     _uiSub = null;
+    _chatRefreshTimer?.cancel();
+    _chatRefreshTimer = null;
 
     for (final ctl in _hintAlertCtrls.values) {
       ctl.close();
@@ -106,6 +185,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final vm = context.read<WalletHomeVM>();
     if (state == AppLifecycleState.resumed) {
       vm.onResumed();
+      unawaited(_refreshUnreadChatCount());
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       vm.onPausedOrInactive();
@@ -147,6 +227,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
         /// DRAWER HERE
         drawer: const AppDrawer(),
+        floatingActionButton: _ChatFloatingButton(
+          colors: colors,
+          unreadCount: _unreadChatCount,
+          onTap: _openFloatingChat,
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
         body: Stack(
           children: [
@@ -271,6 +357,117 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   }
 
   // ──────────────────────── Event handling (UI side effects) ────────────────────────
+  Future<void> _refreshUnreadChatCount() async {
+    try {
+      final authenticated = await _auth.isAuthenticated;
+      if (!authenticated) {
+        if (!mounted) return;
+        if (_unreadChatCount != 0) {
+          setState(() => _unreadChatCount = 0);
+        }
+        return;
+      }
+
+      final threads = await _chat.listThreads(
+        const ChatListQuery(page: 1, limit: 50),
+      );
+      final unread = threads.items.fold<int>(
+        0,
+        (sum, thread) => sum + thread.unreadCount,
+      );
+      if (!mounted) return;
+      if (unread != _unreadChatCount) {
+        setState(() => _unreadChatCount = unread);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (_unreadChatCount != 0) {
+        setState(() => _unreadChatCount = 0);
+      }
+    }
+  }
+
+  Future<bool> _ensureChatConsent() async {
+    try {
+      final stored = await SecurityStorage.read(_kChatConsentKey);
+      if (stored == 'accepted') return true;
+    } catch (_) {
+      // Ask consent now when read fails.
+    }
+
+    if (!mounted) return false;
+    final accepted = await showChatConsentModal(context);
+    if (!accepted) return false;
+
+    try {
+      await SecurityStorage.save(_kChatConsentKey, 'accepted');
+      await SecurityStorage.save(
+        _kChatConsentAtKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
+    } catch (_) {
+      // Allow this session even if persistence fails.
+    }
+    return true;
+  }
+
+  Future<void> _openFloatingChat() async {
+    final authenticated = await _auth.isAuthenticated;
+    if (!authenticated) {
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      if (mounted) {
+        await _refreshUnreadChatCount();
+      }
+      return;
+    }
+
+    final consented = await _ensureChatConsent();
+    if (!consented || !mounted) return;
+
+    ChatDirectThreadModel? targetThread;
+    try {
+      final threads = await _chat.listThreads(
+        const ChatListQuery(page: 1, limit: 50),
+      );
+      final unreadThreads =
+          threads.items.where((thread) => thread.unreadCount > 0).toList()
+            ..sort(
+              (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                  .compareTo(
+                    a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+                  ),
+            );
+      if (unreadThreads.isNotEmpty) {
+        targetThread = unreadThreads.first;
+      }
+    } catch (_) {
+      // Fallback to chat hub.
+    }
+
+    if (!mounted) return;
+    if (targetThread != null) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatThreadScreen(thread: targetThread!),
+        ),
+      );
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ChatHubScreen()),
+      );
+    }
+
+    if (mounted) {
+      await _refreshUnreadChatCount();
+    }
+  }
+
   Future<bool> _ensureVerifiedForTradeAccess() async {
     try {
       final verification = await VerificationCoreService.I.getMe();

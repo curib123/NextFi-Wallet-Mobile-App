@@ -759,6 +759,53 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     return c.error;
   }
 
+  String _partyPrimaryLabel(
+    TradePartyLite? party, {
+    required String fallbackId,
+  }) {
+    if (party != null) {
+      final display = party.displayName?.trim() ?? '';
+      if (display.isNotEmpty) return display;
+      final name = party.name.trim();
+      if (name.isNotEmpty) return name;
+      final username = party.username?.trim() ?? '';
+      if (username.isNotEmpty) return '@$username';
+      final email = party.email.trim();
+      if (email.isNotEmpty) return email;
+    }
+    return fallbackId.isNotEmpty ? fallbackId : 'Counterparty';
+  }
+
+  String _partySecondaryLabel(TradePartyLite? party) {
+    if (party == null) return '';
+    final username = party.username?.trim() ?? '';
+    final email = party.email.trim();
+    if (username.isNotEmpty && email.isNotEmpty) return '@$username | $email';
+    if (username.isNotEmpty) return '@$username';
+    if (email.isNotEmpty) return email;
+    return '';
+  }
+
+  String _counterpartyTitle(TradeModel trade) {
+    final me = _currentUserId?.trim() ?? '';
+    final counterpart = trade.counterpartyFor(_currentUserId);
+    final fallback = trade.sellerId == me ? trade.buyerId : trade.sellerId;
+    return _partyPrimaryLabel(counterpart, fallbackId: fallback);
+  }
+
+  String _counterpartySubtitle(TradeModel trade) {
+    return _partySecondaryLabel(trade.counterpartyFor(_currentUserId));
+  }
+
+  String _senderLabel(TradeModel trade, TradeMessageModel message) {
+    if ((_currentUserId?.trim() ?? '').isNotEmpty &&
+        message.senderId == _currentUserId) {
+      return 'You';
+    }
+    final party = trade.partyForUserId(message.senderId);
+    return _partyPrimaryLabel(party, fallbackId: message.senderId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -812,6 +859,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         !trade.isFinalStatus && trade.status != TradeStatus.released;
     final canReview = trade.status == TradeStatus.released;
     final nextHint = _nextActionHint(c, trade);
+    final counterpartyTitle = _counterpartyTitle(trade);
+    final counterpartySubtitle = _counterpartySubtitle(trade);
 
     return DefaultTabController(
       length: 2,
@@ -823,14 +872,32 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           scrolledUnderElevation: 0,
           centerTitle: false,
           titleSpacing: 20,
-          title: Text(
-            'Trade ${trade.id.length > 8 ? trade.id.substring(0, 8) : trade.id}',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
-            ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Trade ${trade.id.length > 8 ? trade.id.substring(0, 8) : trade.id}',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.35,
+                ),
+              ),
+              Text(
+                counterpartySubtitle.trim().isNotEmpty
+                    ? '$counterpartyTitle | $counterpartySubtitle'
+                    : counterpartyTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 11.7,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
           ),
           leading: Padding(
             padding: const EdgeInsets.only(left: 8),
@@ -1449,6 +1516,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                       final mine =
                           _currentUserId != null &&
                           m.senderId == _currentUserId;
+                      final senderLabel = _senderLabel(trade, m);
                       return Align(
                         alignment: mine
                             ? Alignment.centerRight
@@ -1467,6 +1535,17 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (!mine) ...[
+                                Text(
+                                  senderLabel,
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 10.4,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                              ],
                               Text(
                                 m.message,
                                 style: TextStyle(

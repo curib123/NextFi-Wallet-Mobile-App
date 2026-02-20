@@ -161,6 +161,126 @@ class TradeMessageModel {
   }
 }
 
+class TradePartyLite {
+  final String id;
+  final String email;
+  final String name;
+  final String? username;
+  final String? displayName;
+  final String? avatarUrl;
+
+  const TradePartyLite({
+    required this.id,
+    required this.email,
+    required this.name,
+    this.username,
+    this.displayName,
+    this.avatarUrl,
+  });
+
+  TradePartyLite copyWith({
+    String? id,
+    String? email,
+    String? name,
+    String? username,
+    String? displayName,
+    String? avatarUrl,
+  }) {
+    return TradePartyLite(
+      id: id ?? this.id,
+      email: email ?? this.email,
+      name: name ?? this.name,
+      username: username ?? this.username,
+      displayName: displayName ?? this.displayName,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+    );
+  }
+
+  factory TradePartyLite.fromJson(Map<String, dynamic> json) {
+    String readString(List<String> keys, {Map<String, dynamic>? from}) {
+      final src = from ?? json;
+      for (final key in keys) {
+        final value = src[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return '';
+    }
+
+    Map<String, dynamic>? readMap(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is Map<String, dynamic>) return value;
+        if (value is Map) {
+          return value.map((k, v) => MapEntry(k.toString(), v));
+        }
+      }
+      return null;
+    }
+
+    final profile = readMap(const ['profile', 'userProfile', 'user_profile']);
+    final resolvedDisplayName = (() {
+      final direct = readString(const ['displayName', 'display_name']);
+      if (direct.isNotEmpty) return direct;
+      if (profile != null) {
+        final fromProfile = readString(const [
+          'displayName',
+          'display_name',
+        ], from: profile);
+        if (fromProfile.isNotEmpty) return fromProfile;
+      }
+      return null;
+    })();
+
+    final resolvedUsername = (() {
+      final direct = readString(const ['username']);
+      if (direct.isNotEmpty) return direct;
+      if (profile != null) {
+        final fromProfile = readString(const ['username'], from: profile);
+        if (fromProfile.isNotEmpty) return fromProfile;
+      }
+      return null;
+    })();
+
+    final resolvedName = (() {
+      final direct = readString(const ['name', 'fullName', 'full_name']);
+      if (direct.isNotEmpty) return direct;
+      if (resolvedDisplayName != null &&
+          resolvedDisplayName.trim().isNotEmpty) {
+        return resolvedDisplayName.trim();
+      }
+      if (profile != null) {
+        final fullName = readString(const [
+          'name',
+          'fullName',
+          'full_name',
+        ], from: profile);
+        if (fullName.isNotEmpty) return fullName;
+
+        final parts = [
+          readString(const ['firstName', 'first_name'], from: profile),
+          readString(const ['middleName', 'middle_name'], from: profile),
+          readString(const ['lastName', 'last_name'], from: profile),
+        ].where((part) => part.isNotEmpty).toList();
+        if (parts.isNotEmpty) return parts.join(' ').trim();
+      }
+      return '';
+    })();
+
+    final avatar = readString(const ['avatarUrl', 'avatar_url', 'avatar']);
+
+    return TradePartyLite(
+      id: readString(const ['id', 'userId', 'user_id']),
+      email: readString(const ['email']),
+      name: resolvedName,
+      username: resolvedUsername,
+      displayName: resolvedDisplayName,
+      avatarUrl: avatar.isEmpty ? null : avatar,
+    );
+  }
+}
+
 class TradeProofModel {
   final String id;
   final String? imageUrl;
@@ -208,6 +328,8 @@ class TradeModel {
   final String offerId;
   final String buyerId;
   final String sellerId;
+  final TradePartyLite? buyer;
+  final TradePartyLite? seller;
   final TradeStatus status;
   final String statusRaw;
   final OfferAsset asset;
@@ -248,6 +370,8 @@ class TradeModel {
     required this.offerId,
     required this.buyerId,
     required this.sellerId,
+    this.buyer,
+    this.seller,
     required this.status,
     required this.statusRaw,
     required this.asset,
@@ -399,6 +523,14 @@ class TradeModel {
       return null;
     }
 
+    Map<String, dynamic>? asMap(dynamic raw) {
+      if (raw is Map<String, dynamic>) return raw;
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry(k.toString(), v));
+      }
+      return null;
+    }
+
     final statusRaw = readString(const ['status'], fallback: 'UNKNOWN');
     final fundedTxHash = readNullableString(const [
       'fundedTxHash',
@@ -412,14 +544,58 @@ class TradeModel {
       'releaseTxHash',
       'release_tx_hash',
     ]);
+    final buyerId = readString(const ['buyerId', 'buyer_id']);
+    final sellerId = readString(const ['sellerId', 'seller_id']);
+    final buyerRaw =
+        asMap(json['buyer']) ??
+        asMap(json['buyerUser']) ??
+        asMap(json['buyer_user']) ??
+        asMap(json['buyerAccount']) ??
+        asMap(json['buyer_account']);
+    final sellerRaw =
+        asMap(json['seller']) ??
+        asMap(json['sellerUser']) ??
+        asMap(json['seller_user']) ??
+        asMap(json['sellerAccount']) ??
+        asMap(json['seller_account']);
+    final buyerParty = (() {
+      if (buyerRaw == null) return null;
+      var party = TradePartyLite.fromJson(buyerRaw);
+      if (party.id.isEmpty && buyerId.isNotEmpty) {
+        party = party.copyWith(id: buyerId);
+      }
+      final hasInfo =
+          party.id.isNotEmpty ||
+          party.email.isNotEmpty ||
+          party.name.isNotEmpty ||
+          (party.username?.trim().isNotEmpty ?? false) ||
+          (party.displayName?.trim().isNotEmpty ?? false);
+      return hasInfo ? party : null;
+    })();
+    final sellerParty = (() {
+      if (sellerRaw == null) return null;
+      var party = TradePartyLite.fromJson(sellerRaw);
+      if (party.id.isEmpty && sellerId.isNotEmpty) {
+        party = party.copyWith(id: sellerId);
+      }
+      final hasInfo =
+          party.id.isNotEmpty ||
+          party.email.isNotEmpty ||
+          party.name.isNotEmpty ||
+          (party.username?.trim().isNotEmpty ?? false) ||
+          (party.displayName?.trim().isNotEmpty ?? false);
+      return hasInfo ? party : null;
+    })();
     final buyerWallet = readWallet(const ['buyerWallet', 'buyer_wallet']);
     final sellerWallet = readWallet(const ['sellerWallet', 'seller_wallet']);
 
     return TradeModel(
       id: readString(const ['id']),
       offerId: readString(const ['offerId', 'offer_id']),
-      buyerId: readString(const ['buyerId', 'buyer_id']),
-      sellerId: readString(const ['sellerId', 'seller_id']),
+      buyerId: buyerId,
+      sellerId: sellerId,
+      buyer: buyerParty,
+      seller: sellerParty,
       status: tradeStatusFromApi(statusRaw),
       statusRaw: statusRaw,
       asset: offerAssetFromApi(json['asset']),
@@ -506,4 +682,28 @@ class TradeModel {
       status == TradeStatus.cancelled ||
       status == TradeStatus.expired ||
       status == TradeStatus.refunded;
+
+  TradePartyLite? partyForUserId(String? userId) {
+    final id = userId?.trim() ?? '';
+    if (id.isEmpty) return null;
+    if (buyer?.id == id || buyerId == id) {
+      return buyer ?? TradePartyLite(id: buyerId, email: '', name: '');
+    }
+    if (seller?.id == id || sellerId == id) {
+      return seller ?? TradePartyLite(id: sellerId, email: '', name: '');
+    }
+    return null;
+  }
+
+  TradePartyLite? counterpartyFor(String? currentUserId) {
+    final me = currentUserId?.trim() ?? '';
+    if (me.isEmpty) return null;
+    if (buyerId == me) {
+      return seller ?? TradePartyLite(id: sellerId, email: '', name: '');
+    }
+    if (sellerId == me) {
+      return buyer ?? TradePartyLite(id: buyerId, email: '', name: '');
+    }
+    return null;
+  }
 }
