@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -113,7 +114,6 @@ class _HeaderSectionState extends State<HeaderSection> {
     return _deltaFiat! >= 0 ? _upColor : _downColor;
   }
 
-
   // Up/Down icon beside the balance text
   Widget _trendIconForDelta() {
     if (!_shouldColorize()) return const SizedBox.shrink();
@@ -184,7 +184,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                         ),
                         const SizedBox(width: 8),
                         InkResponse(
-                          onTap: () => setState(() => _hideBalance = !_hideBalance),
+                          onTap: () =>
+                              setState(() => _hideBalance = !_hideBalance),
                           borderRadius: BorderRadius.circular(10),
                           child: Icon(
                             _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
@@ -200,7 +201,10 @@ class _HeaderSectionState extends State<HeaderSection> {
                     TweenAnimationBuilder<double>(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOut,
-                      tween: Tween(begin: 1.0, end: (_deltaFiat == null) ? 1.0 : 1.02),
+                      tween: Tween(
+                        begin: 1.0,
+                        end: (_deltaFiat == null) ? 1.0 : 1.02,
+                      ),
                       builder: (context, scale, child) {
                         return Transform.scale(
                           scale: scale,
@@ -224,8 +228,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                             downColor: _downColor,
                             loading: widget.loadingBalances,
                             pulse: widget.livePulse,
-                            showTrendIcon: false,     // ← we show our own icon
-                            forceBaseColor: true,     // ← lock color to baseColor
+                            showTrendIcon: false, // ← we show our own icon
+                            forceBaseColor: true, // ← lock color to baseColor
                           ),
                         ],
                       ),
@@ -255,14 +259,17 @@ class _HeaderSectionState extends State<HeaderSection> {
                           ),
                           child: (_deltaFiat != null && !_hideBalance)
                               ? _DeltaChipFiat(
-                            key: ValueKey('${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}'),
-                            amount: _deltaFiat!,
-                            fmt: widget.currencyFmt,
-                            upColor: _upColor,
-                            downColor: _downColor,
-                            active: true, // always colorize when we show it
-                            neutralColor: widget.colors.textSecondary,
-                          )
+                                  key: ValueKey(
+                                    '${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}',
+                                  ),
+                                  amount: _deltaFiat!,
+                                  fmt: widget.currencyFmt,
+                                  upColor: _upColor,
+                                  downColor: _downColor,
+                                  active:
+                                      true, // always colorize when we show it
+                                  neutralColor: widget.colors.textSecondary,
+                                )
                               : const SizedBox.shrink(key: ValueKey('empty')),
                         ),
                       ],
@@ -276,19 +283,24 @@ class _HeaderSectionState extends State<HeaderSection> {
               // Right: primary action
               SizedBox(
                 height: 40,
-                child: FilledButton.icon(
+                child: AppFilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: widget.colors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 1,
                   ),
                   onPressed: widget.onSwap,
-                  icon: const Icon(LucideIcons.shuffle, size: 20),
+                  icon: const Icon(LucideIcons.scanLine, size: 20),
                   label: const Text(
-                    'Swap',
-                    style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2),
+                    'Scanner',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 ),
               ),

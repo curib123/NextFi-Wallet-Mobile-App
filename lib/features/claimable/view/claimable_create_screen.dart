@@ -1,6 +1,7 @@
 // lib/features/claimable/view/claimable_create_screen.dart
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -17,18 +18,13 @@ import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dar
 import 'package:next_fi/features/wallet_home/model/recipient_address_model.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/scanner/view/scanner_screen.dart';
-
-import 'package:next_fi/features/send/view/widgets/recipient_badge.dart';
-import 'package:next_fi/features/send/view/widgets/recipient_add_template.dart';
-import 'package:next_fi/features/send/view/widgets/recipient_loading_line.dart';
+import 'package:next_fi/services/federation_address/federation_address_core_service.dart';
+import 'package:next_fi/services/federation_address/models/federation_address_models.dart';
 
 class ClaimableCreateScreen extends StatefulWidget {
   final String initialAsset;
 
-  const ClaimableCreateScreen({
-    super.key,
-    this.initialAsset = 'XLM',
-  });
+  const ClaimableCreateScreen({super.key, this.initialAsset = 'XLM'});
 
   @override
   State<ClaimableCreateScreen> createState() => _ClaimableCreateScreenState();
@@ -52,6 +48,12 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
   bool _recipientLoading = false;
   RecipientAddressModel? _resolvedRecipient;
+  bool _federationLoading = false;
+  FederationResolveResponse? _resolvedFederation;
+  String? _federationError;
+  int _federationResolveSeq = 0;
+  final String _federationDomain = FederationAddressCoreService.defaultDomain;
+  List<String> _federationSuggestions = const [];
 
   static final _dateFmt = DateFormat('MMM d, yyyy');
 
@@ -70,23 +72,55 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     super.dispose();
   }
 
-  bool _looksLikeStellarPk(String x) =>
-      RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
+  bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
+  bool _looksLikeFederation(String x) =>
+      RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
+  bool _looksLikeFederationAliasInput(String x) =>
+      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(x);
 
   void _onRecipientChanged() {
     final addr = _recipientCtl.text.trim();
 
-    if (!_looksLikeStellarPk(addr)) {
-      if (_resolvedRecipient != null || _recipientLoading) {
-        setState(() {
-          _resolvedRecipient = null;
-          _recipientLoading = false;
-        });
-      }
+    if (addr.isEmpty) {
+      setState(() {
+        _resolvedRecipient = null;
+        _recipientLoading = false;
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+        _federationSuggestions = const [];
+      });
       return;
     }
 
-    _lookupRecipient(addr);
+    if (_looksLikeStellarPk(addr)) {
+      setState(() {
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+        _federationSuggestions = const [];
+      });
+      _lookupRecipient(addr);
+      return;
+    }
+
+    if (_looksLikeFederation(addr)) {
+      setState(() {
+        _resolvedRecipient = null;
+        _federationSuggestions = const [];
+      });
+      _resolveFederation(addr);
+      return;
+    }
+
+    _updateFederationSuggestions(addr);
+    setState(() {
+      _resolvedRecipient = null;
+      _recipientLoading = false;
+      _resolvedFederation = null;
+      _federationError = null;
+      _federationLoading = false;
+    });
   }
 
   Future<void> _lookupRecipient(String address) async {
@@ -113,6 +147,82 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     }
   }
 
+  Future<void> _resolveFederation(String federationAddress) async {
+    final requestId = ++_federationResolveSeq;
+
+    setState(() {
+      _federationLoading = true;
+      _federationError = null;
+      _resolvedFederation = null;
+      _recipientLoading = true;
+      _resolvedRecipient = null;
+    });
+
+    try {
+      final resolved = await FederationAddressCoreService.I.resolveByName(
+        federationAddress,
+        domain: _federationDomain,
+      );
+      if (!mounted || requestId != _federationResolveSeq) return;
+
+      final accountId = resolved.accountId.trim();
+      if (accountId.isEmpty || !_looksLikeStellarPk(accountId)) {
+        throw StateError('Resolved federation has no valid Stellar account id');
+      }
+
+      setState(() {
+        _resolvedFederation = resolved;
+        _federationLoading = false;
+      });
+      await _lookupRecipient(accountId);
+    } catch (_) {
+      if (!mounted || requestId != _federationResolveSeq) return;
+      setState(() {
+        _federationLoading = false;
+        _recipientLoading = false;
+        _resolvedFederation = null;
+        _federationError = 'Federation not found or unavailable.';
+      });
+    }
+  }
+
+  void _updateFederationSuggestions(String input) {
+    final domain = _federationDomain.trim();
+    if (domain.isEmpty ||
+        input.isEmpty ||
+        input.contains('*') ||
+        !_looksLikeFederationAliasInput(input)) {
+      if (_federationSuggestions.isNotEmpty) {
+        setState(() => _federationSuggestions = const []);
+      }
+      return;
+    }
+
+    final candidate = '${input.toLowerCase()}*$domain';
+    if (_federationSuggestions.length == 1 &&
+        _federationSuggestions.first == candidate) {
+      return;
+    }
+    setState(() => _federationSuggestions = [candidate]);
+  }
+
+  void _applyFederationSuggestion(String value) {
+    _recipientCtl.text = value;
+    _recipientCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _recipientCtl.text.length),
+    );
+  }
+
+  String? _resolvedRecipientAddressForSubmit() {
+    final input = _recipientCtl.text.trim();
+    if (_looksLikeStellarPk(input)) return input;
+    if (_looksLikeFederation(input)) {
+      final resolved = _resolvedFederation?.accountId.trim();
+      if (resolved != null && _looksLikeStellarPk(resolved)) return resolved;
+    }
+    return null;
+  }
+
   Future<void> _pickUnlockDate() async {
     final now = DateTime.now();
     final date = await showDatePicker(
@@ -135,7 +245,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   DateTime? get _combinedUnlockDateTime {
     if (_unlockDate == null) return null;
     final t = _unlockTime ?? const TimeOfDay(hour: 0, minute: 0);
-    return DateTime(_unlockDate!.year, _unlockDate!.month, _unlockDate!.day, t.hour, t.minute);
+    return DateTime(
+      _unlockDate!.year,
+      _unlockDate!.month,
+      _unlockDate!.day,
+      t.hour,
+      t.minute,
+    );
   }
 
   Future<void> _pickExpiryDate() async {
@@ -163,12 +279,20 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   DateTime? get _combinedExpiryDateTime {
     if (_expiryDate == null) return null;
     final t = _expiryTime ?? const TimeOfDay(hour: 23, minute: 59);
-    return DateTime(_expiryDate!.year, _expiryDate!.month, _expiryDate!.day, t.hour, t.minute);
+    return DateTime(
+      _expiryDate!.year,
+      _expiryDate!.month,
+      _expiryDate!.day,
+      t.hour,
+      t.minute,
+    );
   }
 
   String? _validate() {
-    final addr = _recipientCtl.text.trim();
-    if (!_looksLikeStellarPk(addr)) return 'Enter a valid Stellar address (G…)';
+    final addr = _resolvedRecipientAddressForSubmit();
+    if (addr == null) {
+      return 'Enter a valid Stellar address or federation address.';
+    }
 
     final amt = double.tryParse(_amountCtl.text.trim()) ?? 0;
     if (amt <= 0) return 'Enter a valid amount';
@@ -181,13 +305,15 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     if (_mode == ClaimableMode.timeLocked) {
       final dt = _combinedUnlockDateTime;
       if (dt == null) return 'Pick an unlock date';
-      if (dt.isBefore(DateTime.now())) return 'Unlock time must be in the future';
+      if (dt.isBefore(DateTime.now()))
+        return 'Unlock time must be in the future';
     }
 
     if (_hasExpiry) {
       final dt = _combinedExpiryDateTime;
       if (dt == null) return 'Pick an expiry date';
-      if (dt.isBefore(DateTime.now())) return 'Expiry time must be in the future';
+      if (dt.isBefore(DateTime.now()))
+        return 'Expiry time must be in the future';
 
       if (_mode == ClaimableMode.timeLocked) {
         final unlock = _combinedUnlockDateTime;
@@ -222,7 +348,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
     try {
       final vm = context.read<ClaimableVM>();
-      final addr = _recipientCtl.text.trim();
+      final addr = _resolvedRecipientAddressForSubmit();
+      if (addr == null) {
+        throw StateError('Recipient must resolve to a valid Stellar account.');
+      }
       final amt = double.parse(_amountCtl.text.trim());
 
       String txHash;
@@ -262,16 +391,12 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       ctl.update(
         AppAlertType.success,
         title: 'Balance Created',
-        subtitle: 'Claimable balance created successfully',
+        subtitle: 'Claimable balance created successfully\n$txHash',
         onPrimary: () => Navigator.pop(context, true),
       );
     } catch (e) {
       if (!mounted) return;
-      ctl.update(
-        AppAlertType.error,
-        title: 'Error',
-        subtitle: e.toString(),
-      );
+      ctl.update(AppAlertType.error, title: 'Error', subtitle: e.toString());
     }
   }
 
@@ -282,7 +407,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
     if (result != null && mounted) {
       _recipientCtl.text = result;
-      _lookupRecipient(result);
+      _onRecipientChanged();
     }
   }
 
@@ -301,7 +426,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
     if (selected != null && mounted) {
       _recipientCtl.text = selected.address;
-      setState(() => _resolvedRecipient = selected);
+      setState(() {
+        _resolvedRecipient = selected;
+        _resolvedFederation = null;
+        _federationError = null;
+        _federationLoading = false;
+        _federationSuggestions = const [];
+      });
     }
   }
 
@@ -318,7 +449,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
   String _shortenAddress(String addr) {
     if (addr.length <= 16) return addr;
-    return '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
+    return '${addr.substring(0, 6)}â€¦${addr.substring(addr.length - 6)}';
   }
 
   @override
@@ -367,19 +498,16 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // MODERN HEADER
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildModernHeader(AppColor c) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 20, 12),
       decoration: BoxDecoration(
         color: c.background,
         border: Border(
-          bottom: BorderSide(
-            color: c.border.withOpacity(0.06),
-            width: 1,
-          ),
+          bottom: BorderSide(color: c.border.withOpacity(0.06), width: 1),
         ),
       ),
       child: Row(
@@ -422,9 +550,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // MODE SELECTOR CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildModeCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -477,13 +605,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   }
 
   Widget _buildModeOption(
-      AppColor c, {
-        required IconData icon,
-        required String label,
-        required String subtitle,
-        required bool isSelected,
-        required VoidCallback onTap,
-      }) {
+    AppColor c, {
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -497,15 +625,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              c.primary.withOpacity(0.12),
-              c.primary.withOpacity(0.06),
-            ],
-          )
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    c.primary.withOpacity(0.12),
+                    c.primary.withOpacity(0.06),
+                  ],
+                )
               : null,
-          color: isSelected ? null : (isDark ? c.background : c.surface.withOpacity(0.3)),
+          color: isSelected
+              ? null
+              : (isDark ? c.background : c.surface.withOpacity(0.3)),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
@@ -527,7 +657,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               child: Icon(
                 icon,
                 size: 20,
-                color: isSelected ? c.primary : c.textSecondary.withOpacity(0.6),
+                color: isSelected
+                    ? c.primary
+                    : c.textSecondary.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 10),
@@ -556,9 +688,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // AMOUNT CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildAmountCard(AppColor c, double currentBal) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -622,9 +754,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Expanded(
                 child: TextField(
                   controller: _amountCtl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,7}$'),
+                    ),
                   ],
                   style: TextStyle(
                     fontSize: 40,
@@ -666,14 +802,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       _amountCtl.text = currentBal > 0
-                          ? currentBal.toStringAsFixed(7).replaceFirst(RegExp(r'\.?0+$'), '')
+                          ? currentBal
+                                .toStringAsFixed(7)
+                                .replaceFirst(RegExp(r'\.?0+$'), '')
                           : '';
                       _amountCtl.selection = TextSelection.fromPosition(
                         TextPosition(offset: _amountCtl.text.length),
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: c.primary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -702,13 +843,23 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // RECIPIENT CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildRecipientCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final addr = _recipientCtl.text.trim();
-    final hasValidAddr = _looksLikeStellarPk(addr);
+    final resolvedAccountId = _resolvedFederation?.accountId.trim();
+    final hasValidAddr =
+        _looksLikeStellarPk(addr) ||
+        (_looksLikeFederation(addr) &&
+            resolvedAccountId != null &&
+            _looksLikeStellarPk(resolvedAccountId));
+    final hasFederationInput = _looksLikeFederation(addr);
+    final recipientLookupAddress = _looksLikeStellarPk(addr)
+        ? addr
+        : (resolvedAccountId ?? addr);
+    final isLoadingRecipient = _recipientLoading || _federationLoading;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -745,26 +896,46 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 ),
               ),
               const Spacer(),
-              _buildQuickActionButton(c, icon: LucideIcons.qrCode, onTap: _scanQR),
+              _buildQuickActionButton(
+                c,
+                icon: LucideIcons.qrCode,
+                onTap: _scanQR,
+              ),
               const SizedBox(width: 8),
-              _buildQuickActionButton(c, icon: LucideIcons.users, onTap: _selectRecipient),
+              _buildQuickActionButton(
+                c,
+                icon: LucideIcons.users,
+                onTap: _selectRecipient,
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          if (_recipientLoading)
+          if (isLoadingRecipient)
             _buildRecipientLoadingState(c)
           else if (hasValidAddr && _resolvedRecipient != null)
             _buildSavedRecipientChip(c, _resolvedRecipient!)
           else if (hasValidAddr && _resolvedRecipient == null)
-              _buildNewRecipientChip(c, addr)
-            else
-              _buildRecipientInputField(c, addr, isDark),
+            _buildNewRecipientChip(c, recipientLookupAddress)
+          else
+            _buildRecipientInputField(c, addr, isDark),
+          if (_federationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildFederationSuggestions(c),
+          ],
+          if (hasFederationInput) ...[
+            const SizedBox(height: 10),
+            _buildFederationStatus(c),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionButton(AppColor c, {required IconData icon, required VoidCallback onTap}) {
+  Widget _buildQuickActionButton(
+    AppColor c, {
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
@@ -790,10 +961,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       decoration: BoxDecoration(
         color: c.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.primary.withOpacity(0.1),
-          width: 1,
-        ),
+        border: Border.all(color: c.primary.withOpacity(0.1), width: 1),
       ),
       child: Center(
         child: SizedBox(
@@ -833,7 +1001,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             ),
             child: Center(
               child: Text(
-                recipient.name.isNotEmpty ? recipient.name[0].toUpperCase() : '?',
+                recipient.name.isNotEmpty
+                    ? recipient.name[0].toUpperCase()
+                    : '?',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
@@ -910,7 +1080,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               color: c.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
+            child: Icon(
+              LucideIcons.userPlus,
+              size: 18,
+              color: c.primary.withOpacity(0.7),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -942,7 +1116,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () async {
-              final saved = await showRecipientUpsertSheet(context, address: addr);
+              final saved = await showRecipientUpsertSheet(
+                context,
+                address: addr,
+              );
               if (saved == true && mounted) _lookupRecipient(addr);
             },
             child: Container(
@@ -991,7 +1168,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste or enter Stellar address',
+          hintText: 'Paste G... or alias*$_federationDomain',
           hintStyle: TextStyle(
             color: c.textSecondary.withOpacity(0.4),
             fontSize: 14,
@@ -999,24 +1176,41 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 16, right: 12),
-            child: Icon(LucideIcons.wallet, color: c.textSecondary.withOpacity(0.5), size: 18),
+            child: Icon(
+              LucideIcons.wallet,
+              color: c.textSecondary.withOpacity(0.5),
+              size: 18,
+            ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           suffixIcon: addr.isNotEmpty
               ? Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: IconButton(
-              onPressed: () {
-                _recipientCtl.clear();
-                setState(() => _resolvedRecipient = null);
-              },
-              icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary.withOpacity(0.5)),
-              splashRadius: 20,
-            ),
-          )
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    onPressed: () {
+                      _recipientCtl.clear();
+                      setState(() {
+                        _resolvedRecipient = null;
+                        _resolvedFederation = null;
+                        _federationError = null;
+                        _federationLoading = false;
+                        _federationSuggestions = const [];
+                      });
+                    },
+                    icon: Icon(
+                      LucideIcons.x,
+                      size: 18,
+                      color: c.textSecondary.withOpacity(0.5),
+                    ),
+                    splashRadius: 20,
+                  ),
+                )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
         ),
         onChanged: (_) => setState(() {}),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
@@ -1024,9 +1218,128 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  Widget _buildFederationSuggestions(AppColor c) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _federationSuggestions
+          .map(
+            (s) => ActionChip(
+              avatar: Icon(LucideIcons.atSign, size: 14, color: c.primary),
+              label: Text(s),
+              labelStyle: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+              side: BorderSide(color: c.primary.withOpacity(0.35)),
+              backgroundColor: c.primary.withOpacity(0.08),
+              onPressed: () => _applyFederationSuggestion(s),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildFederationStatus(AppColor c) {
+    if (_federationLoading) {
+      return _buildFederationBanner(
+        c,
+        icon: null,
+        title: 'Resolving federation address...',
+        color: c.primary,
+        showSpinner: true,
+      );
+    }
+
+    if (_federationError != null) {
+      return _buildFederationBanner(
+        c,
+        icon: LucideIcons.alertCircle,
+        title: _federationError!,
+        color: c.error,
+      );
+    }
+
+    final resolved = _resolvedFederation;
+    if (resolved != null && resolved.accountId.trim().isNotEmpty) {
+      return _buildFederationBanner(
+        c,
+        icon: LucideIcons.checkCircle2,
+        title: 'Resolved to ${_shortenAddress(resolved.accountId)}',
+        subtitle: resolved.stellarAddress,
+        color: c.success,
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildFederationBanner(
+    AppColor c, {
+    required IconData? icon,
+    required String title,
+    required Color color,
+    String? subtitle,
+    bool showSpinner = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.18), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showSpinner)
+            SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: color.withOpacity(0.85),
+              ),
+            )
+          else if (icon != null)
+            Icon(icon, size: 16, color: color.withOpacity(0.9)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color.withOpacity(0.95),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+                if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle.trim(),
+                    style: TextStyle(
+                      color: c.textSecondary.withOpacity(0.9),
+                      fontSize: 11.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // UNLOCK SCHEDULE CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildUnlockCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1078,9 +1391,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: true)),
+              Expanded(
+                child: _buildDateTimePicker(c, isDate: true, isUnlock: true),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: true)),
+              Expanded(
+                child: _buildDateTimePicker(c, isDate: false, isUnlock: true),
+              ),
             ],
           ),
           if (_combinedUnlockDateTime != null) ...[
@@ -1097,7 +1414,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(LucideIcons.checkCircle2, size: 16, color: c.primary.withOpacity(0.7)),
+                  Icon(
+                    LucideIcons.checkCircle2,
+                    size: 16,
+                    color: c.primary.withOpacity(0.7),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1119,9 +1440,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // EXPIRATION CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildExpirationCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1193,9 +1514,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: _buildDateTimePicker(c, isDate: true, isUnlock: false)),
+                Expanded(
+                  child: _buildDateTimePicker(c, isDate: true, isUnlock: false),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _buildDateTimePicker(c, isDate: false, isUnlock: false)),
+                Expanded(
+                  child: _buildDateTimePicker(
+                    c,
+                    isDate: false,
+                    isUnlock: false,
+                  ),
+                ),
               ],
             ),
             if (_combinedExpiryDateTime != null) ...[
@@ -1212,7 +1541,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(LucideIcons.alertTriangle, size: 16, color: c.warning.withOpacity(0.7)),
+                    Icon(
+                      LucideIcons.alertTriangle,
+                      size: 16,
+                      color: c.warning.withOpacity(0.7),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -1235,7 +1568,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  Widget _buildDateTimePicker(AppColor c, {required bool isDate, required bool isUnlock}) {
+  Widget _buildDateTimePicker(
+    AppColor c, {
+    required bool isDate,
+    required bool isUnlock,
+  }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final icon = isDate ? LucideIcons.calendar : LucideIcons.clock;
     final color = isUnlock ? c.primary : c.warning;
@@ -1244,7 +1581,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         : (isUnlock ? _unlockTime : _expiryTime);
     final text = isDate
         ? (value != null ? _dateFmt.format(value as DateTime) : 'Select date')
-        : (value != null ? (value as TimeOfDay).format(context) : 'Select time');
+        : (value != null
+              ? (value as TimeOfDay).format(context)
+              : 'Select time');
 
     final onTap = isDate
         ? (isUnlock ? _pickUnlockDate : _pickExpiryDate)
@@ -1272,14 +1611,18 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             Icon(
               icon,
               size: 16,
-              color: value != null ? color.withOpacity(0.8) : c.textSecondary.withOpacity(0.5),
+              color: value != null
+                  ? color.withOpacity(0.8)
+                  : c.textSecondary.withOpacity(0.5),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
-                  color: value != null ? c.textPrimary : c.textSecondary.withOpacity(0.5),
+                  color: value != null
+                      ? c.textPrimary
+                      : c.textSecondary.withOpacity(0.5),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,
@@ -1293,22 +1636,26 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // INFO CARD
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildInfoCard(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isTimeLocked = _mode == ClaimableMode.timeLocked;
 
     String message;
     if (isTimeLocked && _hasExpiry) {
-      message = 'Funds locked until unlock time. Recipient can claim between unlock and expiry. You can reclaim after expiry if unclaimed.';
+      message =
+          'Funds locked until unlock time. Recipient can claim between unlock and expiry. You can reclaim after expiry if unclaimed.';
     } else if (isTimeLocked) {
-      message = 'Funds locked until unlock time. Recipient can claim anytime after that.';
+      message =
+          'Funds locked until unlock time. Recipient can claim anytime after that.';
     } else if (_hasExpiry) {
-      message = 'Recipient can claim immediately but must do so before expiry. You can reclaim if unclaimed.';
+      message =
+          'Recipient can claim immediately but must do so before expiry. You can reclaim if unclaimed.';
     } else {
-      message = 'Recipient can claim anytime. Balance held on Stellar network until claimed.';
+      message =
+          'Recipient can claim anytime. Balance held on Stellar network until claimed.';
     }
 
     return Container(
@@ -1364,9 +1711,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // FLOATING ACTION BAR
-  // ──────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildFloatingActionBar(AppColor c) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1395,7 +1742,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         top: false,
         child: SizedBox(
           height: 56,
-          child: ElevatedButton(
+          child: AppElevatedButton(
             onPressed: () {
               HapticFeedback.mediumImpact();
               _submit();

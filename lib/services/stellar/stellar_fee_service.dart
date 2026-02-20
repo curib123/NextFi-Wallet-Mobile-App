@@ -2,78 +2,106 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
+import 'package:next_fi/services/fee_config/fee_config_core_service.dart';
+import 'package:next_fi/services/fee_config/models/fee_config_models.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/services/stellar/stellar_base_service.dart';
 
-/// Service for fee estimation and price quotes
+/// Service for fee estimation and price quotes.
+/// Fee policy comes from backend `/api/v1/fee-config`.
 class StellarFeeService extends StellarBaseService {
   final String usdcIssuer;
-  final TransactionFeeVaultSecureStorage configVault;
+  final FeeConfigCoreService feeConfigCore;
+
+  FeeConfigModel? _cachedFeeConfig;
+  DateTime? _cachedFeeConfigAt;
+  static const Duration _feeConfigTtl = Duration(minutes: 3);
 
   StellarFeeService({
     required this.usdcIssuer,
     required StellarSDK sdk,
     StellarSDK? sdkQuickNode,
-    TransactionFeeVaultSecureStorage? configVault,
+    FeeConfigCoreService? feeConfigCore,
     String? quickNodeUrlMainnet,
     String? quickNodeUrlTestnet,
     Map<String, String>? quickNodeDefaultHeaders,
-  })  : configVault = configVault ?? TransactionFeeVaultSecureStorage(),
-        super(
-        sdk: sdk,
-        sdkQuickNode: sdkQuickNode,
-        quickNodeUrlMainnet: quickNodeUrlMainnet,
-        quickNodeUrlTestnet: quickNodeUrlTestnet,
-        quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-      );
+  }) : feeConfigCore = feeConfigCore ?? FeeConfigCoreService.I,
+       super(
+         sdk: sdk,
+         sdkQuickNode: sdkQuickNode,
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       );
 
   Asset get xlm => Asset.NATIVE;
   Asset get usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
-  static const double kTxFeeUsdc = 0.005;
+  bool _isFeeConfigFresh() {
+    final at = _cachedFeeConfigAt;
+    if (at == null) return false;
+    return DateTime.now().difference(at) <= _feeConfigTtl;
+  }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Fee Address
-  // ──────────────────────────────────────────────────────────────────────────
+  Future<FeeConfigModel> ensureFeeConfigLoaded({bool refresh = false}) async {
+    if (!refresh && _cachedFeeConfig != null && _isFeeConfigFresh()) {
+      return _cachedFeeConfig!;
+    }
 
-  Future<String> getSwapFeeAddress() async {
     try {
-      return (await configVault.readOrInit()).address;
+      final cfg = await feeConfigCore.getCurrent();
+      _cachedFeeConfig = cfg;
+      _cachedFeeConfigAt = DateTime.now();
+      return cfg;
     } catch (e) {
+      if (!refresh && _cachedFeeConfig != null) {
+        return _cachedFeeConfig!;
+      }
       fail(
-        'Unable to load fee settings',
+        'Unable to load fee configuration',
         technicalError: e,
-        advice:
-        'Please restart the app. If the problem continues, you may need to reinstall',
+        advice: 'Please try again in a moment.',
       );
     }
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Fee Calculation
-  // ──────────────────────────────────────────────────────────────────────────
+  Future<String> getSwapFeeAddress({bool refresh = false}) async {
+    final cfg = await ensureFeeConfigLoaded(refresh: refresh);
+    final address = cfg.profitAddress.trim();
+
+    if (address.isEmpty) {
+      fail('Fee address is not configured', advice: 'Please contact support.');
+    }
+    return address;
+  }
+
+  Future<double> getSwapFeeRate({bool refresh = false}) async {
+    final cfg = await ensureFeeConfigLoaded(refresh: refresh);
+    if (!cfg.isEnabled) return 0.0;
+    return cfg.swapFeeRate;
+  }
 
   Future<double> computeDynamicFeeXlm() async {
+    final cfg = await ensureFeeConfigLoaded();
+    final feeUsd = cfg.txFeeUsd;
+
+    if (!cfg.isEnabled || feeUsd <= 0) return 0.0;
+
     try {
-      final x1 = await quoteUsdcToXlm(kTxFeeUsdc);
+      final x1 = await quoteUsdcToXlm(feeUsd);
       if (x1 != null && x1 > 0) return x1;
     } catch (_) {}
 
     try {
       final usdcPer1Xlm = await quoteXlmToUsdc(1.0);
       if (usdcPer1Xlm != null && usdcPer1Xlm > 0) {
-        final x2 = kTxFeeUsdc / usdcPer1Xlm;
+        final x2 = feeUsd / usdcPer1Xlm;
         if (x2 > 0) return x2;
       }
     } catch (_) {}
 
-    try {
-      return await configVault.getFeeXlm();
-    } catch (_) {
-      return 0.05;
-    }
+    return feeUsd;
   }
 
   Future<int> getCurrentFeeStroops() async {
@@ -86,10 +114,6 @@ class StellarFeeService extends StellarBaseService {
 
   Future<String> getCurrentFeeLabel() async =>
       '${(await getCurrentFeeXlm()).toStringAsFixed(7)} XLM';
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Network Fee Estimation
-  // ──────────────────────────────────────────────────────────────────────────
 
   Future<double> estimateNetworkFeeXlm({
     int opCount = 1,
@@ -125,10 +149,6 @@ class StellarFeeService extends StellarBaseService {
 
     return (200 * ops) * 1e-7;
   }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Quotes
-  // ──────────────────────────────────────────────────────────────────────────
 
   Future<double?> quoteStrictSend({
     required Asset sourceAsset,

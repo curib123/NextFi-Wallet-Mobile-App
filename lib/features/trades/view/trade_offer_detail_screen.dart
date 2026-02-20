@@ -1,0 +1,1454 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
+import 'package:next_fi/features/trades/view/trade_order_screen.dart';
+import 'package:next_fi/features/trades/view/trade_template_screen.dart';
+import 'package:next_fi/features/verification_flow/view/payment_method_setup_screen.dart';
+import 'package:next_fi/services/offers/models/offers_models.dart';
+import 'package:next_fi/services/offers/offers_core_service.dart';
+import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
+import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/trades/models/trades_dtos.dart';
+import 'package:next_fi/services/trades/trades_core_service.dart';
+import 'package:next_fi/services/wallet/models/wallet_models.dart';
+import 'package:next_fi/services/wallet/wallet_core_service.dart';
+import 'package:provider/provider.dart';
+
+class TradeOfferDetailScreen extends StatefulWidget {
+  const TradeOfferDetailScreen({
+    super.key,
+    required this.mode,
+    required this.offer,
+  });
+
+  final TradeTemplateMode mode;
+  final OfferModel offer;
+
+  @override
+  State<TradeOfferDetailScreen> createState() => _TradeOfferDetailScreenState();
+}
+
+class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
+  final _offers = OffersCoreService.I;
+  final _payments = PaymentMethodAndAccountsCoreService.I;
+  final _trades = TradesCoreService.I;
+  final _wallets = WalletCoreService.I;
+
+  final _amountCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  final _buyerAddressCtrl = TextEditingController();
+  final _money = NumberFormat.currency(symbol: '', decimalDigits: 2);
+
+  OfferModel? _offer;
+  List<UserPaymentAccountModel> _myAccounts = const [];
+  List<UserPaymentAccountModel> _sellerAccounts = const [];
+  List<WalletAddress> _myWallets = const [];
+  UserPaymentAccountModel? _buyerAccount;
+  UserPaymentAccountModel? _sellerAccount;
+  WalletAddress? _buyerWallet;
+  String? _createIdempotencyKey;
+  double? _walletXlmBalance;
+  bool _fetchingBalance = false;
+  Timer? _retryTimer;
+
+  bool _loading = true;
+  bool _submitting = false;
+  String? _error;
+
+  bool get _isBuy => widget.mode == TradeTemplateMode.buy;
+
+  @override
+  void initState() {
+    super.initState();
+    _offer = widget.offer;
+    _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _amountCtrl.dispose();
+    _noteCtrl.dispose();
+    _buyerAddressCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _error != null) _bootstrap();
+    });
+  }
+
+  Future<void> _bootstrap() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait<dynamic>([
+        _offers.getPublicOffer(widget.offer.id),
+        _payments.listMyPaymentAccounts(activeOnly: true),
+        _wallets.list(),
+      ]);
+      final fullOffer = results[0] as OfferModel;
+      final myAccounts = results[1] as List<UserPaymentAccountModel>;
+      final wallets = results[2] as List<WalletAddress>;
+      final stellarWallets = wallets
+          .where((w) => w.network.trim().toLowerCase() == 'stellar')
+          .toList();
+      final selectedWallet = stellarWallets.isNotEmpty
+          ? stellarWallets.first
+          : null;
+
+      if (!mounted) return;
+      setState(() {
+        _offer = fullOffer;
+        _myAccounts = myAccounts;
+        _buyerAccount = myAccounts.isNotEmpty ? myAccounts.first : null;
+        _sellerAccounts = fullOffer.sellerPaymentAccounts;
+        _sellerAccount = _sellerAccounts.isNotEmpty
+            ? _sellerAccounts.first
+            : null;
+        _myWallets = stellarWallets;
+        _buyerWallet = selectedWallet;
+        _buyerAddressCtrl.text = selectedWallet?.publicAddress ?? '';
+        _loading = false;
+      });
+      _fetchWalletBalance(selectedWallet?.publicAddress);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+      _scheduleRetry();
+    }
+  }
+
+  Future<void> _fetchWalletBalance(String? address) async {
+    if (address == null || address.trim().isEmpty) {
+      if (mounted) setState(() => _walletXlmBalance = null);
+      return;
+    }
+    if (mounted) setState(() => _fetchingBalance = true);
+    try {
+      final stellar = context.read<StellarWalletServices>();
+      final balance = await stellar.accountService.getXlmBalance(
+        address.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _walletXlmBalance = balance;
+        _fetchingBalance = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _walletXlmBalance = null;
+        _fetchingBalance = false;
+      });
+    }
+  }
+
+  String _priceLabel(OfferModel offer) {
+    if (offer.priceType == OfferPriceType.fixed && offer.fixedPrice != null) {
+      return '${_money.format(offer.fixedPrice)} ${offer.fiatCurrency}';
+    }
+    if (offer.priceType == OfferPriceType.floating &&
+        offer.marginPercent != null) {
+      return 'Market ${offer.marginPercent! >= 0 ? '+' : ''}${offer.marginPercent!.toStringAsFixed(2)}%';
+    }
+    return 'Price not available';
+  }
+
+  Future<void> _continue() async {
+    final offer = _offer;
+    if (offer == null || _submitting) return;
+
+    final amountText = _amountCtrl.text.trim();
+    final amount = double.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      _showSnack('Enter a valid amount.');
+      return;
+    }
+    if (amount < offer.minAmount || amount > offer.maxAmount) {
+      _showSnack(
+        'Amount must be between ${offer.minAmount.toStringAsFixed(2)} and ${offer.maxAmount.toStringAsFixed(2)} ${offer.fiatCurrency}.',
+      );
+      return;
+    }
+
+    String? resolvedBuyerAddress;
+    bool useManualAddress = false;
+
+    if (_isBuy) {
+      // SELL offer: user is buyer — needs wallet + seller payment account
+      final sellerWalletAddress = offer.sellerWallet?.publicAddress.trim();
+      if ((offer.sellerWalletId?.trim().isEmpty ?? true) &&
+          (sellerWalletAddress == null || sellerWalletAddress.isEmpty)) {
+        _showSnack(
+          'This offer is missing seller escrow wallet configuration. Please choose another offer.',
+        );
+        return;
+      }
+      if (_sellerAccount == null) {
+        _showSnack('This offer has no seller payment account configured.');
+        return;
+      }
+      final resolvedWallet = _resolveBuyerAddressInput();
+      resolvedBuyerAddress = resolvedWallet.address;
+      useManualAddress = resolvedWallet.useManualAddress;
+      if (resolvedBuyerAddress.isEmpty) {
+        _showSnack('Select your receiving wallet or paste a Stellar address.');
+        return;
+      }
+      if (!_looksStellarAddress(resolvedBuyerAddress)) {
+        _showSnack('Enter a valid Stellar address (G...).');
+        return;
+      }
+      if (sellerWalletAddress != null &&
+          sellerWalletAddress.isNotEmpty &&
+          sellerWalletAddress.toUpperCase() ==
+              resolvedBuyerAddress.toUpperCase()) {
+        _showSnack('Buyer wallet and seller escrow wallet must be different.');
+        return;
+      }
+    }
+    // BUY offer (user sells): no wallet needed — deposit address auto-generated
+
+    _createIdempotencyKey ??= _buildActionKey('trade-create');
+
+    final confirmed = await _showConfirmSheet(
+      context,
+      offer: offer,
+      amount: amount,
+      buyerAccount: _buyerAccount,
+      sellerAccount: _sellerAccount,
+      buyerWalletAddress: resolvedBuyerAddress,
+      note: _noteCtrl.text.trim(),
+      isBuy: _isBuy,
+      money: _money,
+    );
+    if (confirmed != true) return;
+
+    setState(() => _submitting = true);
+    try {
+      final trade = await _trades.createTrade(
+        CreateTradeRequest(
+          offerId: offer.id,
+          amount: amount,
+          // Only for SELL offers (user is buyer)
+          sellerPaymentAccountId: _isBuy ? _sellerAccount?.id : null,
+          buyerPaymentAccountId: _buyerAccount?.id,
+          buyerWalletId: (_isBuy && !useManualAddress) ? _buyerWallet?.id : null,
+          buyerPublicAddress: resolvedBuyerAddress,
+          idempotencyKey: _createIdempotencyKey!,
+          note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        ),
+      );
+      _createIdempotencyKey = null;
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => TradeOrderScreen(
+            tradeId: trade.id,
+            asSeller: false,
+            mode: widget.mode,
+          ),
+        ),
+        result: true,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _showSnack(e.toString());
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  bool _looksStellarAddress(String value) {
+    final normalized = value.trim().toUpperCase();
+    return RegExp(r'^G[A-Z2-7]{55}$').hasMatch(normalized);
+  }
+
+  ({String address, bool useManualAddress}) _resolveBuyerAddressInput() {
+    final typedBuyerAddress = _buyerAddressCtrl.text.trim().toUpperCase();
+    final selectedWalletAddress = _buyerWallet?.publicAddress.trim() ?? '';
+    final useManualAddress =
+        typedBuyerAddress.isNotEmpty &&
+        typedBuyerAddress != selectedWalletAddress.toUpperCase();
+    final resolvedBuyerAddress = useManualAddress
+        ? typedBuyerAddress
+        : (selectedWalletAddress.isNotEmpty
+              ? selectedWalletAddress
+              : typedBuyerAddress);
+    return (address: resolvedBuyerAddress, useManualAddress: useManualAddress);
+  }
+
+  String _buildActionKey(String action) {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final rnd = math.Random().nextInt(1 << 32).toRadixString(16);
+    return '$action-$now-$rnd';
+  }
+
+  String _shortAddress(String address) {
+    final v = address.trim();
+    if (v.length <= 18) return v;
+    return '${v.substring(0, 8)}...${v.substring(v.length - 8)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final offer = _offer;
+    final amount = double.tryParse(_amountCtrl.text.trim());
+    final hasOffer = offer != null;
+    final amountValid =
+        offer != null &&
+        amount != null &&
+        amount > 0 &&
+        amount >= offer.minAmount &&
+        amount <= offer.maxAmount;
+    final sellerWalletAddress = offer?.sellerWallet?.publicAddress.trim() ?? '';
+    final sellerWalletConfigured =
+        !_isBuy || // BUY offers don't need seller escrow wallet
+        (offer?.sellerWalletId?.trim().isNotEmpty ?? false) ||
+        sellerWalletAddress.isNotEmpty;
+    final sellerAccountConfigured =
+        !_isBuy || _sellerAccount != null; // Only required for SELL offers
+    final buyerWalletInput = _resolveBuyerAddressInput();
+    final buyerWalletAddress = buyerWalletInput.address;
+    final buyerWalletValid =
+        !_isBuy || // BUY offers don't need buyer wallet
+        (buyerWalletAddress.isNotEmpty &&
+            _looksStellarAddress(buyerWalletAddress) &&
+            !(sellerWalletAddress.isNotEmpty &&
+                buyerWalletAddress.toUpperCase() ==
+                    sellerWalletAddress.toUpperCase()));
+    final canContinue =
+        !_submitting &&
+        hasOffer &&
+        amountValid &&
+        sellerWalletConfigured &&
+        sellerAccountConfigured &&
+        buyerWalletValid;
+    final nextStepHint = !amountValid
+        ? 'Enter a valid amount within the offer limits.'
+        : (_isBuy && !buyerWalletValid)
+        ? 'Set a valid receiving wallet address for crypto delivery.'
+        : (_isBuy && !sellerAccountConfigured)
+        ? 'Select the seller payment account from this offer.'
+        : (_isBuy && !sellerWalletConfigured)
+        ? 'This offer is missing seller escrow wallet configuration.'
+        : 'Ready to create a protected trade.';
+
+    return Scaffold(
+      backgroundColor: c.background,
+      appBar: _buildAppBar(c),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline_rounded, color: c.error, size: 24),
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: c.textSecondary, fontSize: 12.8),
+                    ),
+                    const SizedBox(height: 12),
+                    AppOutlinedButton(
+                      onPressed: _bootstrap,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: c.textPrimary,
+                        side: BorderSide(color: c.border.withOpacity(0.5)),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : offer == null
+          ? const SizedBox.shrink()
+          : SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+                children: [
+                  _OfferOverviewCard(
+                    offer: offer,
+                    c: c,
+                    priceLabel: _priceLabel(offer),
+                  ),
+                  const SizedBox(height: 10),
+                  _ClaimableProtectionCard(c: c),
+                  const SizedBox(height: 10),
+                  _TradeSetupChecklistCard(
+                    c: c,
+                    amountValid: amountValid,
+                    walletValid: buyerWalletValid,
+                    sellerAccountValid: sellerAccountConfigured,
+                    sellerEscrowWalletValid: sellerWalletConfigured,
+                    hint: nextStepHint,
+                    isBuy: _isBuy,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'TRADE SETUP',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: c.border.withOpacity(0.25)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Create Trade',
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 14.8,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _amountCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {
+                            _createIdempotencyKey = null;
+                          }),
+                          decoration: InputDecoration(
+                            labelText: 'Amount (${offer.fiatCurrency})',
+                            hintText:
+                                '${offer.minAmount.toStringAsFixed(2)} - ${offer.maxAmount.toStringAsFixed(2)}',
+                            filled: true,
+                            fillColor: c.background,
+                            border: _fieldBorder(c),
+                            enabledBorder: _fieldBorder(c),
+                            focusedBorder: _fieldFocusedBorder(c),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _noteCtrl,
+                          minLines: 2,
+                          maxLines: 3,
+                          onChanged: (_) => setState(() {
+                            _createIdempotencyKey = null;
+                          }),
+                          decoration: InputDecoration(
+                            labelText: 'Note (optional)',
+                            hintText: 'Payment note for merchant',
+                            filled: true,
+                            fillColor: c.background,
+                            border: _fieldBorder(c),
+                            enabledBorder: _fieldBorder(c),
+                            focusedBorder: _fieldFocusedBorder(c),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // ── Your fiat payment account ──────────────────────
+                        if (_myAccounts.isEmpty)
+                          _MissingAccountNotice(c: c, isBuy: _isBuy)
+                        else ...[
+                          DropdownButtonFormField<UserPaymentAccountModel>(
+                            value: _buyerAccount,
+                            isExpanded: true,
+                            items: _myAccounts
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e,
+                                    child: Text(
+                                      '${e.paymentMethod?.name ?? 'Method'} | ${e.accountName}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _submitting
+                                ? null
+                                : (v) => setState(() {
+                                    _buyerAccount = v;
+                                    _createIdempotencyKey = null;
+                                  }),
+                            decoration: InputDecoration(
+                              labelText: _isBuy
+                                  ? 'Your payment account (optional)'
+                                  : 'Your fiat payout account (recommended)',
+                              filled: true,
+                              fillColor: c.background,
+                              border: _fieldBorder(c),
+                              enabledBorder: _fieldBorder(c),
+                              focusedBorder: _fieldFocusedBorder(c),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _isBuy
+                                ? 'Optional: add your preferred payment reference for better dispute evidence.'
+                                : 'The merchant will send fiat to this account after crypto is confirmed.',
+                            style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 11.8,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                        // ── BUY flow: wallet selection for crypto delivery ──
+                        if (_isBuy) ...[
+                          const SizedBox(height: 10),
+                          if (_myWallets.isEmpty)
+                            _NoWalletNotice(c: c)
+                          else
+                            DropdownButtonFormField<WalletAddress>(
+                              value: _buyerWallet,
+                              isExpanded: true,
+                              items: _myWallets
+                                  .map(
+                                    (wallet) => DropdownMenuItem<WalletAddress>(
+                                      value: wallet,
+                                      child: Text(
+                                        '${wallet.label?.trim().isNotEmpty == true ? wallet.label!.trim() : 'Stellar Wallet'} | ${_shortAddress(wallet.publicAddress)}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _submitting
+                                  ? null
+                                  : (wallet) {
+                                      setState(() {
+                                        _buyerWallet = wallet;
+                                        _buyerAddressCtrl.text =
+                                            wallet?.publicAddress ?? '';
+                                        _createIdempotencyKey = null;
+                                      });
+                                      _fetchWalletBalance(wallet?.publicAddress);
+                                    },
+                              decoration: InputDecoration(
+                                labelText: 'Receive wallet (crypto delivery)',
+                                filled: true,
+                                fillColor: c.background,
+                                border: _fieldBorder(c),
+                                enabledBorder: _fieldBorder(c),
+                                focusedBorder: _fieldFocusedBorder(c),
+                              ),
+                            ),
+                          if (_myWallets.isNotEmpty && _buyerWallet != null) ...[
+                            const SizedBox(height: 6),
+                            _WalletBalanceBanner(
+                              c: c,
+                              balance: _walletXlmBalance,
+                              loading: _fetchingBalance,
+                              isSellMode: false,
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _buyerAddressCtrl,
+                            textCapitalization: TextCapitalization.characters,
+                            onChanged: (_) => setState(() {
+                              _createIdempotencyKey = null;
+                            }),
+                            decoration: InputDecoration(
+                              labelText: 'Receive address (fallback)',
+                              hintText: 'G...',
+                              filled: true,
+                              fillColor: c.background,
+                              border: _fieldBorder(c),
+                              enabledBorder: _fieldBorder(c),
+                              focusedBorder: _fieldFocusedBorder(c),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // Seller payment account (where user pays fiat TO)
+                          if (_sellerAccounts.isEmpty)
+                            _NoSellerAccountNotice(c: c)
+                          else
+                            DropdownButtonFormField<UserPaymentAccountModel>(
+                              value: _sellerAccount,
+                              isExpanded: true,
+                              items: _sellerAccounts
+                                  .map(
+                                    (e) => DropdownMenuItem(
+                                      value: e,
+                                      child: Text(
+                                        '${e.paymentMethod?.name ?? 'Method'} | ${e.accountName}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _submitting
+                                  ? null
+                                  : (v) => setState(() {
+                                      _sellerAccount = v;
+                                      _createIdempotencyKey = null;
+                                    }),
+                              decoration: InputDecoration(
+                                labelText: 'Merchant payment account (pay fiat here)',
+                                filled: true,
+                                fillColor: c.background,
+                                border: _fieldBorder(c),
+                                enabledBorder: _fieldBorder(c),
+                                focusedBorder: _fieldFocusedBorder(c),
+                              ),
+                            ),
+                        ] else ...[
+                          // ── SELL flow: no wallet needed ──────────────────
+                          const SizedBox(height: 10),
+                          _BuyFlowDepositNotice(c: c),
+                        ],
+                        const SizedBox(height: 12),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          height: 48,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: _submitting
+                                ? null
+                                : [
+                                    BoxShadow(
+                                      color: c.primary.withOpacity(0.3),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                          ),
+                          child: AppElevatedButton.icon(
+                            onPressed: canContinue ? _continue : null,
+                            icon: _submitting
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.check_circle_outline,
+                                    size: 16,
+                                  ),
+                            label: Text(
+                              _submitting
+                                  ? 'Creating trade...'
+                                  : 'Confirm & Continue',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: c.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size.fromHeight(48),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(AppColor c) {
+    return AppBar(
+      backgroundColor: c.background,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleSpacing: 4,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: c.textPrimary,
+            size: 18,
+          ),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _isBuy ? 'Buy Crypto' : 'Sell Crypto',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: (_isBuy ? c.success : c.warning).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _isBuy ? 'You: Buyer · Merchant: Seller' : 'You: Seller · Merchant: Buyer',
+                  style: TextStyle(
+                    color: _isBuy ? c.success : c.warning,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  OutlineInputBorder _fieldBorder(AppColor c) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(13),
+      borderSide: BorderSide(color: c.border.withOpacity(0.24)),
+    );
+  }
+
+  OutlineInputBorder _fieldFocusedBorder(AppColor c) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(13),
+      borderSide: BorderSide(color: c.primary.withOpacity(0.42), width: 1.2),
+    );
+  }
+}
+
+class _OfferOverviewCard extends StatelessWidget {
+  const _OfferOverviewCard({
+    required this.offer,
+    required this.c,
+    required this.priceLabel,
+  });
+
+  final OfferModel offer;
+  final AppColor c;
+  final String priceLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final methods = offer.paymentMethods
+        .map((e) => e.name.trim().isEmpty ? e.code : e.name)
+        .where((e) => e.trim().isNotEmpty)
+        .join(' | ');
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'LIVE OFFER',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Icon(LucideIcons.shieldCheck, size: 15, color: c.success),
+              const SizedBox(width: 4),
+              Text(
+                'Escrow Protected',
+                style: TextStyle(
+                  color: c.success,
+                  fontSize: 11.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${offerAssetToApi(offer.asset)}/${offer.fiatCurrency}',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            priceLabel,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Limits ${offer.minAmount.toStringAsFixed(2)} - ${offer.maxAmount.toStringAsFixed(2)} ${offer.fiatCurrency}',
+            style: TextStyle(color: c.textSecondary, fontSize: 12.6),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Payment window ${offer.paymentWindow} minutes',
+            style: TextStyle(color: c.textSecondary, fontSize: 12.6),
+          ),
+          if (methods.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              methods,
+              style: TextStyle(
+                color: c.textPrimary.withOpacity(0.85),
+                fontSize: 12.4,
+              ),
+            ),
+          ],
+          if (offer.sellerWallet?.publicAddress.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Escrow wallet ${offer.sellerWallet!.publicAddress}',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.9,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ClaimableProtectionCard extends StatelessWidget {
+  const _ClaimableProtectionCard({required this.c});
+
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: c.success.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.success.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: c.success.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.verified_user_rounded,
+              color: c.success,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Claimable Balance Protection',
+                  style: TextStyle(
+                    color: c.success,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Anti-scam protection is enabled: this trade uses claimable-balance escrow. Do not release or confirm outside the official flow.',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 12.3,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BuyFlowDepositNotice extends StatelessWidget {
+  const _BuyFlowDepositNotice({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Crypto deposit address auto-generated',
+            style: TextStyle(
+              color: c.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.6,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'After creating this trade, you will receive a unique deposit address and memo. You must send the exact amount with the exact memo — missing or wrong memo will prevent the system from matching your deposit.',
+            style: TextStyle(color: c.textPrimary, fontSize: 12, height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TradeSetupChecklistCard extends StatelessWidget {
+  const _TradeSetupChecklistCard({
+    required this.c,
+    required this.amountValid,
+    required this.walletValid,
+    required this.sellerAccountValid,
+    required this.sellerEscrowWalletValid,
+    required this.hint,
+    required this.isBuy,
+  });
+
+  final AppColor c;
+  final bool amountValid;
+  final bool walletValid;
+  final bool sellerAccountValid;
+  final bool sellerEscrowWalletValid;
+  final String hint;
+  final bool isBuy;
+
+  Widget _row({required String label, required bool ok}) {
+    return Row(
+      children: [
+        Icon(
+          ok
+              ? Icons.check_circle_rounded
+              : Icons.radio_button_unchecked_rounded,
+          size: 15,
+          color: ok ? c.success : c.textSecondary,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 12.3,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border.withOpacity(0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Setup Checklist',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 12.8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _row(label: 'Amount is within offer limits', ok: amountValid),
+          if (isBuy) ...[
+            const SizedBox(height: 6),
+            _row(label: 'Receive wallet address is valid', ok: walletValid),
+            const SizedBox(height: 6),
+            _row(
+              label: 'Merchant payment account selected',
+              ok: sellerAccountValid,
+            ),
+            const SizedBox(height: 6),
+            _row(
+              label: 'Offer has seller escrow wallet binding',
+              ok: sellerEscrowWalletValid,
+            ),
+          ] else ...[
+            const SizedBox(height: 6),
+            _row(
+              label: 'Deposit address auto-generated after creation',
+              ok: true,
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            hint,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11.8,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MissingAccountNotice extends StatelessWidget {
+  const _MissingAccountNotice({required this.c, this.isBuy = true});
+
+  final AppColor c;
+  final bool isBuy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.warning.withOpacity(0.09),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.warning.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No payment account selected yet.',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.6,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'You can still proceed using wallet binding, but adding a payment account improves settlement traceability.',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.1,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          AppTextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const PaymentMethodSetupScreen(),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: c.primary,
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Open payment account setup'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoSellerAccountNotice extends StatelessWidget {
+  const _NoSellerAccountNotice({required this.c});
+
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.error.withOpacity(0.2)),
+      ),
+      child: Text(
+        'Seller payment account is not available for this offer. Choose another offer.',
+        style: TextStyle(color: c.textPrimary, fontSize: 12.3),
+      ),
+    );
+  }
+}
+
+class _NoWalletNotice extends StatelessWidget {
+  const _NoWalletNotice({required this.c});
+
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.warning.withOpacity(0.09),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.warning.withOpacity(0.25)),
+      ),
+      child: Text(
+        'No Stellar wallet found in your account. Paste a valid G-address below or create a wallet first.',
+        style: TextStyle(color: c.textPrimary, fontSize: 12.3, height: 1.3),
+      ),
+    );
+  }
+}
+
+Future<bool?> _showConfirmSheet(
+  BuildContext context, {
+  required OfferModel offer,
+  required double amount,
+  required UserPaymentAccountModel? buyerAccount,
+  required UserPaymentAccountModel? sellerAccount,
+  required String? buyerWalletAddress,
+  required String note,
+  required bool isBuy,
+  required NumberFormat money,
+}) {
+  final c = AppColor.of(context);
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.border.withOpacity(0.25)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: c.border.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Confirm Trade',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _ConfirmRow(
+                c: c,
+                label: 'You are',
+                value: isBuy
+                    ? 'Buying — pay fiat, receive crypto via CB'
+                    : 'Selling — send crypto on-chain, receive fiat',
+              ),
+              _ConfirmRow(
+                c: c,
+                label: 'Asset',
+                value:
+                    '${offerAssetToApi(offer.asset)} / ${offer.fiatCurrency}',
+              ),
+              _ConfirmRow(
+                c: c,
+                label: 'Amount',
+                value: '${money.format(amount)} ${offer.fiatCurrency}',
+              ),
+              _ConfirmRow(
+                c: c,
+                label: 'Your account',
+                value: buyerAccount == null
+                    ? 'Not provided'
+                    : '${buyerAccount.paymentMethod?.name ?? 'Method'} | ${buyerAccount.accountName}',
+              ),
+              if (isBuy && sellerAccount != null)
+                _ConfirmRow(
+                  c: c,
+                  label: 'Pay fiat to',
+                  value:
+                      '${sellerAccount.paymentMethod?.name ?? 'Method'} | ${sellerAccount.accountName}',
+                ),
+              if (isBuy && buyerWalletAddress != null && buyerWalletAddress.isNotEmpty)
+                _ConfirmRow(
+                  c: c,
+                  label: 'Receive wallet',
+                  value: buyerWalletAddress,
+                ),
+              if (!isBuy)
+                _ConfirmRow(
+                  c: c,
+                  label: 'Deposit',
+                  value: 'Address & memo shown after trade is created',
+                ),
+              if (note.isNotEmpty)
+                _ConfirmRow(c: c, label: 'Note', value: note),
+              const SizedBox(height: 12),
+              AppElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                fullWidth: true,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: c.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('Create Trade'),
+              ),
+              const SizedBox(height: 8),
+              AppTextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                fullWidth: true,
+                style: TextButton.styleFrom(
+                  foregroundColor: c.textPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _WalletBalanceBanner extends StatelessWidget {
+  const _WalletBalanceBanner({
+    required this.c,
+    required this.balance,
+    required this.loading,
+    required this.isSellMode,
+  });
+
+  final AppColor c;
+  final double? balance;
+  final bool loading;
+  final bool isSellMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final balanceFmt = NumberFormat('#,##0.######');
+    final hasBalance = balance != null;
+    final isLow = isSellMode && hasBalance && balance! < 5.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: isLow
+            ? c.warning.withOpacity(0.09)
+            : c.success.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isLow
+              ? c.warning.withOpacity(0.25)
+              : c.success.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            loading
+                ? Icons.hourglass_empty_rounded
+                : isLow
+                ? Icons.warning_amber_rounded
+                : Icons.account_balance_wallet_rounded,
+            size: 14,
+            color: loading
+                ? c.textSecondary
+                : isLow
+                ? c.warning
+                : c.success,
+          ),
+          const SizedBox(width: 7),
+          if (loading)
+            Text(
+              'Fetching wallet balance...',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            )
+          else if (!hasBalance)
+            Text(
+              'Could not fetch balance from Stellar network.',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            )
+          else ...[
+            Text(
+              'Wallet balance: ',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            ),
+            Text(
+              '${balanceFmt.format(balance!)} XLM',
+              style: TextStyle(
+                color: isLow ? c.warning : c.success,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (isSellMode && isLow) ...[
+              const SizedBox(width: 6),
+              Text(
+                '— top up before selling',
+                style: TextStyle(color: c.warning, fontSize: 11.5),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ConfirmRow extends StatelessWidget {
+  const _ConfirmRow({
+    required this.c,
+    required this.label,
+    required this.value,
+  });
+
+  final AppColor c;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 12.2,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12.7,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

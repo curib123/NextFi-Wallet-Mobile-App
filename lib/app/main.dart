@@ -17,6 +17,8 @@ import 'package:provider/single_child_widget.dart';
 // ─────────────────────────── App core ─────────────────────────
 import 'package:next_fi/app/home.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart' hide ThemeBridge;
+import 'package:next_fi/common/services/network_monitor.dart';
+import 'package:next_fi/common/components/network_status_overlay.dart';
 
 // ─────────────────────────── Services ─────────────────────────
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
@@ -27,7 +29,6 @@ import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 
-import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
@@ -67,9 +68,7 @@ Future<void> _loadInitialThemeMode() async {
 // Must be top-level
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('[FCM][bg] ${message.messageId} data=${message.data}');
   // System notification is shown automatically by backend config (no need to call LocalNotif here)
 }
@@ -94,10 +93,7 @@ Future<void> main() async {
 
   runApp(
     Phoenix(
-      child: MultiProvider(
-        providers: _buildProviders(),
-        child: const MyApp(),
-      ),
+      child: MultiProvider(providers: _buildProviders(), child: const MyApp()),
     ),
   );
 }
@@ -111,6 +107,9 @@ List<SingleChildWidget> _buildProviders() {
       'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 
   return [
+    // 0) Network connectivity monitor
+    ChangeNotifierProvider(create: (_) => NetworkMonitor()),
+
     // 1) Boot an initial Stellar service
     Provider<StellarWalletServices>(
       create: (_) => StellarWalletServices(
@@ -120,9 +119,7 @@ List<SingleChildWidget> _buildProviders() {
     ),
 
     // 2) Seed keypair VM
-    ChangeNotifierProvider(
-      create: (_) => SeedKeypairVM()..init(),
-    ),
+    ChangeNotifierProvider(create: (_) => SeedKeypairVM()..init()),
 
     // 3) Currency depends on Stellar service
     ChangeNotifierProxyProvider<StellarWalletServices, CurrencyVM>(
@@ -134,25 +131,28 @@ List<SingleChildWidget> _buildProviders() {
     ChangeNotifierProxyProvider<CurrencyVM, AssetVM>(
       create: (ctx) => AssetVM(ctx.read<CurrencyVM>(), isTestnet: kIsTestnet),
       update: (ctx, currency, prev) =>
-      prev ?? AssetVM(currency, isTestnet: kIsTestnet),
+          prev ?? AssetVM(currency, isTestnet: kIsTestnet),
     ),
 
     // 5) Replace Stellar service when AssetVM is ready
     ProxyProvider<AssetVM, StellarWalletServices>(
       update: (ctx, assetVM, old) {
         final issuer = assetVM.usdcIssuer;
-        if (old == null || old.usdcIssuer != issuer || old.isTestnet != kIsTestnet) {
-          return StellarWalletServices(
-            usdcIssuer: issuer,
-            testnet: kIsTestnet,
-          );
+        if (old == null ||
+            old.usdcIssuer != issuer ||
+            old.isTestnet != kIsTestnet) {
+          return StellarWalletServices(usdcIssuer: issuer, testnet: kIsTestnet);
         }
         return old;
       },
     ),
 
     // 6) WalletHome depends on Stellar + SeedKeypair
-    ChangeNotifierProxyProvider2<StellarWalletServices, SeedKeypairVM, WalletHomeVM>(
+    ChangeNotifierProxyProvider2<
+      StellarWalletServices,
+      SeedKeypairVM,
+      WalletHomeVM
+    >(
       create: (ctx) => WalletHomeVM(
         stellar: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
@@ -170,24 +170,25 @@ List<SingleChildWidget> _buildProviders() {
       update: (ctx, currency, prev) => prev ?? PriceChartVM(currency),
     ),
 
-    // 8) Activity Log VM (independent - initialize on create)
-    ChangeNotifierProvider<ActivityLogVM>(
-      create: (_) => ActivityLogVM()..init(),
-    ),
-
     // 9) Base VMs (independent)
     ChangeNotifierProvider<ImportWalletVM>(create: (_) => ImportWalletVM()),
-    ChangeNotifierProvider<RecipientAddressVM>(create: (_) => RecipientAddressVM()),
+    ChangeNotifierProvider<RecipientAddressVM>(
+      create: (_) => RecipientAddressVM(),
+    ),
     ChangeNotifierProvider<TabVM>(create: (_) => TabVM()),
     ChangeNotifierProvider<WalletSettingsVM>(create: (_) => WalletSettingsVM()),
     ChangeNotifierProvider<WalletCreationVM>(create: (_) => WalletCreationVM()),
     ChangeNotifierProvider<AuthGateVM>(create: (_) => AuthGateVM()),
-    ChangeNotifierProvider<SettingsVM>(create: (_) => SettingsVM()..initDefaults()),
+    ChangeNotifierProvider<SettingsVM>(
+      create: (_) => SettingsVM()..initDefaults(),
+    ),
 
     // 10) Transactions depends on Stellar
     ChangeNotifierProxyProvider<StellarWalletServices, TransactionsVM>(
-      create: (ctx) => TransactionsVM(stellarSvc: ctx.read<StellarWalletServices>()),
-      update: (ctx, stellar, prev) => prev ?? TransactionsVM(stellarSvc: stellar),
+      create: (ctx) =>
+          TransactionsVM(stellarSvc: ctx.read<StellarWalletServices>()),
+      update: (ctx, stellar, prev) =>
+          prev ?? TransactionsVM(stellarSvc: stellar),
     ),
 
     // 11) Send depends on Stellar + SeedKeypair
@@ -196,7 +197,8 @@ List<SingleChildWidget> _buildProviders() {
         service: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
       ),
-      update: (ctx, stellar, seedVM, prev) => prev ?? SendVM(service: stellar, seedVM: seedVM),
+      update: (ctx, stellar, seedVM, prev) =>
+          prev ?? SendVM(service: stellar, seedVM: seedVM),
     ),
 
     // 12) Seed phrase depends on Stellar
@@ -206,32 +208,40 @@ List<SingleChildWidget> _buildProviders() {
     ),
 
     // 13) Swap depends on Stellar + SeedKeypair + WalletHome
-    ChangeNotifierProxyProvider3<StellarWalletServices, SeedKeypairVM, WalletHomeVM, SwapVM>(
+    ChangeNotifierProxyProvider3<
+      StellarWalletServices,
+      SeedKeypairVM,
+      WalletHomeVM,
+      SwapVM
+    >(
       create: (ctx) => SwapVM(
         svc: ctx.read<StellarWalletServices>(),
         keypairVM: ctx.read<SeedKeypairVM>(),
         walletHomeVM: ctx.read<WalletHomeVM>(),
       )..bindToActiveWallet(),
       update: (ctx, stellar, seedVM, walletHomeVM, existing) {
-        final vm = existing ??
-            SwapVM(
-              svc: stellar,
-              keypairVM: seedVM,
-              walletHomeVM: walletHomeVM,
-            );
+        final vm =
+            existing ??
+            SwapVM(svc: stellar, keypairVM: seedVM, walletHomeVM: walletHomeVM);
         vm.bindToAddress(seedVM.accountId);
         return vm;
       },
     ),
 
     // 14) Claimable balances depends on Stellar + SeedKeypair + WalletHomeVM
-    ChangeNotifierProxyProvider3<StellarWalletServices, SeedKeypairVM, WalletHomeVM, ClaimableVM>(
+    ChangeNotifierProxyProvider3<
+      StellarWalletServices,
+      SeedKeypairVM,
+      WalletHomeVM,
+      ClaimableVM
+    >(
       create: (ctx) => ClaimableVM(
         service: ctx.read<StellarWalletServices>(),
         seedVM: ctx.read<SeedKeypairVM>(),
         walletHomeVM: ctx.read<WalletHomeVM>(),
       ),
-      update: (ctx, stellar, seedVM, walletHomeVM, prev) => prev ??
+      update: (ctx, stellar, seedVM, walletHomeVM, prev) =>
+          prev ??
           ClaimableVM(
             service: stellar,
             seedVM: seedVM,
@@ -249,13 +259,21 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  bool get _isRunningWidgetTest {
+    final bindingName = WidgetsBinding.instance.runtimeType.toString();
+    return bindingName.contains('TestWidgetsFlutterBinding');
+  }
+
   @override
   void initState() {
     super.initState();
+    if (_isRunningWidgetTest) return;
     _bindFcm();
   }
 
   Future<void> _bindFcm() async {
+    if (_isRunningWidgetTest) return;
+
     // ✅ Initialize local notifications for foreground display
     await LocalNotif.I.init(
       onLocalTap: (payload) {
@@ -345,6 +363,9 @@ class _MyAppState extends State<MyApp> {
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),
+          builder: (context, child) => NetworkStatusOverlay(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );

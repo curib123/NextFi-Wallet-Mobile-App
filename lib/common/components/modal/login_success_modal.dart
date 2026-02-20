@@ -1,16 +1,14 @@
 // lib/common/components/modal/login_success_modal.dart
 
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
-Future<void> showLoginSuccessModal(
-    BuildContext context, {
-      required User user,
-    }) {
+Future<void> showLoginSuccessModal(BuildContext context, {required User user}) {
   return showGeneralDialog(
     context: context,
     barrierDismissible: true,
@@ -27,9 +25,10 @@ Future<void> showLoginSuccessModal(
       return FadeTransition(
         opacity: anim,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(
-            CurvedAnimation(parent: anim, curve: Curves.easeOut),
-          ),
+          scale: Tween<double>(
+            begin: 0.96,
+            end: 1,
+          ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
           child: child,
         ),
       );
@@ -40,9 +39,7 @@ Future<void> showLoginSuccessModal(
 class _LoginSuccessModal extends StatelessWidget {
   final User user;
 
-  const _LoginSuccessModal({
-    required this.user,
-  });
+  const _LoginSuccessModal({required this.user});
 
   void _continue(BuildContext context) {
     Navigator.pop(context);
@@ -107,10 +104,7 @@ class _LoginSuccessModal extends StatelessWidget {
 
               Text(
                 "You're all set to continue",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: colors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 14, color: colors.textSecondary),
               ),
 
               const SizedBox(height: 26),
@@ -129,16 +123,14 @@ class _LoginSuccessModal extends StatelessWidget {
                       user: user,
                       radius: 22,
                       colors: colors,
-                      backgroundColor:
-                      colors.primary.withOpacity(0.15),
+                      backgroundColor: colors.primary.withOpacity(0.15),
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             user.name,
@@ -172,7 +164,7 @@ class _LoginSuccessModal extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: 48,
-                child: ElevatedButton(
+                child: AppElevatedButton(
                   onPressed: () => _continue(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.primary,
@@ -184,10 +176,7 @@ class _LoginSuccessModal extends StatelessWidget {
                   ),
                   child: const Text(
                     'Continue',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),

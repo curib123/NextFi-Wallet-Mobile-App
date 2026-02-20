@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/common/components/drawer/appdrawer.dart';
+import 'package:next_fi/common/components/modal/chat_consent_modal.dart';
 import 'package:next_fi/features/auth/view/login.dart';
+import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
+import 'package:next_fi/features/chat/view/chat_thread_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:provider/provider.dart';
@@ -10,7 +13,9 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
+import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
+import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/build_tab_bar.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/header_section.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/incoming_hints_strip.dart';
@@ -23,7 +28,14 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/modal/token_chooser.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/chat/chat_core_service.dart';
+import 'package:next_fi/services/chat/models/chat_dtos.dart';
+import 'package:next_fi/services/chat/models/chat_models.dart';
+import 'package:next_fi/services/oath2.0/auth_service.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/verification/models/verification_models.dart';
+import 'package:next_fi/services/verification/verification_core_service.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
@@ -33,8 +45,73 @@ class WalletHomeScreen extends StatefulWidget {
   State<WalletHomeScreen> createState() => _WalletHomeScreenState();
 }
 
+class _ChatFloatingButton extends StatelessWidget {
+  const _ChatFloatingButton({
+    required this.colors,
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  final AppColor colors;
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final badgeText = unreadCount > 99 ? '99+' : unreadCount.toString();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        FloatingActionButton(
+          heroTag: 'wallet_home_chat_fab',
+          onPressed: onTap,
+          tooltip: 'Messenger',
+          elevation: 0,
+          backgroundColor: colors.primary,
+          foregroundColor: Colors.white,
+          child: const Icon(Icons.chat_bubble_outline_rounded, size: 22),
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.error,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 1.6),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                badgeText,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.3,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _WalletHomeScreenState extends State<WalletHomeScreen>
-    with WidgetsBindingObserver, TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with
+        WidgetsBindingObserver,
+        TickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin {
+  static const String _kChatConsentKey = 'chat.user_consent.v1';
+  static const String _kChatConsentAtKey = 'chat.user_consent_at.v1';
+
+  final _auth = AuthService();
+  final _chat = ChatCoreService.I;
+
   late final AnimationController _livePulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -45,9 +122,12 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     duration: const Duration(seconds: 20),
   )..repeat();
 
-  final Map<String, AppAlertController> _hintAlertCtrls = <String, AppAlertController>{};
+  final Map<String, AppAlertController> _hintAlertCtrls =
+      <String, AppAlertController>{};
   AppAlertController? _bootBalancesCtl;
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
+  Timer? _chatRefreshTimer;
+  int _unreadChatCount = 0;
 
   // First open: no counting animation; enabled only after the FIRST ready has passed.
   bool _animateTotal = false;
@@ -70,6 +150,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       vm.attachConfirmedTxStream(txVm.incomingStream);
 
       unawaited(vm.boot());
+      unawaited(_refreshUnreadChatCount());
+    });
+
+    _chatRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      unawaited(_refreshUnreadChatCount());
     });
   }
 
@@ -81,6 +166,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     _uiSub?.cancel();
     _uiSub = null;
+    _chatRefreshTimer?.cancel();
+    _chatRefreshTimer = null;
 
     for (final ctl in _hintAlertCtrls.values) {
       ctl.close();
@@ -98,7 +185,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final vm = context.read<WalletHomeVM>();
     if (state == AppLifecycleState.resumed) {
       vm.onResumed();
-    } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      unawaited(_refreshUnreadChatCount());
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       vm.onPausedOrInactive();
     }
   }
@@ -115,22 +204,35 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     final assetsVM = context.watch<AssetVM>();
     final stellar = context.read<StellarWalletServices>();
 
-    final currencyFmt = NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+    final currencyFmt = NumberFormat.simpleCurrency(
+      name: currency.fiat.toUpperCase(),
+    );
     final fxXlm = currency.xlmToFiat(s.xlm);
     final fxUsdc = currency.usdcToFiat(s.usdc);
-    final totalFiat = (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+    final totalFiat =
+        (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
 
     final assetList = assetsVM.assets;
     final logosById = {
-      for (final a in assetList) a.id: (a.primaryLogo.isNotEmpty ? a.primaryLogo : assetsVM.logoFor(a.symbol)),
+      for (final a in assetList)
+        a.id: (a.primaryLogo.isNotEmpty
+            ? a.primaryLogo
+            : assetsVM.logoFor(a.symbol)),
     };
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         backgroundColor: colors.surface,
+
         /// DRAWER HERE
         drawer: const AppDrawer(),
+        floatingActionButton: _ChatFloatingButton(
+          colors: colors,
+          unreadCount: _unreadChatCount,
+          onTap: _openFloatingChat,
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
         body: Stack(
           children: [
@@ -151,7 +253,8 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
             // Main content
             SafeArea(
               child: RefreshIndicator.adaptive(
-                onRefresh: () => context.read<WalletHomeVM>().refresh(force: true),
+                onRefresh: () =>
+                    context.read<WalletHomeVM>().refresh(force: true),
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
@@ -170,7 +273,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           loadingBalances: s.loadingBalances,
                           totalFiat: totalFiat,
                           lastBalancesAt: s.lastBalancesAt,
-                          onSwap: () => vm.onSwapPressed(),
+                          onSwap: _openHeaderScanner,
                           onSend: () => vm.onSendPressed(),
                           onReceive: () => vm.onReceivePressed(),
                           onBuy: () => vm.onBuyPressed(),
@@ -178,21 +281,24 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           livePulse: _livePulse,
                           incomingStrip: s.hasWallet
                               ? IncomingHintsStrip(
-                            colors: colors,
-                            stellarAddress: s.address ?? '',
-                            incomingHints: s.hints
-                                .map((h) => {
-                              'hash': h.id,
-                              'from': h.from,
-                              'to': h.to,
-                              'amount': h.amount.toStringAsFixed(6),
-                              'assetCode': h.assetCode,
-                            })
-                                .toList(),
-                            onAcknowledge: (tx) =>
-                                context.read<WalletHomeVM>().ackHint((tx['hash'] ?? '').toString()),
-                            walletState: s,
-                          )
+                                  colors: colors,
+                                  stellarAddress: s.address ?? '',
+                                  incomingHints: s.hints
+                                      .map(
+                                        (h) => {
+                                          'hash': h.id,
+                                          'from': h.from,
+                                          'to': h.to,
+                                          'amount': h.amount.toStringAsFixed(6),
+                                          'assetCode': h.assetCode,
+                                        },
+                                      )
+                                      .toList(),
+                                  onAcknowledge: (tx) => context
+                                      .read<WalletHomeVM>()
+                                      .ackHint((tx['hash'] ?? '').toString()),
+                                  walletState: s,
+                                )
                               : const SizedBox.shrink(),
                           animateTotal: _animateTotal,
                         ),
@@ -217,11 +323,16 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                               xlmBalance: s.xlm,
                               usdcBalance: s.usdc,
                               address: s.address ?? '',
-                              loading: assetsVM.loading || currency.loading || s.loadingBalances,
+                              loading:
+                                  assetsVM.loading ||
+                                  currency.loading ||
+                                  s.loadingBalances,
                               onItemTap: (token) {
                                 vm.onReceivePressed(initialToken: token);
                               },
-                              hasUsdcTrustline: stellar.hasUsdcTrustline(s.address ?? ''),
+                              hasUsdcTrustline: stellar.hasUsdcTrustline(
+                                s.address ?? '',
+                              ),
                             ),
                           ),
                           TabKeepAlive(
@@ -245,9 +356,187 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     );
   }
 
+  // ──────────────────────── Event handling (UI side effects) ────────────────────────
+  Future<void> _refreshUnreadChatCount() async {
+    try {
+      final authenticated = await _auth.isAuthenticated;
+      if (!authenticated) {
+        if (!mounted) return;
+        if (_unreadChatCount != 0) {
+          setState(() => _unreadChatCount = 0);
+        }
+        return;
+      }
 
+      final threads = await _chat.listThreads(
+        const ChatListQuery(page: 1, limit: 50),
+      );
+      final unread = threads.items.fold<int>(
+        0,
+        (sum, thread) => sum + thread.unreadCount,
+      );
+      if (!mounted) return;
+      if (unread != _unreadChatCount) {
+        setState(() => _unreadChatCount = unread);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (_unreadChatCount != 0) {
+        setState(() => _unreadChatCount = 0);
+      }
+    }
+  }
 
-// ──────────────────────── Event handling (UI side effects) ────────────────────────
+  Future<bool> _ensureChatConsent() async {
+    try {
+      final stored = await SecurityStorage.read(_kChatConsentKey);
+      if (stored == 'accepted') return true;
+    } catch (_) {
+      // Ask consent now when read fails.
+    }
+
+    if (!mounted) return false;
+    final accepted = await showChatConsentModal(context);
+    if (!accepted) return false;
+
+    try {
+      await SecurityStorage.save(_kChatConsentKey, 'accepted');
+      await SecurityStorage.save(
+        _kChatConsentAtKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
+    } catch (_) {
+      // Allow this session even if persistence fails.
+    }
+    return true;
+  }
+
+  Future<void> _openFloatingChat() async {
+    final authenticated = await _auth.isAuthenticated;
+    if (!authenticated) {
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      if (mounted) {
+        await _refreshUnreadChatCount();
+      }
+      return;
+    }
+
+    final consented = await _ensureChatConsent();
+    if (!consented || !mounted) return;
+
+    ChatDirectThreadModel? targetThread;
+    try {
+      final threads = await _chat.listThreads(
+        const ChatListQuery(page: 1, limit: 50),
+      );
+      final unreadThreads =
+          threads.items.where((thread) => thread.unreadCount > 0).toList()
+            ..sort(
+              (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                  .compareTo(
+                    a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+                  ),
+            );
+      if (unreadThreads.isNotEmpty) {
+        targetThread = unreadThreads.first;
+      }
+    } catch (_) {
+      // Fallback to chat hub.
+    }
+
+    if (!mounted) return;
+    if (targetThread != null) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatThreadScreen(thread: targetThread!),
+        ),
+      );
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ChatHubScreen()),
+      );
+    }
+
+    if (mounted) {
+      await _refreshUnreadChatCount();
+    }
+  }
+
+  Future<void> _openHeaderScanner() async {
+    final vm = context.read<WalletHomeVM>();
+    final state = vm.state;
+    final address = (state.address ?? '').trim();
+    if (address.isEmpty) {
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Wallet not ready',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+
+    final xlmBalance = state.xlm;
+    final usdcBalance = state.usdc;
+
+    try {
+      await showTokenSelector(
+        context,
+        address,
+        xlmBalance,
+        usdcBalance,
+        title: 'Select Coin',
+        screenBuilder: (addr, token, balance) => SendScreen(
+          address: addr,
+          token: token,
+          balance: balance,
+          autoOpenScanner: true,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          builder: (_) => SendScreen(
+            address: address,
+            token: 'XLM',
+            balance: xlmBalance,
+            autoOpenScanner: true,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        await vm.refresh(force: true);
+      }
+    }
+  }
+
+  Future<bool> _ensureVerifiedForTradeAccess() async {
+    try {
+      final verification = await VerificationCoreService.I.getMe();
+      if (verification.status == TrustStatus.ready) return true;
+    } catch (_) {}
+
+    if (!mounted) return false;
+    showFloatingSnackBar(
+      context,
+      message: 'Verification READY is required for trades',
+      type: SnackBarType.warning,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VerificationFlowScreen()),
+    );
+    return false;
+  }
+
   void _onUiEvent(WalletHomeUiEvent e) async {
     if (!mounted) return;
 
@@ -270,40 +559,38 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (e is NavigateToLogin) {
       Navigator.push(
         context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    /// ───────────────── BUY FLOW ─────────────────
+    if (e is StartBuyFlow) {
+      final allowed = await _ensureVerifiedForTradeAccess();
+      if (!allowed || !mounted) return;
+      Navigator.push(
+        context,
         MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
+          builder: (_) =>
+              const TradeTemplateScreen(mode: TradeTemplateMode.buy),
         ),
       );
       return;
     }
-    /// ───────────────── BUY FLOW (TEMP DISABLED) ─────────────────
-    if (e is StartBuyFlow) {
-      // TODO: Implement Buy flow screen
-      debugPrint('StartBuyFlow triggered — screen not implemented yet');
 
-      showFloatingSnackBar(
-        context,
-        message: 'Buy feature coming soon',
-        type: SnackBarType.info,
-      );
-
-      return;
-    }
-
-    /// ───────────────── SELL FLOW (TEMP DISABLED) ─────────────────
+    /// ───────────────── SELL FLOW ─────────────────
     if (e is StartSellFlow) {
-      // TODO: Implement Sell flow screen
-      debugPrint('StartSellFlow triggered — screen not implemented yet');
-
-      showFloatingSnackBar(
+      final allowed = await _ensureVerifiedForTradeAccess();
+      if (!allowed || !mounted) return;
+      Navigator.push(
         context,
-        message: 'Sell feature coming soon',
-        type: SnackBarType.info,
+        MaterialPageRoute(
+          builder: (_) =>
+              const TradeTemplateScreen(mode: TradeTemplateMode.sell),
+        ),
       );
-
       return;
     }
-
 
     /// ───────────────── TOAST ─────────────────
     if (e is ShowToastEvent) {
@@ -332,11 +619,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     /// ───────────────── BOOT READY ─────────────────
     if (e is BootBalancesReady) {
       final currency = context.read<CurrencyVM>();
-      final currencyFmt =
-      NumberFormat.simpleCurrency(name: currency.fiat.toUpperCase());
+      final currencyFmt = NumberFormat.simpleCurrency(
+        name: currency.fiat.toUpperCase(),
+      );
 
-      final totalFiat =
-          currency.xlmToFiat(e.xlm) + currency.usdcToFiat(e.usdc);
+      final totalFiat = currency.xlmToFiat(e.xlm) + currency.usdcToFiat(e.usdc);
 
       _bootBalancesCtl?.update(
         AppAlertType.success,
@@ -392,9 +679,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (e is NavigateToSwap) {
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => const SwapScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const SwapScreen()),
       );
       return;
     }
@@ -440,6 +725,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       onPrimary: () => vm.ackHint(h.id),
       barrierDismissible: true,
     );
+    _hintAlertCtrls[h.id.toString()] = ctl;
   }
 
   String _short(String addr) {

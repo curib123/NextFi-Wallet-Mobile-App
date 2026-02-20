@@ -1,5 +1,6 @@
 // lib/features/claimable/view/claimable_list_screen.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/drawer/appdrawer.dart';
@@ -145,10 +146,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       decoration: BoxDecoration(
         color: c.background,
         border: Border(
-          bottom: BorderSide(
-            color: c.border.withOpacity(0.1),
-            width: 1,
-          ),
+          bottom: BorderSide(color: c.border.withOpacity(0.1), width: 1),
         ),
       ),
       child: Row(
@@ -181,10 +179,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     return Container(
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: c.border.withOpacity(0.1),
-            width: 1,
-          ),
+          bottom: BorderSide(color: c.border.withOpacity(0.1), width: 1),
         ),
       ),
       child: TabBar(
@@ -193,10 +188,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
         unselectedLabelColor: c.textSecondary,
         indicatorColor: c.primary,
         indicatorWeight: 2,
-        labelStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-        ),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         unselectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w500,
           fontSize: 14,
@@ -280,10 +272,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
 
     return TabBarView(
       controller: _tabController,
-      children: [
-        _buildReceivedTab(c, vm),
-        _buildSentTab(c, vm),
-      ],
+      children: [_buildReceivedTab(c, vm), _buildSentTab(c, vm)],
     );
   }
 
@@ -292,7 +281,8 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       return ClaimableEmpty(
         onCreate: _openCreate,
         message: 'No claimable balances',
-        description: 'When someone sends you a claimable balance, '
+        description:
+            'When someone sends you a claimable balance, '
             'it will appear here. You can also create one yourself.',
       );
     }
@@ -309,7 +299,8 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       return ClaimableEmpty(
         onCreate: _openCreate,
         message: 'No sent balances',
-        description: 'Claimable balances you create will appear here. '
+        description:
+            'Claimable balances you create will appear here. '
             'You can track their status and see when they\'re claimed.',
         icon: LucideIcons.send,
       );
@@ -338,13 +329,10 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
             Text(
               vm.error!,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: c.error,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: c.error, fontSize: 14),
             ),
             const SizedBox(height: 16),
-            OutlinedButton(
+            AppOutlinedButton(
               onPressed: _refresh,
               style: OutlinedButton.styleFrom(
                 foregroundColor: c.primary,
@@ -362,13 +350,14 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
   }
 
   Widget _buildList(
-      AppColor c,
-      List<dynamic> items, {
-        required bool isReceived,
-      }) {
+    AppColor c,
+    List<dynamic> items, {
+    required bool isReceived,
+  }) {
     final readyCount = items.where((i) => i.canClaimNow).length;
-    final lockedCount =
-        items.where((i) => i.unlockTime != null && !i.canClaimNow).length;
+    final lockedCount = items
+        .where((i) => i.unlockTime != null && !i.canClaimNow)
+        .length;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(
@@ -400,11 +389,11 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
   }
 
   Widget _buildSummary(
-      AppColor c,
-      int readyCount,
-      int lockedCount,
-      bool isReceived,
-      ) {
+    AppColor c,
+    int readyCount,
+    int lockedCount,
+    bool isReceived,
+  ) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -417,31 +406,18 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
             LucideIcons.checkCircle,
           ),
         if (lockedCount > 0)
-          _summaryChip(
-            c,
-            '$lockedCount locked',
-            c.warning,
-            LucideIcons.lock,
-          ),
+          _summaryChip(c, '$lockedCount locked', c.warning, LucideIcons.lock),
       ],
     );
   }
 
-  Widget _summaryChip(
-      AppColor c,
-      String label,
-      Color color,
-      IconData icon,
-      ) {
+  Widget _summaryChip(AppColor c, String label, Color color, IconData icon) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: color.withOpacity(0.15),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.15), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -470,11 +446,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       onPressed: _openCreate,
       backgroundColor: c.primary,
       elevation: 2,
-      child: const Icon(
-        LucideIcons.plus,
-        color: Colors.white,
-        size: 22,
-      ),
+      child: const Icon(LucideIcons.plus, color: Colors.white, size: 22),
     );
   }
 }

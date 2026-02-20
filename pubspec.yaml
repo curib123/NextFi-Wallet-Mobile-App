@@ -58,14 +58,18 @@ dependencies:
   flutter_facebook_auth: ^7.0.0
   firebase_messaging: ^16.1.1
   flutter_local_notifications: ^20.1.0
+  connectivity_plus: ^6.1.4
   firebase_core: ^4.4.0
   timezone: ^0.10.0
+  image_picker: ^1.1.2
+  socket_io_client: ^3.1.2
 
 
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
   build_runner: ^2.4.6
   hive_generator: ^2.0.1
@@ -75,14 +79,6 @@ flutter_icons:
   ios: true
   image_path: "assets/icon/ic_stat_notification.png"
   min_sdk_android: 21
-
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -16,9 +16,9 @@ import 'package:next_fi/services/secure_storage/token_storage.dart';
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthService {
-  final TokenStorage _tokenStorage;
-  final AuthHttpClient _http;
-  final GoogleSignIn _googleSignIn;
+  late final TokenStorage _tokenStorage;
+  late final AuthHttpClient _http;
+  late final GoogleSignIn _googleSignIn;
 
   final _statusCtrl = StreamController<AuthStatus>.broadcast();
 
@@ -42,17 +42,17 @@ class AuthService {
     TokenStorage? tokenStorage,
     AuthHttpClient? httpClient,
     GoogleSignIn? googleSignIn,
-  })  : _tokenStorage = tokenStorage ?? TokenStorage(),
-        _googleSignIn = googleSignIn ??
-            GoogleSignIn(
-              scopes: ['email', 'profile', 'openid'],
-              serverClientId:
+  }) {
+    _tokenStorage = tokenStorage ?? TokenStorage();
+    _googleSignIn =
+        googleSignIn ??
+        GoogleSignIn(
+          scopes: ['email', 'profile', 'openid'],
+          serverClientId:
               '53734918028-hvsc41gb8ogai7rrqs6ctjgnf5mhcscr.apps.googleusercontent.com',
-            ),
-        _http = httpClient ??
-            AuthHttpClient(
-              tokenStorage: tokenStorage ?? TokenStorage(),
-            );
+        );
+    _http = httpClient ?? AuthHttpClient(tokenStorage: _tokenStorage);
+  }
 
   Stream<AuthStatus> get status => _statusCtrl.stream;
 
@@ -74,11 +74,13 @@ class AuthService {
 
   /// Silent background user fetch (doesn't throw errors to UI)
   void _loadUserInBackground() {
-    currentUser.then((user) {
-      debugPrint('[AUTH] Background user loaded: ${user.email}');
-    }).catchError((e) {
-      debugPrint('[AUTH] Background user load failed: $e');
-    });
+    currentUser
+        .then((user) {
+          debugPrint('[AUTH] Background user loaded: ${user.email}');
+        })
+        .catchError((e) {
+          debugPrint('[AUTH] Background user load failed: $e');
+        });
   }
 
   // ── Google Sign-In ─────────────────────────────
@@ -116,7 +118,7 @@ class AuthService {
         auth: false,
       );
 
-      return _handleAuthResponse(AuthResponse.fromJson(json));
+      return await _handleAuthResponse(AuthResponse.fromJson(json));
     } on PlatformException catch (e) {
       debugPrint('[GOOGLE][PlatformException]');
       debugPrint('code: ${e.code}');
@@ -153,103 +155,72 @@ class AuthService {
 
       // ── Handle login states
       if (result.status == LoginStatus.cancelled) {
-        throw const AuthException(
-          'Facebook login cancelled',
-        );
+        throw const AuthException('Facebook login cancelled');
       }
 
       if (result.status == LoginStatus.failed) {
-        throw AuthException(
-          result.message ?? 'Facebook login failed',
-        );
+        throw AuthException(result.message ?? 'Facebook login failed');
       }
 
       if (result.status != LoginStatus.success) {
-        throw const AuthException(
-          'Facebook login unsuccessful',
-        );
+        throw const AuthException('Facebook login unsuccessful');
       }
 
       // ── Extract token
       final accessToken = result.accessToken;
 
       if (accessToken == null) {
-        throw const AuthException(
-          'No Facebook access token',
-        );
+        throw const AuthException('No Facebook access token');
       }
 
       // ── Optional: fetch profile locally (debug help)
       try {
-        final profile =
-        await FacebookAuth.instance.getUserData(
+        final profile = await FacebookAuth.instance.getUserData(
           fields: "id,name,email,picture.width(200)",
         );
 
         debugPrint('[FACEBOOK] Local Profile → $profile');
       } catch (e) {
-        debugPrint(
-          '[FACEBOOK] Profile fetch skipped → $e',
-        );
+        debugPrint('[FACEBOOK] Profile fetch skipped → $e');
       }
 
       // ── Send token to backend
-      debugPrint(
-        '[FACEBOOK] Sending token to backend...',
-      );
+      debugPrint('[FACEBOOK] Sending token to backend...');
 
       final json = await _http.post(
         AuthEndpoints.facebookToken,
-        body: {
-          'accessToken': accessToken,
-        },
+        body: {'accessToken': accessToken},
         auth: false,
       );
 
-      debugPrint(
-        '[FACEBOOK] Backend response → $json',
-      );
+      debugPrint('[FACEBOOK] Backend response → $json');
 
       // ── Handle auth response
-      return _handleAuthResponse(
-        AuthResponse.fromJson(json),
-      );
+      return await _handleAuthResponse(AuthResponse.fromJson(json));
     }
-
     // ── Custom handled errors
     on AuthException catch (e) {
-      debugPrint(
-        '[FACEBOOK][AuthException] ${e.message}',
-      );
+      debugPrint('[FACEBOOK][AuthException] ${e.message}');
       rethrow;
     }
-
     // ── Facebook SDK platform errors
     on PlatformException catch (e, s) {
-      debugPrint(
-        '[FACEBOOK][PlatformException]',
-      );
+      debugPrint('[FACEBOOK][PlatformException]');
       debugPrint('code → ${e.code}');
       debugPrint('message → ${e.message}');
       debugPrint('details → ${e.details}');
       debugPrint('stack → $s');
 
-      throw AuthException(
-        'Facebook platform error: ${e.message}',
-      );
+      throw AuthException('Facebook platform error: ${e.message}');
     }
-
     // ── Unknown errors
     catch (e, s) {
       debugPrint('[FACEBOOK][ERROR] $e');
       debugPrint('[FACEBOOK][STACK] $s');
 
-      throw AuthException(
-        'Facebook sign-in failed: $e',
-      );
+      throw AuthException('Facebook sign-in failed: $e');
     }
   }
-
 
   // ── Session (CACHED) ─────────────────────────────
 
@@ -341,7 +312,6 @@ class AuthService {
     _statusCtrl.add(AuthStatus.unauthenticated);
   }
 
-
   // ── Authentication State (CACHED) ─────────────────────────────
 
   /// Fast auth check using memory cache (no storage I/O)
@@ -363,10 +333,10 @@ class AuthService {
 
   // ── Auth Response Handler ─────────────────────────────
 
-  User _handleAuthResponse(AuthResponse response) {
+  Future<User> _handleAuthResponse(AuthResponse response) async {
     debugPrint('[AUTH] Saving tokens');
 
-    _tokenStorage.saveTokens(
+    await _tokenStorage.saveTokens(
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
     );

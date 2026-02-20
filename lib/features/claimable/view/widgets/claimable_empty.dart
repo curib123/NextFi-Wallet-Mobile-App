@@ -1,5 +1,6 @@
 // lib/features/claimable/view/widgets/claimable_empty.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
@@ -64,7 +65,7 @@ class ClaimableEmpty extends StatelessWidget {
             const SizedBox(height: 24),
             SizedBox(
               height: 48,
-              child: ElevatedButton(
+              child: AppElevatedButton(
                 onPressed: onCreate,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.primary,

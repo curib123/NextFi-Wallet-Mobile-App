@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/modal/login_success_modal.dart';
 import 'package:next_fi/features/auth/view_model/login_vm.dart';
-import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 
@@ -22,7 +21,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final _auth = AuthService();
   final vm = LoginVM();
 
   bool _googleLoading = false;
@@ -55,12 +53,15 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _applySystemUi(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-      systemNavigationBarColor:
-      isDark ? AppColor.dark.background : AppColor.light.background,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: isDark
+            ? AppColor.dark.background
+            : AppColor.light.background,
+      ),
+    );
   }
 
   // ── Auth ─────────────────────────────────────────────────────────
@@ -82,10 +83,7 @@ class _LoginScreenState extends State<LoginScreen>
         HapticFeedback.mediumImpact();
 
         // Show success modal
-        await showLoginSuccessModal(
-          context,
-          user: user,
-        );
+        await showLoginSuccessModal(context, user: user);
 
         if (!mounted) return;
 
@@ -112,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _facebookLoading = true);
 
     try {
-      final user = await _auth.signInWithFacebook();
+      final user = await vm.signInFacebook();
 
       if (!mounted) return;
 
@@ -122,10 +120,7 @@ class _LoginScreenState extends State<LoginScreen>
         HapticFeedback.mediumImpact();
 
         // Show success modal
-        await showLoginSuccessModal(
-          context,
-          user: user,
-        );
+        await showLoginSuccessModal(context, user: user);
 
         if (!mounted) return;
 
@@ -152,13 +147,15 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _snack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w500)),
-      backgroundColor: AppColor.dark.error,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w500)),
+        backgroundColor: AppColor.dark.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      ),
+    );
   }
 
   // ── Build ────────────────────────────────────────────────────────
@@ -203,11 +200,7 @@ class _LoginScreenState extends State<LoginScreen>
                   const Spacer(flex: 3),
 
                   // ── Logo
-                  _fadeSlide(
-                    visible: _visible,
-                    delay: 0,
-                    child: _buildLogo(),
-                  ),
+                  _fadeSlide(visible: _visible, delay: 0, child: _buildLogo()),
 
                   const SizedBox(height: 20),
 
@@ -366,7 +359,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         const SizedBox(height: 12),
         Text(
-          'Manage your XLM & USDC pair — send, receive, claim balances, and trade seamlessly. Login is optional for buy & sell.',
+          'Manage your XLM & USDC pair — send, receive, claim balances, and trade seamlessly. Buy and sell trades require verified status.',
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w400,
@@ -486,14 +479,18 @@ class _AuthButtonState extends State<_AuthButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: widget.isLoading ? null : (_) => setState(() => _pressed = true),
+      onTapDown: widget.isLoading
+          ? null
+          : (_) => setState(() => _pressed = true),
       onTapUp: widget.isLoading
           ? null
           : (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      onTapCancel: widget.isLoading ? null : () => setState(() => _pressed = false),
+              setState(() => _pressed = false);
+              widget.onTap();
+            },
+      onTapCancel: widget.isLoading
+          ? null
+          : () => setState(() => _pressed = false),
       child: AnimatedScale(
         scale: _pressed ? 0.975 : 1.0,
         duration: const Duration(milliseconds: 100),
@@ -513,39 +510,39 @@ class _AuthButtonState extends State<_AuthButton> {
             boxShadow: _pressed
                 ? []
                 : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Center(
             child: widget.isLoading
                 ? SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(widget.loadingColor),
-              ),
-            )
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(widget.loadingColor),
+                    ),
+                  )
                 : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                widget.icon,
-                const SizedBox(width: 12),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: widget.textColor,
-                    letterSpacing: -0.1,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      widget.icon,
+                      const SizedBox(width: 12),
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: widget.textColor,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -605,15 +602,9 @@ class _GoogleLogoPainter extends CustomPainter {
 
     final barTop = cy - r * 0.195;
     final barBottom = cy + r * 0.195;
-    canvas.drawRect(
-      Rect.fromLTRB(cx, barTop, cx + r, barBottom),
-      blue,
-    );
+    canvas.drawRect(Rect.fromLTRB(cx, barTop, cx + r, barBottom), blue);
 
-    canvas.drawRect(
-      Rect.fromLTRB(cx, barTop, cx + r, cy),
-      white,
-    );
+    canvas.drawRect(Rect.fromLTRB(cx, barTop, cx + r, cy), white);
   }
 
   @override

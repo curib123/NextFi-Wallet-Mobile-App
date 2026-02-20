@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -117,7 +118,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     ),
                   ),
 
-                if (state.lastRawValue != null && state.status == ScannerStatus.paused)
+                if (state.lastRawValue != null &&
+                    state.status == ScannerStatus.paused)
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -178,16 +180,21 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
-                              child: FilledButton.icon(
+                              child: AppFilledButton.icon(
                                 onPressed: () {
                                   vm.resume();
                                 },
-                                icon: const Icon(LucideIcons.scanLine, size: 18),
+                                icon: const Icon(
+                                  LucideIcons.scanLine,
+                                  size: 18,
+                                ),
                                 label: const Text('Scan Another'),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: colors.primary,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -214,7 +221,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             : Colors.white.withOpacity(0.95),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.error.withOpacity(0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.error.withOpacity(0.3),
                           width: 1,
                         ),
                         boxShadow: [
@@ -232,10 +241,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             width: 64,
                             height: 64,
                             decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .error
-                                  .withOpacity(0.12),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.error.withOpacity(0.12),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -250,18 +258,23 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).brightness == Brightness.dark
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
                                   ? Colors.white
                                   : const Color(0xFF1C1C1E),
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            state.errorMessage ?? 'An unexpected error occurred',
+                            state.errorMessage ??
+                                'An unexpected error occurred',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Theme.of(context).brightness == Brightness.dark
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
                                   ? Colors.white.withOpacity(0.7)
                                   : Colors.black.withOpacity(0.6),
                               height: 1.5,
@@ -270,12 +283,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           const SizedBox(height: 24),
                           SizedBox(
                             width: double.infinity,
-                            child: FilledButton.icon(
+                            child: AppFilledButton.icon(
                               onPressed: vm.init,
                               icon: const Icon(LucideIcons.refreshCw, size: 20),
                               label: const Text('Try Again'),
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -289,9 +304,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
                 if (state.status == ScannerStatus.initializing)
                   const Center(
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                    ),
+                    child: CircularProgressIndicator(color: Colors.white),
                   ),
               ],
             ),

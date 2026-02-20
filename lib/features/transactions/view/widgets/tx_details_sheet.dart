@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
@@ -98,12 +99,17 @@ Future<void> showTxDetailsBottomSheet({
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isIncoming ? colors.success : colors.error).withOpacity(0.12),
+                        color: (isIncoming ? colors.success : colors.error)
+                            .withOpacity(0.12),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: (isIncoming ? colors.success : colors.error).withOpacity(0.3),
+                          color: (isIncoming ? colors.success : colors.error)
+                              .withOpacity(0.3),
                         ),
                       ),
                       child: Text(
@@ -143,7 +149,10 @@ Future<void> showTxDetailsBottomSheet({
                   children: [
                     if (existing != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Color(existing.color).withOpacity(0.14),
                           borderRadius: BorderRadius.circular(999),
@@ -163,20 +172,24 @@ Future<void> showTxDetailsBottomSheet({
                     if (existing != null) const SizedBox(width: 8),
 
                     // Tertiary action
-                    TextButton.icon(
+                    AppTextButton.icon(
                       onPressed: () async {
                         final saved = await showRecipientUpsertSheet(
                           context,
                           initial: existing,
                         );
                         if (saved == true) {
-                          final updated = context.read<RecipientAddressVM>().byAddress(peerAddr);
+                          final updated = context
+                              .read<RecipientAddressVM>()
+                              .byAddress(peerAddr);
                           tx['recName'] = updated?.name;
                           tx['recColor'] = updated?.color;
                         }
                       },
                       icon: Icon(
-                        existing != null ? LucideIcons.userCog : LucideIcons.userPlus,
+                        existing != null
+                            ? LucideIcons.userCog
+                            : LucideIcons.userPlus,
                         size: 16,
                         color: colors.primary,
                       ),
@@ -198,7 +211,11 @@ Future<void> showTxDetailsBottomSheet({
                 // Date/time
                 Row(
                   children: [
-                    Icon(LucideIcons.calendarClock, size: 16, color: colors.textSecondary),
+                    Icon(
+                      LucideIcons.calendarClock,
+                      size: 16,
+                      color: colors.textSecondary,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       dt != null ? _detailFmt.format(dt) : 'Unknown date',
@@ -216,7 +233,12 @@ Future<void> showTxDetailsBottomSheet({
                 const SizedBox(height: 8),
                 KeyValueRow(label: 'To', value: to, copyable: true),
                 const SizedBox(height: 8),
-                KeyValueRow(label: 'Tx Hash', value: hash, mono: true, copyable: true),
+                KeyValueRow(
+                  label: 'Tx Hash',
+                  value: hash,
+                  mono: true,
+                  copyable: true,
+                ),
                 const SizedBox(height: 16),
 
                 // Actions (CustomButton)
@@ -227,7 +249,9 @@ Future<void> showTxDetailsBottomSheet({
                       child: CustomButton(
                         text: 'Copy Hash',
                         icon: LucideIcons.copy,
-                        type: (hash.isEmpty) ? ButtonType.disabled : ButtonType.outlined,
+                        type: (hash.isEmpty)
+                            ? ButtonType.disabled
+                            : ButtonType.outlined,
                         onPressed: () async {
                           if (hash.isEmpty) return;
                           await Clipboard.setData(ClipboardData(text: hash));
@@ -245,7 +269,9 @@ Future<void> showTxDetailsBottomSheet({
                       child: CustomButton(
                         text: 'Explorer',
                         icon: LucideIcons.externalLink,
-                        type: (hash.isEmpty) ? ButtonType.disabled : ButtonType.filled,
+                        type: (hash.isEmpty)
+                            ? ButtonType.disabled
+                            : ButtonType.filled,
                         onPressed: () async {
                           if (hash.isEmpty) return;
                           await LinkOpener.openStellarTx(

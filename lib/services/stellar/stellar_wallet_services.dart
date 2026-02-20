@@ -1,9 +1,7 @@
 // lib/services/stellar/stellar_wallet_services.dart
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/services/stellar/wallet_models.dart';
@@ -20,16 +18,9 @@ import 'package:next_fi/services/stellar/stellar_dex_service.dart';
 import 'package:next_fi/services/stellar/stellar_fee_service.dart';
 import 'package:next_fi/services/stellar/stellar_stream_service.dart';
 
-// Import activity logging
-import 'package:next_fi/features/activity/model/activity_log.dart';
-import 'package:next_fi/features/activity/view_model/activity_log_vm.dart';
-import 'package:next_fi/features/activity/view/widgets/activity_notification.dart';
-
 // Export base service types
 export 'package:next_fi/services/stellar/stellar_base_service.dart'
     show StellarWalletError, ProgressCallback;
-
-
 
 /// Production-ready Stellar wallet service with integrated activity logging.
 ///
@@ -56,16 +47,10 @@ class StellarWalletServices {
   // Legacy properties for backwards compatibility
   final String usdcIssuer;
   final StellarSDK sdk;
-  final TransactionFeeVaultSecureStorage configVault;
-
-  // Activity logging (optional)
-  ActivityLogVM? _activityVM;
-  BuildContext? _context;
 
   StellarWalletServices({
     required this.usdcIssuer,
     bool testnet = false,
-    TransactionFeeVaultSecureStorage? configVault,
     FlutterSecureStorage? secureStorage,
     String? quickNodeUrlMainnet,
     String? quickNodeUrlTestnet,
@@ -73,207 +58,199 @@ class StellarWalletServices {
     String? sorobanUrlMainnet,
     String? sorobanUrlTestnet,
     Map<String, String>? sorobanDefaultHeaders,
-    ActivityLogVM? activityVM,
-    BuildContext? context,
-  })  : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-        configVault = configVault ?? TransactionFeeVaultSecureStorage(),
-        _activityVM = activityVM,
-        _context = context,
-        walletManager = StellarWalletManager(
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          secureStorage: secureStorage,
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        accountService = StellarAccountService(
-          usdcIssuer: usdcIssuer,
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        feeService = StellarFeeService(
-          usdcIssuer: usdcIssuer,
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          configVault: configVault,
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        paymentService = StellarPaymentService(
-          accountService: StellarAccountService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        swapService = StellarSwapService(
-          accountService: StellarAccountService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          feeService: StellarFeeService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            configVault: configVault,
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        claimableBalanceService = StellarClaimableBalanceService(
-          accountService: StellarAccountService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        dexService = StellarDexService(
-          accountService: StellarAccountService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        ),
-        streamService = StellarStreamService(
-          usdcIssuer: usdcIssuer,
-          feeService: StellarFeeService(
-            usdcIssuer: usdcIssuer,
-            sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-            sdkQuickNode: _createQuickNodeSdk(
-                testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-            configVault: configVault,
-            quickNodeUrlMainnet: quickNodeUrlMainnet,
-            quickNodeUrlTestnet: quickNodeUrlTestnet,
-            quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-          ),
-          sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
-          sdkQuickNode: _createQuickNodeSdk(
-              testnet, quickNodeUrlMainnet, quickNodeUrlTestnet),
-          soroban: _createSorobanRpc(
-              testnet, sorobanUrlMainnet, sorobanUrlTestnet, sorobanDefaultHeaders),
-          quickNodeUrlMainnet: quickNodeUrlMainnet,
-          quickNodeUrlTestnet: quickNodeUrlTestnet,
-          quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-        );
+  }) : sdk = testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+       walletManager = StellarWalletManager(
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         secureStorage: secureStorage,
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       accountService = StellarAccountService(
+         usdcIssuer: usdcIssuer,
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       feeService = StellarFeeService(
+         usdcIssuer: usdcIssuer,
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       paymentService = StellarPaymentService(
+         accountService: StellarAccountService(
+           usdcIssuer: usdcIssuer,
+           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+           sdkQuickNode: _createQuickNodeSdk(
+             testnet,
+             quickNodeUrlMainnet,
+             quickNodeUrlTestnet,
+           ),
+           quickNodeUrlMainnet: quickNodeUrlMainnet,
+           quickNodeUrlTestnet: quickNodeUrlTestnet,
+           quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+         ),
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       swapService = StellarSwapService(
+         accountService: StellarAccountService(
+           usdcIssuer: usdcIssuer,
+           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+           sdkQuickNode: _createQuickNodeSdk(
+             testnet,
+             quickNodeUrlMainnet,
+             quickNodeUrlTestnet,
+           ),
+           quickNodeUrlMainnet: quickNodeUrlMainnet,
+           quickNodeUrlTestnet: quickNodeUrlTestnet,
+           quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+         ),
+         feeService: StellarFeeService(
+           usdcIssuer: usdcIssuer,
+           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+           sdkQuickNode: _createQuickNodeSdk(
+             testnet,
+             quickNodeUrlMainnet,
+             quickNodeUrlTestnet,
+           ),
+           quickNodeUrlMainnet: quickNodeUrlMainnet,
+           quickNodeUrlTestnet: quickNodeUrlTestnet,
+           quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+         ),
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       claimableBalanceService = StellarClaimableBalanceService(
+         accountService: StellarAccountService(
+           usdcIssuer: usdcIssuer,
+           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+           sdkQuickNode: _createQuickNodeSdk(
+             testnet,
+             quickNodeUrlMainnet,
+             quickNodeUrlTestnet,
+           ),
+           quickNodeUrlMainnet: quickNodeUrlMainnet,
+           quickNodeUrlTestnet: quickNodeUrlTestnet,
+           quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+         ),
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       dexService = StellarDexService(
+         accountService: StellarAccountService(
+           usdcIssuer: usdcIssuer,
+           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+           sdkQuickNode: _createQuickNodeSdk(
+             testnet,
+             quickNodeUrlMainnet,
+             quickNodeUrlTestnet,
+           ),
+           quickNodeUrlMainnet: quickNodeUrlMainnet,
+           quickNodeUrlTestnet: quickNodeUrlTestnet,
+           quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+         ),
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       ),
+       streamService = StellarStreamService(
+         usdcIssuer: usdcIssuer,
+         feeService: StellarFeeService(
+           usdcIssuer: usdcIssuer,
+           sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+           sdkQuickNode: _createQuickNodeSdk(
+             testnet,
+             quickNodeUrlMainnet,
+             quickNodeUrlTestnet,
+           ),
+           quickNodeUrlMainnet: quickNodeUrlMainnet,
+           quickNodeUrlTestnet: quickNodeUrlTestnet,
+           quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+         ),
+         sdk: testnet ? StellarSDK.TESTNET : StellarSDK.PUBLIC,
+         sdkQuickNode: _createQuickNodeSdk(
+           testnet,
+           quickNodeUrlMainnet,
+           quickNodeUrlTestnet,
+         ),
+         soroban: _createSorobanRpc(
+           testnet,
+           sorobanUrlMainnet,
+           sorobanUrlTestnet,
+           sorobanDefaultHeaders,
+         ),
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       );
 
   static StellarSDK? _createQuickNodeSdk(
-      bool testnet, String? mainnetUrl, String? testnetUrl) {
+    bool testnet,
+    String? mainnetUrl,
+    String? testnetUrl,
+  ) {
     final url = testnet ? testnetUrl : mainnetUrl;
     return (url != null && url.isNotEmpty) ? StellarSDK(url) : null;
   }
 
-  static SorobanRpc? _createSorobanRpc(bool testnet, String? mainnetUrl,
-      String? testnetUrl, Map<String, String>? headers) {
+  static SorobanRpc? _createSorobanRpc(
+    bool testnet,
+    String? mainnetUrl,
+    String? testnetUrl,
+    Map<String, String>? headers,
+  ) {
     final url = testnet ? testnetUrl : mainnetUrl;
     return (url != null && url.isNotEmpty) ? SorobanRpc(url, headers) : null;
   }
 
   bool get isTestnet => sdk == StellarSDK.TESTNET;
 
-  /// Enable activity logging (call this to activate logging features)
-  void enableActivityLogging(ActivityLogVM activityVM, {BuildContext? context}) {
-    _activityVM = activityVM;
-    _context = context;
-  }
-
-  /// Disable activity logging
-  void disableActivityLogging() {
-    _activityVM = null;
-    _context = null;
-  }
-
-  /// Check if activity logging is enabled
-  bool get isActivityLoggingEnabled => _activityVM != null;
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // ACTIVITY LOGGING HELPERS
-  // ══════════════════════════════════════════════════════════════════════════
-
-  void _showNotification(ActivityLog log) {
-    if (_context != null && _context!.mounted && _activityVM?.settings.showNotifications == true) {
-      ActivityNotificationManager.show(_context!, log);
-    }
-  }
-
-  Future<void> _logActivity(ActivityLog log) async {
-    if (_activityVM != null) {
-      await _activityVM!.addLog(log);
-    }
-  }
-
-  Future<void> _updateActivity(
-      String id, {
-        ActivityStatus? status,
-        String? txHash,
-        String? errorMessage,
-        String? errorAdvice,
-        String? description,
-      }) async {
-    if (_activityVM != null) {
-      await _activityVM!.updateLog(
-        id,
-        status: status,
-        txHash: txHash,
-        errorMessage: errorMessage,
-        errorAdvice: errorAdvice,
-        description: description,
-      );
-    }
-  }
-
-
-  // ══════════════════════════════════════════════════════════════════════════
   // MNEMONIC & WALLET MANAGEMENT
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -285,27 +262,46 @@ class StellarWalletServices {
       walletManager.validateMnemonic(mnemonic);
   Future<Wallet> createWallet(String mnemonic, {String passphrase = ''}) =>
       walletManager.createWallet(mnemonic, passphrase: passphrase);
-  Future<KeyPair> getKeyPairFromMnemonic(String mnemonic,
-      {int index = 0, String passphrase = ''}) =>
-      walletManager.getKeyPairFromMnemonic(mnemonic,
-          index: index, passphrase: passphrase);
-  Future<String> getAccountIdFromMnemonic(String mnemonic,
-      {int index = 0, String passphrase = ''}) =>
-      walletManager.getAccountIdFromMnemonic(mnemonic,
-          index: index, passphrase: passphrase);
-  Future<List<KeyPair>> deriveAccounts(String mnemonic,
-      {required int count, String passphrase = ''}) =>
-      walletManager.deriveAccounts(mnemonic,
-          count: count, passphrase: passphrase);
+  Future<KeyPair> getKeyPairFromMnemonic(
+    String mnemonic, {
+    int index = 0,
+    String passphrase = '',
+  }) => walletManager.getKeyPairFromMnemonic(
+    mnemonic,
+    index: index,
+    passphrase: passphrase,
+  );
+  Future<String> getAccountIdFromMnemonic(
+    String mnemonic, {
+    int index = 0,
+    String passphrase = '',
+  }) => walletManager.getAccountIdFromMnemonic(
+    mnemonic,
+    index: index,
+    passphrase: passphrase,
+  );
+  Future<List<KeyPair>> deriveAccounts(
+    String mnemonic, {
+    required int count,
+    String passphrase = '',
+  }) => walletManager.deriveAccounts(
+    mnemonic,
+    count: count,
+    passphrase: passphrase,
+  );
 
-  Future<void> storeMnemonic(String mnemonic, {String key = 'stellar_mnemonic'}) =>
-      walletManager.storeMnemonic(mnemonic, key: key);
+  Future<void> storeMnemonic(
+    String mnemonic, {
+    String key = 'stellar_mnemonic',
+  }) => walletManager.storeMnemonic(mnemonic, key: key);
   Future<String?> retrieveMnemonic({String key = 'stellar_mnemonic'}) =>
       walletManager.retrieveMnemonic(key: key);
   Future<void> deleteMnemonic({String key = 'stellar_mnemonic'}) =>
       walletManager.deleteMnemonic(key: key);
-  Future<void> storeSecretSeed(String secretSeed, {String key = 'stellar_secret'}) =>
-      walletManager.storeSecretSeed(secretSeed, key: key);
+  Future<void> storeSecretSeed(
+    String secretSeed, {
+    String key = 'stellar_secret',
+  }) => walletManager.storeSecretSeed(secretSeed, key: key);
   Future<String?> retrieveSecretSeed({String key = 'stellar_secret'}) =>
       walletManager.retrieveSecretSeed(key: key);
   Future<KeyPair?> getKeyPairFromStorage({String key = 'stellar_secret'}) =>
@@ -329,91 +325,40 @@ class StellarWalletServices {
   Future<bool> hasTrustline(String accountId, Asset asset) =>
       accountService.hasTrustline(accountId, asset);
 
-  Future<String> createUsdcTrustline(
-      {required KeyPair keyPair, String limit = '922337203685.4775807'}) async {
-    String? activityId;
+  Future<String> createUsdcTrustline({
+    required KeyPair keyPair,
+    String limit = '922337203685.4775807',
+  }) => accountService.createUsdcTrustline(keyPair: keyPair, limit: limit);
 
-    try {
-      // Log activity if enabled
-      if (_activityVM != null) {
-        final log = ActivityLog.trustline(
-          id: _activityVM!.generateId(),
-          isAdding: true,
-          assetCode: 'USDC',
-          issuer: usdcIssuer,
-          status: ActivityStatus.processing,
-        );
-        activityId = log.id;
-        await _logActivity(log);
-        _showNotification(log);
-      }
+  Future<String> createTrustline({
+    required KeyPair keyPair,
+    required Asset asset,
+    String limit = '922337203685.4775807',
+  }) => accountService.createTrustline(
+    keyPair: keyPair,
+    asset: asset,
+    limit: limit,
+  );
 
-      final hash = await accountService.createUsdcTrustline(
-        keyPair: keyPair,
-        limit: limit,
-      );
-
-      // Update activity on success
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'USDC enabled',
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      return hash;
-    } catch (e) {
-      // Update activity on error
-      if (activityId != null) {
-        String errorMsg = 'Failed to add USDC';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
-
-  Future<String> createTrustline(
-      {required KeyPair keyPair,
-        required Asset asset,
-        String limit = '922337203685.4775807'}) =>
-      accountService.createTrustline(keyPair: keyPair, asset: asset, limit: limit);
-
-  Future<String> removeTrustline({required KeyPair keyPair, required Asset asset}) =>
-      accountService.removeTrustline(keyPair: keyPair, asset: asset);
+  Future<String> removeTrustline({
+    required KeyPair keyPair,
+    required Asset asset,
+  }) => accountService.removeTrustline(keyPair: keyPair, asset: asset);
 
   // Account Data
-  Future<String> setAccountData(
-      {required KeyPair keyPair, required String key, required String value}) =>
-      accountService.setAccountData(keyPair: keyPair, key: key, value: value);
-  Future<String> deleteAccountData({required KeyPair keyPair, required String key}) =>
-      accountService.deleteAccountData(keyPair: keyPair, key: key);
-  Future<String?> getAccountData({required String accountId, required String key}) =>
-      accountService.getAccountData(accountId: accountId, key: key);
+  Future<String> setAccountData({
+    required KeyPair keyPair,
+    required String key,
+    required String value,
+  }) => accountService.setAccountData(keyPair: keyPair, key: key, value: value);
+  Future<String> deleteAccountData({
+    required KeyPair keyPair,
+    required String key,
+  }) => accountService.deleteAccountData(keyPair: keyPair, key: key);
+  Future<String?> getAccountData({
+    required String accountId,
+    required String key,
+  }) => accountService.getAccountData(accountId: accountId, key: key);
 
   // Account Options
   Future<String> setAccountOptions({
@@ -426,39 +371,42 @@ class StellarWalletServices {
     int? masterWeight,
     int? setFlags,
     int? clearFlags,
-  }) =>
-      accountService.setAccountOptions(
-        keyPair: keyPair,
-        homeDomain: homeDomain,
-        inflationDestination: inflationDestination,
-        lowThreshold: lowThreshold,
-        mediumThreshold: mediumThreshold,
-        highThreshold: highThreshold,
-        masterWeight: masterWeight,
-        setFlags: setFlags,
-        clearFlags: clearFlags,
-      );
+  }) => accountService.setAccountOptions(
+    keyPair: keyPair,
+    homeDomain: homeDomain,
+    inflationDestination: inflationDestination,
+    lowThreshold: lowThreshold,
+    mediumThreshold: mediumThreshold,
+    highThreshold: highThreshold,
+    masterWeight: masterWeight,
+    setFlags: setFlags,
+    clearFlags: clearFlags,
+  );
 
-  Future<String> setHomeDomain({required KeyPair keyPair, required String domain}) =>
-      accountService.setHomeDomain(keyPair: keyPair, domain: domain);
+  Future<String> setHomeDomain({
+    required KeyPair keyPair,
+    required String domain,
+  }) => accountService.setHomeDomain(keyPair: keyPair, domain: domain);
 
-  Future<String> mergeAccount(
-      {required KeyPair keyPair,
-        required String destinationId,
-        ProgressCallback? onProgress}) =>
-      accountService.mergeAccount(
-          keyPair: keyPair, destinationId: destinationId, onProgress: onProgress);
+  Future<String> mergeAccount({
+    required KeyPair keyPair,
+    required String destinationId,
+    ProgressCallback? onProgress,
+  }) => accountService.mergeAccount(
+    keyPair: keyPair,
+    destinationId: destinationId,
+    onProgress: onProgress,
+  );
 
   Future<String> sponsorAccount({
     required KeyPair sponsorKeyPair,
     required String sponsoredId,
     required List<Operation> sponsoredOperations,
-  }) =>
-      accountService.sponsorAccount(
-        sponsorKeyPair: sponsorKeyPair,
-        sponsoredId: sponsoredId,
-        sponsoredOperations: sponsoredOperations,
-      );
+  }) => accountService.sponsorAccount(
+    sponsorKeyPair: sponsorKeyPair,
+    sponsoredId: sponsoredId,
+    sponsoredOperations: sponsoredOperations,
+  );
 
   Future<double> getBaseReserve(String accountId) =>
       accountService.getBaseReserve(accountId);
@@ -485,80 +433,13 @@ class StellarWalletServices {
     required double amount,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      // Log activity if enabled
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logPayment(
-          isSending: true,
-          amount: amount,
-          asset: 'XLM',
-          fromAddress: keyPair.accountId,
-          toAddress: destination,
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      // Execute payment with progress tracking
-      final hash = await paymentService.sendXlm(
-        keyPair: keyPair,
-        destination: destination,
-        amount: amount,
-        memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
-      );
-
-      // Update activity on success
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Payment sent successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      // Update activity on error
-      if (activityId != null) {
-        String errorMsg = 'Payment failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
+  }) => paymentService.sendXlm(
+    keyPair: keyPair,
+    destination: destination,
+    amount: amount,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
 
   Future<String> sendUsdc({
     required KeyPair keyPair,
@@ -566,79 +447,13 @@ class StellarWalletServices {
     required double usdcAmount,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      // Log activity if enabled
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logPayment(
-          isSending: true,
-          amount: usdcAmount,
-          asset: 'USDC',
-          fromAddress: keyPair.accountId,
-          toAddress: destination,
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await paymentService.sendUsdc(
-        keyPair: keyPair,
-        destination: destination,
-        usdcAmount: usdcAmount,
-        memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
-      );
-
-      // Update activity on success
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Payment sent successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      // Update activity on error
-      if (activityId != null) {
-        String errorMsg = 'Payment failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
+  }) => paymentService.sendUsdc(
+    keyPair: keyPair,
+    destination: destination,
+    usdcAmount: usdcAmount,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // SWAPS WITH ACTIVITY LOGGING
@@ -651,76 +466,14 @@ class StellarWalletServices {
     String? destination,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logSwap(
-          sendAmount: sendAmountXlm,
-          sendAsset: 'XLM',
-          receiveAmount: minUsdcOut,
-          receiveAsset: 'USDC',
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await swapService.swapXlmToUsdc(
-        keyPair: keyPair,
-        sendAmountXlm: sendAmountXlm,
-        minUsdcOut: minUsdcOut,
-        destination: destination,
-        memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
-      );
-
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Swap completed successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      if (activityId != null) {
-        String errorMsg = 'Swap failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
+  }) => swapService.swapXlmToUsdc(
+    keyPair: keyPair,
+    sendAmountXlm: sendAmountXlm,
+    minUsdcOut: minUsdcOut,
+    destination: destination,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
 
   Future<String> swapUsdcToXlm({
     required KeyPair keyPair,
@@ -729,76 +482,14 @@ class StellarWalletServices {
     String? destination,
     String? memoText,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logSwap(
-          sendAmount: sendAmountUsdc,
-          sendAsset: 'USDC',
-          receiveAmount: minXlmOut,
-          receiveAsset: 'XLM',
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await swapService.swapUsdcToXlm(
-        keyPair: keyPair,
-        sendAmountUsdc: sendAmountUsdc,
-        minXlmOut: minXlmOut,
-        destination: destination,
-        memoText: memoText,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
-      );
-
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Swap completed successfully',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      if (activityId != null) {
-        String errorMsg = 'Swap failed';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
+  }) => swapService.swapUsdcToXlm(
+    keyPair: keyPair,
+    sendAmountUsdc: sendAmountUsdc,
+    minXlmOut: minXlmOut,
+    destination: destination,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // CLAIMABLE BALANCES WITH ACTIVITY LOGGING
@@ -811,15 +502,14 @@ class StellarWalletServices {
     required List<Claimant> claimants,
     String? memoText,
     ProgressCallback? onProgress,
-  }) =>
-      claimableBalanceService.createClaimableBalance(
-        keyPair: keyPair,
-        asset: asset,
-        amount: amount,
-        claimants: claimants,
-        memoText: memoText,
-        onProgress: onProgress,
-      );
+  }) => claimableBalanceService.createClaimableBalance(
+    keyPair: keyPair,
+    asset: asset,
+    amount: amount,
+    claimants: claimants,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
 
   Future<String> createUnconditionalClaimableBalance({
     required KeyPair keyPair,
@@ -827,77 +517,13 @@ class StellarWalletServices {
     required double amount,
     required String recipientId,
     ProgressCallback? onProgress,
-  }) async {
-    String? activityId;
-
-    try {
-      final assetCode = asset is AssetTypeCreditAlphaNum ? asset.code : 'XLM';
-
-      if (_activityVM != null) {
-        activityId = await _activityVM!.logClaimable(
-          isCreating: true,
-          amount: amount,
-          asset: assetCode,
-          recipientAddress: recipientId,
-          status: ActivityStatus.processing,
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      final hash = await claimableBalanceService.createUnconditionalClaimableBalance(
-        keyPair: keyPair,
-        asset: asset,
-        amount: amount,
-        recipientId: recipientId,
-        onProgress: (message) {
-          if (activityId != null) {
-            _updateActivity(activityId, description: message);
-          }
-          onProgress?.call(message);
-        },
-      );
-
-      if (activityId != null) {
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.completed,
-          txHash: hash,
-          description: 'Claimable balance created',
-        );
-
-        final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-        _showNotification(log);
-      }
-
-      return hash;
-    } catch (e) {
-      if (activityId != null) {
-        String errorMsg = 'Failed to create claimable balance';
-        String? errorAdvice;
-
-        if (e is StellarWalletError) {
-          errorMsg = e.message;
-          errorAdvice = e.advice;
-        }
-
-        await _updateActivity(
-          activityId,
-          status: ActivityStatus.failed,
-          errorMessage: errorMsg,
-          errorAdvice: errorAdvice,
-        );
-
-        if (_activityVM != null) {
-          final log = _activityVM!.logs.firstWhere((l) => l.id == activityId);
-          _showNotification(log);
-        }
-      }
-
-      rethrow;
-    }
-  }
+  }) => claimableBalanceService.createUnconditionalClaimableBalance(
+    keyPair: keyPair,
+    asset: asset,
+    amount: amount,
+    recipientId: recipientId,
+    onProgress: onProgress,
+  );
 
   Future<String> createTimeLockedPayment({
     required KeyPair keyPair,
@@ -906,15 +532,14 @@ class StellarWalletServices {
     required String recipientId,
     required DateTime unlockTime,
     ProgressCallback? onProgress,
-  }) =>
-      claimableBalanceService.createTimeLockedPayment(
-        keyPair: keyPair,
-        asset: asset,
-        amount: amount,
-        recipientId: recipientId,
-        unlockTime: unlockTime,
-        onProgress: onProgress,
-      );
+  }) => claimableBalanceService.createTimeLockedPayment(
+    keyPair: keyPair,
+    asset: asset,
+    amount: amount,
+    recipientId: recipientId,
+    unlockTime: unlockTime,
+    onProgress: onProgress,
+  );
 
   Future<String> createUnconditionalWithExpiry({
     required KeyPair keyPair,
@@ -923,15 +548,14 @@ class StellarWalletServices {
     required String recipientId,
     required DateTime expiryTime,
     ProgressCallback? onProgress,
-  }) =>
-      claimableBalanceService.createUnconditionalWithExpiry(
-        keyPair: keyPair,
-        asset: asset,
-        amount: amount,
-        recipientId: recipientId,
-        expiryTime: expiryTime,
-        onProgress: onProgress,
-      );
+  }) => claimableBalanceService.createUnconditionalWithExpiry(
+    keyPair: keyPair,
+    asset: asset,
+    amount: amount,
+    recipientId: recipientId,
+    expiryTime: expiryTime,
+    onProgress: onProgress,
+  );
 
   Future<String> createTimeLockedWithExpiry({
     required KeyPair keyPair,
@@ -941,60 +565,61 @@ class StellarWalletServices {
     required DateTime unlockTime,
     required DateTime expiryTime,
     ProgressCallback? onProgress,
-  }) =>
-      claimableBalanceService.createTimeLockedWithExpiry(
-        keyPair: keyPair,
-        asset: asset,
-        amount: amount,
-        recipientId: recipientId,
-        unlockTime: unlockTime,
-        expiryTime: expiryTime,
-        onProgress: onProgress,
-      );
+  }) => claimableBalanceService.createTimeLockedWithExpiry(
+    keyPair: keyPair,
+    asset: asset,
+    amount: amount,
+    recipientId: recipientId,
+    unlockTime: unlockTime,
+    expiryTime: expiryTime,
+    onProgress: onProgress,
+  );
 
   Future<String> claimClaimableBalance({
     required KeyPair keyPair,
     required String balanceId,
     ProgressCallback? onProgress,
-  }) =>
-      claimableBalanceService.claimClaimableBalance(
-        keyPair: keyPair,
-        balanceId: balanceId,
-        onProgress: onProgress,
-      );
+  }) => claimableBalanceService.claimClaimableBalance(
+    keyPair: keyPair,
+    balanceId: balanceId,
+    onProgress: onProgress,
+  );
 
   Future<List<ClaimableBalanceResponse>> getClaimableBalances({
     required String accountId,
     int limit = 200,
-  }) =>
-      claimableBalanceService.getClaimableBalances(
-          accountId: accountId, limit: limit);
+  }) => claimableBalanceService.getClaimableBalances(
+    accountId: accountId,
+    limit: limit,
+  );
 
   Future<List<ClaimableBalanceResponse>> getSentClaimableBalances({
     required String accountId,
     int limit = 200,
-  }) =>
-      claimableBalanceService.getSentClaimableBalances(
-          accountId: accountId, limit: limit);
+  }) => claimableBalanceService.getSentClaimableBalances(
+    accountId: accountId,
+    limit: limit,
+  );
 
   Future<Map<String, List<ClaimableBalanceResponse>>> getAllClaimableBalances({
     required String accountId,
     int limit = 200,
-  }) =>
-      claimableBalanceService.getAllClaimableBalances(
-          accountId: accountId, limit: limit);
+  }) => claimableBalanceService.getAllClaimableBalances(
+    accountId: accountId,
+    limit: limit,
+  );
 
   Future<ClaimableBalanceResponse?> getClaimableBalanceById({
     required String balanceId,
-  }) =>
-      claimableBalanceService.getClaimableBalanceById(balanceId: balanceId);
+  }) => claimableBalanceService.getClaimableBalanceById(balanceId: balanceId);
 
   Future<bool> canClaimBalance({
     required String accountId,
     required String balanceId,
-  }) =>
-      claimableBalanceService.canClaimBalance(
-          accountId: accountId, balanceId: balanceId);
+  }) => claimableBalanceService.canClaimBalance(
+    accountId: accountId,
+    balanceId: balanceId,
+  );
 
   // ══════════════════════════════════════════════════════════════════════════
   // DEX TRADING
@@ -1008,16 +633,15 @@ class StellarWalletServices {
     required double price,
     int? offerId,
     ProgressCallback? onProgress,
-  }) =>
-      dexService.createSellOffer(
-        keyPair: keyPair,
-        selling: selling,
-        buying: buying,
-        amount: amount,
-        price: price,
-        offerId: offerId,
-        onProgress: onProgress,
-      );
+  }) => dexService.createSellOffer(
+    keyPair: keyPair,
+    selling: selling,
+    buying: buying,
+    amount: amount,
+    price: price,
+    offerId: offerId,
+    onProgress: onProgress,
+  );
 
   Future<String> createBuyOffer({
     required KeyPair keyPair,
@@ -1027,16 +651,15 @@ class StellarWalletServices {
     required double price,
     int? offerId,
     ProgressCallback? onProgress,
-  }) =>
-      dexService.createBuyOffer(
-        keyPair: keyPair,
-        buying: buying,
-        selling: selling,
-        amount: amount,
-        price: price,
-        offerId: offerId,
-        onProgress: onProgress,
-      );
+  }) => dexService.createBuyOffer(
+    keyPair: keyPair,
+    buying: buying,
+    selling: selling,
+    amount: amount,
+    price: price,
+    offerId: offerId,
+    onProgress: onProgress,
+  );
 
   Future<String> cancelOffer({
     required KeyPair keyPair,
@@ -1044,27 +667,24 @@ class StellarWalletServices {
     required Asset selling,
     required Asset buying,
     ProgressCallback? onProgress,
-  }) =>
-      dexService.cancelOffer(
-        keyPair: keyPair,
-        offerId: offerId,
-        selling: selling,
-        buying: buying,
-        onProgress: onProgress,
-      );
+  }) => dexService.cancelOffer(
+    keyPair: keyPair,
+    offerId: offerId,
+    selling: selling,
+    buying: buying,
+    onProgress: onProgress,
+  );
 
   Future<List<OfferResponse>> getAccountOffers({
     required String accountId,
     int limit = 200,
-  }) =>
-      dexService.getAccountOffers(accountId: accountId, limit: limit);
+  }) => dexService.getAccountOffers(accountId: accountId, limit: limit);
 
   Future<OrderBookResponse> getOrderBook({
     required Asset selling,
     required Asset buying,
     int limit = 20,
-  }) =>
-      dexService.getOrderBook(selling: selling, buying: buying, limit: limit);
+  }) => dexService.getOrderBook(selling: selling, buying: buying, limit: limit);
 
   // ══════════════════════════════════════════════════════════════════════════
   // FEE & QUOTES
@@ -1074,20 +694,27 @@ class StellarWalletServices {
   Future<int> getCurrentFeeStroops() => feeService.getCurrentFeeStroops();
   Future<double> getCurrentFeeXlm() => feeService.getCurrentFeeXlm();
   Future<String> getCurrentFeeLabel() => feeService.getCurrentFeeLabel();
+  Future<void> ensureSwapFeeConfigLoaded({bool refresh = false}) async {
+    await feeService.ensureFeeConfigLoaded(refresh: refresh);
+  }
 
-  Future<double> estimateNetworkFeeXlm({int opCount = 1, int percentile = 90}) =>
-      feeService.estimateNetworkFeeXlm(opCount: opCount, percentile: percentile);
+  Future<double> estimateNetworkFeeXlm({
+    int opCount = 1,
+    int percentile = 90,
+  }) => feeService.estimateNetworkFeeXlm(
+    opCount: opCount,
+    percentile: percentile,
+  );
 
   Future<double?> quoteStrictSend({
     required Asset sourceAsset,
     required String sourceAmount,
     required List<Asset> destinationAssets,
-  }) =>
-      feeService.quoteStrictSend(
-        sourceAsset: sourceAsset,
-        sourceAmount: sourceAmount,
-        destinationAssets: destinationAssets,
-      );
+  }) => feeService.quoteStrictSend(
+    sourceAsset: sourceAsset,
+    sourceAmount: sourceAmount,
+    destinationAssets: destinationAssets,
+  );
 
   Future<double?> quoteXlmToUsdc(double sendAmountXlm) =>
       feeService.quoteXlmToUsdc(sendAmountXlm);
@@ -1104,7 +731,10 @@ class StellarWalletServices {
   Stream<AccountState> accountStateStream(String accountId) =>
       streamService.accountStateStream(accountId);
 
-  Stream<FeeEstimate> feeEstimateStream({int opCount = 1, int percentile = 90}) =>
+  Stream<FeeEstimate> feeEstimateStream({
+    int opCount = 1,
+    int percentile = 90,
+  }) =>
       streamService.feeEstimateStream(opCount: opCount, percentile: percentile);
 
   Stream<PairPrice> xlmUsdcPriceStream() => streamService.xlmUsdcPriceStream();

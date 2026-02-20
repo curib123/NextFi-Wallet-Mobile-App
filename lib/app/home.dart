@@ -1,15 +1,15 @@
 // lib/app/home.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/reusable_view_model/tab_vm.dart';
 import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
-import 'package:next_fi/services/secure_storage/profit_address_vault_secure_storage.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/features/settings/view_model/settings_vm.dart' hide ThemeBridge;
+import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 
 import 'widgets/app_bottom_navigation.dart';
 
@@ -21,6 +21,8 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
+  Timer? _splashTimer;
+
   bool _showSplash = true;
   bool _isLoading = true;
   bool _hasMnemonic = false;
@@ -32,15 +34,17 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _applySystemThemeToRoot();
 
-    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
-      _applySystemThemeToRoot();
-    };
+    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged =
+        () {
+          _applySystemThemeToRoot();
+        };
 
     _boot();
   }
 
   @override
   void dispose() {
+    _splashTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -52,16 +56,21 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   void _applySystemThemeToRoot() {
-    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-    final mode = (brightness == Brightness.dark) ? ThemeMode.dark : ThemeMode.light;
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final mode = (brightness == Brightness.dark)
+        ? ThemeMode.dark
+        : ThemeMode.light;
     ThemeBridge.apply?.call(mode);
   }
 
   Future<void> _boot() async {
-    await TransactionFeeVaultSecureStorage().initSignedConfigFromActiveWallet();
-    final minSplash = Future.delayed(const Duration(seconds: 5));
+    final splashCompleter = Completer<void>();
+    _splashTimer?.cancel();
+    _splashTimer = Timer(const Duration(seconds: 5), splashCompleter.complete);
+
     final check = _checkMnemonic();
-    await Future.wait([minSplash, check]);
+    await Future.wait([splashCompleter.future, check]);
     if (!mounted) return;
     setState(() => _showSplash = false);
   }
@@ -94,27 +103,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColor.of(context);
-
     if (_showSplash) {
       return const WalletCreationScreen(isSplash: true);
     }
 
     if (_isLoading) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RubiksCubeLoader(
-                size: 30,
-                speed: const Duration(milliseconds: 1200),
-                color: colors.textSecondary,
-              ),
-            ],
-          ),
-        ),
-      );
+      return const Scaffold(body: PageLoader(label: 'Loading wallet...'));
     }
 
     if (!_hasMnemonic) {

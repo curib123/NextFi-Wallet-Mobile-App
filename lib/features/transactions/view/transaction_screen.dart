@@ -1,4 +1,3 @@
-// lib/features/transactions/view/transaction_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
@@ -24,6 +23,7 @@ import 'widgets/transaction_tile.dart';
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
+
   @override
   State<TransactionScreen> createState() => _TransactionScreenState();
 }
@@ -32,7 +32,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
   final ScrollController _scrollController = ScrollController();
   StreamSubscription<Tx>? _incomingUiSub;
 
-  // Store refs so we NEVER call context.* in dispose()
   WalletHomeVM? _walletVm;
   VoidCallback? _walletListener;
   String? _lastBoundAddr;
@@ -44,12 +43,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
   void initState() {
     super.initState();
 
-    // Infinite scroll → load more
     _scrollController.addListener(() {
       final pos = _scrollController.position;
       if (!mounted || !pos.hasPixels) return;
 
-      final txvm = context.read<TransactionsVM>(); // safe in handlers
+      final txvm = context.read<TransactionsVM>();
       if (pos.pixels >= pos.maxScrollExtent - 200 &&
           !txvm.state.loadingMore &&
           txvm.state.hasMore) {
@@ -62,14 +60,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // Defer to next frame so build/layout is stable
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final walletNow = context.read<WalletHomeVM>();     // safe here
-      final txvm = context.read<TransactionsVM>();        // safe here
+      final walletNow = context.read<WalletHomeVM>();
+      final txvm = context.read<TransactionsVM>();
 
-      // If WalletHomeVM instance changed, move listener
       if (!identical(walletNow, _walletVm)) {
         if (_walletVm != null && _walletListener != null) {
           _walletVm!.removeListener(_walletListener!);
@@ -85,10 +81,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
         };
 
         _walletVm!.addListener(_walletListener!);
-        _walletListener!(); // initial bind
+        _walletListener!();
       }
 
-      // Subscribe once for incoming UI chips/toasts
       _incomingUiSub ??= txvm.incomingStream.listen((tx) {
         if (!mounted) return;
 
@@ -107,22 +102,20 @@ class _TransactionScreenState extends State<TransactionScreen> {
           type: AppAlertType.info,
           title: 'Incoming $asset',
           subtitle:
-          'You received ${amount.toStringAsFixed(6)} $asset. Tap below to view details.',
+              'You received ${amount.toStringAsFixed(6)} $asset. Tap below to view details.',
           primaryText: 'View',
           barrierDismissible: true,
           onPrimary: () {
             final peerAddr = (tx['from'] ?? '').toString().trim();
-            const isIncoming = true;
             showTxDetailsBottomSheet(
               context: context,
               tx: tx,
               peerAddr: peerAddr,
-              isIncoming: isIncoming,
+              isIncoming: true,
             );
           },
         );
 
-        // Auto-close after 5s if still mounted
         Timer(const Duration(seconds: 5), () {
           if (mounted) ctl;
         });
@@ -132,7 +125,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   @override
   void dispose() {
-    // No context.* calls here
     _incomingUiSub?.cancel();
     _incomingUiSub = null;
 
@@ -169,16 +161,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
     final vm = context.watch<TransactionsVM>();
     final recipProv = context.watch<RecipientAddressVM>();
 
-    // Attach contact meta (UI-only; VM state remains pure)
     void attachRecipientMetaTo(List<Tx> list) {
       if (recipProv.loading) return;
       for (final tx in list) {
         final direction = (tx['direction'] ?? 'other').toString();
         final isIncoming = direction == 'in';
         final peerAddr =
-        (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? ''))
-            .toString()
-            .trim();
+            (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? '')).toString().trim();
         if (peerAddr.isEmpty) continue;
         final rec = recipProv.byAddress(peerAddr);
         tx['recName'] = rec?.name;
@@ -188,8 +177,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final visibleTxs = [...vm.state.visibleTxs];
     attachRecipientMetaTo(visibleTxs);
-    final showLoaderRow =
-        vm.state.loadingMore && vm.state.filter == TxFilter.all;
+    final showLoaderRow = vm.state.loadingMore && vm.state.filter == TxFilter.all;
 
     Widget content;
     if (vm.state.loading && vm.state.txs.isEmpty) {
@@ -202,7 +190,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               EmptyState.error(
-                title: 'Couldn’t load transactions',
+                title: 'Could not load transactions',
                 message: vm.state.errorMsg!,
                 primaryActionLabel: null,
                 onPrimaryAction: null,
@@ -222,7 +210,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     } else if (vm.state.txs.isEmpty) {
       final msg = vm.state.accountMissing
           ? 'This wallet is new or not yet funded on-chain. Once you receive your first XLM or USDC, your transactions will appear here.'
-          : 'When you send or receive XLM or USDC, they’ll appear here.';
+          : 'When you send or receive XLM or USDC, they will appear here.';
       content = Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -283,12 +271,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
-                  child: RubiksCubeLoader(color: colors.textPrimary),
+                  child: ModernFintechLoader(
+                    size: 24,
+                    speed: const Duration(milliseconds: 1200),
+                    color: colors.textPrimary,
+                  ),
                 ),
               );
             }
-            final tx = visibleTxs[index];
 
+            final tx = visibleTxs[index];
             return TransactionTile(
               colors: colors,
               tx: tx,
@@ -298,9 +290,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 final direction = (tx['direction'] ?? 'other').toString();
                 final isIncoming = direction == 'in';
                 final peerAddr =
-                (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? ''))
-                    .toString()
-                    .trim();
+                    (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? ''))
+                        .toString()
+                        .trim();
 
                 showTxDetailsBottomSheet(
                   context: context,
@@ -336,7 +328,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
             duration: const Duration(milliseconds: 180),
             child: content,
           ),
-          // top-center incoming chips overlay
           Positioned(
             top: 8,
             left: 0,
@@ -348,19 +339,19 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 children: _incomingChips
                     .map(
                       (c) => AnimatedSlide(
-                    key: ValueKey(c.id),
-                    duration: const Duration(milliseconds: 250),
-                    offset: const Offset(0, 0),
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 250),
-                      opacity: 1.0,
-                      child: IncomingChipBadge(
-                        chip: c,
-                        surface: colors.surface,
+                        key: ValueKey(c.id),
+                        duration: const Duration(milliseconds: 250),
+                        offset: const Offset(0, 0),
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 250),
+                          opacity: 1.0,
+                          child: IncomingChipBadge(
+                            chip: c,
+                            surface: colors.surface,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                )
+                    )
                     .toList(),
               ),
             ),

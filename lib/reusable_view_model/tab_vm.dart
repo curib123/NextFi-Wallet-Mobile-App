@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:next_fi/features/activity/view/activity_screen.dart';
 import 'package:next_fi/features/claimable/view/claimable_list_screen.dart';
+import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
 import 'package:next_fi/features/transactions/view/transaction_screen.dart';
 import 'package:next_fi/features/wallet_home/view/wallet_home_screen.dart';
@@ -15,13 +15,13 @@ class TabVM extends ChangeNotifier {
   int get currentIndex => _currentIndex;
   bool get isFirstTime => _isFirstTime;
 
-  /// Updated screen order: Wallet → Activity → Swap → Claimable → Transactions
+  // Wallet -> History -> Swap -> Claimable -> Settings
   final List<Widget> screens = const [
-    WalletHomeScreen(),      // 0: Wallet
-    ActivityScreen(),        // 1: Activity (NEW)
-    SwapScreen(),            // 2: Swap (moved from position 1)
-    ClaimableListScreen(),   // 3: Claimable (moved from position 2)
-    TransactionScreen(),     // 4: Transactions (moved from position 3)
+    WalletHomeScreen(),
+    TransactionScreen(),
+    SwapScreen(),
+    ClaimableListScreen(),
+    SettingsScreen(),
   ];
 
   TabVM() {
@@ -35,7 +35,7 @@ class TabVM extends ChangeNotifier {
   }
 
   Future<void> _loadFirstTimeStatus() async {
-    String? value = await _secureStorage.read(key: 'first_time');
+    final value = await _secureStorage.read(key: 'first_time');
     _isFirstTime = value == null ? true : value.toLowerCase() == 'true';
     notifyListeners();
   }

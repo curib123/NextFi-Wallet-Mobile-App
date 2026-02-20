@@ -1,6 +1,7 @@
 // lib/common/components/security_pin_sheet.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -78,13 +79,10 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
       parent: _animController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
     _animController.forward();
   }
 
@@ -133,7 +131,8 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
         _lockoutRemaining != null && _lockoutRemaining! > Duration.zero;
     if (lockedOut) {
       _showError(
-          'Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.');
+        'Too many attempts. Try again in ${_lockoutRemaining!.inSeconds}s.',
+      );
       HapticFeedback.heavyImpact();
       return;
     }
@@ -160,9 +159,11 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
           setState(() => _lockoutRemaining = rem);
           _startOrStopLockoutTimer(rem);
         }
-        _showError(rem != null && rem > Duration.zero
-            ? 'Too many attempts. Try again in ${rem.inSeconds}s.'
-            : 'Invalid PIN');
+        _showError(
+          rem != null && rem > Duration.zero
+              ? 'Too many attempts. Try again in ${rem.inSeconds}s.'
+              : 'Invalid PIN',
+        );
         HapticFeedback.heavyImpact();
       }
     } catch (e) {
@@ -272,8 +273,9 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
                               ? LucideIcons.loader2
                               : LucideIcons.checkCircle2,
                           loading: _submitting,
-                          onPressed:
-                          (_submitting || isLockedOut) ? null : _submit,
+                          onPressed: (_submitting || isLockedOut)
+                              ? null
+                              : _submit,
                         ),
                       ),
                     ],
@@ -331,13 +333,10 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
       parent: _animController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
     _animController.forward();
   }
 
@@ -405,7 +404,8 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       _showSuccess(
-          _hasExisting ? 'PIN updated successfully' : 'PIN created successfully');
+        _hasExisting ? 'PIN updated successfully' : 'PIN created successfully',
+      );
       await Future.delayed(const Duration(milliseconds: 500));
       await _close(true);
     } catch (e) {
@@ -575,12 +575,12 @@ Widget _buildHandle(AppColor colors) {
 }
 
 Widget _buildHeader(
-    AppColor colors, {
-      required IconData icon,
-      required String title,
-      required String subtitle,
-      required VoidCallback onClose,
-    }) {
+  AppColor colors, {
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required VoidCallback onClose,
+}) {
   return Row(
     children: [
       Container(
@@ -616,10 +616,7 @@ Widget _buildHeader(
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: TextStyle(
-                fontSize: 13,
-                color: colors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 13, color: colors.textSecondary),
             ),
           ],
         ),
@@ -633,11 +630,7 @@ Widget _buildHeader(
             width: 40,
             height: 40,
             alignment: Alignment.center,
-            child: Icon(
-              LucideIcons.x,
-              color: colors.textSecondary,
-              size: 20,
-            ),
+            child: Icon(LucideIcons.x, color: colors.textSecondary, size: 20),
           ),
         ),
       ),
@@ -651,18 +644,11 @@ Widget _buildLockoutWarning(AppColor colors, Duration remaining) {
     decoration: BoxDecoration(
       color: colors.error.withOpacity(0.1),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(
-        color: colors.error.withOpacity(0.3),
-        width: 1,
-      ),
+      border: Border.all(color: colors.error.withOpacity(0.3), width: 1),
     ),
     child: Row(
       children: [
-        Icon(
-          LucideIcons.shieldAlert,
-          color: colors.error,
-          size: 20,
-        ),
+        Icon(LucideIcons.shieldAlert, color: colors.error, size: 20),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -698,26 +684,16 @@ Widget _buildSecurityTips(AppColor colors) {
     decoration: BoxDecoration(
       color: colors.primary.withOpacity(0.08),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(
-        color: colors.primary.withOpacity(0.2),
-        width: 1,
-      ),
+      border: Border.all(color: colors.primary.withOpacity(0.2), width: 1),
     ),
     child: Row(
       children: [
-        Icon(
-          LucideIcons.lightbulb,
-          color: colors.primary,
-          size: 18,
-        ),
+        Icon(LucideIcons.lightbulb, color: colors.primary, size: 18),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
             'Choose a PIN that\'s easy to remember but hard to guess',
-            style: TextStyle(
-              fontSize: 12,
-              color: colors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 12, color: colors.textSecondary),
           ),
         ),
       ],
@@ -726,17 +702,17 @@ Widget _buildSecurityTips(AppColor colors) {
 }
 
 Widget _buildPinInput(
-    AppColor colors, {
-      required TextEditingController controller,
-      FocusNode? focusNode,
-      required String label,
-      required bool obscure,
-      bool enabled = true,
-      required VoidCallback onToggleObscure,
-      String? Function(String?)? validator,
-      void Function(String)? onFieldSubmitted,
-      VoidCallback? onSubmit,
-    }) {
+  AppColor colors, {
+  required TextEditingController controller,
+  FocusNode? focusNode,
+  required String label,
+  required bool obscure,
+  bool enabled = true,
+  required VoidCallback onToggleObscure,
+  String? Function(String?)? validator,
+  void Function(String)? onFieldSubmitted,
+  VoidCallback? onSubmit,
+}) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -753,10 +729,7 @@ Widget _buildPinInput(
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: colors.border.withOpacity(0.3),
-            width: 1,
-          ),
+          border: Border.all(color: colors.border.withOpacity(0.3), width: 1),
         ),
         child: TextFormField(
           controller: controller,
@@ -803,45 +776,35 @@ Widget _buildPinInput(
 }
 
 Widget _buildButton(
-    AppColor colors, {
-      required String label,
-      required IconData icon,
-      bool outlined = false,
-      bool loading = false,
-      VoidCallback? onPressed,
-    }) {
+  AppColor colors, {
+  required String label,
+  required IconData icon,
+  bool outlined = false,
+  bool loading = false,
+  VoidCallback? onPressed,
+}) {
   if (outlined) {
-    return OutlinedButton(
+    return AppOutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        side: BorderSide(
-          color: colors.border.withOpacity(0.3),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        side: BorderSide(color: colors.border.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 8),
-          Text(label),
-        ],
+        children: [Icon(icon, size: 16), const SizedBox(width: 8), Text(label)],
       ),
     );
   }
 
-  return ElevatedButton(
+  return AppElevatedButton(
     onPressed: onPressed,
     style: ElevatedButton.styleFrom(
       backgroundColor: colors.primary,
       foregroundColor: Colors.white,
       padding: const EdgeInsets.symmetric(vertical: 14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       elevation: 0,
       disabledBackgroundColor: colors.textSecondary.withOpacity(0.2),
     ),
