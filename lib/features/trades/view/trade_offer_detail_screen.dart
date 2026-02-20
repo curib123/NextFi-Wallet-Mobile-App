@@ -12,10 +12,12 @@ import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
 import 'package:next_fi/services/wallet/models/wallet_models.dart';
 import 'package:next_fi/services/wallet/wallet_core_service.dart';
+import 'package:provider/provider.dart';
 
 class TradeOfferDetailScreen extends StatefulWidget {
   const TradeOfferDetailScreen({
@@ -50,6 +52,8 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
   UserPaymentAccountModel? _sellerAccount;
   WalletAddress? _buyerWallet;
   String? _createIdempotencyKey;
+  double? _walletXlmBalance;
+  bool _fetchingBalance = false;
 
   bool _loading = true;
   bool _submitting = false;
@@ -107,11 +111,37 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
         _buyerAddressCtrl.text = selectedWallet?.publicAddress ?? '';
         _loading = false;
       });
+      _fetchWalletBalance(selectedWallet?.publicAddress);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _fetchWalletBalance(String? address) async {
+    if (address == null || address.trim().isEmpty) {
+      if (mounted) setState(() => _walletXlmBalance = null);
+      return;
+    }
+    if (mounted) setState(() => _fetchingBalance = true);
+    try {
+      final stellar = context.read<StellarWalletServices>();
+      final balance = await stellar.accountService.getXlmBalance(
+        address.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _walletXlmBalance = balance;
+        _fetchingBalance = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _walletXlmBalance = null;
+        _fetchingBalance = false;
       });
     }
   }
@@ -492,12 +522,15 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                                 .toList(),
                             onChanged: _submitting
                                 ? null
-                                : (wallet) => setState(() {
-                                    _buyerWallet = wallet;
-                                    _buyerAddressCtrl.text =
-                                        wallet?.publicAddress ?? '';
-                                    _createIdempotencyKey = null;
-                                  }),
+                                : (wallet) {
+                                    setState(() {
+                                      _buyerWallet = wallet;
+                                      _buyerAddressCtrl.text =
+                                          wallet?.publicAddress ?? '';
+                                      _createIdempotencyKey = null;
+                                    });
+                                    _fetchWalletBalance(wallet?.publicAddress);
+                                  },
                             decoration: InputDecoration(
                               labelText: 'Receive wallet (escrow release)',
                               filled: true,
@@ -507,6 +540,15 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                               focusedBorder: _fieldFocusedBorder(c),
                             ),
                           ),
+                        if (_myWallets.isNotEmpty && _buyerWallet != null) ...[
+                          const SizedBox(height: 6),
+                          _WalletBalanceBanner(
+                            c: c,
+                            balance: _walletXlmBalance,
+                            loading: _fetchingBalance,
+                            isSellMode: !_isBuy,
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         TextField(
                           controller: _buyerAddressCtrl,
@@ -621,16 +663,7 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleSpacing: 20,
-      title: Text(
-        _isBuy ? 'Buy Offer' : 'Sell Offer',
-        style: TextStyle(
-          color: c.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
-        ),
-      ),
+      titleSpacing: 4,
       leading: Padding(
         padding: const EdgeInsets.only(left: 8),
         child: IconButton(
@@ -641,6 +674,42 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
           ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _isBuy ? 'Buy Crypto' : 'Sell Crypto',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+            ),
+          ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: (_isBuy ? c.success : c.warning).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _isBuy ? 'You: Buyer · Merchant: Seller' : 'You: Seller · Merchant: Buyer',
+                  style: TextStyle(
+                    color: _isBuy ? c.success : c.warning,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1089,8 +1158,10 @@ Future<bool?> _showConfirmSheet(
               const SizedBox(height: 10),
               _ConfirmRow(
                 c: c,
-                label: 'Flow',
-                value: isBuy ? 'Buy from SELL offer' : 'Sell to BUY offer',
+                label: 'You are',
+                value: isBuy
+                    ? 'Buying — merchant sends crypto, you pay fiat'
+                    : 'Selling — you send crypto, merchant pays fiat',
               ),
               _ConfirmRow(
                 c: c,
@@ -1112,7 +1183,7 @@ Future<bool?> _showConfirmSheet(
               ),
               _ConfirmRow(
                 c: c,
-                label: 'Seller account',
+                label: isBuy ? 'Merchant acct' : 'Your payout',
                 value:
                     '${sellerAccount.paymentMethod?.name ?? 'Method'} | ${sellerAccount.accountName}',
               ),
@@ -1156,6 +1227,92 @@ Future<bool?> _showConfirmSheet(
       );
     },
   );
+}
+
+class _WalletBalanceBanner extends StatelessWidget {
+  const _WalletBalanceBanner({
+    required this.c,
+    required this.balance,
+    required this.loading,
+    required this.isSellMode,
+  });
+
+  final AppColor c;
+  final double? balance;
+  final bool loading;
+  final bool isSellMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final balanceFmt = NumberFormat('#,##0.######');
+    final hasBalance = balance != null;
+    final isLow = isSellMode && hasBalance && balance! < 5.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: isLow
+            ? c.warning.withOpacity(0.09)
+            : c.success.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isLow
+              ? c.warning.withOpacity(0.25)
+              : c.success.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            loading
+                ? Icons.hourglass_empty_rounded
+                : isLow
+                ? Icons.warning_amber_rounded
+                : Icons.account_balance_wallet_rounded,
+            size: 14,
+            color: loading
+                ? c.textSecondary
+                : isLow
+                ? c.warning
+                : c.success,
+          ),
+          const SizedBox(width: 7),
+          if (loading)
+            Text(
+              'Fetching wallet balance...',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            )
+          else if (!hasBalance)
+            Text(
+              'Could not fetch balance from Stellar network.',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            )
+          else ...[
+            Text(
+              'Wallet balance: ',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            ),
+            Text(
+              '${balanceFmt.format(balance!)} XLM',
+              style: TextStyle(
+                color: isLow ? c.warning : c.success,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (isSellMode && isLow) ...[
+              const SizedBox(width: 6),
+              Text(
+                '— top up before selling',
+                style: TextStyle(color: c.warning, fontSize: 11.5),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _ConfirmRow extends StatelessWidget {

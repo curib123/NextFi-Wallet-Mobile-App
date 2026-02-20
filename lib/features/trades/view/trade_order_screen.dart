@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -216,8 +217,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final ok = await _confirm(
       title: 'Release Escrow?',
       message:
-          'Only release if payment is fully received in your account. This action is final.',
+          'Only release if payment is fully received in your account. This action is final and cannot be undone.',
       confirmLabel: 'Release',
+      isDestructive: false,
     );
     if (ok != true) return;
     final txHash = await _promptText(
@@ -450,33 +452,115 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     int minLength = 0,
   }) async {
     final ctrl = TextEditingController();
-    final value = await showDialog<String>(
+    final value = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) {
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
         final c = AppColor.of(context);
-        return AlertDialog(
-          backgroundColor: c.surface,
-          title: Text(title),
-          content: TextField(
-            controller: ctrl,
-            minLines: 2,
-            maxLines: 4,
-            decoration: InputDecoration(hintText: hint),
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
           ),
-          actions: [
-            AppTextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('Back'),
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            AppElevatedButton(
-              onPressed: () {
-                final text = ctrl.text.trim();
-                if (text.length < minLength && minLength > 0) return;
-                Navigator.of(context).pop(text);
-              },
-              child: Text(confirm),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    filled: true,
+                    fillColor: c.background,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide(color: c.border.withOpacity(0.24)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide(color: c.border.withOpacity(0.24)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide(
+                        color: c.primary.withOpacity(0.5),
+                        width: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppOutlinedButton(
+                        onPressed: () => Navigator.of(ctx).pop(null),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: c.textPrimary,
+                          side: BorderSide(color: c.border.withOpacity(0.4)),
+                          minimumSize: const Size.fromHeight(44),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Back'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AppElevatedButton(
+                        onPressed: () {
+                          final text = ctrl.text.trim();
+                          if (text.length < minLength && minLength > 0) return;
+                          Navigator.of(ctx).pop(text);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: c.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(44),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(confirm),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -487,51 +571,158 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Future<(int, String?)?> _promptReviewInput() async {
     int rating = 5;
     final ctrl = TextEditingController();
-    final result = await showDialog<(int, String?)>(
+    final result = await showModalBottomSheet<(int, String?)>(
       context: context,
-      builder: (_) {
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
         final c = AppColor.of(context);
         return StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              backgroundColor: c.surface,
-              title: const Text('Leave Review'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Rating: $rating',
-                    style: TextStyle(color: c.textPrimary),
-                  ),
-                  Slider(
-                    value: rating.toDouble(),
-                    min: 1,
-                    max: 5,
-                    divisions: 4,
-                    onChanged: (v) => setLocal(() => rating = v.round()),
-                  ),
-                  TextField(
-                    controller: ctrl,
-                    minLines: 2,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: 'Comment (optional)',
-                    ),
-                  ),
-                ],
+          builder: (ctx2, setLocal) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
               ),
-              actions: [
-                AppTextButton(
-                  onPressed: () => Navigator.of(context).pop(null),
-                  child: const Text('Back'),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
                 ),
-                AppElevatedButton(
-                  onPressed: () =>
-                      Navigator.of(context).pop((rating, ctrl.text.trim())),
-                  child: const Text('Submit'),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: c.border.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Leave a Review',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Help others know about this merchant.',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Rating',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: List.generate(5, (i) {
+                        return GestureDetector(
+                          onTap: () => setLocal(() => rating = i + 1),
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Icon(
+                              i < rating
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              color: i < rating ? Colors.amber : c.border,
+                              size: 32,
+                            ),
+                          ),
+                        );
+                      }),
+                      ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: ctrl,
+                      autofocus: true,
+                      minLines: 2,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'Comment (optional)',
+                        filled: true,
+                        fillColor: c.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(13),
+                          borderSide: BorderSide(
+                            color: c.border.withOpacity(0.24),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(13),
+                          borderSide: BorderSide(
+                            color: c.border.withOpacity(0.24),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(13),
+                          borderSide: BorderSide(
+                            color: c.primary.withOpacity(0.5),
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AppOutlinedButton(
+                            onPressed: () => Navigator.of(ctx).pop(null),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: c.textPrimary,
+                              side: BorderSide(
+                                color: c.border.withOpacity(0.4),
+                              ),
+                              minimumSize: const Size.fromHeight(44),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Back'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: AppElevatedButton(
+                            onPressed: () => Navigator.of(ctx).pop(
+                              (rating, ctrl.text.trim()),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: c.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size.fromHeight(44),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Submit Review'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
           },
         );
@@ -545,24 +736,88 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     required String title,
     required String message,
     required String confirmLabel,
+    bool isDestructive = false,
   }) {
     final c = AppColor.of(context);
-    return showDialog<bool>(
+    return showModalBottomSheet<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: c.surface,
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          AppTextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          AppElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: c.border.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: AppOutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border.withOpacity(0.4)),
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDestructive ? c.error : c.primary,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(44),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(confirmLabel),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1293,51 +1548,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   ),
                 ],
                 const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: c.border.withOpacity(0.25)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Escrow Tracking',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13.2,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      _SummaryRow(
-                        c: c,
-                        label: 'Claimable ID',
-                        value: trade.claimableBalanceId ?? 'Not assigned yet',
-                      ),
-                      if ((trade.fundedTxHash ?? '').trim().isNotEmpty)
-                        _SummaryRow(
-                          c: c,
-                          label: 'Fund tx',
-                          value: trade.fundedTxHash!,
-                        ),
-                      if ((trade.releasedTxHash ?? '').trim().isNotEmpty)
-                        _SummaryRow(
-                          c: c,
-                          label: 'Release tx',
-                          value: trade.releasedTxHash!,
-                        ),
-                      if ((trade.refundTxHash ?? '').trim().isNotEmpty)
-                        _SummaryRow(
-                          c: c,
-                          label: 'Refund tx',
-                          value: trade.refundTxHash!,
-                        ),
-                    ],
-                  ),
-                ),
+                _EscrowTrackingCard(c: c, trade: trade),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
@@ -1679,6 +1890,317 @@ class _SummaryRow extends StatelessWidget {
                 fontSize: 12.3,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EscrowTrackingCard extends StatelessWidget {
+  const _EscrowTrackingCard({required this.c, required this.trade});
+
+  final AppColor c;
+  final TradeModel trade;
+
+  Color _escrowColor() {
+    switch (trade.escrowState) {
+      case TradeEscrowState.funded:
+        return c.warning;
+      case TradeEscrowState.released:
+        return c.success;
+      case TradeEscrowState.refunded:
+        return c.textSecondary;
+      case TradeEscrowState.unfunded:
+      case TradeEscrowState.unknown:
+        return c.textSecondary;
+    }
+  }
+
+  String _escrowLabel() {
+    switch (trade.escrowState) {
+      case TradeEscrowState.funded:
+        return 'FUNDED';
+      case TradeEscrowState.released:
+        return 'RELEASED';
+      case TradeEscrowState.refunded:
+        return 'REFUNDED';
+      case TradeEscrowState.unfunded:
+        return 'UNFUNDED';
+      case TradeEscrowState.unknown:
+        return 'UNKNOWN';
+    }
+  }
+
+  String _shortHash(String hash) {
+    if (hash.length <= 20) return hash;
+    return '${hash.substring(0, 10)}...${hash.substring(hash.length - 10)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final claimId = trade.claimableBalanceId;
+    final escrowColor = _escrowColor();
+    final fmt = DateFormat('MMM d, HH:mm');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Escrow Tracking',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.2,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: escrowColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _escrowLabel(),
+                  style: TextStyle(
+                    color: escrowColor,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (claimId != null && claimId.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 13,
+                  color: c.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _shortHash(claimId),
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 11.8,
+                      fontFamily: 'monospace',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: claimId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Claimable balance ID copied.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.copy_rounded,
+                      size: 14,
+                      color: c.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ] else ...[
+            Row(
+              children: [
+                Icon(
+                  Icons.hourglass_empty_rounded,
+                  size: 13,
+                  color: c.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Escrow ID pending backend assignment',
+                  style: TextStyle(color: c.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+          if (trade.escrowFundedAt != null)
+            _EscrowTimestamp(
+              c: c,
+              icon: Icons.lock_rounded,
+              label: 'Funded',
+              time: fmt.format(trade.escrowFundedAt!.toLocal()),
+              color: c.warning,
+            ),
+          if (trade.escrowReleasedAt != null)
+            _EscrowTimestamp(
+              c: c,
+              icon: Icons.check_circle_rounded,
+              label: 'Released',
+              time: fmt.format(trade.escrowReleasedAt!.toLocal()),
+              color: c.success,
+            ),
+          if (trade.escrowRefundedAt != null)
+            _EscrowTimestamp(
+              c: c,
+              icon: Icons.refresh_rounded,
+              label: 'Refunded',
+              time: fmt.format(trade.escrowRefundedAt!.toLocal()),
+              color: c.textSecondary,
+            ),
+          if (trade.escrowExpiryAt != null &&
+              trade.escrowState == TradeEscrowState.funded)
+            _EscrowTimestamp(
+              c: c,
+              icon: Icons.timer_outlined,
+              label: 'Escrow expires',
+              time: fmt.format(trade.escrowExpiryAt!.toLocal()),
+              color: c.error,
+            ),
+          if ((trade.fundedTxHash ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _TxHashRow(
+              c: c,
+              label: 'Fund tx',
+              hash: trade.fundedTxHash!,
+            ),
+          ],
+          if ((trade.releasedTxHash ?? '').trim().isNotEmpty)
+            _TxHashRow(
+              c: c,
+              label: 'Release tx',
+              hash: trade.releasedTxHash!,
+            ),
+          if ((trade.refundTxHash ?? '').trim().isNotEmpty)
+            _TxHashRow(c: c, label: 'Refund tx', hash: trade.refundTxHash!),
+        ],
+      ),
+    );
+  }
+}
+
+class _EscrowTimestamp extends StatelessWidget {
+  const _EscrowTimestamp({
+    required this.c,
+    required this.icon,
+    required this.label,
+    required this.time,
+    required this.color,
+  });
+
+  final AppColor c;
+  final IconData icon;
+  final String label;
+  final String time;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            time,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TxHashRow extends StatelessWidget {
+  const _TxHashRow({
+    required this.c,
+    required this.label,
+    required this.hash,
+  });
+
+  final AppColor c;
+  final String label;
+  final String hash;
+
+  String _short(String h) {
+    if (h.length <= 20) return h;
+    return '${h.substring(0, 8)}...${h.substring(h.length - 8)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _short(hash),
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 11.5,
+                fontFamily: 'monospace',
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: hash));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Transaction hash copied.'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.copy_rounded, size: 13, color: c.textSecondary),
             ),
           ),
         ],

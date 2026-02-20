@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
+import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
@@ -8,6 +10,7 @@ import 'package:next_fi/services/payment_method_and_accounts/models/payment_meth
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 import 'package:next_fi/services/wallet/models/wallet_models.dart';
 import 'package:next_fi/services/wallet/wallet_core_service.dart';
+import 'package:provider/provider.dart';
 
 class MerchantOfferEditorScreen extends StatefulWidget {
   const MerchantOfferEditorScreen({super.key, this.initialOffer});
@@ -25,8 +28,6 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
   final _offers = OffersCoreService.I;
   final _payments = PaymentMethodAndAccountsCoreService.I;
   final _wallets = WalletCoreService.I;
-
-  final _fiatCtrl = TextEditingController(text: 'PHP');
   final _fixedPriceCtrl = TextEditingController();
   final _marginCtrl = TextEditingController();
   final _minCtrl = TextEditingController();
@@ -64,7 +65,6 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
 
   @override
   void dispose() {
-    _fiatCtrl.dispose();
     _fixedPriceCtrl.dispose();
     _marginCtrl.dispose();
     _minCtrl.dispose();
@@ -87,9 +87,6 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
     _requiredReady = offer.requiredReady;
     _isActive = offer.isActive;
 
-    _fiatCtrl.text = offer.fiatCurrency.trim().isEmpty
-        ? 'PHP'
-        : offer.fiatCurrency.trim().toUpperCase();
     _fixedPriceCtrl.text = offer.fixedPrice?.toString() ?? '';
     _marginCtrl.text = offer.marginPercent?.toString() ?? '';
     _minCtrl.text = offer.minAmount.toString();
@@ -165,11 +162,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
   Future<void> _submit() async {
     if (_saving) return;
 
-    final fiat = _fiatCtrl.text.trim().toUpperCase();
-    if (fiat.length < 3) {
-      _showSnack('Enter a valid fiat code, for example PHP.');
-      return;
-    }
+    final fiat = context.read<CurrencyVM>().fiat.toUpperCase();
 
     final minAmount = double.tryParse(_minCtrl.text.trim());
     final maxAmount = double.tryParse(_maxCtrl.text.trim());
@@ -297,6 +290,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final vmFiat = context.watch<CurrencyVM>().fiat.toUpperCase();
     final minAmount = double.tryParse(_minCtrl.text.trim());
     final maxAmount = double.tryParse(_maxCtrl.text.trim());
     final totalQty = double.tryParse(_totalCtrl.text.trim());
@@ -304,7 +298,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
     final fixedPrice = double.tryParse(_fixedPriceCtrl.text.trim());
     final marginPercent = double.tryParse(_marginCtrl.text.trim());
 
-    final marketReady = _fiatCtrl.text.trim().toUpperCase().length >= 3;
+    const marketReady = true;
     final priceReady = _priceType == OfferPriceType.fixed
         ? (fixedPrice != null && fixedPrice > 0)
         : (marginPercent != null);
@@ -402,7 +396,7 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
                   _ReadOnlyRow(
                     c: c,
                     label: 'Fiat',
-                    value: _fiatCtrl.text.trim().toUpperCase(),
+                    value: _initial!.fiatCurrency,
                   ),
                 ] else ...[
                   _ChoiceRow<OfferType>(
@@ -427,17 +421,54 @@ class _MerchantOfferEditorScreenState extends State<MerchantOfferEditorScreen> {
                     onChanged: (value) => setState(() => _asset = value),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: _fiatCtrl,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      labelText: 'Fiat currency',
-                      hintText: 'PHP',
-                      filled: true,
-                      fillColor: c.background,
-                      border: _fieldBorder(c),
-                      enabledBorder: _fieldBorder(c),
-                      focusedBorder: _fieldFocusedBorder(c),
+                  InkWell(
+                    onTap: _saving
+                        ? null
+                        : () async {
+                            await showFiatPickerBottomSheet(context);
+                          },
+                    borderRadius: BorderRadius.circular(13),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      decoration: BoxDecoration(
+                        color: c.background,
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: c.border.withOpacity(0.24)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Fiat currency',
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  vmFiat,
+                                  style: TextStyle(
+                                    color: c.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.expand_more_rounded,
+                            color: c.textSecondary,
+                            size: 20,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

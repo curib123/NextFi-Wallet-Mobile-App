@@ -3,13 +3,16 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
+import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
 import 'package:next_fi/features/merchant_offers/view/merchant_offer_editor_screen.dart';
 import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
 import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
+import 'package:provider/provider.dart';
 
 class MerchantOffersScreen extends StatefulWidget {
   const MerchantOffersScreen({super.key});
@@ -22,7 +25,6 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
   final _offers = OffersCoreService.I;
   final _profile = ProfileCoreService.I;
   final _searchCtrl = TextEditingController();
-  final _fiatCtrl = TextEditingController(text: 'PHP');
   final _money = NumberFormat.currency(symbol: '', decimalDigits: 2);
 
   OfferType _type = OfferType.sell;
@@ -42,7 +44,6 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
-    _fiatCtrl.dispose();
     super.dispose();
   }
 
@@ -88,7 +89,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
       final query = OffersQuery(
         type: _type,
         asset: _asset,
-        fiatCurrency: _fiatCtrl.text.trim().isEmpty ? 'PHP' : _fiatCtrl.text,
+        fiatCurrency: context.read<CurrencyVM>().fiat.toUpperCase(),
         q: _searchCtrl.text.trim().isEmpty ? null : _searchCtrl.text.trim(),
         page: 1,
         limit: 100,
@@ -153,24 +154,100 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
 
   Future<void> _deleteOffer(OfferModel offer) async {
     if (_busyOfferId != null) return;
-    final ok = await showDialog<bool>(
+    final c = AppColor.of(context);
+    final ok = await showModalBottomSheet<bool>(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        final c = AppColor.of(context);
-        return AlertDialog(
-          backgroundColor: c.surface,
-          title: const Text('Delete Offer'),
-          content: const Text('This action will remove the offer permanently.'),
-          actions: [
-            AppTextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: c.border.withOpacity(0.25)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.border.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: c.error.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    color: c.error,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Delete Offer?',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'This will permanently remove the offer and cannot be undone.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                AppElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  fullWidth: true,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: c.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Delete Offer'),
+                ),
+                const SizedBox(height: 8),
+                AppOutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  fullWidth: true,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    foregroundColor: c.textPrimary,
+                    side: BorderSide(color: c.border.withOpacity(0.4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Keep Offer'),
+                ),
+              ],
             ),
-            AppElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
+          ),
         );
       },
     );
@@ -195,6 +272,15 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _openFiatPicker() async {
+    final old = context.read<CurrencyVM>().fiat;
+    await showFiatPickerBottomSheet(context);
+    if (!mounted) return;
+    if (context.read<CurrencyVM>().fiat != old) {
+      _loadOffers(showLoader: true);
+    }
+  }
+
   String _priceLabel(OfferModel offer) {
     if (offer.priceType == OfferPriceType.fixed && offer.fixedPrice != null) {
       return '${_money.format(offer.fixedPrice)} ${offer.fiatCurrency}';
@@ -210,6 +296,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final fiat = context.watch<CurrencyVM>().fiat.toUpperCase();
 
     return Scaffold(
       backgroundColor: c.background,
@@ -283,7 +370,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
                   _FilterCard(
                     c: c,
                     searchCtrl: _searchCtrl,
-                    fiatCtrl: _fiatCtrl,
+                    fiatCurrency: fiat,
                     type: _type,
                     asset: _asset,
                     onSearch: () => _loadOffers(showLoader: true),
@@ -295,6 +382,7 @@ class _MerchantOffersScreenState extends State<MerchantOffersScreen> {
                       setState(() => _asset = v);
                       _loadOffers(showLoader: true);
                     },
+                    onFiatPickerPressed: _openFiatPicker,
                   ),
                   const SizedBox(height: 18),
                   _SectionLabel(c: c, label: 'MY OFFERS'),
@@ -541,22 +629,24 @@ class _FilterCard extends StatelessWidget {
   const _FilterCard({
     required this.c,
     required this.searchCtrl,
-    required this.fiatCtrl,
+    required this.fiatCurrency,
     required this.type,
     required this.asset,
     required this.onSearch,
     required this.onTypeChanged,
     required this.onAssetChanged,
+    required this.onFiatPickerPressed,
   });
 
   final AppColor c;
   final TextEditingController searchCtrl;
-  final TextEditingController fiatCtrl;
+  final String fiatCurrency;
   final OfferType type;
   final OfferAsset asset;
   final VoidCallback onSearch;
   final ValueChanged<OfferType> onTypeChanged;
   final ValueChanged<OfferAsset> onAssetChanged;
+  final VoidCallback onFiatPickerPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -600,20 +690,35 @@ class _FilterCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              SizedBox(
-                width: 86,
-                child: TextField(
-                  controller: fiatCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => onSearch(),
-                  decoration: InputDecoration(
-                    hintText: 'FIAT',
-                    filled: true,
-                    fillColor: c.background,
-                    border: fieldBorder(),
-                    enabledBorder: fieldBorder(),
-                    focusedBorder: fieldFocused(),
+              GestureDetector(
+                onTap: onFiatPickerPressed,
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: c.background,
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: c.border.withOpacity(0.24)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        fiatCurrency,
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.expand_more_rounded,
+                        size: 16,
+                        color: c.textSecondary,
+                      ),
+                    ],
                   ),
                 ),
               ),

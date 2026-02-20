@@ -5,9 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
+import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
 import 'package:next_fi/features/merchant_offers/view/merchant_offers_screen.dart';
 import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
 import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
+import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
@@ -15,6 +17,7 @@ import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
+import 'package:provider/provider.dart';
 
 import 'trade_offer_detail_screen.dart';
 
@@ -35,7 +38,6 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
   final _profile = ProfileCoreService.I;
   final _trades = TradesCoreService.I;
   final _searchCtrl = TextEditingController();
-  final _fiatCtrl = TextEditingController(text: 'PHP');
 
   final NumberFormat _money = NumberFormat.currency(
     symbol: '',
@@ -54,10 +56,11 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
   Timer? _inboxRefreshTimer;
 
   bool get _isBuy => widget.mode == TradeTemplateMode.buy;
-  String get _title => _isBuy ? 'Buy Trades' : 'Sell Trades';
+  String get _title => _isBuy ? 'Buy Crypto' : 'Sell Crypto';
   String get _subtitle => _isBuy
-      ? 'Select a SELL offer to buy protected assets.'
-      : 'Select a BUY offer to sell to verified merchants.';
+      ? 'Browse merchant SELL offers. You pay fiat, merchant releases crypto to you.'
+      : 'Browse merchant BUY offers. You send crypto, merchant pays you fiat.';
+  String get _roleLabel => _isBuy ? 'Merchant: Seller' : 'Merchant: Buyer';
   OfferType get _targetOfferType => _isBuy ? OfferType.sell : OfferType.buy;
 
   @override
@@ -72,7 +75,6 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
     _inboxRefreshTimer?.cancel();
     _inboxRefreshTimer = null;
     _searchCtrl.dispose();
-    _fiatCtrl.dispose();
     super.dispose();
   }
 
@@ -85,7 +87,7 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
     final query = OffersQuery(
       type: _targetOfferType,
       asset: _asset,
-      fiatCurrency: _fiatCtrl.text.trim().isEmpty ? 'PHP' : _fiatCtrl.text,
+      fiatCurrency: context.read<CurrencyVM>().fiat.toUpperCase(),
       q: _searchCtrl.text.trim().isEmpty ? null : _searchCtrl.text.trim(),
       page: 1,
       limit: 100,
@@ -227,6 +229,7 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final fiat = context.watch<CurrencyVM>().fiat.toUpperCase();
     return Scaffold(
       backgroundColor: c.background,
       appBar: _buildAppBar(c),
@@ -253,24 +256,48 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _isBuy ? 'BUY FLOW' : 'SELL FLOW',
-                        style: TextStyle(
-                          color: c.primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.7,
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (_isBuy ? c.success : c.warning)
+                                .withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _isBuy ? 'BUY CRYPTO' : 'SELL CRYPTO',
+                            style: TextStyle(
+                              color: _isBuy ? c.success : c.warning,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.7,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: c.primary.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _roleLabel,
+                            style: TextStyle(
+                              color: c.primary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -478,40 +505,44 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        SizedBox(
-                          width: 86,
-                          child: TextField(
-                            controller: _fiatCtrl,
-                            textCapitalization: TextCapitalization.characters,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _loadOffers(),
-                            decoration: InputDecoration(
-                              hintText: 'FIAT',
-                              filled: true,
-                              fillColor: c.background,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 12,
+                        GestureDetector(
+                          onTap: () async {
+                            final old = context.read<CurrencyVM>().fiat;
+                            await showFiatPickerBottomSheet(context);
+                            if (!mounted) return;
+                            if (context.read<CurrencyVM>().fiat != old) {
+                              _loadOffers();
+                            }
+                          },
+                          child: Container(
+                            height: 50,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: c.background,
+                              borderRadius: BorderRadius.circular(13),
+                              border: Border.all(
+                                color: c.border.withOpacity(0.22),
                               ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(13),
-                                borderSide: BorderSide(
-                                  color: c.border.withOpacity(0.25),
+                            ),
+                            alignment: Alignment.center,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  fiat,
+                                  style: TextStyle(
+                                    color: c.textPrimary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(13),
-                                borderSide: BorderSide(
-                                  color: c.border.withOpacity(0.22),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.expand_more_rounded,
+                                  size: 16,
+                                  color: c.textSecondary,
                                 ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(13),
-                                borderSide: BorderSide(
-                                  color: c.primary.withOpacity(0.4),
-                                  width: 1.2,
-                                ),
-                              ),
+                              ],
                             ),
                           ),
                         ),

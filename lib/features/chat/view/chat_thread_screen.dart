@@ -31,7 +31,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _auth = AuthService();
   final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  final _time = DateFormat('MMM d, HH:mm');
+  final _timeFull = DateFormat('MMM d, HH:mm');
+  final _timeShort = DateFormat('HH:mm');
 
   MiniChatSocketService? _socket;
   StreamSubscription<MiniChatSocketStatus>? _socketStatusSub;
@@ -320,20 +321,52 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return f.email.trim().isNotEmpty ? f.email.trim() : 'Direct Chat';
   }
 
-  String _statusText() {
-    if (_socketStatus.ready) return 'Realtime connected to secure thread room.';
-    if (_socketStatus.connecting) return 'Connecting to secure chat room...';
-    if (_socketStatus.connected && !_socketStatus.joined) {
-      return 'Connected. Joining thread room...';
-    }
-    return 'Realtime disconnected. Sending will fallback to API.';
+  String get _friendSubtitle {
+    final f = widget.thread.friendUser;
+    if (f == null) return '';
+    final username = f.username?.trim() ?? '';
+    if (username.isNotEmpty) return '@$username';
+    return '';
   }
 
-  Color _statusColor(AppColor c) {
+  Color _statusDotColor(AppColor c) {
     if (_socketStatus.ready) return c.success;
-    if (_socketStatus.connecting) return c.warning;
-    if (_socketStatus.connected) return c.warning;
+    if (_socketStatus.connecting || _socketStatus.connected) return c.warning;
     return c.error;
+  }
+
+  String _statusText() {
+    if (_socketStatus.ready) return 'End-to-end encrypted';
+    if (_socketStatus.connecting) return 'Connecting...';
+    if (_socketStatus.connected) return 'Joining room...';
+    return 'Reconnecting — messages may be delayed';
+  }
+
+  bool _showDateHeader(int index) {
+    if (index == 0) return true;
+    final prev = _messages[index - 1].createdAt;
+    final curr = _messages[index].createdAt;
+    if (prev == null || curr == null) return false;
+    final p = prev.toLocal();
+    final c = curr.toLocal();
+    return p.year != c.year || p.month != c.month || p.day != c.day;
+  }
+
+  String _dateHeader(DateTime dt) {
+    final now = DateTime.now();
+    final local = dt.toLocal();
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
+      return 'Today';
+    }
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (local.year == yesterday.year &&
+        local.month == yesterday.month &&
+        local.day == yesterday.day) {
+      return 'Yesterday';
+    }
+    return DateFormat('MMMM d, y').format(local);
   }
 
   @override
@@ -341,33 +374,99 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final c = AppColor.of(context);
     return Scaffold(
       backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 20,
-        title: Text(
-          _friendTitle,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            letterSpacing: -0.35,
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () => _loadMessages(showLoader: false),
-            icon: Icon(Icons.refresh_rounded, color: c.textPrimary, size: 19),
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(c),
       body: _loading
-          ? const PageLoader(label: 'Loading thread...')
+          ? const PageLoader(label: 'Loading messages...')
           : _error != null
           ? _buildErrorState(c)
           : _buildContent(c),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(AppColor c) {
+    final dotColor = _statusDotColor(c);
+    return AppBar(
+      backgroundColor: c.background,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 4,
+      leading: IconButton(
+        icon: Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: c.textPrimary,
+          size: 18,
+        ),
+        onPressed: () => Navigator.of(context).maybePop(),
+      ),
+      title: Row(
+        children: [
+          // Avatar
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: c.primary.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                _friendTitle.isNotEmpty ? _friendTitle[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: c.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _friendTitle,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: dotColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _friendSubtitle.isNotEmpty
+                          ? _friendSubtitle
+                          : _statusText(),
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 11.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: () => _loadMessages(showLoader: false),
+          icon: Icon(Icons.refresh_rounded, color: c.textSecondary, size: 19),
+        ),
+      ],
     );
   }
 
@@ -424,82 +523,89 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Widget _buildContent(AppColor c) {
-    final accent = _statusColor(c);
     return Column(
       children: [
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.border.withOpacity(0.25)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.025),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.11),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(Icons.lock_rounded, color: accent, size: 15),
+        // Connection status banner (only show when not ready)
+        if (!_socketStatus.ready)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            color: _socketStatus.connecting
+                ? c.warning.withOpacity(0.08)
+                : c.error.withOpacity(0.07),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 11,
+                  height: 11,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: _socketStatus.connecting ? c.warning : c.error,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _statusText(),
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 12.2,
-                        fontWeight: FontWeight.w600,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (_socketError != null && _socketError!.trim().isNotEmpty) ...[
-                const SizedBox(height: 4),
+                ),
+                const SizedBox(width: 7),
                 Text(
-                  _socketError!,
+                  _statusText(),
                   style: TextStyle(
-                    color: c.error,
-                    fontSize: 11.2,
-                    height: 1.35,
+                    color: _socketStatus.connecting ? c.warning : c.error,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+        // Error banner
+        if (_socketError != null && _socketError!.trim().isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            color: c.error.withOpacity(0.07),
+            child: Text(
+              _socketError!,
+              style: TextStyle(color: c.error, fontSize: 11.2),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        // Messages
         Expanded(
           child: _messages.isEmpty
               ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                    child: Text(
-                      'No messages yet. Start the conversation.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: c.textSecondary, fontSize: 12.8),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_rounded,
+                        size: 32,
+                        color: c.textSecondary.withOpacity(0.4),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'End-to-end encrypted',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Messages are encrypted on your device.\nSay hello!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: c.textSecondary.withOpacity(0.65),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
                 )
               : ListView.builder(
                   controller: _scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
                   itemCount: _messages.length,
                   itemBuilder: (_, i) {
                     final m = _messages[i];
@@ -508,122 +614,219 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     final text = ChatEnvelopeCodec.decodeText(m.ciphertext);
                     final timestamp = m.createdAt == null
                         ? ''
-                        : _time.format(m.createdAt!.toLocal());
+                        : _timeShort.format(m.createdAt!.toLocal());
                     final pending = (() {
                       final cid = m.clientMessageId?.trim() ?? '';
                       if (cid.isEmpty) return false;
                       return _pendingClientMessageIds.contains(cid);
                     })();
+                    final showDate =
+                        m.createdAt != null && _showDateHeader(i);
 
-                    return Align(
-                      alignment: mine
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.fromLTRB(11, 9, 11, 8),
-                        constraints: const BoxConstraints(maxWidth: 290),
-                        decoration: BoxDecoration(
-                          color: mine ? c.primary : c.surface,
-                          borderRadius: BorderRadius.circular(13),
-                          border: mine
-                              ? null
-                              : Border.all(color: c.border.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              text,
-                              style: TextStyle(
-                                color: mine ? Colors.white : c.textPrimary,
-                                fontSize: 12.9,
-                                height: 1.35,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  timestamp,
+                    return Column(
+                      children: [
+                        if (showDate) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: c.border.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                child: Text(
+                                  _dateHeader(m.createdAt!),
                                   style: TextStyle(
-                                    color: mine
-                                        ? Colors.white.withOpacity(0.72)
-                                        : c.textSecondary,
-                                    fontSize: 10.7,
+                                    color: c.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                if (mine && pending) ...[
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Sending...',
+                              ),
+                            ),
+                          ),
+                        ],
+                        Align(
+                          alignment: mine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 4),
+                            constraints: BoxConstraints(
+                              maxWidth:
+                                  MediaQuery.of(context).size.width * 0.72,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: mine
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    9,
+                                    12,
+                                    9,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: mine ? c.primary : c.surface,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(18),
+                                      topRight: const Radius.circular(18),
+                                      bottomLeft: mine
+                                          ? const Radius.circular(18)
+                                          : const Radius.circular(4),
+                                      bottomRight: mine
+                                          ? const Radius.circular(4)
+                                          : const Radius.circular(18),
+                                    ),
+                                    border: mine
+                                        ? null
+                                        : Border.all(
+                                            color: c.border.withOpacity(0.28),
+                                          ),
+                                  ),
+                                  child: Text(
+                                    text,
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.72),
-                                      fontSize: 10.7,
+                                      color: mine
+                                          ? Colors.white
+                                          : c.textPrimary,
+                                      fontSize: 13.5,
+                                      height: 1.35,
                                     ),
                                   ),
-                                ],
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      timestamp,
+                                      style: TextStyle(
+                                        color: c.textSecondary.withOpacity(0.7),
+                                        fontSize: 10.5,
+                                      ),
+                                    ),
+                                    if (mine) ...[
+                                      const SizedBox(width: 3),
+                                      Icon(
+                                        pending
+                                            ? Icons.schedule_rounded
+                                            : Icons.done_all_rounded,
+                                        size: 13,
+                                        color: pending
+                                            ? c.textSecondary
+                                            : c.primary,
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     );
                   },
                 ),
         ),
+        // Input bar
         Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
           decoration: BoxDecoration(
             color: c.surface,
-            border: Border(top: BorderSide(color: c.border.withOpacity(0.25))),
+            border: Border(
+              top: BorderSide(color: c.border.withOpacity(0.2)),
+            ),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _inputCtrl,
-                  minLines: 1,
-                  maxLines: 4,
-                  onSubmitted: (_) => _sendMessage(),
-                  decoration: InputDecoration(
-                    hintText: 'Type a message...',
-                    filled: true,
-                    fillColor: c.background,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+          child: SafeArea(
+            top: false,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: c.border.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 14,
+                          color: c.textSecondary.withOpacity(0.5),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            minLines: 1,
+                            maxLines: 4,
+                            onSubmitted: (_) => _sendMessage(),
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 13.5,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Message…',
+                              hintStyle: TextStyle(
+                                color: c.textSecondary.withOpacity(0.6),
+                                fontSize: 13.5,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 11),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              AppElevatedButton(
-                onPressed: _sending ? null : _sendMessage,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(48, 46),
-                  backgroundColor: c.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _sending ? null : _sendMessage,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _sending
+                          ? c.primary.withOpacity(0.5)
+                          : c.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: _sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                    ),
                   ),
                 ),
-                child: _sending
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : const Icon(Icons.send_rounded, size: 18),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],

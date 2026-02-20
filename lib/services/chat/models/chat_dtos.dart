@@ -43,13 +43,16 @@ class UpsertChatEncryptionKeyRequest {
 }
 
 class SendChatFriendRequestRequest {
-  final String receiverId;
+  final String receiverUsername;
   final String? note;
 
-  const SendChatFriendRequestRequest({required this.receiverId, this.note});
+  const SendChatFriendRequestRequest({
+    required this.receiverUsername,
+    this.note,
+  });
 
   Map<String, dynamic> toJson() => {
-    'receiverId': receiverId.trim(),
+    'receiverUsername': receiverUsername.trim(),
     if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
   };
 }
