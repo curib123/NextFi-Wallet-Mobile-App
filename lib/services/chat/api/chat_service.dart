@@ -254,14 +254,24 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    final data = ChatHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null) return ChatFriendRequestModel.fromJson(map);
-
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for POST /chat/friends/requests',
-      body: res.body,
+    // Try to parse the returned friend request model from the response body.
+    // Some backends return a simple {"success": true} without embedding the
+    // full model — in that case we return a placeholder so callers don't
+    // fail (the result is not used by the UI).
+    if (res.body.isNotEmpty) {
+      try {
+        final data = ChatHttp.decodeJson<dynamic>(res);
+        final map = _extractMap(data, keys: const ['data', 'item', 'request']);
+        if (map != null) return ChatFriendRequestModel.fromJson(map);
+      } catch (_) {
+        // Parsing failed — fall through to placeholder below.
+      }
+    }
+    return ChatFriendRequestModel(
+      id: '',
+      senderId: '',
+      receiverId: '',
+      status: ChatFriendRequestStatus.pending,
     );
   }
 

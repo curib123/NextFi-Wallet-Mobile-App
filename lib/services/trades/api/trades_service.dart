@@ -144,6 +144,8 @@ class TradesService {
     }
   }
 
+  // ── Trade CRUD ────────────────────────────────────────────────────────────
+
   Future<TradeModel> createTrade(CreateTradeRequest req) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.createTrade()),
@@ -199,6 +201,197 @@ class TradesService {
     );
   }
 
+  // ── vF1 Action methods ────────────────────────────────────────────────────
+
+  Future<TradeModel> _postAction(
+    String url,
+    Map<String, dynamic> body,
+    String label,
+  ) async {
+    final res = await _client.post(
+      TradesHttp.uri(url),
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'trade', 'item']);
+    if (map != null) return TradeModel.fromJson(map);
+    throw ApiException(res.statusCode, 'Unexpected response for $label', body: res.body);
+  }
+
+  /// SELL: user marks fiat as sent.
+  Future<TradeModel> fiatSent(String id, {String? note}) =>
+      _postAction(
+        TradesEndpoints.fiatSent(id),
+        FiatSentRequest(note: note).toJson(),
+        'POST /trades/$id/actions/fiat-sent',
+      );
+
+  /// SELL: merchant confirms fiat received.
+  Future<TradeModel> fiatReceived(String id) =>
+      _postAction(
+        TradesEndpoints.fiatReceived(id),
+        const FiatReceivedRequest().toJson(),
+        'POST /trades/$id/actions/fiat-received',
+      );
+
+  /// BUY: merchant marks fiat as sent to user.
+  Future<TradeModel> fiatSentMerchant(String id, {String? note}) =>
+      _postAction(
+        TradesEndpoints.fiatSentMerchant(id),
+        FiatSentMerchantRequest(note: note).toJson(),
+        'POST /trades/$id/actions/fiat-sent-merchant',
+      );
+
+  /// BUY: user confirms fiat received from merchant.
+  Future<TradeModel> confirmReceived(String id) =>
+      _postAction(
+        TradesEndpoints.confirmReceived(id),
+        const ConfirmReceivedRequest().toJson(),
+        'POST /trades/$id/actions/confirm-received',
+      );
+
+  /// Either party cancels the trade.
+  Future<TradeModel> cancelTradeAction(String id, {String? reason}) =>
+      _postAction(
+        TradesEndpoints.cancelTradeAction(id),
+        CancelTradeActionRequest(reason: reason).toJson(),
+        'POST /trades/$id/actions/cancel',
+      );
+
+  /// Either party opens a dispute.
+  Future<TradeModel> openDisputeAction(String id, {required String reason}) =>
+      _postAction(
+        TradesEndpoints.openDisputeAction(id),
+        OpenDisputeActionRequest(reason: reason).toJson(),
+        'POST /trades/$id/actions/open-dispute',
+      );
+
+  // ── vF1 Trade chat ────────────────────────────────────────────────────────
+
+  Future<List<TradeMessageModel>> getTradeChat(
+    String id, {
+    int page = 1,
+  }) async {
+    final res = await _client.get(
+      TradesHttp.uri(
+        TradesEndpoints.getTradeChat(id),
+        queryParams: {'page': '$page'},
+      ),
+      headers: await _headers(),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final items = _extractListMaps(
+      data,
+      keys: const ['messages', 'items', 'data'],
+    );
+    return items.map(TradeMessageModel.fromJson).toList();
+  }
+
+  Future<TradeMessageModel> sendTradeChatMessage(
+    String id,
+    String message,
+  ) async {
+    final req = SendTradeChatRequest(message: message);
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.sendTradeChatMessage(id)),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(
+      data,
+      keys: const ['data', 'message', 'tradeMessage', 'item'],
+    );
+    if (map != null) return TradeMessageModel.fromJson(map);
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for POST /trades/$id/chat/messages',
+      body: res.body,
+    );
+  }
+
+  // ── Upload proof ──────────────────────────────────────────────────────────
+
+  Future<TradeModel> uploadPaymentProof(
+    String tradeId, {
+    required File image,
+    String? note,
+  }) async {
+    _ensureImagePathAllowed(image.path, label: 'Payment proof');
+    final token = await _tokenOrThrow();
+
+    final req =
+        http.MultipartRequest(
+            'POST',
+            TradesHttp.uri(TradesEndpoints.uploadProof(tradeId)),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..headers['Accept'] = 'application/json'
+          ..files.add(await http.MultipartFile.fromPath('image', image.path));
+
+    if (note != null && note.trim().isNotEmpty) {
+      req.fields['note'] = note.trim();
+    }
+
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'trade', 'item']);
+    if (map != null) return TradeModel.fromJson(map);
+
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for POST /trades/me/$tradeId/proof',
+      body: res.body,
+    );
+  }
+
+  // ── Seller (merchant) routes ──────────────────────────────────────────────
+
+  Future<List<TradeModel>> listSellerTrades(TradesQuery query) async {
+    final res = await _client.get(
+      TradesHttp.uri(
+        TradesEndpoints.listSellerTrades(),
+        queryParams: query.toQueryMap(),
+      ),
+      headers: await _headers(),
+    );
+
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final items = _extractListMaps(
+      data,
+      keys: const ['items', 'data', 'trades', 'list'],
+    );
+    return items.map(TradeModel.fromJson).toList();
+  }
+
+  Future<TradeModel> getSellerTradeById(String id) async {
+    final res = await _client.get(
+      TradesHttp.uri(TradesEndpoints.getSellerTrade(id)),
+      headers: await _headers(),
+    );
+
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'trade', 'item']);
+    if (map != null) return TradeModel.fromJson(map);
+
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for GET /trades/seller/me/$id',
+      body: res.body,
+    );
+  }
+
+  // ── Legacy methods (kept for backward compat) ─────────────────────────────
+
   Future<TradeModel> markPaid(
     String id, {
     required String idempotencyKey,
@@ -251,42 +444,6 @@ class TradesService {
     );
   }
 
-  Future<TradeModel> uploadPaymentProof(
-    String tradeId, {
-    required File image,
-    String? note,
-  }) async {
-    _ensureImagePathAllowed(image.path, label: 'Payment proof');
-    final token = await _tokenOrThrow();
-
-    final req =
-        http.MultipartRequest(
-            'POST',
-            TradesHttp.uri(TradesEndpoints.uploadProof(tradeId)),
-          )
-          ..headers['Authorization'] = 'Bearer $token'
-          ..headers['Accept'] = 'application/json'
-          ..files.add(await http.MultipartFile.fromPath('image', image.path));
-
-    if (note != null && note.trim().isNotEmpty) {
-      req.fields['note'] = note.trim();
-    }
-
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
-
-    TradesHttp.ensureOk(res);
-    final data = TradesHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'trade', 'item']);
-    if (map != null) return TradeModel.fromJson(map);
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for POST /trades/me/$tradeId/proof',
-      body: res.body,
-    );
-  }
-
   Future<TradeMessageModel> sendMyMessage(
     String tradeId,
     String message,
@@ -309,42 +466,6 @@ class TradesService {
     throw ApiException(
       res.statusCode,
       'Unexpected response for POST /trades/me/$tradeId/messages',
-      body: res.body,
-    );
-  }
-
-  Future<List<TradeModel>> listSellerTrades(TradesQuery query) async {
-    final res = await _client.get(
-      TradesHttp.uri(
-        TradesEndpoints.listSellerTrades(),
-        queryParams: query.toQueryMap(),
-      ),
-      headers: await _headers(),
-    );
-
-    TradesHttp.ensureOk(res);
-    final data = TradesHttp.decodeJson<dynamic>(res);
-    final items = _extractListMaps(
-      data,
-      keys: const ['items', 'data', 'trades', 'list'],
-    );
-    return items.map(TradeModel.fromJson).toList();
-  }
-
-  Future<TradeModel> getSellerTradeById(String id) async {
-    final res = await _client.get(
-      TradesHttp.uri(TradesEndpoints.getSellerTrade(id)),
-      headers: await _headers(),
-    );
-
-    TradesHttp.ensureOk(res);
-    final data = TradesHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'trade', 'item']);
-    if (map != null) return TradeModel.fromJson(map);
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for GET /trades/seller/me/$id',
       body: res.body,
     );
   }

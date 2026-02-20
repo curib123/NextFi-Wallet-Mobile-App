@@ -185,36 +185,44 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
       );
       return;
     }
-    final sellerWalletAddress = offer.sellerWallet?.publicAddress.trim();
-    if ((offer.sellerWalletId?.trim().isEmpty ?? true) &&
-        (sellerWalletAddress == null || sellerWalletAddress.isEmpty)) {
-      _showSnack(
-        'This offer is missing seller escrow wallet configuration. Please choose another offer.',
-      );
-      return;
+
+    String? resolvedBuyerAddress;
+    bool useManualAddress = false;
+
+    if (_isBuy) {
+      // SELL offer: user is buyer — needs wallet + seller payment account
+      final sellerWalletAddress = offer.sellerWallet?.publicAddress.trim();
+      if ((offer.sellerWalletId?.trim().isEmpty ?? true) &&
+          (sellerWalletAddress == null || sellerWalletAddress.isEmpty)) {
+        _showSnack(
+          'This offer is missing seller escrow wallet configuration. Please choose another offer.',
+        );
+        return;
+      }
+      if (_sellerAccount == null) {
+        _showSnack('This offer has no seller payment account configured.');
+        return;
+      }
+      final resolvedWallet = _resolveBuyerAddressInput();
+      resolvedBuyerAddress = resolvedWallet.address;
+      useManualAddress = resolvedWallet.useManualAddress;
+      if (resolvedBuyerAddress.isEmpty) {
+        _showSnack('Select your receiving wallet or paste a Stellar address.');
+        return;
+      }
+      if (!_looksStellarAddress(resolvedBuyerAddress)) {
+        _showSnack('Enter a valid Stellar address (G...).');
+        return;
+      }
+      if (sellerWalletAddress != null &&
+          sellerWalletAddress.isNotEmpty &&
+          sellerWalletAddress.toUpperCase() ==
+              resolvedBuyerAddress.toUpperCase()) {
+        _showSnack('Buyer wallet and seller escrow wallet must be different.');
+        return;
+      }
     }
-    if (_sellerAccount == null) {
-      _showSnack('This offer has no seller payment account configured.');
-      return;
-    }
-    final resolvedWallet = _resolveBuyerAddressInput();
-    final resolvedBuyerAddress = resolvedWallet.address;
-    final useManualAddress = resolvedWallet.useManualAddress;
-    if (resolvedBuyerAddress.isEmpty) {
-      _showSnack('Select your receiving wallet or paste a Stellar address.');
-      return;
-    }
-    if (!_looksStellarAddress(resolvedBuyerAddress)) {
-      _showSnack('Enter a valid Stellar address (G...).');
-      return;
-    }
-    if (sellerWalletAddress != null &&
-        sellerWalletAddress.isNotEmpty &&
-        sellerWalletAddress.toUpperCase() ==
-            resolvedBuyerAddress.toUpperCase()) {
-      _showSnack('Buyer wallet and seller escrow wallet must be different.');
-      return;
-    }
+    // BUY offer (user sells): no wallet needed — deposit address auto-generated
 
     _createIdempotencyKey ??= _buildActionKey('trade-create');
 
@@ -223,7 +231,7 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
       offer: offer,
       amount: amount,
       buyerAccount: _buyerAccount,
-      sellerAccount: _sellerAccount!,
+      sellerAccount: _sellerAccount,
       buyerWalletAddress: resolvedBuyerAddress,
       note: _noteCtrl.text.trim(),
       isBuy: _isBuy,
@@ -237,9 +245,10 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
         CreateTradeRequest(
           offerId: offer.id,
           amount: amount,
-          sellerPaymentAccountId: _sellerAccount!.id,
+          // Only for SELL offers (user is buyer)
+          sellerPaymentAccountId: _isBuy ? _sellerAccount?.id : null,
           buyerPaymentAccountId: _buyerAccount?.id,
-          buyerWalletId: useManualAddress ? null : _buyerWallet?.id,
+          buyerWalletId: (_isBuy && !useManualAddress) ? _buyerWallet?.id : null,
           buyerPublicAddress: resolvedBuyerAddress,
           idempotencyKey: _createIdempotencyKey!,
           note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
@@ -315,17 +324,20 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
         amount <= offer.maxAmount;
     final sellerWalletAddress = offer?.sellerWallet?.publicAddress.trim() ?? '';
     final sellerWalletConfigured =
+        !_isBuy || // BUY offers don't need seller escrow wallet
         (offer?.sellerWalletId?.trim().isNotEmpty ?? false) ||
         sellerWalletAddress.isNotEmpty;
-    final sellerAccountConfigured = _sellerAccount != null;
+    final sellerAccountConfigured =
+        !_isBuy || _sellerAccount != null; // Only required for SELL offers
     final buyerWalletInput = _resolveBuyerAddressInput();
     final buyerWalletAddress = buyerWalletInput.address;
     final buyerWalletValid =
-        buyerWalletAddress.isNotEmpty &&
-        _looksStellarAddress(buyerWalletAddress) &&
-        !(sellerWalletAddress.isNotEmpty &&
-            buyerWalletAddress.toUpperCase() ==
-                sellerWalletAddress.toUpperCase());
+        !_isBuy || // BUY offers don't need buyer wallet
+        (buyerWalletAddress.isNotEmpty &&
+            _looksStellarAddress(buyerWalletAddress) &&
+            !(sellerWalletAddress.isNotEmpty &&
+                buyerWalletAddress.toUpperCase() ==
+                    sellerWalletAddress.toUpperCase()));
     final canContinue =
         !_submitting &&
         hasOffer &&
@@ -335,11 +347,11 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
         buyerWalletValid;
     final nextStepHint = !amountValid
         ? 'Enter a valid amount within the offer limits.'
-        : !buyerWalletValid
-        ? 'Set a valid receiving wallet address for escrow release.'
-        : !sellerAccountConfigured
+        : (_isBuy && !buyerWalletValid)
+        ? 'Set a valid receiving wallet address for crypto delivery.'
+        : (_isBuy && !sellerAccountConfigured)
         ? 'Select the seller payment account from this offer.'
-        : !sellerWalletConfigured
+        : (_isBuy && !sellerWalletConfigured)
         ? 'This offer is missing seller escrow wallet configuration.'
         : 'Ready to create a protected trade.';
 
@@ -396,6 +408,7 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                     sellerAccountValid: sellerAccountConfigured,
                     sellerEscrowWalletValid: sellerWalletConfigured,
                     hint: nextStepHint,
+                    isBuy: _isBuy,
                   ),
                   const SizedBox(height: 18),
                   Text(
@@ -472,8 +485,9 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
+                        // ── Your fiat payment account ──────────────────────
                         if (_myAccounts.isEmpty)
-                          _MissingAccountNotice(c: c)
+                          _MissingAccountNotice(c: c, isBuy: _isBuy)
                         else ...[
                           DropdownButtonFormField<UserPaymentAccountModel>(
                             value: _buyerAccount,
@@ -496,7 +510,9 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                                     _createIdempotencyKey = null;
                                   }),
                             decoration: InputDecoration(
-                              labelText: 'Your payment account (optional)',
+                              labelText: _isBuy
+                                  ? 'Your payment account (optional)'
+                                  : 'Your fiat payout account (recommended)',
                               filled: true,
                               fillColor: c.background,
                               border: _fieldBorder(c),
@@ -506,7 +522,9 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Optional: add your preferred payout/payment reference for better dispute evidence.',
+                            _isBuy
+                                ? 'Optional: add your preferred payment reference for better dispute evidence.'
+                                : 'The merchant will send fiat to this account after crypto is confirmed.',
                             style: TextStyle(
                               color: c.textSecondary,
                               fontSize: 11.8,
@@ -514,103 +532,111 @@ class _TradeOfferDetailScreenState extends State<TradeOfferDetailScreen> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 10),
-                        if (_myWallets.isEmpty)
-                          _NoWalletNotice(c: c)
-                        else
-                          DropdownButtonFormField<WalletAddress>(
-                            value: _buyerWallet,
-                            isExpanded: true,
-                            items: _myWallets
-                                .map(
-                                  (wallet) => DropdownMenuItem<WalletAddress>(
-                                    value: wallet,
-                                    child: Text(
-                                      '${wallet.label?.trim().isNotEmpty == true ? wallet.label!.trim() : 'Stellar Wallet'} | ${_shortAddress(wallet.publicAddress)}',
-                                      overflow: TextOverflow.ellipsis,
+                        // ── BUY flow: wallet selection for crypto delivery ──
+                        if (_isBuy) ...[
+                          const SizedBox(height: 10),
+                          if (_myWallets.isEmpty)
+                            _NoWalletNotice(c: c)
+                          else
+                            DropdownButtonFormField<WalletAddress>(
+                              value: _buyerWallet,
+                              isExpanded: true,
+                              items: _myWallets
+                                  .map(
+                                    (wallet) => DropdownMenuItem<WalletAddress>(
+                                      value: wallet,
+                                      child: Text(
+                                        '${wallet.label?.trim().isNotEmpty == true ? wallet.label!.trim() : 'Stellar Wallet'} | ${_shortAddress(wallet.publicAddress)}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _submitting
-                                ? null
-                                : (wallet) {
-                                    setState(() {
-                                      _buyerWallet = wallet;
-                                      _buyerAddressCtrl.text =
-                                          wallet?.publicAddress ?? '';
+                                  )
+                                  .toList(),
+                              onChanged: _submitting
+                                  ? null
+                                  : (wallet) {
+                                      setState(() {
+                                        _buyerWallet = wallet;
+                                        _buyerAddressCtrl.text =
+                                            wallet?.publicAddress ?? '';
+                                        _createIdempotencyKey = null;
+                                      });
+                                      _fetchWalletBalance(wallet?.publicAddress);
+                                    },
+                              decoration: InputDecoration(
+                                labelText: 'Receive wallet (crypto delivery)',
+                                filled: true,
+                                fillColor: c.background,
+                                border: _fieldBorder(c),
+                                enabledBorder: _fieldBorder(c),
+                                focusedBorder: _fieldFocusedBorder(c),
+                              ),
+                            ),
+                          if (_myWallets.isNotEmpty && _buyerWallet != null) ...[
+                            const SizedBox(height: 6),
+                            _WalletBalanceBanner(
+                              c: c,
+                              balance: _walletXlmBalance,
+                              loading: _fetchingBalance,
+                              isSellMode: false,
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _buyerAddressCtrl,
+                            textCapitalization: TextCapitalization.characters,
+                            onChanged: (_) => setState(() {
+                              _createIdempotencyKey = null;
+                            }),
+                            decoration: InputDecoration(
+                              labelText: 'Receive address (fallback)',
+                              hintText: 'G...',
+                              filled: true,
+                              fillColor: c.background,
+                              border: _fieldBorder(c),
+                              enabledBorder: _fieldBorder(c),
+                              focusedBorder: _fieldFocusedBorder(c),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // Seller payment account (where user pays fiat TO)
+                          if (_sellerAccounts.isEmpty)
+                            _NoSellerAccountNotice(c: c)
+                          else
+                            DropdownButtonFormField<UserPaymentAccountModel>(
+                              value: _sellerAccount,
+                              isExpanded: true,
+                              items: _sellerAccounts
+                                  .map(
+                                    (e) => DropdownMenuItem(
+                                      value: e,
+                                      child: Text(
+                                        '${e.paymentMethod?.name ?? 'Method'} | ${e.accountName}',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _submitting
+                                  ? null
+                                  : (v) => setState(() {
+                                      _sellerAccount = v;
                                       _createIdempotencyKey = null;
-                                    });
-                                    _fetchWalletBalance(wallet?.publicAddress);
-                                  },
-                            decoration: InputDecoration(
-                              labelText: 'Receive wallet (escrow release)',
-                              filled: true,
-                              fillColor: c.background,
-                              border: _fieldBorder(c),
-                              enabledBorder: _fieldBorder(c),
-                              focusedBorder: _fieldFocusedBorder(c),
+                                    }),
+                              decoration: InputDecoration(
+                                labelText: 'Merchant payment account (pay fiat here)',
+                                filled: true,
+                                fillColor: c.background,
+                                border: _fieldBorder(c),
+                                enabledBorder: _fieldBorder(c),
+                                focusedBorder: _fieldFocusedBorder(c),
+                              ),
                             ),
-                          ),
-                        if (_myWallets.isNotEmpty && _buyerWallet != null) ...[
-                          const SizedBox(height: 6),
-                          _WalletBalanceBanner(
-                            c: c,
-                            balance: _walletXlmBalance,
-                            loading: _fetchingBalance,
-                            isSellMode: !_isBuy,
-                          ),
+                        ] else ...[
+                          // ── SELL flow: no wallet needed ──────────────────
+                          const SizedBox(height: 10),
+                          _BuyFlowDepositNotice(c: c),
                         ],
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _buyerAddressCtrl,
-                          textCapitalization: TextCapitalization.characters,
-                          onChanged: (_) => setState(() {
-                            _createIdempotencyKey = null;
-                          }),
-                          decoration: InputDecoration(
-                            labelText: 'Buyer public address (fallback)',
-                            hintText: 'G...',
-                            filled: true,
-                            fillColor: c.background,
-                            border: _fieldBorder(c),
-                            enabledBorder: _fieldBorder(c),
-                            focusedBorder: _fieldFocusedBorder(c),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        if (_sellerAccounts.isEmpty)
-                          _NoSellerAccountNotice(c: c)
-                        else
-                          DropdownButtonFormField<UserPaymentAccountModel>(
-                            value: _sellerAccount,
-                            isExpanded: true,
-                            items: _sellerAccounts
-                                .map(
-                                  (e) => DropdownMenuItem(
-                                    value: e,
-                                    child: Text(
-                                      '${e.paymentMethod?.name ?? 'Method'} | ${e.accountName}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _submitting
-                                ? null
-                                : (v) => setState(() {
-                                    _sellerAccount = v;
-                                    _createIdempotencyKey = null;
-                                  }),
-                            decoration: InputDecoration(
-                              labelText: 'Seller payment account',
-                              filled: true,
-                              fillColor: c.background,
-                              border: _fieldBorder(c),
-                              enabledBorder: _fieldBorder(c),
-                              focusedBorder: _fieldFocusedBorder(c),
-                            ),
-                          ),
                         const SizedBox(height: 12),
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 250),
@@ -922,6 +948,42 @@ class _ClaimableProtectionCard extends StatelessWidget {
   }
 }
 
+class _BuyFlowDepositNotice extends StatelessWidget {
+  const _BuyFlowDepositNotice({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Crypto deposit address auto-generated',
+            style: TextStyle(
+              color: c.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.6,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'After creating this trade, you will receive a unique deposit address and memo. You must send the exact amount with the exact memo — missing or wrong memo will prevent the system from matching your deposit.',
+            style: TextStyle(color: c.textPrimary, fontSize: 12, height: 1.35),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TradeSetupChecklistCard extends StatelessWidget {
   const _TradeSetupChecklistCard({
     required this.c,
@@ -930,6 +992,7 @@ class _TradeSetupChecklistCard extends StatelessWidget {
     required this.sellerAccountValid,
     required this.sellerEscrowWalletValid,
     required this.hint,
+    required this.isBuy,
   });
 
   final AppColor c;
@@ -938,6 +1001,7 @@ class _TradeSetupChecklistCard extends StatelessWidget {
   final bool sellerAccountValid;
   final bool sellerEscrowWalletValid;
   final String hint;
+  final bool isBuy;
 
   Widget _row({required String label, required bool ok}) {
     return Row(
@@ -986,18 +1050,26 @@ class _TradeSetupChecklistCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _row(label: 'Amount is within offer limits', ok: amountValid),
-          const SizedBox(height: 6),
-          _row(label: 'Receive wallet is valid', ok: walletValid),
-          const SizedBox(height: 6),
-          _row(
-            label: 'Seller payment account selected',
-            ok: sellerAccountValid,
-          ),
-          const SizedBox(height: 6),
-          _row(
-            label: 'Offer has seller escrow wallet binding',
-            ok: sellerEscrowWalletValid,
-          ),
+          if (isBuy) ...[
+            const SizedBox(height: 6),
+            _row(label: 'Receive wallet address is valid', ok: walletValid),
+            const SizedBox(height: 6),
+            _row(
+              label: 'Merchant payment account selected',
+              ok: sellerAccountValid,
+            ),
+            const SizedBox(height: 6),
+            _row(
+              label: 'Offer has seller escrow wallet binding',
+              ok: sellerEscrowWalletValid,
+            ),
+          ] else ...[
+            const SizedBox(height: 6),
+            _row(
+              label: 'Deposit address auto-generated after creation',
+              ok: true,
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
             hint,
@@ -1014,9 +1086,10 @@ class _TradeSetupChecklistCard extends StatelessWidget {
 }
 
 class _MissingAccountNotice extends StatelessWidget {
-  const _MissingAccountNotice({required this.c});
+  const _MissingAccountNotice({required this.c, this.isBuy = true});
 
   final AppColor c;
+  final bool isBuy;
 
   @override
   Widget build(BuildContext context) {
@@ -1122,8 +1195,8 @@ Future<bool?> _showConfirmSheet(
   required OfferModel offer,
   required double amount,
   required UserPaymentAccountModel? buyerAccount,
-  required UserPaymentAccountModel sellerAccount,
-  required String buyerWalletAddress,
+  required UserPaymentAccountModel? sellerAccount,
+  required String? buyerWalletAddress,
   required String note,
   required bool isBuy,
   required NumberFormat money,
@@ -1172,8 +1245,8 @@ Future<bool?> _showConfirmSheet(
                 c: c,
                 label: 'You are',
                 value: isBuy
-                    ? 'Buying — merchant sends crypto, you pay fiat'
-                    : 'Selling — you send crypto, merchant pays fiat',
+                    ? 'Buying — pay fiat, receive crypto via CB'
+                    : 'Selling — send crypto on-chain, receive fiat',
               ),
               _ConfirmRow(
                 c: c,
@@ -1193,17 +1266,25 @@ Future<bool?> _showConfirmSheet(
                     ? 'Not provided'
                     : '${buyerAccount.paymentMethod?.name ?? 'Method'} | ${buyerAccount.accountName}',
               ),
-              _ConfirmRow(
-                c: c,
-                label: isBuy ? 'Merchant acct' : 'Your payout',
-                value:
-                    '${sellerAccount.paymentMethod?.name ?? 'Method'} | ${sellerAccount.accountName}',
-              ),
-              _ConfirmRow(
-                c: c,
-                label: 'Receive wallet',
-                value: buyerWalletAddress,
-              ),
+              if (isBuy && sellerAccount != null)
+                _ConfirmRow(
+                  c: c,
+                  label: 'Pay fiat to',
+                  value:
+                      '${sellerAccount.paymentMethod?.name ?? 'Method'} | ${sellerAccount.accountName}',
+                ),
+              if (isBuy && buyerWalletAddress != null && buyerWalletAddress.isNotEmpty)
+                _ConfirmRow(
+                  c: c,
+                  label: 'Receive wallet',
+                  value: buyerWalletAddress,
+                ),
+              if (!isBuy)
+                _ConfirmRow(
+                  c: c,
+                  label: 'Deposit',
+                  value: 'Address & memo shown after trade is created',
+                ),
               if (note.isNotEmpty)
                 _ConfirmRow(c: c, label: 'Note', value: note),
               const SizedBox(height: 12),

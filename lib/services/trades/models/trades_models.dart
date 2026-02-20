@@ -1,7 +1,23 @@
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 
+// ─── TradeStatus ─────────────────────────────────────────────────────────────
+
 enum TradeStatus {
+  // New vF1 SELL flow
+  awaitingFiat,
+  fiatSent,
+  fiatConfirmed,
+  deliveryCbCreated,
+  claimed,
+  // New vF1 BUY flow
+  awaitingCrypto,
+  cryptoConfirmed,
+  awaitingUserConfirm,
+  overdue,
+  // Shared terminal
+  completed,
+  // Legacy statuses (kept for backward compat)
   created,
   awaitingPayment,
   paid,
@@ -16,6 +32,30 @@ enum TradeStatus {
 TradeStatus tradeStatusFromApi(dynamic raw) {
   final value = raw?.toString().trim().toUpperCase();
   switch (value) {
+    // New vF1 SELL
+    case 'AWAITING_FIAT':
+      return TradeStatus.awaitingFiat;
+    case 'FIAT_SENT':
+      return TradeStatus.fiatSent;
+    case 'FIAT_CONFIRMED':
+      return TradeStatus.fiatConfirmed;
+    case 'DELIVERY_CB_CREATED':
+      return TradeStatus.deliveryCbCreated;
+    case 'CLAIMED':
+      return TradeStatus.claimed;
+    // New vF1 BUY
+    case 'AWAITING_CRYPTO':
+      return TradeStatus.awaitingCrypto;
+    case 'CRYPTO_CONFIRMED':
+      return TradeStatus.cryptoConfirmed;
+    case 'AWAITING_USER_CONFIRM':
+      return TradeStatus.awaitingUserConfirm;
+    case 'OVERDUE':
+      return TradeStatus.overdue;
+    // Shared terminal
+    case 'COMPLETED':
+      return TradeStatus.completed;
+    // Legacy
     case 'CREATED':
     case 'PENDING':
       return TradeStatus.created;
@@ -27,7 +67,6 @@ TradeStatus tradeStatusFromApi(dynamic raw) {
     case 'PAID':
       return TradeStatus.paid;
     case 'RELEASED':
-    case 'COMPLETED':
       return TradeStatus.released;
     case 'CANCELLED':
       return TradeStatus.cancelled;
@@ -45,6 +84,26 @@ TradeStatus tradeStatusFromApi(dynamic raw) {
 
 String tradeStatusToApi(TradeStatus status) {
   switch (status) {
+    case TradeStatus.awaitingFiat:
+      return 'AWAITING_FIAT';
+    case TradeStatus.fiatSent:
+      return 'FIAT_SENT';
+    case TradeStatus.fiatConfirmed:
+      return 'FIAT_CONFIRMED';
+    case TradeStatus.deliveryCbCreated:
+      return 'DELIVERY_CB_CREATED';
+    case TradeStatus.claimed:
+      return 'CLAIMED';
+    case TradeStatus.awaitingCrypto:
+      return 'AWAITING_CRYPTO';
+    case TradeStatus.cryptoConfirmed:
+      return 'CRYPTO_CONFIRMED';
+    case TradeStatus.awaitingUserConfirm:
+      return 'AWAITING_USER_CONFIRM';
+    case TradeStatus.overdue:
+      return 'OVERDUE';
+    case TradeStatus.completed:
+      return 'COMPLETED';
     case TradeStatus.created:
       return 'CREATED';
     case TradeStatus.awaitingPayment:
@@ -66,6 +125,8 @@ String tradeStatusToApi(TradeStatus status) {
   }
 }
 
+// ─── TradeEscrowState ─────────────────────────────────────────────────────────
+
 enum TradeEscrowState { unfunded, funded, released, refunded, unknown }
 
 TradeEscrowState tradeEscrowStateFromApi(dynamic raw) {
@@ -83,6 +144,18 @@ TradeEscrowState tradeEscrowStateFromApi(dynamic raw) {
       return TradeEscrowState.unknown;
   }
 }
+
+// ─── TradeMessageType ─────────────────────────────────────────────────────────
+
+enum TradeMessageType { text, system }
+
+TradeMessageType tradeMessageTypeFromApi(dynamic raw) {
+  final value = raw?.toString().trim().toUpperCase();
+  if (value == 'SYSTEM') return TradeMessageType.system;
+  return TradeMessageType.text;
+}
+
+// ─── TradeWalletRef ───────────────────────────────────────────────────────────
 
 class TradeWalletRef {
   final String id;
@@ -122,20 +195,26 @@ class TradeWalletRef {
   }
 }
 
+// ─── TradeMessageModel ────────────────────────────────────────────────────────
+
 class TradeMessageModel {
   final String id;
   final String tradeId;
-  final String senderId;
+  final String? senderId; // null for SYSTEM messages
   final String message;
+  final TradeMessageType type;
   final DateTime? createdAt;
 
   const TradeMessageModel({
     required this.id,
     required this.tradeId,
-    required this.senderId,
+    this.senderId,
     required this.message,
+    this.type = TradeMessageType.text,
     this.createdAt,
   });
+
+  bool get isSystem => type == TradeMessageType.system || senderId == null;
 
   factory TradeMessageModel.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic value) =>
@@ -151,15 +230,29 @@ class TradeMessageModel {
       return fallback;
     }
 
+    String? readNullableString(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return null;
+    }
+
+    final typeRaw = json['type'];
     return TradeMessageModel(
       id: readString(const ['id']),
       tradeId: readString(const ['tradeId', 'trade_id']),
-      senderId: readString(const ['senderId', 'sender_id']),
+      senderId: readNullableString(const ['senderId', 'sender_id']),
       message: readString(const ['message']),
+      type: tradeMessageTypeFromApi(typeRaw),
       createdAt: parseDate(json['createdAt'] ?? json['created_at']),
     );
   }
 }
+
+// ─── TradePartyLite ───────────────────────────────────────────────────────────
 
 class TradePartyLite {
   final String id;
@@ -281,6 +374,8 @@ class TradePartyLite {
   }
 }
 
+// ─── TradeProofModel ──────────────────────────────────────────────────────────
+
 class TradeProofModel {
   final String id;
   final String? imageUrl;
@@ -323,6 +418,8 @@ class TradeProofModel {
   }
 }
 
+// ─── TradeModel ───────────────────────────────────────────────────────────────
+
 class TradeModel {
   final String id;
   final String offerId;
@@ -341,6 +438,8 @@ class TradeModel {
   final DateTime? expiresAt;
   final String? note;
   final String? cancelReason;
+
+  // Legacy escrow fields
   final TradeEscrowState escrowState;
   final String? claimableBalanceId;
   final String? fundedTxHash;
@@ -352,18 +451,45 @@ class TradeModel {
   final DateTime? escrowExpiryAt;
   final DateTime? paymentDueAt;
   final DateTime? releaseDueAt;
+  final String? escrowTxHash;
+  final String? releaseTxHash;
+
+  // Wallet refs
   final String? buyerWalletId;
   final String? sellerWalletId;
   final TradeWalletRef? buyerWallet;
   final TradeWalletRef? sellerWallet;
-  final String? escrowTxHash;
-  final String? releaseTxHash;
+
+  // Payment accounts
   final UserPaymentAccountModel? buyerPaymentAccount;
   final UserPaymentAccountModel? sellerPaymentAccount;
+
+  // Messages & proofs
   final List<TradeMessageModel> messages;
   final List<TradeProofModel> proofs;
+
+  // Timestamps
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  // ── vF1 NEW SELL fields ───────────────────────────────────────────────────
+  final String? deliveryCbId; // claimable balance ID for delivery
+  final DateTime? fiatDeadlineAt; // user must click fiat-sent by this time
+  final DateTime? merchantSlaDeadlineAt; // merchant must create CB delivery
+  final DateTime? fiatSentAt; // when user clicked fiat-sent
+  final DateTime? fiatConfirmedAt; // when merchant confirmed fiat
+  final DateTime? claimedAt; // when user claimed CB
+
+  // ── vF1 NEW BUY fields ────────────────────────────────────────────────────
+  final String? depositAddress; // merchant wallet address for deposit
+  final String? requiredMemo; // unique memo for watcher matching
+  final DateTime? cryptoSendDeadlineAt; // user must send crypto by this time
+  final DateTime? merchantFiatDeadlineAt; // merchant must send fiat by this time
+  final DateTime? cryptoConfirmedAt; // when watcher confirmed deposit
+  final DateTime? fiatSentByMerchantAt; // when merchant marked fiat sent
+  final DateTime? overdueAt; // when trade went overdue
+  final String? depositTxHash; // confirmed deposit transaction hash
+  final String? depositOperationId; // confirmed deposit operation ID
 
   const TradeModel({
     required this.id,
@@ -406,6 +532,23 @@ class TradeModel {
     this.proofs = const [],
     this.createdAt,
     this.updatedAt,
+    // vF1 SELL
+    this.deliveryCbId,
+    this.fiatDeadlineAt,
+    this.merchantSlaDeadlineAt,
+    this.fiatSentAt,
+    this.fiatConfirmedAt,
+    this.claimedAt,
+    // vF1 BUY
+    this.depositAddress,
+    this.requiredMemo,
+    this.cryptoSendDeadlineAt,
+    this.merchantFiatDeadlineAt,
+    this.cryptoConfirmedAt,
+    this.fiatSentByMerchantAt,
+    this.overdueAt,
+    this.depositTxHash,
+    this.depositOperationId,
   });
 
   factory TradeModel.fromJson(Map<String, dynamic> json) {
@@ -589,6 +732,38 @@ class TradeModel {
     final buyerWallet = readWallet(const ['buyerWallet', 'buyer_wallet']);
     final sellerWallet = readWallet(const ['sellerWallet', 'seller_wallet']);
 
+    // vF1: delivery sub-object
+    Map<String, dynamic>? deliveryJson;
+    final rawDelivery = json['delivery'] ?? json['tradeDelivery'];
+    if (rawDelivery is Map<String, dynamic>) deliveryJson = rawDelivery;
+
+    String? readDeliveryNullable(List<String> keys) {
+      // Check top-level first, then delivery sub-object
+      final top = readNullableString(keys);
+      if (top != null) return top;
+      if (deliveryJson == null) return null;
+      for (final key in keys) {
+        final value = deliveryJson![key];
+        if (value == null) continue;
+        final text = value.toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+      return null;
+    }
+
+    DateTime? readDeliveryDate(List<String> keys) {
+      final top = readNullableString(keys);
+      if (top != null) return DateTime.tryParse(top);
+      if (deliveryJson == null) return null;
+      for (final key in keys) {
+        final value = deliveryJson![key];
+        if (value == null) continue;
+        final parsed = DateTime.tryParse(value.toString());
+        if (parsed != null) return parsed;
+      }
+      return null;
+    }
+
     return TradeModel(
       id: readString(const ['id']),
       offerId: readString(const ['offerId', 'offer_id']),
@@ -604,7 +779,7 @@ class TradeModel {
         'fiat_currency',
       ], fallback: 'PHP'),
       amount: readDouble(const ['amount']),
-      price: readNullableDouble(const ['price']),
+      price: readNullableDouble(const ['price', 'priceSnapshot', 'price_snapshot']),
       fiatAmount: readNullableDouble(const ['fiatAmount', 'fiat_amount']),
       paymentWindow: readInt(const [
         'paymentWindow',
@@ -664,24 +839,104 @@ class TradeModel {
       proofs: readProofs(),
       createdAt: parseDate(json['createdAt'] ?? json['created_at']),
       updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
+      // vF1 SELL
+      deliveryCbId: readDeliveryNullable(const [
+        'deliveryCbId',
+        'delivery_cb_id',
+        'claimableBalanceId',
+        'claimable_balance_id',
+      ]),
+      fiatDeadlineAt: parseDate(
+        json['fiatDeadlineAt'] ?? json['fiat_deadline_at'],
+      ),
+      merchantSlaDeadlineAt: parseDate(
+        json['merchantSlaDeadlineAt'] ?? json['merchant_sla_deadline_at'],
+      ),
+      fiatSentAt: parseDate(json['fiatSentAt'] ?? json['fiat_sent_at']),
+      fiatConfirmedAt: parseDate(
+        json['fiatConfirmedAt'] ?? json['fiat_confirmed_at'],
+      ),
+      claimedAt: parseDate(json['claimedAt'] ?? json['claimed_at']),
+      // vF1 BUY
+      depositAddress: readNullableString(const [
+        'depositAddress',
+        'deposit_address',
+      ]),
+      requiredMemo: readNullableString(const [
+        'requiredMemo',
+        'required_memo',
+      ]),
+      cryptoSendDeadlineAt: parseDate(
+        json['cryptoSendDeadlineAt'] ?? json['crypto_send_deadline_at'],
+      ),
+      merchantFiatDeadlineAt: parseDate(
+        json['merchantFiatDeadlineAt'] ?? json['merchant_fiat_deadline_at'],
+      ),
+      cryptoConfirmedAt: parseDate(
+        json['cryptoConfirmedAt'] ?? json['crypto_confirmed_at'],
+      ),
+      fiatSentByMerchantAt: parseDate(
+        json['fiatSentByMerchantAt'] ?? json['fiat_sent_by_merchant_at'],
+      ),
+      overdueAt: parseDate(json['overdueAt'] ?? json['overdue_at']),
+      depositTxHash: readNullableString(const [
+        'depositTxHash',
+        'deposit_tx_hash',
+      ]),
+      depositOperationId: readNullableString(const [
+        'depositOperationId',
+        'deposit_operation_id',
+      ]),
     );
   }
 
+  // ── Computed helpers ────────────────────────────────────────────────────────
+
+  /// Returns the most relevant deadline for the current status.
   DateTime? get paymentDeadline {
+    // vF1 BUY deadlines
+    if (status == TradeStatus.awaitingCrypto && cryptoSendDeadlineAt != null) {
+      return cryptoSendDeadlineAt;
+    }
+    if ((status == TradeStatus.cryptoConfirmed ||
+            status == TradeStatus.awaitingUserConfirm ||
+            status == TradeStatus.overdue) &&
+        merchantFiatDeadlineAt != null) {
+      return merchantFiatDeadlineAt;
+    }
+    // vF1 SELL deadlines
+    if (status == TradeStatus.awaitingFiat && fiatDeadlineAt != null) {
+      return fiatDeadlineAt;
+    }
+    if (status == TradeStatus.fiatConfirmed && merchantSlaDeadlineAt != null) {
+      return merchantSlaDeadlineAt;
+    }
+    // Legacy / fallback
     if (paymentDueAt != null) return paymentDueAt;
     if (expiresAt != null) return expiresAt;
     if (createdAt == null) return null;
     return createdAt!.add(Duration(minutes: paymentWindow));
   }
 
+  /// True when the buyer (user) can act on a SELL offer (pay fiat).
   bool get isOpenForBuyerPayment =>
-      status == TradeStatus.awaitingPayment || status == TradeStatus.created;
+      status == TradeStatus.awaitingFiat ||
+      status == TradeStatus.awaitingPayment ||
+      status == TradeStatus.created;
+
+  /// True when the user (seller in BUY offer) must send crypto.
+  bool get isAwaitingCrypto => status == TradeStatus.awaitingCrypto;
 
   bool get isFinalStatus =>
+      status == TradeStatus.completed ||
+      status == TradeStatus.claimed ||
       status == TradeStatus.released ||
       status == TradeStatus.cancelled ||
       status == TradeStatus.expired ||
       status == TradeStatus.refunded;
+
+  bool get isDisputable =>
+      !isFinalStatus || status == TradeStatus.disputed;
 
   TradePartyLite? partyForUserId(String? userId) {
     final id = userId?.trim() ?? '';

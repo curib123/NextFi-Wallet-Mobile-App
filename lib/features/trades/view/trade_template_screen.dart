@@ -179,7 +179,7 @@ class _TradeTemplateScreenState extends State<TradeTemplateScreen> {
         if (trade.isFinalStatus || trade.messages.isEmpty) continue;
         final last = trade.messages.last;
         if (me.isEmpty ||
-            (last.senderId.trim().isNotEmpty && last.senderId != me)) {
+            (last.senderId!.isNotEmpty && last.senderId != me)) {
           pending++;
         }
       }

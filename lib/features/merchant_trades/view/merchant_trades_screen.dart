@@ -159,6 +159,36 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
         return 'Refunded';
       case TradeStatus.unknown:
         return raw;
+      case TradeStatus.awaitingFiat:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.fiatSent:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.fiatConfirmed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.deliveryCbCreated:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.claimed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.awaitingCrypto:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.cryptoConfirmed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.awaitingUserConfirm:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.overdue:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.completed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
   }
 
@@ -177,6 +207,36 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
       case TradeStatus.refunded:
       case TradeStatus.unknown:
         return c.textSecondary;
+      case TradeStatus.awaitingFiat:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.fiatSent:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.fiatConfirmed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.deliveryCbCreated:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.claimed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.awaitingCrypto:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.cryptoConfirmed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.awaitingUserConfirm:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.overdue:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.completed:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
   }
 
@@ -192,7 +252,7 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
     for (final trade in _items) {
       if (trade.isFinalStatus || trade.messages.isEmpty) continue;
       final last = trade.messages.last;
-      if (last.senderId.trim().isNotEmpty && last.senderId != me) {
+      if (last.senderId!.trim().isNotEmpty && last.senderId != me) {
         count++;
       }
     }

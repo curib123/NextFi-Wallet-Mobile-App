@@ -127,6 +127,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       if (stored == 'accepted') return true;
     } catch (_) {}
 
+    if (!mounted) return false;
     final accepted = await showChatConsentModal(context);
     if (!accepted) return false;
 
