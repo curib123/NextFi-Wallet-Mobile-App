@@ -527,19 +527,6 @@ class _SelfieVerificationStepScreenState
           const SizedBox(height: 10),
           _UploadCard(
             c: c,
-            title: 'Selfie',
-            subtitle: 'Clear face photo in good lighting',
-            icon: Icons.face_retouching_natural_outlined,
-            file: _selfie,
-            busy: _picking || _submitting,
-            onCamera: () => _pickForSlot(_ImageSlot.selfie, ImageSource.camera),
-            onGallery: () =>
-                _pickForSlot(_ImageSlot.selfie, ImageSource.gallery),
-            onClear: () => _clearSlot(_ImageSlot.selfie),
-          ),
-          const SizedBox(height: 10),
-          _UploadCard(
-            c: c,
             title: 'Government ID — Front',
             subtitle: 'Capture the front side of your ID',
             icon: Icons.credit_card_outlined,
@@ -564,6 +551,18 @@ class _SelfieVerificationStepScreenState
             onGallery: () =>
                 _pickForSlot(_ImageSlot.idBack, ImageSource.gallery),
             onClear: () => _clearSlot(_ImageSlot.idBack),
+          ),
+          const SizedBox(height: 10),
+          _UploadCard(
+            c: c,
+            title: 'Selfie with ID',
+            subtitle:
+                'Take a photo of yourself clearly holding your ID next to your face',
+            icon: Icons.face_retouching_natural_outlined,
+            file: _selfie,
+            busy: _picking || _submitting,
+            onCamera: () => _pickForSlot(_ImageSlot.selfie, ImageSource.camera),
+            onClear: () => _clearSlot(_ImageSlot.selfie),
           ),
 
           const SizedBox(height: 12),
@@ -905,7 +904,7 @@ class _UploadCard extends StatelessWidget {
     required this.file,
     required this.busy,
     required this.onCamera,
-    required this.onGallery,
+    this.onGallery,
     required this.onClear,
   });
 
@@ -916,7 +915,7 @@ class _UploadCard extends StatelessWidget {
   final File? file;
   final bool busy;
   final VoidCallback onCamera;
-  final VoidCallback onGallery;
+  final VoidCallback? onGallery;
   final VoidCallback onClear;
 
   @override
@@ -1038,32 +1037,34 @@ class _UploadCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 38,
-                  child: AppOutlinedButton(
-                    onPressed: busy ? null : onGallery,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: c.textPrimary,
-                      side: BorderSide(color: c.border.withOpacity(0.3)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(11),
+              if (onGallery != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 38,
+                    child: AppOutlinedButton(
+                      onPressed: busy ? null : onGallery,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: c.textPrimary,
+                        side: BorderSide(color: c.border.withOpacity(0.3)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.photo_library_outlined,
-                            size: 14, color: c.textSecondary),
-                        const SizedBox(width: 5),
-                        const Text('Gallery',
-                            style: TextStyle(fontSize: 13)),
-                      ],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.photo_library_outlined,
+                              size: 14, color: c.textSecondary),
+                          const SizedBox(width: 5),
+                          const Text('Gallery',
+                              style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
               if (hasFile) ...[
                 const SizedBox(width: 8),
                 SizedBox(

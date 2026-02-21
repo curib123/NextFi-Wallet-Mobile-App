@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/countries/country_service.dart';
+import 'package:next_fi/services/countries/models/country_model.dart';
 import 'package:next_fi/services/profile/models/profile_dtos.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
@@ -33,7 +35,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
 
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _displayNameCtrl;
-  late final TextEditingController _countryCtrl;
+  CountryModel? _selectedCountry;
 
   bool _saving = false;
   String? _error;
@@ -44,14 +46,34 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     final p = widget.initial;
     _usernameCtrl = TextEditingController(text: p?.username ?? '');
     _displayNameCtrl = TextEditingController(text: p?.displayName ?? '');
-    _countryCtrl = TextEditingController(text: p?.country ?? '');
+    if (p?.country != null && p!.country!.isNotEmpty) {
+      _tryPrefillCountry(p.country!);
+    }
+  }
+
+  Future<void> _tryPrefillCountry(String value) async {
+    try {
+      final countries = await CountryService.I.getAll();
+      final match = countries.firstWhere(
+        (c) =>
+            c.name.toLowerCase() == value.toLowerCase() ||
+            c.code.toLowerCase() == value.toLowerCase(),
+        orElse: () => CountryModel(name: value, code: '', flag: ''),
+      );
+      if (mounted) setState(() => _selectedCountry = match);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _selectedCountry = CountryModel(name: value, code: '', flag: ''),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _usernameCtrl.dispose();
     _displayNameCtrl.dispose();
-    _countryCtrl.dispose();
     super.dispose();
   }
 
@@ -66,7 +88,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       final req = UpsertProfileRequest(
         username: _usernameCtrl.text,
         displayName: _displayNameCtrl.text,
-        country: _countryCtrl.text,
+        country: _selectedCountry?.name,
         includeNulls: true,
       );
       await ProfileCoreService.I.upsertMe(req);
@@ -208,13 +230,21 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                         // Location section
                         _SectionHeader(label: 'LOCATION', c: c),
                         const SizedBox(height: 10),
-                        _FormField(
-                          controller: _countryCtrl,
-                          label: 'Country',
-                          hint: 'e.g. Philippines',
-                          icon: Icons.public_rounded,
-                          action: TextInputAction.done,
+                        _CountryPickerField(
                           c: c,
+                          selected: _selectedCountry,
+                          onTap: () async {
+                            final picked =
+                                await showModalBottomSheet<CountryModel>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const _CountryPickerSheet(),
+                            );
+                            if (picked != null) {
+                              setState(() => _selectedCountry = picked);
+                            }
+                          },
                         ),
 
                         // Error banner
@@ -467,6 +497,262 @@ class _ErrorBanner extends StatelessWidget {
               error,
               style: TextStyle(color: c.error, fontSize: 12.5, height: 1.4),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerField extends StatelessWidget {
+  const _CountryPickerField({
+    required this.c,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppColor c;
+  final CountryModel? selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = selected != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: c.border.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: c.border.withOpacity(0.25), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.public_rounded,
+                size: 17,
+                color: hasValue
+                    ? c.primary
+                    : c.textSecondary.withOpacity(0.5)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Country',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: hasValue ? c.primary : c.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (hasValue) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      '${selected!.flag}  ${selected!.name}',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      'Select your country',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: c.textSecondary.withOpacity(0.45),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(
+              hasValue ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+              size: 18,
+              color: hasValue ? c.primary : c.textSecondary.withOpacity(0.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerSheet extends StatefulWidget {
+  const _CountryPickerSheet();
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  List<CountryModel> _all = [];
+  List<CountryModel> _filtered = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(_onSearch);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final countries = await CountryService.I.getAll();
+      if (!mounted) return;
+      setState(() {
+        _all = countries;
+        _filtered = countries;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _all
+          : _all
+              .where((c) =>
+                  c.name.toLowerCase().contains(q) ||
+                  c.code.toLowerCase().contains(q))
+              .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: c.border.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Select Country',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search countries…',
+                hintStyle: TextStyle(
+                    color: c.textSecondary.withOpacity(0.5), fontSize: 14),
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 18, color: c.textSecondary.withOpacity(0.5)),
+                filled: true,
+                fillColor: c.border.withOpacity(0.07),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              style: TextStyle(color: c.textPrimary, fontSize: 14),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _loading
+                ? Center(
+                    child: CircularProgressIndicator(color: c.primary))
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!,
+                                style: TextStyle(
+                                    color: c.error, fontSize: 13),
+                                textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            TextButton(
+                                onPressed: _load,
+                                child: const Text('Retry')),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _filtered.length,
+                        itemBuilder: (_, i) {
+                          final country = _filtered[i];
+                          return ListTile(
+                            leading: Text(country.flag,
+                                style: const TextStyle(fontSize: 22)),
+                            title: Text(
+                              country.name,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                            trailing: Text(
+                              country.code,
+                              style: TextStyle(
+                                  color: c.textSecondary, fontSize: 12),
+                            ),
+                            onTap: () =>
+                                Navigator.of(context).pop(country),
+                          );
+                        },
+                      ),
           ),
         ],
       ),

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
+import 'package:next_fi/services/countries/country_service.dart';
+import 'package:next_fi/services/countries/models/country_model.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_dtos.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
@@ -17,10 +19,11 @@ class MerchantProfileSetupScreen extends StatefulWidget {
       _MerchantProfileSetupScreenState();
 }
 
-class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen> {
+class _MerchantProfileSetupScreenState
+    extends State<MerchantProfileSetupScreen> {
   final _displayNameCtrl = TextEditingController();
   final _requestNoteCtrl = TextEditingController();
-  final _countryCtrl = TextEditingController();
+  CountryModel? _selectedCountry;
   final _locationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -40,7 +43,6 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
     if (initial != null) {
       _displayNameCtrl.text = initial.displayName;
       _requestNoteCtrl.text = initial.requestNote ?? '';
-      _countryCtrl.text = initial.country ?? '';
       _locationCtrl.text = initial.location ?? '';
       _emailCtrl.text = initial.email ?? '';
       _phoneCtrl.text = initial.phone ?? '';
@@ -52,6 +54,10 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
       _type = initial.type == MerchantType.business
           ? MerchantType.business
           : MerchantType.individual;
+      // Pre-fill country picker from saved value
+      if (initial.country != null && initial.country!.isNotEmpty) {
+        _tryPrefillCountry(initial.country!);
+      }
     }
   }
 
@@ -59,7 +65,6 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
   void dispose() {
     _displayNameCtrl.dispose();
     _requestNoteCtrl.dispose();
-    _countryCtrl.dispose();
     _locationCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
@@ -69,6 +74,23 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
     _authorizedRepCtrl.dispose();
     _authorizedPositionCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _tryPrefillCountry(String value) async {
+    try {
+      final countries = await CountryService.I.getAll();
+      if (!mounted) return;
+      final q = value.trim().toLowerCase();
+      final match = countries.firstWhere(
+        (c) =>
+            c.name.toLowerCase() == q ||
+            c.code.toLowerCase() == q,
+        orElse: () => CountryModel(name: value, code: '', flag: ''),
+      );
+      setState(() => _selectedCountry = match);
+    } catch (_) {
+      // Leave null — user can re-pick manually.
+    }
   }
 
   Future<void> _submit() async {
@@ -85,7 +107,7 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
         type: _type,
         displayName: displayName,
         requestNote: _requestNoteCtrl.text.trim(),
-        country: _countryCtrl.text.trim(),
+        country: _selectedCountry?.name,
         location: _locationCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
@@ -125,6 +147,19 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  Future<void> _pickCountry() async {
+    final c = AppColor.of(context);
+    final picked = await showModalBottomSheet<CountryModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CountryPickerSheet(c: c),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedCountry = picked);
+    }
   }
 
   @override
@@ -175,7 +210,11 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
             multiline: true,
           ),
           const SizedBox(height: 10),
-          _Field(c: c, controller: _countryCtrl, label: 'Country', hint: 'e.g. PH'),
+          _CountryPickerField(
+            c: c,
+            selected: _selectedCountry,
+            onTap: _pickCountry,
+          ),
           const SizedBox(height: 10),
           _Field(
             c: c,
@@ -265,7 +304,8 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Colors.white70),
                       ),
                     )
                   : const Text(
@@ -283,6 +323,344 @@ class _MerchantProfileSetupScreenState extends State<MerchantProfileSetupScreen>
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerField extends StatelessWidget {
+  const _CountryPickerField({
+    required this.c,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppColor c;
+  final CountryModel? selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: c.border.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: c.border.withOpacity(0.28)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.public_outlined, color: c.textSecondary, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: selected != null
+                  ? Row(
+                      children: [
+                        if (selected!.flag.isNotEmpty) ...[
+                          Text(
+                            selected!.flag,
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(
+                            selected!.name,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      'Country',
+                      style: TextStyle(
+                        color: c.textSecondary.withOpacity(0.6),
+                        fontSize: 14,
+                      ),
+                    ),
+            ),
+            if (selected != null)
+              Icon(Icons.check_circle_outline_rounded,
+                  color: c.success, size: 17)
+            else
+              Icon(Icons.chevron_right_rounded,
+                  color: c.textSecondary.withOpacity(0.45), size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerSheet extends StatefulWidget {
+  const _CountryPickerSheet({required this.c});
+
+  final AppColor c;
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  List<CountryModel>? _all;
+  List<CountryModel> _filtered = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _searchCtrl.addListener(_onSearch);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.removeListener(_onSearch);
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final countries = await CountryService.I.getAll();
+      if (!mounted) return;
+      setState(() {
+        _all = countries;
+        _filtered = countries;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? (_all ?? [])
+          : (_all ?? [])
+              .where((c) =>
+                  c.name.toLowerCase().contains(q) ||
+                  c.code.toLowerCase().contains(q))
+              .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: c.border.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text(
+                    'Country',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: c.border.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.close_rounded,
+                          size: 16, color: c.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: true,
+                style: TextStyle(color: c.textPrimary, fontSize: 14.5),
+                decoration: InputDecoration(
+                  hintText: 'Search country…',
+                  hintStyle: TextStyle(
+                    color: c.textSecondary.withOpacity(0.5),
+                    fontSize: 14,
+                  ),
+                  filled: true,
+                  fillColor: c.surface,
+                  prefixIcon: Icon(Icons.search_rounded,
+                      color: c.textSecondary, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide:
+                        BorderSide(color: c.border.withOpacity(0.25)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide:
+                        BorderSide(color: c.border.withOpacity(0.25)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: BorderSide(color: c.primary, width: 1.4),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Divider(height: 1, color: c.border.withOpacity(0.15)),
+            Expanded(child: _buildList(c)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(AppColor c) {
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.wifi_off_rounded, color: c.error, size: 32),
+              const SizedBox(height: 12),
+              Text(
+                'Could not load countries',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+              ),
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() => _error = null);
+                  CountryService.I.clearCache();
+                  _load();
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_all == null) {
+      return Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          valueColor: AlwaysStoppedAnimation(c.primary),
+        ),
+      );
+    }
+
+    if (_filtered.isEmpty) {
+      return Center(
+        child: Text(
+          'No countries found',
+          style: TextStyle(color: c.textSecondary, fontSize: 14),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: _filtered.length,
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, indent: 56, color: c.border.withOpacity(0.12)),
+      itemBuilder: (_, i) {
+        final country = _filtered[i];
+        return InkWell(
+          onTap: () => Navigator.of(context).pop(country),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+            child: Row(
+              children: [
+                Text(country.flag, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    country.name,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  country.code,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HERO
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _Hero extends StatelessWidget {
   const _Hero({required this.c});
@@ -306,7 +684,8 @@ class _Hero extends StatelessWidget {
               color: c.primary.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.storefront_outlined, color: c.primary, size: 22),
+            child:
+                Icon(Icons.storefront_outlined, color: c.primary, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -324,6 +703,10 @@ class _Hero extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPE SELECTOR
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _TypeSelector extends StatelessWidget {
   const _TypeSelector({
@@ -377,6 +760,10 @@ class _TypeSelector extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERIC FIELD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _Field extends StatelessWidget {
   const _Field({

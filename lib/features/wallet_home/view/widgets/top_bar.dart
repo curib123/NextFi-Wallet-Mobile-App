@@ -5,15 +5,19 @@ import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
+import 'package:next_fi/features/merchant_flow/view/merchant_onboarding_flow_screen.dart';
 import 'package:next_fi/features/profile/view/profile_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/oath2.0/api/auth_http_client.dart';
 import 'package:next_fi/services/oath2.0/api/endpoints.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/secure_storage/token_storage.dart';
+import 'package:next_fi/services/verification/models/verification_models.dart';
+import 'package:next_fi/services/verification/verification_core_service.dart';
 import 'package:provider/provider.dart';
 
 class TopBar extends StatefulWidget {
@@ -31,6 +35,8 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
   bool _isLoggedIn = false;
   bool _loading = true;
   User? _user;
+  TrustStatus _trustStatus = TrustStatus.unknown;
+  bool _isMerchant = false;
 
   @override
   void initState() {
@@ -77,16 +83,44 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
         _user = user;
         _loading = false;
       });
+      // Fetch verification + merchant status in parallel (non-blocking)
+      _fetchMerchantAccessStatus();
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoggedIn = false;
         _user = null;
         _loading = false;
+        _trustStatus = TrustStatus.unknown;
+        _isMerchant = false;
       });
     } finally {
       client.dispose();
     }
+  }
+
+  Future<void> _fetchMerchantAccessStatus() async {
+    try {
+      final results = await Future.wait([
+        VerificationCoreService.I.getMe().then((v) => v.status),
+        MerchantProfileCoreService.I.getMe().then((m) => m?.isApproved ?? false),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _trustStatus = results[0] as TrustStatus;
+        _isMerchant = results[1] as bool;
+      });
+    } catch (_) {
+      // Status stays at defaults — button simply won't show on error.
+    }
+  }
+
+  Future<void> _handleMerchantRequest() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()),
+    );
+    if (mounted) _fetchMerchantAccessStatus();
   }
 
   void _openDrawer(BuildContext context) {
@@ -103,6 +137,9 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
     final vm = context.watch<WalletHomeVM>();
     final walletName = vm.state.walletName ?? 'Default Wallet';
 
+    final canShowMerchantRequest =
+        _isLoggedIn && _trustStatus == TrustStatus.ready && !_isMerchant;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
@@ -118,6 +155,13 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
             onTap: () => _handleWalletSwitch(context),
           ),
           const Spacer(),
+          if (canShowMerchantRequest) ...[
+            _MerchantRequestButton(
+              colors: colors,
+              onTap: _handleMerchantRequest,
+            ),
+            const SizedBox(width: 8),
+          ],
           _ProfileActionButton(
             colors: colors,
             isLoading: _loading,
@@ -408,6 +452,45 @@ class _ProfileActionButton extends StatelessWidget {
                 color: colors.textPrimary,
                 size: 22,
               ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MERCHANT REQUEST BUTTON  (visible only when TrustStatus.ready & !isMerchant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MerchantRequestButton extends StatelessWidget {
+  const _MerchantRequestButton({
+    required this.colors,
+    required this.onTap,
+  });
+
+  final AppColor colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Become a Merchant',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: colors.primary.withOpacity(0.1),
+            border: Border.all(color: colors.primary.withOpacity(0.2)),
+          ),
+          child: Icon(
+            LucideIcons.store,
+            size: 18,
+            color: colors.primary,
+          ),
+        ),
       ),
     );
   }
