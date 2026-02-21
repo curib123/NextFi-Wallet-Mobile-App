@@ -7,7 +7,7 @@ import 'merchant_payment_account_exceptions.dart';
 
 class MerchantPaymentAccountHttp {
   static Uri uri(String path, {Map<String, String>? queryParams}) {
-    final base = Uri.parse('$cetralized_baseUrl$path');
+    final base = Uri.parse('$centralized_baseUrl$path');
     if (queryParams == null || queryParams.isEmpty) return base;
     final merged = <String, String>{...base.queryParameters, ...queryParams};
     return base.replace(queryParameters: merged);

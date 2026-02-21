@@ -32,5 +32,5 @@ class AuthEndpoints {
   /// Returns the full URL for a given path.
   /// e.g. `AuthEndpoints.fullUrl(AuthEndpoints.me)`
   /// → `https://nextfi-backend.onrender.com/api/v1/auth/me`
-  static String fullUrl(String path) => '$cetralized_baseUrl$path';
+  static String fullUrl(String path) => '$centralized_baseUrl$path';
 }

@@ -7,7 +7,7 @@ import 'fee_config_exceptions.dart';
 
 class FeeConfigHttp {
   static Uri uri(String path, {Map<String, String>? queryParams}) {
-    return Uri.parse('$cetralized_baseUrl$path').replace(
+    return Uri.parse('$centralized_baseUrl$path').replace(
       queryParameters: queryParams?.isEmpty == true ? null : queryParams,
     );
   }

@@ -270,7 +270,7 @@ class MiniChatSocketService {
   }
 
   String _miniChatSocketUrl() {
-    final base = Uri.parse(cetralized_baseUrl);
+    final base = Uri.parse(centralized_baseUrl);
     final socketUri = base.replace(
       path: '/mini-chat',
       query: null,

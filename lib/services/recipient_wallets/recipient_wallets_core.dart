@@ -19,10 +19,10 @@ import 'package:next_fi/services/recipient_wallets/models/recipient_wallet_model
 
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 
-import '../base_url/base_url.dart' show cetralized_baseUrl;
+import '../base_url/base_url.dart' show centralized_baseUrl;
 
 class RecipientWalletsCore {
-  static const String _baseUrl = cetralized_baseUrl;
+  static const String _baseUrl = centralized_baseUrl;
 
   final TokenStorage _tokenStorage;
   late final RecipientWalletsService svc;
