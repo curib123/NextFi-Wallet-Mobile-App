@@ -3,7 +3,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -58,19 +57,29 @@ class _AppDrawerState extends State<AppDrawer>
   late final AnimationController _entryCtrl;
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
+  late final List<Animation<double>> _itemAnims;
 
   @override
   void initState() {
     super.initState();
     _entryCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 560),
     );
     _fadeAnim = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
-      begin: const Offset(-0.04, 0),
+      begin: const Offset(-0.06, 0),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+
+    _itemAnims = List.generate(10, (i) {
+      final start = 0.1 + i * 0.06;
+      final end = (start + 0.35).clamp(0.0, 1.0);
+      return CurvedAnimation(
+        parent: _entryCtrl,
+        curve: Interval(start, end, curve: Curves.easeOutCubic),
+      );
+    });
 
     _profileChangesSub = ProfileCoreService.changes.listen((_) {
       if (!mounted) return;
@@ -196,25 +205,16 @@ class _AppDrawerState extends State<AppDrawer>
 
   void _redirectToLogin() {
     Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   void _handleVerificationTap() {
-    if (_cachedUser == null) {
-      _redirectToLogin();
-      return;
-    }
+    if (_cachedUser == null) { _redirectToLogin(); return; }
     _push(const VerificationFlowScreen());
   }
 
   Future<void> _handleMerchantRequestTap() async {
-    if (_cachedUser == null) {
-      _redirectToLogin();
-      return;
-    }
+    if (_cachedUser == null) { _redirectToLogin(); return; }
     Navigator.pop(context);
     await Navigator.push(
       context,
@@ -224,46 +224,41 @@ class _AppDrawerState extends State<AppDrawer>
   }
 
   void _handleMerchantOffersTap() {
-    if (_cachedUser == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
+    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
   }
 
   void _handleMerchantTradesTap() {
-    if (_cachedUser == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
-
+    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
   }
 
-  // Verification gate: use TrustStatus from the verification service,
-  // with isVerificationIdentityComplete (username set) as the local fallback.
   bool get _isVerifiedForTradeAccess =>
       _trustStatus == TrustStatus.ready ||
           (_cachedProfile?.isVerificationIdentityComplete ?? false);
 
-
   void _handleMessengerTap() {
-    if (_cachedUser == null) {
-      _redirectToLogin();
-      return;
-    }
+    if (_cachedUser == null) { _redirectToLogin(); return; }
     _push(const ChatHubScreen());
   }
 
   void _push(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  Widget _staggered(int index, Widget child) {
+    if (index >= _itemAnims.length) return child;
+    return AnimatedBuilder(
+      animation: _itemAnims[index],
+      builder: (_, __) => Opacity(
+        opacity: _itemAnims[index].value,
+        child: Transform.translate(
+          offset: Offset(0, 10 * (1 - _itemAnims[index].value)),
+          child: child,
+        ),
+      ),
+    );
   }
 
   @override
@@ -273,8 +268,7 @@ class _AppDrawerState extends State<AppDrawer>
     final user = _cachedUser;
 
     final isMerchant = user != null && (_cachedMerchantProfile?.isApproved ?? false);
-    final canRequestMerchant =
-        user != null && _trustStatus == TrustStatus.ready;
+    final canRequestMerchant = user != null && _trustStatus == TrustStatus.ready;
 
     return Drawer(
       backgroundColor: c.background,
@@ -305,108 +299,88 @@ class _AppDrawerState extends State<AppDrawer>
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    const SizedBox(height: 8),
-                    const _SectionLabel(label: 'QUICK ACTIONS'),
-                    _NavTile(
-                      icon: LucideIcons.download,
-                      label: 'Buy Trades',
-                      description: 'Open buy trades template',
-                      colors: c,
-                      onTap: (){},
+                    const SizedBox(height: 10),
+                    _staggered(0, _SectionLabel(label: 'QUICK ACTIONS', colors: c)),
+                    _staggered(1, _NavTile(
+                      icon: LucideIcons.download, label: 'Buy Trades',
+                      description: 'Open buy trades template', colors: c,
+                      accentColor: const Color(0xFF10B981), onTap: () {},
                       requiresAuth: user == null,
-                    ),
-                    _NavTile(
-                      icon: LucideIcons.upload,
-                      label: 'Sell Trades',
-                      description: 'Open sell trades template',
-                      colors: c,
-                      onTap: (){},
+                    )),
+                    _staggered(2, _NavTile(
+                      icon: LucideIcons.upload, label: 'Sell Trades',
+                      description: 'Open sell trades template', colors: c,
+                      accentColor: const Color(0xFFF59E0B), onTap: () {},
                       requiresAuth: user == null,
-                    ),
-                    _NavTile(
-                      icon: LucideIcons.messageSquare,
-                      label: 'Messenger',
-                      description: 'Friends, threads, and secure direct chat',
-                      colors: c,
+                    )),
+                    _staggered(3, _NavTile(
+                      icon: LucideIcons.messageSquare, label: 'Messenger',
+                      description: 'Friends, threads & secure chat', colors: c,
+                      accentColor: const Color(0xFF6366F1),
                       trailing: user != null && _unreadChatCount > 0
                           ? _UnreadBadge(count: _unreadChatCount, colors: c)
                           : null,
-                      onTap: _handleMessengerTap,
-                      requiresAuth: user == null,
-                    ),
-                    _NavTile(
-                      icon: LucideIcons.checkCircle2,
-                      label: 'Verification',
-                      description: 'Complete identity steps',
-                      colors: c,
+                      onTap: _handleMessengerTap, requiresAuth: user == null,
+                    )),
+                    _staggered(4, _NavTile(
+                      icon: LucideIcons.checkCircle2, label: 'Verification',
+                      description: 'Complete identity steps', colors: c,
+                      accentColor: const Color(0xFF0EA5E9),
                       trailing: user != null
-                          ? _TrustStatusDot(status: _trustStatus, colors: c)
+                          ? _TrustStatusChip(status: _trustStatus, colors: c)
                           : null,
-                      onTap: _handleVerificationTap,
-                      requiresAuth: user == null,
-                    ),
+                      onTap: _handleVerificationTap, requiresAuth: user == null,
+                    )),
+
                     if (canRequestMerchant)
-                      _NavTile(
-                        icon: LucideIcons.store,
-                        label: 'Merchant Request',
-                        description: 'Request merchant account access',
-                        colors: c,
+                      _staggered(5, _NavTile(
+                        icon: LucideIcons.store, label: 'Merchant Request',
+                        description: 'Request merchant account access', colors: c,
+                        accentColor: const Color(0xFFF97316),
                         onTap: _handleMerchantRequestTap,
-                      ),
+                      )),
+
                     if (isMerchant) ...[
                       const SizedBox(height: 4),
-                      const _SectionLabel(label: 'MERCHANT'),
-                      _NavTile(
-                        icon: LucideIcons.badgeDollarSign,
-                        label: 'Manage Offers',
-                        description: 'Create and edit merchant offers',
-                        colors: c,
-                        onTap: _handleMerchantOffersTap,
-                      ),
-                      _NavTile(
-                        icon: LucideIcons.messageSquare,
-                        label: 'Merchant Trades',
-                        description: 'Incoming trades and chat inbox',
-                        colors: c,
-                        onTap: _handleMerchantTradesTap,
-                      ),
+                      _staggered(5, _SectionLabel(label: 'MERCHANT', colors: c)),
+                      _staggered(6, _NavTile(
+                        icon: LucideIcons.badgeDollarSign, label: 'Manage Offers',
+                        description: 'Create and edit merchant offers', colors: c,
+                        accentColor: const Color(0xFFF97316), onTap: _handleMerchantOffersTap,
+                      )),
+                      _staggered(7, _NavTile(
+                        icon: LucideIcons.messageSquare, label: 'Merchant Trades',
+                        description: 'Incoming trades and chat inbox', colors: c,
+                        accentColor: const Color(0xFF8B5CF6), onTap: _handleMerchantTradesTap,
+                      )),
                     ],
+
                     const SizedBox(height: 4),
-                    const _SectionLabel(label: 'SETTINGS'),
-                    _NavTile(
-                      icon: LucideIcons.wallet,
-                      label: 'Manage Wallet',
-                      description: 'Keys & backup',
-                      colors: c,
+                    _staggered(8, _SectionLabel(label: 'SETTINGS', colors: c)),
+                    _staggered(8, _NavTile(
+                      icon: LucideIcons.wallet, label: 'Manage Wallet',
+                      description: 'Keys & backup', colors: c,
+                      accentColor: const Color(0xFF14B8A6),
                       onTap: () => _push(const WalletScreenSettings()),
-                    ),
-                    _NavTile(
-                      icon: LucideIcons.settings,
-                      label: 'Preferences',
-                      description: 'App settings',
-                      colors: c,
+                    )),
+                    _staggered(9, _NavTile(
+                      icon: LucideIcons.settings, label: 'Preferences',
+                      description: 'App settings', colors: c,
                       onTap: () => _push(const SettingsScreen()),
-                    ),
+                    )),
+
                     if (_cachedInfo != null) ...[
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 24),
                       _AppVersionInfo(info: _cachedInfo!, colors: c),
                     ],
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
 
               if (user != null) ...[
-                Divider(
-                  color: c.border.withOpacity(0.18),
-                  height: 1,
-                  indent: 20,
-                  endIndent: 20,
-                ),
-                _LogoutButton(
-                  isLoading: _loggingOut,
-                  colors: c,
-                  onTap: _handleLogout,
-                ),
+                _DrawerDivider(colors: c),
+                _LogoutButton(isLoading: _loggingOut, colors: c, onTap: _handleLogout),
               ],
 
               SizedBox(height: mq.padding.bottom + 8),
@@ -419,26 +393,7 @@ class _AppDrawerState extends State<AppDrawer>
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// PROFILE HEADER
-//
-// Data resolved once, zero duplication across the three visual zones:
-//
-//   ZONE A — Avatar (left)
-//     • 56px avatar with brand ring + online dot
-//
-//   ZONE B — Identity text (right of avatar)
-//     Line 1  displayName        e.g. "NextFI"           [17px w700]
-//     Line 2  @username          e.g. "@nextfi_user"      [13px w500, muted]
-//     Line 3  email (auth email) e.g. "me@nextfi.io"      [12px w400, dimmer]
-//
-//   ZONE C — Meta row (below text, inline)
-//     • Verification status pill  (Verified / In Review / …)
-//     • Country chip              (only country — not repeated elsewhere)
-//
-// Fallback chain (no duplication):
-//   • If displayName is absent  → username or email used in Line 1
-//   • Line 2 (@username) hidden when username is absent
-//   • Line 3 (email) hidden when it would duplicate Line 1
+// PROFILE HEADER — solid surface, no glass
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _ProfileHeader extends StatelessWidget {
@@ -454,79 +409,54 @@ class _ProfileHeader extends StatelessWidget {
   final TrustStatus trustStatus;
   final AppColor colors;
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-
   String? _s(String? v) {
     final t = v?.trim();
     return (t == null || t.isEmpty) ? null : t;
   }
 
-  // "NextFI" — displayName wins
   String? get _displayName => _s(profile?.displayName);
-
-  // "@nextfi_user"
   String? get _handle {
     final u = _s(profile?.username);
     return u != null ? '@$u' : null;
   }
-
-  // Raw email from auth
   String? get _email => user.email.trim().isEmpty ? null : user.email.trim();
-
-  // Country code / name
   String? get _country => _s(profile?.country);
-
-  // ── Resolve the three text lines with zero duplication ───────────────────
-
   String get _line1 => _displayName ?? _email ?? 'Anonymous';
-
-  String? get _line2 => _handle; // null if no username
-
-  // Email shown as line3 ONLY when line1 is not the email already
+  String? get _line2 => _handle;
   String? get _line3 {
     final e = _email;
     if (e == null) return null;
-    if (_line1 == e) return null; // would duplicate
+    if (_line1 == e) return null;
     return e;
   }
 
-  // ── Trust pill config ─────────────────────────────────────────────────────
-
-  ({Color color, IconData icon, String label}) get _trust =>
+  ({Color bg, Color glow, IconData icon, String label}) get _trust =>
       switch (trustStatus) {
         TrustStatus.ready => (
-        color: colors.success,
-        icon: LucideIcons.badgeCheck,
-        label: 'Verified',
+        bg: const Color(0xFF10B981), glow: const Color(0xFF10B981),
+        icon: LucideIcons.badgeCheck, label: 'Verified',
         ),
         TrustStatus.reviewing => (
-        color: colors.warning,
-        icon: LucideIcons.clock,
-        label: 'In Review',
+        bg: const Color(0xFFF59E0B), glow: const Color(0xFFF59E0B),
+        icon: LucideIcons.clock, label: 'In Review',
         ),
         TrustStatus.suspended => (
-        color: colors.error,
-        icon: LucideIcons.shieldOff,
-        label: 'Suspended',
+        bg: const Color(0xFFEF4444), glow: const Color(0xFFEF4444),
+        icon: LucideIcons.shieldOff, label: 'Suspended',
         ),
         TrustStatus.basic => (
-        color: colors.textSecondary,
-        icon: LucideIcons.shield,
-        label: 'Basic',
+        bg: colors.border, glow: Colors.transparent,
+        icon: LucideIcons.shield, label: 'Basic',
         ),
         _ => (
-        color: colors.textSecondary,
-        icon: LucideIcons.shield,
-        label: 'Unverified',
+        bg: colors.border, glow: Colors.transparent,
+        icon: LucideIcons.shield, label: 'Unverified',
         ),
       };
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final l1 = _line1;
-    final l2 = _line2;
-    final l3 = _line3;
     final tc = _trust;
     final ctry = _country;
 
@@ -537,107 +467,179 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Thin primary accent bar at top
           Container(
-            width: double.infinity,
-            color: colors.primary.withOpacity(0.04),
-            padding: EdgeInsets.fromLTRB(20, top + 24, 20, 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colors.primary,
+                  colors.primary.withOpacity(0.4),
+                  colors.primary.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, top + 22, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ZONE A — Avatar
-                _DrawerAvatar(user: user, colors: colors),
-
-                const SizedBox(width: 14),
-
-                // ZONE B + C — Text + meta
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Line 1 — display name / email
-                      Text(
-                        l1,
-                        style: TextStyle(
-                          color: colors.textPrimary,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                      // Line 2 — @username handle
-                      if (l2 != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          l2,
-                          style: TextStyle(
-                            color: colors.textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: -0.1,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-
-                      // Line 3 — email (only when not already on line 1)
-                      if (l3 != null) ...[
-                        const SizedBox(height: 1),
-                        Text(
-                          l3,
-                          style: TextStyle(
-                            color: colors.textSecondary.withOpacity(0.6),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: -0.1,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-
-                      const SizedBox(height: 10),
-
-                      // ZONE C — Meta pills
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          // Verification status — always shown
-                          _MetaPill(
-                            icon: tc.icon,
-                            label: tc.label,
-                            color: tc.color,
-                            colors: colors,
-                          ),
-
-                          // Country — shown once, here only
-                          if (ctry != null)
-                            _MetaPill(
-                              icon: LucideIcons.mapPin,
-                              label: ctry,
-                              color: colors.textSecondary,
-                              colors: colors,
-                              subtle: true,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _DrawerAvatar(user: user, colors: colors),
+                    const Spacer(),
+                    _TrustPill(icon: tc.icon, label: tc.label, bg: tc.bg, glow: tc.glow),
+                  ],
                 ),
+
+                const SizedBox(height: 14),
+
+                Text(
+                  _line1,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                    height: 1.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+
+                if (_line2 != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    _line2!,
+                    style: TextStyle(
+                      color: colors.primary.withOpacity(0.8),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+
+                if (_line3 != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _line3!,
+                    style: TextStyle(
+                      color: colors.textSecondary.withOpacity(0.55),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+
+                if (ctry != null) ...[
+                  const SizedBox(height: 10),
+                  _CountryChip(country: ctry, colors: colors),
+                ],
               ],
             ),
           ),
 
-          Divider(
+          Container(
             height: 1,
-            thickness: 1,
-            color: colors.border.withOpacity(0.13),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colors.border.withOpacity(0.0),
+                  colors.border.withOpacity(0.25),
+                  colors.primary.withOpacity(0.35),
+                  colors.border.withOpacity(0.25),
+                  colors.border.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRUST PILL
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TrustPill extends StatelessWidget {
+  const _TrustPill({
+    required this.icon,
+    required this.label,
+    required this.bg,
+    required this.glow,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color bg;
+  final Color glow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: bg.withOpacity(0.30), width: 1),
+        boxShadow: glow != Colors.transparent
+            ? [BoxShadow(color: glow.withOpacity(0.18), blurRadius: 10)]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: bg),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: bg, letterSpacing: 0.1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY CHIP
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryChip extends StatelessWidget {
+  const _CountryChip({required this.country, required this.colors});
+  final String country;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.border.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.border.withOpacity(0.15)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.mapPin, size: 10, color: colors.textSecondary.withOpacity(0.6)),
+          const SizedBox(width: 4),
+          Text(
+            country,
+            style: TextStyle(
+              fontSize: 11.5, fontWeight: FontWeight.w500,
+              color: colors.textSecondary.withOpacity(0.7), letterSpacing: 0.1,
+            ),
           ),
         ],
       ),
@@ -647,54 +649,90 @@ class _ProfileHeader extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DRAWER AVATAR
-// Merchant crown removed — isMerchant no longer available on ProfileModel.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DrawerAvatar extends StatelessWidget {
+class _DrawerAvatar extends StatefulWidget {
   const _DrawerAvatar({required this.user, required this.colors});
-
   final User user;
   final AppColor colors;
 
   @override
+  State<_DrawerAvatar> createState() => _DrawerAvatarState();
+}
+
+class _DrawerAvatarState extends State<_DrawerAvatar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))
+      ..repeat(reverse: true);
+    _pulseAnim = CurvedAnimation(parent: _pulse, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() { _pulse.dispose(); super.dispose(); }
+
+  @override
   Widget build(BuildContext context) {
+    final c = widget.colors;
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Avatar + brand ring
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: colors.primary.withOpacity(0.25),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: colors.primary.withOpacity(0.10),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: UserAvatar(user: user, radius: 26, colors: colors),
-        ),
-
-        // Online dot — bottom-right
-        Positioned(
-          bottom: 1,
-          right: 1,
-          child: Container(
-            width: 12,
-            height: 12,
+        AnimatedBuilder(
+          animation: _pulseAnim,
+          builder: (_, child) => Container(
+            width: 60, height: 60,
             decoration: BoxDecoration(
-              color: colors.success,
               shape: BoxShape.circle,
-              border: Border.all(color: colors.surface, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: colors.success.withOpacity(0.4),
-                  blurRadius: 5,
+                  color: c.primary.withOpacity(0.08 + _pulseAnim.value * 0.12),
+                  blurRadius: 16 + _pulseAnim.value * 8,
+                ),
+              ],
+            ),
+            child: child,
+          ),
+          child: Container(
+            width: 60, height: 60,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [c.primary.withOpacity(0.6), c.primary.withOpacity(0.2)],
+              ),
+            ),
+            padding: const EdgeInsets.all(2.5),
+            child: ClipOval(child: UserAvatar(user: widget.user, radius: 27, colors: c)),
+          ),
+        ),
+
+        Positioned(
+          bottom: 2, right: 2,
+          child: AnimatedBuilder(
+            animation: _pulseAnim,
+            builder: (_, __) => Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 18, height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: c.success.withOpacity(0.2 * _pulseAnim.value),
+                  ),
+                ),
+                Container(
+                  width: 12, height: 12,
+                  decoration: BoxDecoration(
+                    color: c.success, shape: BoxShape.circle,
+                    border: Border.all(color: c.surface, width: 2),
+                    boxShadow: [BoxShadow(color: c.success.withOpacity(0.5), blurRadius: 6)],
+                  ),
                 ),
               ],
             ),
@@ -706,64 +744,7 @@ class _DrawerAvatar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// META PILL  — small status tag used in profile header ZONE C only
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MetaPill extends StatelessWidget {
-  const _MetaPill({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.colors,
-    this.subtle = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final AppColor colors;
-  final bool subtle;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = subtle ? colors.textSecondary : color;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: subtle
-            ? colors.border.withOpacity(0.08)
-            : color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: subtle
-              ? colors.border.withOpacity(0.20)
-              : color.withOpacity(0.22),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: fg),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: fg,
-              letterSpacing: -0.1,
-              height: 1.0,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LOGIN PROMPT
+// LOGIN PROMPT — solid surface, no glass
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LoginPrompt extends StatelessWidget {
@@ -784,97 +765,122 @@ class _LoginPrompt extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Accent bar
           Container(
-            color: colors.primary.withOpacity(0.04),
-            padding: EdgeInsets.fromLTRB(20, topPadding + 24, 20, 20),
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colors.primary,
+                  colors.primary.withOpacity(0.4),
+                  colors.primary.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, topPadding + 22, 20, 20),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 60, height: 60,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: colors.border.withOpacity(0.07),
-                    border: Border.all(
-                      color: colors.border.withOpacity(0.20),
-                      width: 1.5,
-                    ),
+                    color: colors.border.withOpacity(0.06),
+                    border: Border.all(color: colors.border.withOpacity(0.18), width: 1.5),
                   ),
                   child: Icon(
                     LucideIcons.userCircle2,
-                    color: colors.textSecondary.withOpacity(0.45),
-                    size: 26,
+                    color: colors.textSecondary.withOpacity(0.35),
+                    size: 28,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Guest',
+                        'Welcome',
                         style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: colors.textPrimary,
-                          letterSpacing: -0.5,
-                          height: 1.2,
+                          fontSize: 22, fontWeight: FontWeight.w800,
+                          color: colors.textPrimary, letterSpacing: -0.8, height: 1.1,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         'Sign in to unlock all features',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textSecondary,
-                        ),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colors.textSecondary),
                       ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 36,
-                        child: AppElevatedButton(
-                          onPressed: onTap,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: colors.primary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.login_rounded, size: 14),
-                              SizedBox(width: 6),
-                              Text(
-                                'Sign In',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: -0.1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const SizedBox(height: 14),
+                      _GradientButton(label: 'Sign In', icon: Icons.login_rounded, primaryColor: colors.primary, onTap: onTap),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          Divider(
+
+          Container(
             height: 1,
-            thickness: 1,
-            color: colors.border.withOpacity(0.13),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  colors.border.withOpacity(0.0),
+                  colors.border.withOpacity(0.25),
+                  colors.primary.withOpacity(0.35),
+                  colors.border.withOpacity(0.25),
+                  colors.border.withOpacity(0.0),
+                ],
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GRADIENT BUTTON
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GradientButton extends StatelessWidget {
+  const _GradientButton({
+    required this.label, required this.icon,
+    required this.primaryColor, required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color primaryColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [primaryColor, Color.lerp(primaryColor, Colors.purple, 0.3)!],
+          ),
+          borderRadius: BorderRadius.circular(11),
+          boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: Colors.white),
+            const SizedBox(width: 7),
+            Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.1)),
+          ],
+        ),
       ),
     );
   }
@@ -885,22 +891,35 @@ class _LoginPrompt extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
+  const _SectionLabel({required this.label, required this.colors});
   final String label;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10.5,
-          fontWeight: FontWeight.w700,
-          color: c.textSecondary.withOpacity(0.55),
-          letterSpacing: 1.1,
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
+      child: Row(
+        children: [
+          Container(
+            width: 3, height: 10,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [colors.primary, colors.primary.withOpacity(0.3)],
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w800,
+              color: colors.textSecondary.withOpacity(0.5), letterSpacing: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -910,15 +929,11 @@ class _SectionLabel extends StatelessWidget {
 // NAV TILE
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NavTile extends StatelessWidget {
+class _NavTile extends StatefulWidget {
   const _NavTile({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.colors,
-    required this.onTap,
-    this.trailing,
-    this.requiresAuth = false,
+    required this.icon, required this.label, required this.description,
+    required this.colors, required this.onTap,
+    this.accentColor, this.trailing, this.requiresAuth = false,
   });
 
   final IconData icon;
@@ -926,99 +941,98 @@ class _NavTile extends StatelessWidget {
   final String description;
   final AppColor colors;
   final VoidCallback onTap;
+  final Color? accentColor;
   final Widget? trailing;
   final bool requiresAuth;
 
   @override
+  State<_NavTile> createState() => _NavTileState();
+}
+
+class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin {
+  late final AnimationController _pressCtrl;
+  late final Animation<double> _scaleAnim;
+  bool _isPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 120));
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.97)
+        .animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() { _pressCtrl.dispose(); super.dispose(); }
+
+  void _onTapDown(_) { setState(() => _isPressed = true); _pressCtrl.forward(); }
+  void _onTapUp(_) { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+  void _onTapCancel() { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: colors.primary.withOpacity(0.06),
-        highlightColor: colors.primary.withOpacity(0.03),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+    final c = widget.colors;
+    final accent = widget.accentColor ?? c.primary;
+
+    return GestureDetector(
+      onTap: () { HapticFeedback.selectionClick(); widget.onTap(); },
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: ScaleTransition(
+        scale: _scaleAnim,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: _isPressed ? accent.withOpacity(0.05) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _isPressed ? accent.withOpacity(0.12) : Colors.transparent, width: 1,
+            ),
+          ),
           child: Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: colors.border.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(11),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [accent.withOpacity(0.18), accent.withOpacity(0.08)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withOpacity(0.18), width: 1),
                 ),
-                child: Icon(
-                  icon,
-                  color: colors.textPrimary.withOpacity(0.72),
-                  size: 18,
-                ),
+                child: Icon(widget.icon, color: accent, size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      label,
+                      widget.label,
                       style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: colors.textPrimary,
-                        letterSpacing: -0.2,
+                        fontSize: 14.5, fontWeight: FontWeight.w600,
+                        color: c.textPrimary, letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colors.textSecondary,
-                      ),
+                      widget.description,
+                      style: TextStyle(fontSize: 11.5, color: c.textSecondary.withOpacity(0.7), height: 1.3),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 6),
-              if (trailing != null)
-                trailing!
-              else if (requiresAuth)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colors.border.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: colors.border.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lock_outline_rounded,
-                        size: 10,
-                        color: colors.textSecondary.withOpacity(0.6),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        'Sign in',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: colors.textSecondary.withOpacity(0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
+              const SizedBox(width: 8),
+              if (widget.trailing != null)
+                widget.trailing!
+              else if (widget.requiresAuth)
+                _AuthBadge(colors: c)
               else
-                Icon(
-                  LucideIcons.chevronRight,
-                  color: colors.textSecondary.withOpacity(0.3),
-                  size: 16,
-                ),
+                Icon(LucideIcons.chevronRight, color: c.textSecondary.withOpacity(0.22), size: 15),
             ],
           ),
         ),
@@ -1028,44 +1042,85 @@ class _NavTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRUST STATUS DOT  (nav tile trailing)
+// AUTH BADGE
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TrustStatusDot extends StatelessWidget {
-  const _TrustStatusDot({required this.status, required this.colors});
-  final TrustStatus status;
+class _AuthBadge extends StatelessWidget {
+  const _AuthBadge({required this.colors});
   final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (status) {
-      TrustStatus.ready => colors.success,
-      TrustStatus.reviewing => colors.warning,
-      TrustStatus.suspended => colors.error,
-      _ => colors.textSecondary.withOpacity(0.35),
-    };
     return Container(
-      width: 8,
-      height: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: status == TrustStatus.ready
-            ? [
-          BoxShadow(
-            color: colors.success.withOpacity(0.45),
-            blurRadius: 6,
-          ),
-        ]
-            : null,
+        color: colors.border.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.border.withOpacity(0.15)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_outline_rounded, size: 10, color: colors.textSecondary.withOpacity(0.5)),
+          const SizedBox(width: 4),
+          Text('Sign in', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: colors.textSecondary.withOpacity(0.5))),
+        ],
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TRUST STATUS CHIP
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TrustStatusChip extends StatelessWidget {
+  const _TrustStatusChip({required this.status, required this.colors});
+  final TrustStatus status;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, label) = switch (status) {
+      TrustStatus.ready => (const Color(0xFF10B981), 'Verified'),
+      TrustStatus.reviewing => (const Color(0xFFF59E0B), 'Pending'),
+      TrustStatus.suspended => (const Color(0xFFEF4444), 'Suspended'),
+      _ => (colors.textSecondary.withOpacity(0.4), 'Basic'),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6, height: 6,
+            decoration: BoxDecoration(
+              color: color, shape: BoxShape.circle,
+              boxShadow: status == TrustStatus.ready
+                  ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 5)]
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.1)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNREAD BADGE
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _UnreadBadge extends StatelessWidget {
   const _UnreadBadge({required this.count, required this.colors});
-
   final int count;
   final AppColor colors;
 
@@ -1073,17 +1128,35 @@ class _UnreadBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = count > 99 ? '99+' : '$count';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: colors.primary.withOpacity(0.12),
+        gradient: LinearGradient(
+          colors: [colors.primary, Color.lerp(colors.primary, Colors.purple, 0.3)!],
+        ),
         borderRadius: BorderRadius.circular(99),
+        boxShadow: [BoxShadow(color: colors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: colors.primary,
-          fontSize: 10.6,
-          fontWeight: FontWeight.w700,
+      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAWER DIVIDER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DrawerDivider extends StatelessWidget {
+  const _DrawerDivider({required this.colors});
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 1,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [colors.border.withOpacity(0.0), colors.border.withOpacity(0.3), colors.border.withOpacity(0.0)],
         ),
       ),
     );
@@ -1102,24 +1175,25 @@ class _AppVersionInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-      child: Row(
-        children: [
-          Icon(
-            LucideIcons.info,
-            size: 13,
-            color: colors.textSecondary.withOpacity(0.45),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '${info.appName} v${info.version}',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
-              color: colors.textSecondary.withOpacity(0.55),
+      padding: const EdgeInsets.fromLTRB(22, 0, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: colors.border.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: colors.border.withOpacity(0.12)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.package, size: 10, color: colors.textSecondary.withOpacity(0.4)),
+            const SizedBox(width: 5),
+            Text(
+              '${info.appName}  v${info.version}',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: colors.textSecondary.withOpacity(0.45), letterSpacing: 0.1),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1129,63 +1203,58 @@ class _AppVersionInfo extends StatelessWidget {
 // LOGOUT BUTTON
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _LogoutButton extends StatelessWidget {
-  const _LogoutButton({
-    required this.isLoading,
-    required this.colors,
-    required this.onTap,
-  });
+class _LogoutButton extends StatefulWidget {
+  const _LogoutButton({required this.isLoading, required this.colors, required this.onTap});
   final bool isLoading;
   final AppColor colors;
   final VoidCallback onTap;
 
   @override
+  State<_LogoutButton> createState() => _LogoutButtonState();
+}
+
+class _LogoutButtonState extends State<_LogoutButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: isLoading ? null : onTap,
-        splashColor: colors.error.withOpacity(0.06),
-        highlightColor: colors.error.withOpacity(0.03),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          child: Row(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: isLoading
-                    ? SizedBox(
-                  key: const ValueKey('l'),
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(colors.error),
-                  ),
-                )
-                    : Icon(
-                  key: const ValueKey('i'),
-                  LucideIcons.logOut,
-                  color: colors.error,
-                  size: 18,
-                ),
+    final c = widget.colors;
+    return GestureDetector(
+      onTap: widget.isLoading ? null : widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: _pressed ? c.error.withOpacity(0.07) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _pressed ? c.error.withOpacity(0.15) : Colors.transparent),
+        ),
+        child: Row(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: widget.isLoading
+                  ? SizedBox(key: const ValueKey('l'), width: 18, height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(c.error)))
+                  : Icon(key: const ValueKey('i'), LucideIcons.logOut, color: c.error, size: 18),
+            ),
+            const SizedBox(width: 14),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 150),
+              child: Text(
+                widget.isLoading ? 'Signing out…' : 'Sign Out',
+                key: ValueKey(widget.isLoading),
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: c.error, letterSpacing: -0.2),
               ),
-              const SizedBox(width: 14),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 150),
-                child: Text(
-                  isLoading ? 'Signing out…' : 'Sign Out',
-                  key: ValueKey(isLoading),
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w600,
-                    color: colors.error,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+            const Spacer(),
+            if (!widget.isLoading)
+              Icon(LucideIcons.chevronRight, color: c.error.withOpacity(0.3), size: 14),
+          ],
         ),
       ),
     );
@@ -1193,7 +1262,7 @@ class _LogoutButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROFILE SHIMMER  — mirrors real header layout exactly
+// PROFILE SHIMMER
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfileShimmer extends StatefulWidget {
@@ -1208,123 +1277,73 @@ class _ProfileShimmer extends StatefulWidget {
 class _ProfileShimmerState extends State<_ProfileShimmer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double> _anim;
+  late final Animation<double> _sweep;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+    _sweep = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     final c = widget.colors;
     return AnimatedBuilder(
-      animation: _anim,
+      animation: _sweep,
       builder: (_, __) {
-        final s = c.border.withOpacity(0.07 + _anim.value * 0.07);
+        Widget shimBox(double w, double h, {double r = 6}) => Container(
+          width: w, height: h,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(r),
+            gradient: LinearGradient(
+              begin: Alignment(-1 + _sweep.value * 2.5, 0),
+              end: Alignment(-0.5 + _sweep.value * 2.5, 0),
+              colors: [c.border.withOpacity(0.08), c.border.withOpacity(0.17), c.border.withOpacity(0.08)],
+            ),
+          ),
+        );
+
         return Container(
           color: c.surface,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                color: c.primary.withOpacity(0.04),
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  widget.topPadding + 24,
-                  20,
-                  20,
+                height: 3,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [c.primary.withOpacity(0.4), c.primary.withOpacity(0.1), Colors.transparent],
+                  ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(20, widget.topPadding + 22, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Avatar
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: s,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Line 1 — name
-                          Container(
-                            width: 120,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: s,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
-                          const SizedBox(height: 7),
-                          // Line 2 — handle
-                          Container(
-                            width: 88,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: s.withOpacity(0.65),
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          // Line 3 — email
-                          Container(
-                            width: 140,
-                            height: 11,
-                            decoration: BoxDecoration(
-                              color: s.withOpacity(0.45),
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          // Pills row
-                          Row(
-                            children: [
-                              Container(
-                                width: 68,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  color: s.withOpacity(0.5),
-                                  borderRadius: BorderRadius.circular(100),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                width: 40,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  color: s.withOpacity(0.35),
-                                  borderRadius: BorderRadius.circular(100),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    Row(children: [shimBox(60, 60, r: 30), const Spacer(), shimBox(72, 26, r: 13)]),
+                    const SizedBox(height: 14),
+                    shimBox(130, 20, r: 8),
+                    const SizedBox(height: 8),
+                    shimBox(90, 14, r: 6),
+                    const SizedBox(height: 6),
+                    shimBox(160, 12, r: 5),
+                    const SizedBox(height: 12),
+                    shimBox(70, 24, r: 8),
                   ],
                 ),
               ),
-              Divider(
+              Container(
                 height: 1,
-                thickness: 1,
-                color: c.border.withOpacity(0.13),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [c.border.withOpacity(0.0), c.border.withOpacity(0.2), c.border.withOpacity(0.0)],
+                  ),
+                ),
               ),
             ],
           ),
@@ -1349,6 +1368,7 @@ class _LogoutConfirmationModal extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(28),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 40, offset: const Offset(0, -10))],
       ),
       child: SafeArea(
         child: Padding(
@@ -1357,100 +1377,56 @@ class _LogoutConfirmationModal extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                width: 36, height: 4,
+                margin: const EdgeInsets.only(bottom: 28),
+                decoration: BoxDecoration(color: c.border.withOpacity(0.25), borderRadius: BorderRadius.circular(2)),
               ),
               Container(
-                width: 64,
-                height: 64,
+                width: 72, height: 72,
                 decoration: BoxDecoration(
-                  color: c.error.withOpacity(0.08),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: c.error.withOpacity(0.15),
-                    width: 1.5,
-                  ),
+                  color: c.error.withOpacity(0.08),
+                  border: Border.all(color: c.error.withOpacity(0.18), width: 1.5),
                 ),
-                child: Icon(LucideIcons.logOut, color: c.error, size: 26),
+                child: Icon(LucideIcons.logOut, color: c.error, size: 28),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Sign Out?',
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w700,
-                  color: c.textPrimary,
-                  letterSpacing: -0.5,
-                ),
-              ),
+              const SizedBox(height: 18),
+              Text('Sign Out?',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: c.textPrimary, letterSpacing: -0.6)),
               const SizedBox(height: 8),
               Text(
                 "You'll need to sign in again\nto access your account.",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: c.textSecondary,
-                  height: 1.5,
-                ),
+                style: TextStyle(fontSize: 14, color: c.textSecondary, height: 1.55),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: AppElevatedButton(
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    Navigator.pop(context, true);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: c.error,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+              const SizedBox(height: 28),
+              GestureDetector(
+                onTap: () { HapticFeedback.lightImpact(); Navigator.pop(context, true); },
+                child: Container(
+                  width: double.infinity, height: 52,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [c.error, Color.lerp(c.error, Colors.red.shade900, 0.4)!]),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [BoxShadow(color: c.error.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
                   ),
-                  child: const Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
+                  alignment: Alignment.center,
+                  child: const Text('Yes, Sign Out',
+                      style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.2)),
                 ),
               ),
               const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: AppTextButton(
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    Navigator.pop(context, false);
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: c.border.withOpacity(0.08),
-                    foregroundColor: c.textPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+              GestureDetector(
+                onTap: () { HapticFeedback.lightImpact(); Navigator.pop(context, false); },
+                child: Container(
+                  width: double.infinity, height: 52,
+                  decoration: BoxDecoration(
+                    color: c.border.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: c.border.withOpacity(0.12)),
                   ),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w600,
-                      color: c.textPrimary,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
+                  alignment: Alignment.center,
+                  child: Text('Cancel',
+                      style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: c.textPrimary, letterSpacing: -0.2)),
                 ),
               ),
             ],
