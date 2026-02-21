@@ -959,6 +959,8 @@ class _UploadCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w700,
@@ -967,6 +969,8 @@ class _UploadCard extends StatelessWidget {
                     ),
                     Text(
                       subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                     ),
                   ],
@@ -992,19 +996,26 @@ class _UploadCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: double.infinity,
-              height: 148,
-              color: hasFile ? Colors.black : c.border.withOpacity(0.08),
+          SizedBox(
+            width: double.infinity,
+            height: 148,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
               child: hasFile
-                  ? Image.file(file!, fit: BoxFit.cover)
-                  : Center(
-                      child: Icon(
-                        Icons.image_outlined,
-                        color: c.textSecondary.withOpacity(0.45),
-                        size: 28,
+                  ? Image.file(
+                      file!,
+                      width: double.infinity,
+                      height: 148,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      color: c.border.withOpacity(0.08),
+                      child: Center(
+                        child: Icon(
+                          Icons.image_outlined,
+                          color: c.textSecondary.withOpacity(0.45),
+                          size: 28,
+                        ),
                       ),
                     ),
             ),
@@ -1026,12 +1037,18 @@ class _UploadCard extends StatelessWidget {
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.camera_alt_outlined,
                             size: 14, color: c.textSecondary),
                         const SizedBox(width: 5),
-                        const Text('Camera',
-                            style: TextStyle(fontSize: 13)),
+                        const Flexible(
+                          child: Text(
+                            'Camera',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1053,12 +1070,18 @@ class _UploadCard extends StatelessWidget {
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.photo_library_outlined,
                               size: 14, color: c.textSecondary),
                           const SizedBox(width: 5),
-                          const Text('Gallery',
-                              style: TextStyle(fontSize: 13)),
+                          const Flexible(
+                            child: Text(
+                              'Gallery',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1068,12 +1091,14 @@ class _UploadCard extends StatelessWidget {
               if (hasFile) ...[
                 const SizedBox(width: 8),
                 SizedBox(
+                  width: 46,
                   height: 38,
                   child: AppOutlinedButton(
                     onPressed: busy ? null : onClear,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.error,
                       side: BorderSide(color: c.error.withOpacity(0.3)),
+                      padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(11),
                       ),
