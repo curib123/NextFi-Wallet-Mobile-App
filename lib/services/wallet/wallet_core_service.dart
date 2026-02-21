@@ -91,6 +91,15 @@ class WalletCoreService {
     return updateWallet(walletId: walletId, label: label);
   }
 
+  Future<WalletAddress> setActive({required String walletId}) async {
+    try {
+      return await _api.setActive(walletId);
+    } on ApiException catch (e) {
+      _handleAuthError(e);
+      rethrow;
+    }
+  }
+
   Future<WalletAddress> remove({required String walletId}) async {
     try {
       return await _api.remove(walletId);

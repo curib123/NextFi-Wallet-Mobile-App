@@ -48,17 +48,6 @@ class ProfileCoreService {
     return ok;
   }
 
-  Future<MerchantRequestStatusModel> getMerchantRequestStatus() async =>
-      _api.getMerchantRequestStatus();
-
-  Future<MerchantRequestStatusModel> requestMerchantAccess({
-    String? note,
-  }) async {
-    final status = await _api.requestMerchantAccess(note: note);
-    _emitChanged();
-    return status;
-  }
-
   void _emitChanged() {
     if (!_changesCtrl.isClosed) {
       _changesCtrl.add(null);

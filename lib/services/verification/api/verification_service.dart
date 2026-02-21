@@ -11,7 +11,7 @@ typedef TokenProvider = Future<String?> Function();
 
 class VerificationService {
   VerificationService({required this.tokenProvider, http.Client? client})
-    : _client = client ?? http.Client();
+      : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;
@@ -86,11 +86,31 @@ class VerificationService {
   }
 
   Future<VerificationModel> submit({
+    // ── Required ──────────────────────────────────────────
     required String phoneNumber,
     required File selfie,
     required File governmentIdFront,
     required File governmentIdBack,
+    // ── Identity snapshot ─────────────────────────────────
+    String? fullLegalName,
+    DateTime? dateOfBirth,
+    String? nationality,
+    String? countryOfResidence,
+    String? addressLine1,
+    String? addressLine2,
+    String? city,
+    String? stateOrProvince,
+    String? postalCode,
+    String? issuingCountry,
+    // ── Government ID ─────────────────────────────────────
+    GovernmentIdType? governmentIdType,
+    String? governmentIdNumber,
+    DateTime? governmentIdExpiry,
+    // ── Payment account ───────────────────────────────────
     String? paymentAccountId,
+    // ── Consent ───────────────────────────────────────────
+    DateTime? consentAcceptedAt,
+    String? consentVersion,
   }) async {
     final normalizedPhone = phoneNumber.trim();
     if (normalizedPhone.isEmpty) {
@@ -115,31 +135,71 @@ class VerificationService {
 
     final token = await _tokenOrThrow();
 
-    final req =
-        http.MultipartRequest(
-            'POST',
-            VerificationHttp.uri(VerificationEndpoints.submit()),
-          )
-          ..headers['Authorization'] = 'Bearer $token'
-          ..headers['Accept'] = 'application/json'
-          ..fields['phoneNumber'] = normalizedPhone
-          ..files.add(await http.MultipartFile.fromPath('selfie', selfie.path))
-          ..files.add(
-            await http.MultipartFile.fromPath(
-              'governmentIdFront',
-              governmentIdFront.path,
-            ),
-          )
-          ..files.add(
-            await http.MultipartFile.fromPath(
-              'governmentIdBack',
-              governmentIdBack.path,
-            ),
-          );
+    final req = http.MultipartRequest(
+      'POST',
+      VerificationHttp.uri(VerificationEndpoints.submit()),
+    )
+      ..headers['Authorization'] = 'Bearer $token'
+      ..headers['Accept'] = 'application/json'
+    // ── Required fields ───────────────────────────────
+      ..fields['phoneNumber'] = normalizedPhone
+      ..files.add(await http.MultipartFile.fromPath('selfie', selfie.path))
+      ..files.add(
+        await http.MultipartFile.fromPath(
+          'governmentIdFront',
+          governmentIdFront.path,
+        ),
+      )
+      ..files.add(
+        await http.MultipartFile.fromPath(
+          'governmentIdBack',
+          governmentIdBack.path,
+        ),
+      );
 
-    if (paymentAccountId != null && paymentAccountId.trim().isNotEmpty) {
-      req.fields['paymentAccountId'] = paymentAccountId;
-    }
+    // ── Identity snapshot ─────────────────────────────────
+    _addField(req, 'fullLegalName', fullLegalName);
+    _addField(
+      req,
+      'dateOfBirth',
+      dateOfBirth != null
+          ? '${dateOfBirth.year.toString().padLeft(4, '0')}'
+          '-${dateOfBirth.month.toString().padLeft(2, '0')}'
+          '-${dateOfBirth.day.toString().padLeft(2, '0')}'
+          : null,
+    );
+    _addField(req, 'nationality', nationality);
+    _addField(req, 'countryOfResidence', countryOfResidence);
+    _addField(req, 'addressLine1', addressLine1);
+    _addField(req, 'addressLine2', addressLine2);
+    _addField(req, 'city', city);
+    _addField(req, 'stateOrProvince', stateOrProvince);
+    _addField(req, 'postalCode', postalCode);
+    _addField(req, 'issuingCountry', issuingCountry);
+
+    // ── Government ID ─────────────────────────────────────
+    _addField(req, 'governmentIdType', governmentIdType?.apiValue);
+    _addField(req, 'governmentIdNumber', governmentIdNumber);
+    _addField(
+      req,
+      'governmentIdExpiry',
+      governmentIdExpiry != null
+          ? '${governmentIdExpiry.year.toString().padLeft(4, '0')}'
+          '-${governmentIdExpiry.month.toString().padLeft(2, '0')}'
+          '-${governmentIdExpiry.day.toString().padLeft(2, '0')}'
+          : null,
+    );
+
+    // ── Payment account ───────────────────────────────────
+    _addField(req, 'paymentAccountId', paymentAccountId);
+
+    // ── Consent ───────────────────────────────────────────
+    _addField(
+      req,
+      'consentAcceptedAt',
+      consentAcceptedAt?.toUtc().toIso8601String(),
+    );
+    _addField(req, 'consentVersion', consentVersion);
 
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
@@ -157,5 +217,14 @@ class VerificationService {
       'Unexpected response for POST /verification/submit',
       body: res.body,
     );
+  }
+
+  /// Adds a field to a [MultipartRequest] only when [value] is non-null
+  /// and non-blank, keeping the request clean.
+  void _addField(http.MultipartRequest req, String key, String? value) {
+    final trimmed = value?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      req.fields[key] = trimmed;
+    }
   }
 }

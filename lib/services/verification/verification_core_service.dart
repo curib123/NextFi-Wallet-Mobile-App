@@ -26,16 +26,52 @@ class VerificationCoreService {
   Future<VerificationModel> getMe() async => _api.getMe();
 
   Future<VerificationModel> submit({
+    // ── Required ─────────────────────────────────────
     required String phoneNumber,
     required File selfie,
     required File governmentIdFront,
     required File governmentIdBack,
+    // ── Identity snapshot ────────────────────────────
+    String? fullLegalName,
+    DateTime? dateOfBirth,
+    String? nationality,
+    String? countryOfResidence,
+    String? addressLine1,
+    String? addressLine2,
+    String? city,
+    String? stateOrProvince,
+    String? postalCode,
+    String? issuingCountry,
+    // ── Government ID ────────────────────────────────
+    GovernmentIdType? governmentIdType,
+    String? governmentIdNumber,
+    DateTime? governmentIdExpiry,
+    // ── Payment account ──────────────────────────────
     String? paymentAccountId,
-  }) async => _api.submit(
-    phoneNumber: phoneNumber,
-    selfie: selfie,
-    governmentIdFront: governmentIdFront,
-    governmentIdBack: governmentIdBack,
-    paymentAccountId: paymentAccountId,
-  );
+    // ── Consent ──────────────────────────────────────
+    DateTime? consentAcceptedAt,
+    String? consentVersion,
+  }) async =>
+      _api.submit(
+        phoneNumber: phoneNumber,
+        selfie: selfie,
+        governmentIdFront: governmentIdFront,
+        governmentIdBack: governmentIdBack,
+        fullLegalName: fullLegalName,
+        dateOfBirth: dateOfBirth,
+        nationality: nationality,
+        countryOfResidence: countryOfResidence,
+        addressLine1: addressLine1,
+        addressLine2: addressLine2,
+        city: city,
+        stateOrProvince: stateOrProvince,
+        postalCode: postalCode,
+        issuingCountry: issuingCountry,
+        governmentIdType: governmentIdType,
+        governmentIdNumber: governmentIdNumber,
+        governmentIdExpiry: governmentIdExpiry,
+        paymentAccountId: paymentAccountId,
+        consentAcceptedAt: consentAcceptedAt,
+        consentVersion: consentVersion,
+      );
 }

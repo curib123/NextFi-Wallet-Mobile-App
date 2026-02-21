@@ -8,6 +8,7 @@ import '../models/profile_dtos.dart';
 import '../models/profile_models.dart';
 import 'profile_endpoints.dart';
 
+
 typedef TokenProvider = Future<String?> Function();
 
 class ProfileService {
@@ -181,55 +182,4 @@ class ProfileService {
     return true;
   }
 
-  Future<MerchantRequestStatusModel> getMerchantRequestStatus() async {
-    final res = await _client.get(
-      ProfileHttp.uri(ProfileEndpoints.merchantRequestStatus()),
-      headers: await _headers(),
-    );
-
-    ProfileHttp.ensureOk(res);
-    final data = ProfileHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(
-      data,
-      keys: const ['data', 'merchantRequest', 'merchant_request'],
-    );
-
-    if (map != null) {
-      return MerchantRequestStatusModel.fromJson(map);
-    }
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for GET /profile/me/merchant-request',
-      body: res.body,
-    );
-  }
-
-  Future<MerchantRequestStatusModel> requestMerchantAccess({
-    String? note,
-  }) async {
-    final req = RequestMerchantAccessRequest(note: note);
-    final res = await _client.post(
-      ProfileHttp.uri(ProfileEndpoints.requestMerchantAccess()),
-      headers: await _headers(),
-      body: jsonEncode(req.toJson()),
-    );
-
-    ProfileHttp.ensureOk(res);
-    final data = ProfileHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(
-      data,
-      keys: const ['data', 'merchantRequest', 'merchant_request'],
-    );
-
-    if (map != null) {
-      return MerchantRequestStatusModel.fromJson(map);
-    }
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for POST /profile/me/request-merchant',
-      body: res.body,
-    );
-  }
 }

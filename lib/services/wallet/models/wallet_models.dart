@@ -3,24 +3,21 @@ class WalletAddress {
   final String publicAddress;
   final String network;
   final String? label;
-  final String? lastCursor;
+  final bool isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  WalletAddress({
+  const WalletAddress({
     required this.id,
     required this.publicAddress,
-    required this.network,
+    this.network = 'stellar',
     this.label,
-    this.lastCursor,
+    this.isActive = false,
     this.createdAt,
     this.updatedAt,
   });
 
   factory WalletAddress.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) =>
-        value == null ? null : DateTime.tryParse(value.toString());
-
     String readString(List<String> keys, {String fallback = ''}) {
       for (final key in keys) {
         final value = json[key];
@@ -31,21 +28,36 @@ class WalletAddress {
       return fallback;
     }
 
-    String? readNullableString(List<String> keys) {
-      final value = readString(keys);
-      return value.isEmpty ? null : value;
+    bool readBool(List<String> keys, {bool fallback = false}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) {
+          final v = value.trim().toLowerCase();
+          if (v == 'true' || v == '1') return true;
+          if (v == 'false' || v == '0') return false;
+        }
+      }
+      return fallback;
     }
 
+    DateTime? parseDate(dynamic value) =>
+        value == null ? null : DateTime.tryParse(value.toString());
+
     return WalletAddress(
-      id: readString(const ['id', 'walletId', 'wallet_id']),
+      id: readString(const ['id']),
       publicAddress: readString(const [
         'publicAddress',
         'public_address',
         'address',
       ]),
       network: readString(const ['network'], fallback: 'stellar'),
-      label: readNullableString(const ['label']),
-      lastCursor: readNullableString(const ['lastCursor', 'last_cursor']),
+      label: (() {
+        final text = readString(const ['label', 'name']);
+        return text.isEmpty ? null : text;
+      })(),
+      isActive: readBool(const ['isActive', 'is_active']),
       createdAt: parseDate(json['createdAt'] ?? json['created_at']),
       updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
     );
@@ -80,9 +92,9 @@ class WalletPaginationMeta {
     }
 
     return WalletPaginationMeta(
-      total: readInt(const ['total']),
+      total: readInt(const ['total', 'count']),
       page: readInt(const ['page'], fallback: 1),
-      limit: readInt(const ['limit'], fallback: 20),
+      limit: readInt(const ['limit', 'pageSize', 'page_size'], fallback: 20),
       totalPages: readInt(const ['totalPages', 'total_pages'], fallback: 1),
     );
   }

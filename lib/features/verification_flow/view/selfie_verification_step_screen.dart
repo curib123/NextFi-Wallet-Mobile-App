@@ -7,6 +7,7 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
 
 class SelfieVerificationStepScreen extends StatefulWidget {
@@ -22,13 +23,35 @@ enum _ImageSlot { selfie, idFront, idBack }
 class _SelfieVerificationStepScreenState
     extends State<SelfieVerificationStepScreen> {
   final ImagePicker _picker = ImagePicker();
+
+  // ── Contact ──────────────────────────────────────────────
   final TextEditingController _phoneCtrl = TextEditingController();
 
-  static const Set<String> _allowedExtensions = {'jpg', 'jpeg', 'png', 'webp'};
+  // ── Identity ─────────────────────────────────────────────
+  final TextEditingController _fullLegalNameCtrl = TextEditingController();
+  final TextEditingController _nationalityCtrl = TextEditingController();
+  final TextEditingController _countryOfResidenceCtrl = TextEditingController();
+  DateTime? _dateOfBirth;
 
+  // ── Address ──────────────────────────────────────────────
+  final TextEditingController _addressLine1Ctrl = TextEditingController();
+  final TextEditingController _addressLine2Ctrl = TextEditingController();
+  final TextEditingController _cityCtrl = TextEditingController();
+  final TextEditingController _stateOrProvinceCtrl = TextEditingController();
+  final TextEditingController _postalCodeCtrl = TextEditingController();
+  final TextEditingController _issuingCountryCtrl = TextEditingController();
+
+  // ── Government ID ─────────────────────────────────────────
+  GovernmentIdType? _governmentIdType;
+  final TextEditingController _governmentIdNumberCtrl = TextEditingController();
+  DateTime? _governmentIdExpiry;
+
+  // ── Files ────────────────────────────────────────────────
   File? _selfie;
   File? _idFront;
   File? _idBack;
+
+  static const Set<String> _allowedExtensions = {'jpg', 'jpeg', 'png', 'webp'};
 
   bool _picking = false;
   bool _submitting = false;
@@ -46,6 +69,16 @@ class _SelfieVerificationStepScreenState
   @override
   void dispose() {
     _phoneCtrl.dispose();
+    _fullLegalNameCtrl.dispose();
+    _nationalityCtrl.dispose();
+    _countryOfResidenceCtrl.dispose();
+    _addressLine1Ctrl.dispose();
+    _addressLine2Ctrl.dispose();
+    _cityCtrl.dispose();
+    _stateOrProvinceCtrl.dispose();
+    _postalCodeCtrl.dispose();
+    _issuingCountryCtrl.dispose();
+    _governmentIdNumberCtrl.dispose();
     super.dispose();
   }
 
@@ -88,8 +121,7 @@ class _SelfieVerificationStepScreenState
     final normalized = path.trim().toLowerCase();
     final dot = normalized.lastIndexOf('.');
     if (dot < 0) return false;
-    final ext = normalized.substring(dot + 1);
-    return _allowedExtensions.contains(ext);
+    return _allowedExtensions.contains(normalized.substring(dot + 1));
   }
 
   void _assignSlot(_ImageSlot slot, File file) {
@@ -112,21 +144,20 @@ class _SelfieVerificationStepScreenState
       final xFile = await _picker.pickImage(
         source: source,
         imageQuality: 90,
-        preferredCameraDevice: CameraDevice.front,
+        preferredCameraDevice: slot == _ImageSlot.selfie
+            ? CameraDevice.front
+            : CameraDevice.rear,
       );
       if (!mounted) return;
-
       if (xFile == null) {
         setState(() => _picking = false);
         return;
       }
-
       if (!_isSupportedImagePath(xFile.path)) {
         setState(() => _picking = false);
         _showSnack('Unsupported image type. Use JPG, PNG, or WEBP.');
         return;
       }
-
       _assignSlot(slot, File(xFile.path));
       setState(() => _picking = false);
     } catch (e) {
@@ -148,12 +179,38 @@ class _SelfieVerificationStepScreenState
     });
   }
 
+  Future<void> _pickDate({
+    required DateTime? initial,
+    required DateTime firstDate,
+    required DateTime lastDate,
+    required ValueChanged<DateTime> onPicked,
+  }) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial ?? lastDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      builder: (ctx, child) {
+        final c = AppColor.of(ctx);
+        return Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: Theme.of(ctx).colorScheme.copyWith(
+              primary: c.primary,
+              surface: c.surface,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) onPicked(picked);
+  }
+
   String? _validateBeforeSubmit() {
     if (_phoneCtrl.text.trim().isEmpty) return 'Phone number is required.';
     if (_selfie == null) return 'Selfie image is required.';
     if (_idFront == null) return 'Government ID front image is required.';
     if (_idBack == null) return 'Government ID back image is required.';
-
     if (!_isSupportedImagePath(_selfie!.path) ||
         !_isSupportedImagePath(_idFront!.path) ||
         !_isSupportedImagePath(_idBack!.path)) {
@@ -179,6 +236,40 @@ class _SelfieVerificationStepScreenState
         governmentIdFront: _idFront!,
         governmentIdBack: _idBack!,
         paymentAccountId: _activePaymentAccountId,
+        // Identity
+        fullLegalName: _fullLegalNameCtrl.text.trim().isEmpty
+            ? null
+            : _fullLegalNameCtrl.text.trim(),
+        dateOfBirth: _dateOfBirth,
+        nationality: _nationalityCtrl.text.trim().isEmpty
+            ? null
+            : _nationalityCtrl.text.trim(),
+        countryOfResidence: _countryOfResidenceCtrl.text.trim().isEmpty
+            ? null
+            : _countryOfResidenceCtrl.text.trim(),
+        // Address
+        addressLine1: _addressLine1Ctrl.text.trim().isEmpty
+            ? null
+            : _addressLine1Ctrl.text.trim(),
+        addressLine2: _addressLine2Ctrl.text.trim().isEmpty
+            ? null
+            : _addressLine2Ctrl.text.trim(),
+        city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+        stateOrProvince: _stateOrProvinceCtrl.text.trim().isEmpty
+            ? null
+            : _stateOrProvinceCtrl.text.trim(),
+        postalCode: _postalCodeCtrl.text.trim().isEmpty
+            ? null
+            : _postalCodeCtrl.text.trim(),
+        issuingCountry: _issuingCountryCtrl.text.trim().isEmpty
+            ? null
+            : _issuingCountryCtrl.text.trim(),
+        // Government ID
+        governmentIdType: _governmentIdType,
+        governmentIdNumber: _governmentIdNumberCtrl.text.trim().isEmpty
+            ? null
+            : _governmentIdNumberCtrl.text.trim(),
+        governmentIdExpiry: _governmentIdExpiry,
       );
       if (!mounted) return;
 
@@ -240,16 +331,185 @@ class _SelfieVerificationStepScreenState
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 36),
         children: [
           _HeroCard(c: c),
-          const SizedBox(height: 14),
-          _PhoneField(controller: _phoneCtrl, c: c),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
+
+          // ── Section: Contact ──────────────────────────────
+          _SectionHeader(c: c, label: 'Contact'),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _phoneCtrl,
+            c: c,
+            labelText: 'Phone Number *',
+            hintText: 'e.g. +639171234567',
+            prefixIcon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Section: Personal Information ─────────────────
+          _SectionHeader(c: c, label: 'Personal Information'),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _fullLegalNameCtrl,
+            c: c,
+            labelText: 'Full Legal Name',
+            hintText: 'As printed on your ID',
+            prefixIcon: Icons.badge_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 10),
+          _DatePickerField(
+            c: c,
+            label: 'Date of Birth',
+            value: _dateOfBirth,
+            onTap: () => _pickDate(
+              initial: _dateOfBirth,
+              firstDate: DateTime(1900),
+              lastDate: DateTime.now().subtract(const Duration(days: 365 * 16)),
+              onPicked: (d) => setState(() => _dateOfBirth = d),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _nationalityCtrl,
+            c: c,
+            labelText: 'Nationality',
+            hintText: 'e.g. Filipino',
+            prefixIcon: Icons.flag_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _countryOfResidenceCtrl,
+            c: c,
+            labelText: 'Country of Residence',
+            hintText: 'e.g. Philippines',
+            prefixIcon: Icons.location_on_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Section: Address ──────────────────────────────
+          _SectionHeader(c: c, label: 'Address'),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _addressLine1Ctrl,
+            c: c,
+            labelText: 'Address Line 1',
+            hintText: 'Street, building, house no.',
+            prefixIcon: Icons.home_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _addressLine2Ctrl,
+            c: c,
+            labelText: 'Address Line 2',
+            hintText: 'Barangay, subdivision, etc. (optional)',
+            prefixIcon: Icons.home_work_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _AppTextField(
+                  controller: _cityCtrl,
+                  c: c,
+                  labelText: 'City',
+                  hintText: 'e.g. Cebu City',
+                  textInputAction: TextInputAction.next,
+                  textCapitalization: TextCapitalization.words,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _AppTextField(
+                  controller: _postalCodeCtrl,
+                  c: c,
+                  labelText: 'Postal Code',
+                  hintText: 'e.g. 6000',
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _stateOrProvinceCtrl,
+            c: c,
+            labelText: 'State / Province',
+            hintText: 'e.g. Cebu',
+            prefixIcon: Icons.map_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _issuingCountryCtrl,
+            c: c,
+            labelText: 'Issuing Country',
+            hintText: 'Country that issued your ID',
+            prefixIcon: Icons.public_outlined,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Section: Government ID ────────────────────────
+          _SectionHeader(c: c, label: 'Government ID'),
+          const SizedBox(height: 10),
+          _GovernmentIdTypeDropdown(
+            c: c,
+            value: _governmentIdType,
+            onChanged: (v) => setState(() => _governmentIdType = v),
+          ),
+          const SizedBox(height: 10),
+          _AppTextField(
+            controller: _governmentIdNumberCtrl,
+            c: c,
+            labelText: 'ID Number',
+            hintText: 'As printed on your ID',
+            prefixIcon: Icons.numbers_rounded,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.characters,
+          ),
+          const SizedBox(height: 10),
+          _DatePickerField(
+            c: c,
+            label: 'ID Expiry Date',
+            value: _governmentIdExpiry,
+            onTap: () => _pickDate(
+              initial: _governmentIdExpiry,
+              firstDate: DateTime.now(),
+              lastDate: DateTime.now().add(const Duration(days: 365 * 30)),
+              onPicked: (d) => setState(() => _governmentIdExpiry = d),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Section: Documents ────────────────────────────
+          _SectionHeader(c: c, label: 'Documents'),
+          const SizedBox(height: 10),
           _UploadCard(
             c: c,
             title: 'Selfie',
             subtitle: 'Clear face photo in good lighting',
+            icon: Icons.face_retouching_natural_outlined,
             file: _selfie,
             busy: _picking || _submitting,
             onCamera: () => _pickForSlot(_ImageSlot.selfie, ImageSource.camera),
@@ -257,11 +517,12 @@ class _SelfieVerificationStepScreenState
                 _pickForSlot(_ImageSlot.selfie, ImageSource.gallery),
             onClear: () => _clearSlot(_ImageSlot.selfie),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _UploadCard(
             c: c,
-            title: 'Government ID Front',
+            title: 'Government ID — Front',
             subtitle: 'Capture the front side of your ID',
+            icon: Icons.credit_card_outlined,
             file: _idFront,
             busy: _picking || _submitting,
             onCamera: () =>
@@ -270,25 +531,32 @@ class _SelfieVerificationStepScreenState
                 _pickForSlot(_ImageSlot.idFront, ImageSource.gallery),
             onClear: () => _clearSlot(_ImageSlot.idFront),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _UploadCard(
             c: c,
-            title: 'Government ID Back',
+            title: 'Government ID — Back',
             subtitle: 'Capture the back side of your ID',
+            icon: Icons.flip_outlined,
             file: _idBack,
             busy: _picking || _submitting,
-            onCamera: () => _pickForSlot(_ImageSlot.idBack, ImageSource.camera),
+            onCamera: () =>
+                _pickForSlot(_ImageSlot.idBack, ImageSource.camera),
             onGallery: () =>
                 _pickForSlot(_ImageSlot.idBack, ImageSource.gallery),
             onClear: () => _clearSlot(_ImageSlot.idBack),
           ),
+
           const SizedBox(height: 12),
+
           _PaymentAccountHint(
             c: c,
             loading: _loadingPayment,
             activePaymentLabel: _activePaymentLabel,
           ),
-          const SizedBox(height: 18),
+
+          const SizedBox(height: 20),
+
+          // ── Submit ────────────────────────────────────────
           SizedBox(
             height: 52,
             child: AppElevatedButton(
@@ -311,9 +579,8 @@ class _SelfieVerificationStepScreenState
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: const AlwaysStoppedAnimation(
-                              Colors.white,
-                            ),
+                            valueColor:
+                                const AlwaysStoppedAnimation(Colors.white),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -338,6 +605,10 @@ class _SelfieVerificationStepScreenState
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HERO CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HeroCard extends StatelessWidget {
   const _HeroCard({required this.c});
@@ -372,7 +643,7 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Submit your phone number, selfie, and both sides of your government ID.',
+            'Fill in your identity details and upload your documents.',
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 12.5,
@@ -385,26 +656,73 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _PhoneField extends StatelessWidget {
-  const _PhoneField({required this.controller, required this.c});
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.c, required this.label});
+
+  final AppColor c;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 0),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: c.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERIC TEXT FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AppTextField extends StatelessWidget {
+  const _AppTextField({
+    required this.controller,
+    required this.c,
+    required this.labelText,
+    this.hintText,
+    this.prefixIcon,
+    this.keyboardType,
+    this.textInputAction,
+    this.textCapitalization = TextCapitalization.none,
+  });
 
   final TextEditingController controller;
   final AppColor c;
+  final String labelText;
+  final String? hintText;
+  final IconData? prefixIcon;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final TextCapitalization textCapitalization;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      keyboardType: TextInputType.phone,
-      textInputAction: TextInputAction.next,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      textCapitalization: textCapitalization,
       style: TextStyle(
         color: c.textPrimary,
         fontSize: 14.5,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
-        labelText: 'Phone Number *',
-        hintText: 'e.g. +639171234567',
+        labelText: labelText,
+        hintText: hintText,
         filled: true,
         fillColor: c.surface,
         border: OutlineInputBorder(
@@ -419,17 +737,151 @@ class _PhoneField extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           borderSide: BorderSide(color: c.primary, width: 1.4),
         ),
-        prefixIcon: Icon(Icons.phone_outlined, color: c.textSecondary),
+        prefixIcon: prefixIcon != null
+            ? Icon(prefixIcon, color: c.textSecondary, size: 20)
+            : null,
       ),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATE PICKER FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DatePickerField extends StatelessWidget {
+  const _DatePickerField({
+    required this.c,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final AppColor c;
+  final String label;
+  final DateTime? value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayText = value != null
+        ? '${value!.year}-${value!.month.toString().padLeft(2, '0')}-${value!.day.toString().padLeft(2, '0')}'
+        : null;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: c.border.withOpacity(0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today_outlined,
+                color: c.textSecondary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayText ?? label,
+                style: TextStyle(
+                  color: displayText != null ? c.textPrimary : c.textSecondary,
+                  fontSize: 14.5,
+                  fontWeight: displayText != null
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (value != null)
+              Icon(Icons.check_circle_outline_rounded,
+                  color: c.success, size: 18)
+            else
+              Icon(Icons.chevron_right_rounded,
+                  color: c.textSecondary.withOpacity(0.5), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOVERNMENT ID TYPE DROPDOWN
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GovernmentIdTypeDropdown extends StatelessWidget {
+  const _GovernmentIdTypeDropdown({
+    required this.c,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final AppColor c;
+  final GovernmentIdType? value;
+  final ValueChanged<GovernmentIdType?> onChanged;
+
+  static const _labels = {
+    GovernmentIdType.passport: 'Passport',
+    GovernmentIdType.driversLicense: "Driver's License",
+    GovernmentIdType.nationalId: 'National ID',
+    GovernmentIdType.other: 'Other',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<GovernmentIdType>(
+      value: value,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: 'ID Type',
+        filled: true,
+        fillColor: c.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.primary, width: 1.4),
+        ),
+        prefixIcon:
+            Icon(Icons.badge_outlined, color: c.textSecondary, size: 20),
+      ),
+      style: TextStyle(
+        color: c.textPrimary,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w500,
+      ),
+      dropdownColor: c.surface,
+      items: GovernmentIdType.values
+          .map(
+            (t) => DropdownMenuItem(
+              value: t,
+              child: Text(_labels[t] ?? t.name),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UPLOAD CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _UploadCard extends StatelessWidget {
   const _UploadCard({
     required this.c,
     required this.title,
     required this.subtitle,
+    required this.icon,
     required this.file,
     required this.busy,
     required this.onCamera,
@@ -440,6 +892,7 @@ class _UploadCard extends StatelessWidget {
   final AppColor c;
   final String title;
   final String subtitle;
+  final IconData icon;
   final File? file;
   final bool busy;
   final VoidCallback onCamera;
@@ -454,13 +907,33 @@ class _UploadCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.24)),
+        border: Border.all(
+          color: hasFile
+              ? c.success.withOpacity(0.3)
+              : c.border.withOpacity(0.24),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: hasFile
+                      ? c.success.withOpacity(0.1)
+                      : c.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(
+                  hasFile ? Icons.check_rounded : icon,
+                  color: hasFile ? c.success : c.primary,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,23 +943,20 @@ class _UploadCard extends StatelessWidget {
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                        fontSize: 13.5,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                      style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                     ),
                   ],
                 ),
               ),
               if (hasFile)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: c.success.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -507,7 +977,7 @@ class _UploadCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: Container(
               width: double.infinity,
-              height: 164,
+              height: 148,
               color: hasFile ? Colors.black : c.border.withOpacity(0.08),
               child: hasFile
                   ? Image.file(file!, fit: BoxFit.cover)
@@ -525,51 +995,69 @@ class _UploadCard extends StatelessWidget {
             children: [
               Expanded(
                 child: SizedBox(
-                  height: 40,
+                  height: 38,
                   child: AppOutlinedButton(
                     onPressed: busy ? null : onCamera,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.textPrimary,
                       side: BorderSide(color: c.border.withOpacity(0.3)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(11),
                       ),
                     ),
-                    child: const Text('Camera'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.camera_alt_outlined,
+                            size: 14, color: c.textSecondary),
+                        const SizedBox(width: 5),
+                        const Text('Camera',
+                            style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: SizedBox(
-                  height: 40,
+                  height: 38,
                   child: AppOutlinedButton(
                     onPressed: busy ? null : onGallery,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.textPrimary,
                       side: BorderSide(color: c.border.withOpacity(0.3)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(11),
                       ),
                     ),
-                    child: const Text('Gallery'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo_library_outlined,
+                            size: 14, color: c.textSecondary),
+                        const SizedBox(width: 5),
+                        const Text('Gallery',
+                            style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
                   ),
                 ),
               ),
               if (hasFile) ...[
                 const SizedBox(width: 8),
                 SizedBox(
-                  height: 40,
+                  height: 38,
                   child: AppOutlinedButton(
                     onPressed: busy ? null : onClear,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.error,
                       side: BorderSide(color: c.error.withOpacity(0.3)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(11),
                       ),
                     ),
-                    child: const Icon(Icons.delete_outline_rounded, size: 18),
+                    child: const Icon(Icons.delete_outline_rounded, size: 17),
                   ),
                 ),
               ],
@@ -580,6 +1068,10 @@ class _UploadCard extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT ACCOUNT HINT
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _PaymentAccountHint extends StatelessWidget {
   const _PaymentAccountHint({

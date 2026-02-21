@@ -13,7 +13,6 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/features/receive/view/receive_screen.dart';
 import 'package:next_fi/features/send/view/send_screen.dart';
 import 'package:next_fi/features/swap/view/swap_screen.dart';
-import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/build_tab_bar.dart';
@@ -572,7 +571,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         context,
         MaterialPageRoute(
           builder: (_) =>
-              const TradeTemplateScreen(mode: TradeTemplateMode.buy),
+          SnackBar(content: Text("Buy"))
         ),
       );
       return;
@@ -586,7 +585,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         context,
         MaterialPageRoute(
           builder: (_) =>
-              const TradeTemplateScreen(mode: TradeTemplateMode.sell),
+              SnackBar(content: Text("Sell"))
         ),
       );
       return;

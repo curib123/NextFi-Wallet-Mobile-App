@@ -236,6 +236,21 @@ class WalletService {
     return update(id, UpdateWalletRequest(label: label));
   }
 
+  Future<WalletAddress> setActive(String id) async {
+    final res = await _client.patch(
+      WalletHttp.uri(WalletEndpoints.setActive(id)),
+      headers: await _headers(),
+    );
+
+    WalletHttp.ensureOk(res);
+
+    final data = WalletHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'wallet']);
+    if (map != null) return WalletAddress.fromJson(map);
+
+    return WalletAddress(id: id, publicAddress: '', network: 'stellar', isActive: true);
+  }
+
   Future<WalletAddress> remove(String id) async {
     final res = await _client.delete(
       WalletHttp.uri(WalletEndpoints.remove(id)),

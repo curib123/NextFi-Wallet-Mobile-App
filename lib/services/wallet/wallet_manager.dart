@@ -262,15 +262,41 @@ class WalletManager {
   // SWITCH WALLET
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Switch active wallet
+  /// Switch active wallet (local + backend toggle)
   Future<bool> switchWallet({required String localId}) async {
-    return await SeedStorage.setActiveWallet(localId);
+    final localSuccess = await SeedStorage.setActiveWallet(localId);
+    if (!localSuccess) return false;
+
+    // Sync active state to backend (best effort)
+    try {
+      final wallets = await listWallets();
+      final wallet = wallets.firstWhereOrNull((w) => w.localId == localId);
+      if (wallet?.backendId != null) {
+        await _api.setActive(walletId: wallet!.backendId!);
+      }
+    } catch (e) {
+      print('[WalletManager] Backend setActive failed: $e');
+    }
+
+    return true;
   }
 
-  /// Get active wallet
+  /// Get active wallet info for use as escrow/receiver address
   Future<WalletViewModel?> getActiveWallet() async {
     final wallets = await listWallets();
     return wallets.firstWhereOrNull((w) => w.isActive);
+  }
+
+  /// Get the active wallet's public address (for escrow/receiver)
+  Future<String?> getActiveWalletAddress() async {
+    final active = await getActiveWallet();
+    return active?.publicAddress;
+  }
+
+  /// Get the active wallet's backend ID (for API calls)
+  Future<String?> getActiveWalletBackendId() async {
+    final active = await getActiveWallet();
+    return active?.backendId;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

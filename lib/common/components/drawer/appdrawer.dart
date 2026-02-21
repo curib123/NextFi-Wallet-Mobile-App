@@ -11,10 +11,6 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
-import 'package:next_fi/features/merchant_offers/view/merchant_offers_screen.dart';
-import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
-import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
-import 'package:next_fi/features/trades/view/trade_template_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
@@ -149,7 +145,7 @@ class _AppDrawerState extends State<AppDrawer>
       );
       final unread = threads.items.fold<int>(
         0,
-        (sum, thread) => sum + thread.unreadCount,
+            (sum, thread) => sum + thread.unreadCount,
       );
       if (mounted) setState(() => _unreadChatCount = unread);
     } catch (_) {
@@ -199,7 +195,7 @@ class _AppDrawerState extends State<AppDrawer>
       _redirectToLogin();
       return;
     }
-    _push(const MerchantRequestScreen());
+
   }
 
   void _handleMerchantOffersTap() {
@@ -211,11 +207,6 @@ class _AppDrawerState extends State<AppDrawer>
       _push(const VerificationFlowScreen());
       return;
     }
-    if (_cachedProfile?.isMerchant != true) {
-      _push(const MerchantRequestScreen());
-      return;
-    }
-    _push(const MerchantOffersScreen());
   }
 
   void _handleMerchantTradesTap() {
@@ -227,31 +218,15 @@ class _AppDrawerState extends State<AppDrawer>
       _push(const VerificationFlowScreen());
       return;
     }
-    if (_cachedProfile?.isMerchant != true) {
-      _push(const MerchantRequestScreen());
-      return;
-    }
-    _push(const MerchantTradesScreen());
+
   }
 
+  // Verification gate: use TrustStatus from the verification service,
+  // with isVerificationIdentityComplete (username set) as the local fallback.
   bool get _isVerifiedForTradeAccess =>
       _trustStatus == TrustStatus.ready ||
-      (_cachedProfile?.isVerified ?? false);
+          (_cachedProfile?.isVerificationIdentityComplete ?? false);
 
-  void _openTradeTemplate(TradeTemplateMode mode) {
-    if (_cachedUser == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
-    _push(TradeTemplateScreen(mode: mode));
-  }
-
-  void _handleBuyTradesTap() => _openTradeTemplate(TradeTemplateMode.buy);
-  void _handleSellTradesTap() => _openTradeTemplate(TradeTemplateMode.sell);
 
   void _handleMessengerTap() {
     if (_cachedUser == null) {
@@ -271,11 +246,13 @@ class _AppDrawerState extends State<AppDrawer>
     final c = AppColor.of(context);
     final mq = MediaQuery.of(context);
     final user = _cachedUser;
+
+    // Merchant access is now determined solely by the verification service
+    // since ProfileModel no longer exposes isMerchant. The drawer shows
+    // merchant nav items only when the user is fully verified (TrustStatus.ready).
+    final isMerchant = user != null && _trustStatus == TrustStatus.ready;
     final canRequestMerchant =
-        user != null &&
-        _isVerifiedForTradeAccess &&
-        _cachedProfile?.isMerchant != true;
-    final isMerchant = user != null && _cachedProfile?.isMerchant == true;
+        user != null && _isVerifiedForTradeAccess && !isMerchant;
 
     return Drawer(
       backgroundColor: c.background,
@@ -313,7 +290,7 @@ class _AppDrawerState extends State<AppDrawer>
                       label: 'Buy Trades',
                       description: 'Open buy trades template',
                       colors: c,
-                      onTap: _handleBuyTradesTap,
+                      onTap: (){},
                       requiresAuth: user == null,
                     ),
                     _NavTile(
@@ -321,7 +298,7 @@ class _AppDrawerState extends State<AppDrawer>
                       label: 'Sell Trades',
                       description: 'Open sell trades template',
                       colors: c,
-                      onTap: _handleSellTradesTap,
+                      onTap: (){},
                       requiresAuth: user == null,
                     ),
                     _NavTile(
@@ -425,7 +402,7 @@ class _AppDrawerState extends State<AppDrawer>
 // Data resolved once, zero duplication across the three visual zones:
 //
 //   ZONE A — Avatar (left)
-//     • 56px avatar with brand ring + online dot + merchant crown
+//     • 56px avatar with brand ring + online dot
 //
 //   ZONE B — Identity text (right of avatar)
 //     Line 1  displayName        e.g. "NextFI"           [17px w700]
@@ -435,11 +412,9 @@ class _AppDrawerState extends State<AppDrawer>
 //   ZONE C — Meta row (below text, inline)
 //     • Verification status pill  (Verified / In Review / …)
 //     • Country chip              (only country — not repeated elsewhere)
-//     • Merchant tag              (only when isMerchant == true)
 //
 // Fallback chain (no duplication):
-//   • If displayName is absent  → full name ("Juan D. Cruz") used in Line 1
-//   • If full name is absent    → email used in Line 1, Line 2 hidden
+//   • If displayName is absent  → username or email used in Line 1
 //   • Line 2 (@username) hidden when username is absent
 //   • Line 3 (email) hidden when it would duplicate Line 1
 // ═════════════════════════════════════════════════════════════════════════════
@@ -467,16 +442,6 @@ class _ProfileHeader extends StatelessWidget {
   // "NextFI" — displayName wins
   String? get _displayName => _s(profile?.displayName);
 
-  // "Juan D. Cruz" — assembled from parts, never shown if displayName exists
-  String? get _fullName {
-    final parts = [
-      profile?.firstName,
-      profile?.middleName,
-      profile?.lastName,
-    ].map(_s).whereType<String>().join(' ').trim();
-    return parts.isEmpty ? null : parts;
-  }
-
   // "@nextfi_user"
   String? get _handle {
     final u = _s(profile?.username);
@@ -489,20 +454,13 @@ class _ProfileHeader extends StatelessWidget {
   // Country code / name
   String? get _country => _s(profile?.country);
 
-  bool get _isMerchant => profile?.isMerchant ?? false;
-  bool get _isPending => profile?.merchantRequestPending ?? false;
-
   // ── Resolve the three text lines with zero duplication ───────────────────
-  //
-  // line1  : always shown — the primary identity label
-  // line2  : @handle — only shown when a handle exists (never repeats line1)
-  // line3  : email   — only shown when it wouldn't repeat line1
 
-  String get _line1 => _displayName ?? _fullName ?? _email ?? 'Anonymous';
+  String get _line1 => _displayName ?? _email ?? 'Anonymous';
 
   String? get _line2 => _handle; // null if no username
 
-  // Email is shown as line3 ONLY when line1 is not the email already
+  // Email shown as line3 ONLY when line1 is not the email already
   String? get _line3 {
     final e = _email;
     if (e == null) return null;
@@ -515,29 +473,29 @@ class _ProfileHeader extends StatelessWidget {
   ({Color color, IconData icon, String label}) get _trust =>
       switch (trustStatus) {
         TrustStatus.ready => (
-          color: colors.success,
-          icon: LucideIcons.badgeCheck,
-          label: 'Verified',
+        color: colors.success,
+        icon: LucideIcons.badgeCheck,
+        label: 'Verified',
         ),
         TrustStatus.reviewing => (
-          color: colors.warning,
-          icon: LucideIcons.clock,
-          label: 'In Review',
+        color: colors.warning,
+        icon: LucideIcons.clock,
+        label: 'In Review',
         ),
         TrustStatus.suspended => (
-          color: colors.error,
-          icon: LucideIcons.shieldOff,
-          label: 'Suspended',
+        color: colors.error,
+        icon: LucideIcons.shieldOff,
+        label: 'Suspended',
         ),
         TrustStatus.basic => (
-          color: colors.textSecondary,
-          icon: LucideIcons.shield,
-          label: 'Basic',
+        color: colors.textSecondary,
+        icon: LucideIcons.shield,
+        label: 'Basic',
         ),
         _ => (
-          color: colors.textSecondary,
-          icon: LucideIcons.shield,
-          label: 'Unverified',
+        color: colors.textSecondary,
+        icon: LucideIcons.shield,
+        label: 'Unverified',
         ),
       };
 
@@ -557,7 +515,6 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Content block ────────────────────────────────────────────────
           Container(
             width: double.infinity,
             color: colors.primary.withOpacity(0.04),
@@ -566,11 +523,7 @@ class _ProfileHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // ZONE A — Avatar
-                _DrawerAvatar(
-                  user: user,
-                  isMerchant: _isMerchant,
-                  colors: colors,
-                ),
+                _DrawerAvatar(user: user, colors: colors),
 
                 const SizedBox(width: 14),
 
@@ -580,7 +533,7 @@ class _ProfileHeader extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Line 1 — display name / full name / email
+                      // Line 1 — display name / email
                       Text(
                         l1,
                         style: TextStyle(
@@ -650,23 +603,6 @@ class _ProfileHeader extends StatelessWidget {
                               colors: colors,
                               subtle: true,
                             ),
-
-                          // Merchant / Pending — mutually exclusive
-                          if (_isMerchant)
-                            _MetaPill(
-                              icon: LucideIcons.store,
-                              label: 'Merchant',
-                              color: colors.primary,
-                              colors: colors,
-                            )
-                          else if (_isPending)
-                            _MetaPill(
-                              icon: LucideIcons.hourglass,
-                              label: 'Pending',
-                              color: colors.warning,
-                              colors: colors,
-                              subtle: true,
-                            ),
                         ],
                       ),
                     ],
@@ -676,7 +612,6 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
 
-          // Hard rule — clean separation from nav list
           Divider(
             height: 1,
             thickness: 1,
@@ -690,17 +625,13 @@ class _ProfileHeader extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DRAWER AVATAR
+// Merchant crown removed — isMerchant no longer available on ProfileModel.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DrawerAvatar extends StatelessWidget {
-  const _DrawerAvatar({
-    required this.user,
-    required this.isMerchant,
-    required this.colors,
-  });
+  const _DrawerAvatar({required this.user, required this.colors});
 
   final User user;
-  final bool isMerchant;
   final AppColor colors;
 
   @override
@@ -747,23 +678,6 @@ class _DrawerAvatar extends StatelessWidget {
             ),
           ),
         ),
-
-        // Merchant crown — top-right
-        if (isMerchant)
-          Positioned(
-            top: -2,
-            right: -2,
-            child: Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: colors.surface, width: 1.5),
-              ),
-              child: const Icon(LucideIcons.star, size: 9, color: Colors.white),
-            ),
-          ),
       ],
     );
   }
@@ -1116,11 +1030,11 @@ class _TrustStatusDot extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: status == TrustStatus.ready
             ? [
-                BoxShadow(
-                  color: colors.success.withOpacity(0.45),
-                  blurRadius: 6,
-                ),
-              ]
+          BoxShadow(
+            color: colors.success.withOpacity(0.45),
+            blurRadius: 6,
+          ),
+        ]
             : null,
       ),
     );
@@ -1219,20 +1133,20 @@ class _LogoutButton extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 child: isLoading
                     ? SizedBox(
-                        key: const ValueKey('l'),
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(colors.error),
-                        ),
-                      )
+                  key: const ValueKey('l'),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(colors.error),
+                  ),
+                )
                     : Icon(
-                        key: const ValueKey('i'),
-                        LucideIcons.logOut,
-                        color: colors.error,
-                        size: 18,
-                      ),
+                  key: const ValueKey('i'),
+                  LucideIcons.logOut,
+                  color: colors.error,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 14),
               AnimatedSwitcher(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -42,6 +44,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fade;
 
+  StreamSubscription<void>? _profileChangesSub;
+
   bool _loading = true;
   bool _busyChat = false;
   String? _error;
@@ -59,11 +63,17 @@ class _ProfileScreenState extends State<ProfileScreen>
       duration: const Duration(milliseconds: 420),
     );
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+
+    _profileChangesSub = ProfileCoreService.changes.listen((_) {
+      if (mounted) _load();
+    });
+
     _load();
   }
 
   @override
   void dispose() {
+    _profileChangesSub?.cancel();
     _fadeCtrl.dispose();
     super.dispose();
   }
@@ -103,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         _safe<ProfileModel?>(() => _profile.getMe()),
         _safe<VerificationModel>(() => _verification.getMe()),
         _safe<ChatPaged<ChatFriendModel>>(
-          () => _chat.listFriends(const ChatListQuery(page: 1, limit: 50)),
+              () => _chat.listFriends(const ChatListQuery(page: 1, limit: 50)),
         ),
       ]);
 
@@ -136,7 +146,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _editProfile() async {
     final changed = await showProfileSetupModal(context, initial: _profileData);
     if (changed == true && mounted) {
-      await _load();
+      _fadeCtrl.forward(from: 0);
+      // _load() already triggered by the changes stream.
     }
   }
 
@@ -176,9 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       final stored = await SecurityStorage.read(_kChatConsentKey);
       if (stored == 'accepted') return true;
-    } catch (_) {
-      // Ask consent now when read fails.
-    }
+    } catch (_) {}
 
     if (!mounted) return false;
     final accepted = await showChatConsentModal(context);
@@ -190,20 +199,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         _kChatConsentAtKey,
         DateTime.now().toUtc().toIso8601String(),
       );
-    } catch (_) {
-      // Allow this session even if persistence fails.
-    }
+    } catch (_) {}
     return true;
-  }
-
-  String _fullName(ProfileModel? p) {
-    if (p == null) return '';
-    final parts = [
-      p.firstName,
-      p.middleName,
-      p.lastName,
-    ].map((v) => v?.trim() ?? '').where((v) => v.isNotEmpty).toList();
-    return parts.join(' ');
   }
 
   String _displayName() {
@@ -213,8 +210,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         profile!.displayName!.trim().isNotEmpty) {
       return profile.displayName!.trim();
     }
-    final fullName = _fullName(profile);
-    if (fullName.isNotEmpty) return fullName;
     if (user != null && user.name.trim().isNotEmpty) return user.name.trim();
     if (user != null && user.email.trim().isNotEmpty) return user.email.trim();
     return 'Profile';
@@ -247,39 +242,39 @@ class _ProfileScreenState extends State<ProfileScreen>
     return text.isEmpty ? 'Not set' : text;
   }
 
-  String _valueBool(bool? raw) => raw == true ? 'Yes' : 'No';
-
   String _valueDate(DateTime? raw) =>
       raw == null ? 'Not set' : _date.format(raw.toLocal());
 
   ({String label, Color color, IconData icon}) _trustUi(AppColor c) {
+    // Use isVerificationIdentityComplete (username set) as local fallback
+    // when no verification record is available yet.
     final status =
         _verificationData?.status ??
-        ((_profileData?.isVerified ?? false)
-            ? TrustStatus.ready
-            : TrustStatus.basic);
+            ((_profileData?.isVerificationIdentityComplete ?? false)
+                ? TrustStatus.ready
+                : TrustStatus.basic);
     switch (status) {
       case TrustStatus.ready:
         return (label: 'READY', color: c.success, icon: Icons.verified_rounded);
       case TrustStatus.reviewing:
         return (
-          label: 'REVIEWING',
-          color: c.warning,
-          icon: Icons.hourglass_top_rounded,
+        label: 'REVIEWING',
+        color: c.warning,
+        icon: Icons.hourglass_top_rounded,
         );
       case TrustStatus.suspended:
         return (label: 'SUSPENDED', color: c.error, icon: Icons.block_rounded);
       case TrustStatus.basic:
         return (
-          label: 'BASIC',
-          color: c.textSecondary,
-          icon: Icons.shield_outlined,
+        label: 'BASIC',
+        color: c.textSecondary,
+        icon: Icons.shield_outlined,
         );
       case TrustStatus.unknown:
         return (
-          label: 'UNKNOWN',
-          color: c.textSecondary,
-          icon: Icons.help_outline_rounded,
+        label: 'UNKNOWN',
+        color: c.textSecondary,
+        icon: Icons.help_outline_rounded,
         );
     }
   }
@@ -320,51 +315,54 @@ class _ProfileScreenState extends State<ProfileScreen>
           : _user == null
           ? _LoggedOutState(onRetry: _load)
           : FadeTransition(
-              opacity: _fade,
-              child: RefreshIndicator(
-                onRefresh: _load,
-                color: c.primary,
-                backgroundColor: c.surface,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-                  children: [
-                    _HeroCard(
-                      user: _user!,
-                      profile: _profileData,
-                      displayName: _displayName(),
-                    ),
-                    const SizedBox(height: 14),
-                    _VerificationCard(
-                      ui: _trustUi(c),
-                      verification: _verificationData,
-                      onOpenVerification: _openVerification,
-                    ),
-                    const SizedBox(height: 14),
-                    _ProfileDataCard(
-                      profile: _profileData,
-                      connectedEmail: _user!.email,
-                      onEditProfile: _editProfile,
-                      value: _value,
-                      valueBool: _valueBool,
-                      valueDate: _valueDate,
-                    ),
-                    const SizedBox(height: 14),
-                    _FriendsCard(
-                      friends: _friends,
-                      busy: _busyChat,
-                      friendName: _friendName,
-                      friendSubtitle: _friendSubtitle,
-                      onChatTap: _openFriendChat,
-                      onOpenMessenger: _openMessenger,
-                    ),
-                  ],
-                ),
+        opacity: _fade,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          color: c.primary,
+          backgroundColor: c.surface,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            children: [
+              _HeroCard(
+                user: _user!,
+                profile: _profileData,
+                displayName: _displayName(),
               ),
-            ),
+              const SizedBox(height: 14),
+              _VerificationCard(
+                ui: _trustUi(c),
+                verification: _verificationData,
+                onOpenVerification: _openVerification,
+              ),
+              const SizedBox(height: 14),
+              _ProfileDataCard(
+                profile: _profileData,
+                connectedEmail: _user!.email,
+                onEditProfile: _editProfile,
+                value: _value,
+                valueDate: _valueDate,
+              ),
+              const SizedBox(height: 14),
+              _FriendsCard(
+                friends: _friends,
+                busy: _busyChat,
+                friendName: _friendName,
+                friendSubtitle: _friendSubtitle,
+                onChatTap: _openFriendChat,
+                onOpenMessenger: _openMessenger,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HERO CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HeroCard extends StatelessWidget {
   const _HeroCard({
@@ -450,6 +448,10 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VERIFICATION CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _VerificationCard extends StatelessWidget {
   const _VerificationCard({
     required this.ui,
@@ -507,8 +509,8 @@ class _VerificationCard extends StatelessWidget {
             value: verification?.submittedAt == null
                 ? 'Not submitted'
                 : DateFormat(
-                    'MMM d, y - HH:mm',
-                  ).format(verification!.submittedAt!.toLocal()),
+              'MMM d, y - HH:mm',
+            ).format(verification!.submittedAt!.toLocal()),
           ),
           const SizedBox(height: 12),
           Align(
@@ -532,13 +534,17 @@ class _VerificationCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROFILE DATA CARD
+// Fields reflect ProfileModel: username, displayName, country, createdAt, updatedAt
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ProfileDataCard extends StatelessWidget {
   const _ProfileDataCard({
     required this.profile,
     required this.connectedEmail,
     required this.onEditProfile,
     required this.value,
-    required this.valueBool,
     required this.valueDate,
   });
 
@@ -546,7 +552,6 @@ class _ProfileDataCard extends StatelessWidget {
   final String connectedEmail;
   final VoidCallback onEditProfile;
   final String Function(String?) value;
-  final String Function(bool?) valueBool;
   final String Function(DateTime?) valueDate;
 
   @override
@@ -589,69 +594,31 @@ class _ProfileDataCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _DataLine(
-            icon: LucideIcons.userCircle2,
-            label: 'First Name',
-            value: value(p?.firstName),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
-            icon: LucideIcons.userCircle2,
-            label: 'Middle Name',
-            value: value(p?.middleName),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
-            icon: LucideIcons.userCircle2,
-            label: 'Last Name',
-            value: value(p?.lastName),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
             icon: LucideIcons.globe2,
             label: 'Country',
             value: value(p?.country),
           ),
           const SizedBox(height: 10),
           _DataLine(
-            icon: LucideIcons.mapPin,
-            label: 'Address',
-            value: value(p?.address),
+            icon: LucideIcons.calendarDays,
+            label: 'Member Since',
+            value: valueDate(p?.createdAt),
           ),
           const SizedBox(height: 10),
           _DataLine(
-            icon: LucideIcons.checkCircle2,
-            label: 'Merchant',
-            value: valueBool(p?.isMerchant),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
-            icon: LucideIcons.shieldCheck,
-            label: 'Verified Flag',
-            value: valueBool(p?.isVerified),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
-            icon: LucideIcons.power,
-            label: 'Active',
-            value: valueBool(p?.isActive),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
-            icon: LucideIcons.clock3,
-            label: 'Available From',
-            value: valueDate(p?.availableFrom),
-          ),
-          const SizedBox(height: 10),
-          _DataLine(
-            icon: LucideIcons.clock3,
-            label: 'Available To',
-            value: valueDate(p?.availableTo),
+            icon: LucideIcons.refreshCw,
+            label: 'Last Updated',
+            value: valueDate(p?.updatedAt),
           ),
         ],
       ),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FRIENDS CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _FriendsCard extends StatelessWidget {
   const _FriendsCard({
@@ -688,41 +655,41 @@ class _FriendsCard extends StatelessWidget {
       ),
       child: friends.isEmpty
           ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'No friends yet. Open Messenger to send requests.',
-                  style: TextStyle(color: c.textSecondary, fontSize: 12.6),
-                ),
-                const SizedBox(height: 10),
-                AppOutlinedButton.icon(
-                  onPressed: onOpenMessenger,
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                  label: const Text('Open Friend Requests'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: c.primary,
-                    side: BorderSide(color: c.primary.withOpacity(0.34)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                for (var i = 0; i < friends.length; i++) ...[
-                  _FriendTile(
-                    friend: friends[i],
-                    busy: busy,
-                    friendName: friendName,
-                    friendSubtitle: friendSubtitle,
-                    onChatTap: onChatTap,
-                  ),
-                  if (i != friends.length - 1) const SizedBox(height: 8),
-                ],
-              ],
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No friends yet. Open Messenger to send requests.',
+            style: TextStyle(color: c.textSecondary, fontSize: 12.6),
+          ),
+          const SizedBox(height: 10),
+          AppOutlinedButton.icon(
+            onPressed: onOpenMessenger,
+            icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+            label: const Text('Open Friend Requests'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: c.primary,
+              side: BorderSide(color: c.primary.withOpacity(0.34)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
+          ),
+        ],
+      )
+          : Column(
+        children: [
+          for (var i = 0; i < friends.length; i++) ...[
+            _FriendTile(
+              friend: friends[i],
+              busy: busy,
+              friendName: friendName,
+              friendSubtitle: friendSubtitle,
+              onChatTap: onChatTap,
+            ),
+            if (i != friends.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -818,6 +785,10 @@ class _FriendTile extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.title,
@@ -878,6 +849,10 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA LINE
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _DataLine extends StatelessWidget {
   const _DataLine({
     required this.icon,
@@ -929,6 +904,10 @@ class _DataLine extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ERROR STATE
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
@@ -990,6 +969,10 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGGED OUT STATE
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _LoggedOutState extends StatelessWidget {
   const _LoggedOutState({required this.onRetry});

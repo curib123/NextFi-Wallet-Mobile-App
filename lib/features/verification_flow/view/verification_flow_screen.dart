@@ -215,7 +215,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
                 (
                   icon: Icons.camera_alt_outlined,
                   title: 'Identity Verification',
-                  subtitle: 'Phone number + selfie + government ID front/back',
+                  subtitle: 'Identity details, phone number, selfie & government ID',
                 ),
               ],
             ),

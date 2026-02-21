@@ -7,9 +7,9 @@ import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 
 Future<bool?> showProfileSetupModal(
-  BuildContext context, {
-  ProfileModel? initial,
-}) {
+    BuildContext context, {
+      ProfileModel? initial,
+    }) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -33,17 +33,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
 
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _displayNameCtrl;
-  late final TextEditingController _firstNameCtrl;
-  late final TextEditingController _middleNameCtrl;
-  late final TextEditingController _lastNameCtrl;
   late final TextEditingController _countryCtrl;
-  late final TextEditingController _addressCtrl;
-
-  ProfileAvailability _availability = ProfileAvailability.available;
-  bool _isActive = true;
-  bool _autoUnavailable = false;
-  DateTime? _availableFrom;
-  DateTime? _availableTo;
 
   bool _saving = false;
   String? _error;
@@ -54,29 +44,14 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     final p = widget.initial;
     _usernameCtrl = TextEditingController(text: p?.username ?? '');
     _displayNameCtrl = TextEditingController(text: p?.displayName ?? '');
-    _firstNameCtrl = TextEditingController(text: p?.firstName ?? '');
-    _middleNameCtrl = TextEditingController(text: p?.middleName ?? '');
-    _lastNameCtrl = TextEditingController(text: p?.lastName ?? '');
     _countryCtrl = TextEditingController(text: p?.country ?? '');
-    _addressCtrl = TextEditingController(text: p?.address ?? '');
-    _availability = p?.availability == ProfileAvailability.unknown
-        ? ProfileAvailability.available
-        : (p?.availability ?? ProfileAvailability.available);
-    _isActive = p?.isActive ?? true;
-    _autoUnavailable = p?.autoUnavailable ?? false;
-    _availableFrom = p?.availableFrom;
-    _availableTo = p?.availableTo;
   }
 
   @override
   void dispose() {
     _usernameCtrl.dispose();
     _displayNameCtrl.dispose();
-    _firstNameCtrl.dispose();
-    _middleNameCtrl.dispose();
-    _lastNameCtrl.dispose();
     _countryCtrl.dispose();
-    _addressCtrl.dispose();
     super.dispose();
   }
 
@@ -91,16 +66,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       final req = UpsertProfileRequest(
         username: _usernameCtrl.text,
         displayName: _displayNameCtrl.text,
-        firstName: _firstNameCtrl.text,
-        middleName: _middleNameCtrl.text,
-        lastName: _lastNameCtrl.text,
         country: _countryCtrl.text,
-        address: _addressCtrl.text,
-        availability: _availability,
-        isActive: _isActive,
-        autoUnavailable: _autoUnavailable,
-        availableFrom: _availableFrom,
-        availableTo: _availableTo,
         includeNulls: true,
       );
       await ProfileCoreService.I.upsertMe(req);
@@ -122,61 +88,6 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       return '3-30 chars, letters/numbers/underscore/dot only';
     }
     return null;
-  }
-
-  String _formatDateTime(DateTime? dt) {
-    if (dt == null) return 'Not set';
-    final local = dt.toLocal();
-    final y = local.year.toString().padLeft(4, '0');
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
-  }
-
-  Future<void> _pickDateTime({required bool isFrom}) async {
-    final now = DateTime.now();
-    final seed = isFrom ? (_availableFrom ?? now) : (_availableTo ?? now);
-
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: seed,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 5),
-    );
-    if (pickedDate == null || !mounted) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(seed),
-    );
-    if (pickedTime == null || !mounted) return;
-
-    final next = DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      pickedTime.hour,
-      pickedTime.minute,
-    );
-    setState(() {
-      if (isFrom) {
-        _availableFrom = next.toUtc();
-      } else {
-        _availableTo = next.toUtc();
-      }
-    });
-  }
-
-  void _clearDateTime({required bool isFrom}) {
-    setState(() {
-      if (isFrom) {
-        _availableFrom = null;
-      } else {
-        _availableTo = null;
-      }
-    });
   }
 
   @override
@@ -294,38 +205,6 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
 
                         const SizedBox(height: 20),
 
-                        // Legal name section
-                        _SectionHeader(label: 'LEGAL NAME', c: c),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _firstNameCtrl,
-                          label: 'First Name',
-                          hint: 'Optional',
-                          icon: Icons.person_outline_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _middleNameCtrl,
-                          label: 'Middle Name',
-                          hint: 'Optional',
-                          icon: Icons.person_outline_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _lastNameCtrl,
-                          label: 'Last Name',
-                          hint: 'Optional',
-                          icon: Icons.person_outline_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-
-                        const SizedBox(height: 20),
-
                         // Location section
                         _SectionHeader(label: 'LOCATION', c: c),
                         const SizedBox(height: 10),
@@ -334,133 +213,8 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                           label: 'Country',
                           hint: 'e.g. Philippines',
                           icon: Icons.public_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _addressCtrl,
-                          label: 'Address',
-                          hint: 'Street, city, province (optional)',
-                          icon: Icons.location_on_outlined,
                           action: TextInputAction.done,
-                          multiline: true,
                           c: c,
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        _SectionHeader(label: 'TRADING AVAILABILITY', c: c),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<ProfileAvailability>(
-                          value: _availability == ProfileAvailability.unknown
-                              ? ProfileAvailability.available
-                              : _availability,
-                          items:
-                              const [
-                                    ProfileAvailability.available,
-                                    ProfileAvailability.unavailable,
-                                    ProfileAvailability.onBreak,
-                                  ]
-                                  .map(
-                                    (v) => DropdownMenuItem(
-                                      value: v,
-                                      child: Text(v.name.toUpperCase()),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: _saving
-                              ? null
-                              : (v) {
-                                  if (v == null) return;
-                                  setState(() => _availability = v);
-                                },
-                          decoration: InputDecoration(
-                            labelText: 'Availability',
-                            prefixIcon: Icon(
-                              Icons.schedule_outlined,
-                              color: c.textSecondary.withOpacity(0.6),
-                            ),
-                            filled: true,
-                            fillColor: c.border.withOpacity(0.05),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
-                              borderSide: BorderSide(
-                                color: c.border.withOpacity(0.25),
-                                width: 1.2,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
-                              borderSide: BorderSide(
-                                color: c.border.withOpacity(0.25),
-                                width: 1.2,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: c.surface,
-                            borderRadius: BorderRadius.circular(13),
-                            border: Border.all(
-                              color: c.border.withOpacity(0.25),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              SwitchListTile.adaptive(
-                                value: _isActive,
-                                onChanged: _saving
-                                    ? null
-                                    : (v) => setState(() => _isActive = v),
-                                title: const Text('Profile active'),
-                                subtitle: const Text(
-                                  'Enable or disable profile',
-                                ),
-                              ),
-                              Divider(
-                                height: 1,
-                                color: c.border.withOpacity(0.22),
-                              ),
-                              SwitchListTile.adaptive(
-                                value: _autoUnavailable,
-                                onChanged: _saving
-                                    ? null
-                                    : (v) =>
-                                          setState(() => _autoUnavailable = v),
-                                title: const Text('Auto unavailable'),
-                                subtitle: const Text(
-                                  'Auto-set unavailable outside window',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _AvailabilityDateField(
-                          c: c,
-                          label: 'Available From',
-                          value: _formatDateTime(_availableFrom),
-                          onPick: _saving
-                              ? null
-                              : () => _pickDateTime(isFrom: true),
-                          onClear: _saving
-                              ? null
-                              : () => _clearDateTime(isFrom: true),
-                        ),
-                        const SizedBox(height: 10),
-                        _AvailabilityDateField(
-                          c: c,
-                          label: 'Available To',
-                          value: _formatDateTime(_availableTo),
-                          onPick: _saving
-                              ? null
-                              : () => _pickDateTime(isFrom: false),
-                          onClear: _saving
-                              ? null
-                              : () => _clearDateTime(isFrom: false),
                         ),
 
                         // Error banner
@@ -531,91 +285,8 @@ class _FieldRow extends StatelessWidget {
   }
 }
 
-class _AvailabilityDateField extends StatelessWidget {
-  const _AvailabilityDateField({
-    required this.c,
-    required this.label,
-    required this.value,
-    required this.onPick,
-    required this.onClear,
-  });
-
-  final AppColor c;
-  final String label;
-  final String value;
-  final VoidCallback? onPick;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: AppOutlinedButton(
-                  onPressed: onPick,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: c.primary,
-                    side: BorderSide(color: c.primary.withOpacity(0.45)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Set'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppTextButton(
-                  onPressed: onClear,
-                  style: TextButton.styleFrom(
-                    foregroundColor: c.textSecondary,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Clear'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// FORM FIELD  — flat, soft, modern
+// FORM FIELD — flat, soft, modern
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FormField extends StatefulWidget {
@@ -653,16 +324,16 @@ class _FormFieldState extends State<_FormField> {
     final c = widget.c;
     final border = _focused
         ? OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.primary, width: 1.5),
-          )
+      borderRadius: BorderRadius.circular(13),
+      borderSide: BorderSide(color: c.primary, width: 1.5),
+    )
         : OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(
-              color: c.border.withOpacity(0.3),
-              width: 1.2,
-            ),
-          );
+      borderRadius: BorderRadius.circular(13),
+      borderSide: BorderSide(
+        color: c.border.withOpacity(0.3),
+        width: 1.2,
+      ),
+    );
 
     return Focus(
       onFocusChange: (v) => setState(() => _focused = v),
@@ -828,12 +499,12 @@ class _SaveButton extends StatelessWidget {
         boxShadow: saving
             ? null
             : [
-                BoxShadow(
-                  color: c.primary.withOpacity(0.28),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+          BoxShadow(
+            color: c.primary.withOpacity(0.28),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: AppElevatedButton(
         onPressed: saving ? null : onPressed,
@@ -852,44 +523,44 @@ class _SaveButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: saving
               ? Row(
-                  key: const ValueKey('saving'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(Colors.white70),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Saving…',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  key: const ValueKey('save'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.check_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'Save Profile',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
+            key: const ValueKey('saving'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.white70),
                 ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Saving…',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          )
+              : Row(
+            key: const ValueKey('save'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.check_rounded, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Save Profile',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
