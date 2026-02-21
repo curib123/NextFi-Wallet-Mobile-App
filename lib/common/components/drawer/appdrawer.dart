@@ -272,12 +272,9 @@ class _AppDrawerState extends State<AppDrawer>
     final mq = MediaQuery.of(context);
     final user = _cachedUser;
 
-    // Merchant access is now determined solely by the verification service
-    // since ProfileModel no longer exposes isMerchant. The drawer shows
-    // merchant nav items only when the user is fully verified (TrustStatus.ready).
     final isMerchant = user != null && (_cachedMerchantProfile?.isApproved ?? false);
     final canRequestMerchant =
-        user != null && _isVerifiedForTradeAccess && !isMerchant;
+        user != null && _trustStatus == TrustStatus.ready;
 
     return Drawer(
       backgroundColor: c.background,

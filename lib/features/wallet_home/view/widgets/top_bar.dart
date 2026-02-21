@@ -10,7 +10,6 @@ import 'package:next_fi/features/profile/view/profile_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_home/view_model/wallet_home_vm.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/oath2.0/api/auth_http_client.dart';
 import 'package:next_fi/services/oath2.0/api/endpoints.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
@@ -36,7 +35,6 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
   bool _loading = true;
   User? _user;
   TrustStatus _trustStatus = TrustStatus.unknown;
-  bool _isMerchant = false;
 
   @override
   void initState() {
@@ -60,7 +58,10 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
 
   Future<void> _refreshProfile() async {
     if (!mounted) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _trustStatus = TrustStatus.unknown;
+    });
 
     final hasTokens = await _tokenStorage.hasTokens;
     if (!hasTokens) {
@@ -92,7 +93,6 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
         _user = null;
         _loading = false;
         _trustStatus = TrustStatus.unknown;
-        _isMerchant = false;
       });
     } finally {
       client.dispose();
@@ -101,17 +101,11 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
 
   Future<void> _fetchMerchantAccessStatus() async {
     try {
-      final results = await Future.wait([
-        VerificationCoreService.I.getMe().then((v) => v.status),
-        MerchantProfileCoreService.I.getMe().then((m) => m?.isApproved ?? false),
-      ]);
+      final status = await VerificationCoreService.I.getMe().then((v) => v.status);
       if (!mounted) return;
-      setState(() {
-        _trustStatus = results[0] as TrustStatus;
-        _isMerchant = results[1] as bool;
-      });
+      setState(() => _trustStatus = status);
     } catch (_) {
-      // Status stays at defaults — button simply won't show on error.
+      // Status stays at unknown — button won't show on error.
     }
   }
 
@@ -138,7 +132,7 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
     final walletName = vm.state.walletName ?? 'Default Wallet';
 
     final canShowMerchantRequest =
-        _isLoggedIn && _trustStatus == TrustStatus.ready && !_isMerchant;
+        _isLoggedIn && _trustStatus == TrustStatus.ready;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
