@@ -23,7 +23,6 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
   final _accountNameCtrl = TextEditingController();
   final _accountNoCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
-  final _instructionsCtrl = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
@@ -54,7 +53,6 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     _accountNameCtrl.dispose();
     _accountNoCtrl.dispose();
     _labelCtrl.dispose();
-    _instructionsCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
   }
@@ -105,16 +103,13 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
             ? null
             : _accountNoCtrl.text.trim(),
         label: _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim(),
-        instructions: _instructionsCtrl.text.trim().isEmpty
-            ? null
-            : _instructionsCtrl.text.trim(),
+        instructions: null,
         isActive: _setAsActive,
       );
       await _core.createMyPaymentAccount(req);
       _accountNameCtrl.clear();
       _accountNoCtrl.clear();
       _labelCtrl.clear();
-      _instructionsCtrl.clear();
       if (!mounted) return;
       await _loadAll();
       if (!mounted) return;
@@ -222,33 +217,17 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
           children: [
             _StepHero(c: c),
-            const SizedBox(height: 24),
-
-            _SectionLabel(label: 'SELECT METHOD', c: c),
-            const SizedBox(height: 10),
-            _methods.isEmpty
-                ? _EmptyCard(
-                    icon: Icons.payment_outlined,
-                    title: 'No Payment Methods',
-                    body: 'No active payment methods are available right now.',
-                    c: c,
-                  )
-                : _MethodGrid(
-                    methods: _methods,
-                    selected: _selectedMethod,
-                    onSelect: (m) => setState(() => _selectedMethod = m),
-                    c: c,
-                  ),
-
             const SizedBox(height: 28),
 
             _SectionLabel(label: 'ADD NEW ACCOUNT', c: c),
             const SizedBox(height: 10),
             _AccountForm(
+              methods: _methods,
+              selectedMethod: _selectedMethod,
+              onMethodChanged: (m) => setState(() => _selectedMethod = m),
               accountNameCtrl: _accountNameCtrl,
               accountNoCtrl: _accountNoCtrl,
               labelCtrl: _labelCtrl,
-              instructionsCtrl: _instructionsCtrl,
               setAsActive: _setAsActive,
               saving: _saving,
               onSetAsActiveChanged: (v) => setState(() => _setAsActive = v),
@@ -437,110 +416,128 @@ class _EmptyCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// METHOD GRID
+// METHOD DROPDOWN
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MethodGrid extends StatelessWidget {
-  const _MethodGrid({
+class _MethodDropdown extends StatelessWidget {
+  const _MethodDropdown({
     required this.methods,
     required this.selected,
-    required this.onSelect,
+    required this.onChanged,
     required this.c,
   });
   final List<PaymentMethodModel> methods;
   final PaymentMethodModel? selected;
-  final ValueChanged<PaymentMethodModel> onSelect;
+  final ValueChanged<PaymentMethodModel?> onChanged;
   final AppColor c;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      itemCount: methods.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.6,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+    if (methods.isEmpty) {
+      return _EmptyCard(
+        icon: Icons.payment_outlined,
+        title: 'No Payment Methods',
+        body: 'No active payment methods are available right now.',
+        c: c,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: c.border.withOpacity(0.28), width: 1.2),
       ),
-      itemBuilder: (_, i) {
-        final m = methods[i];
-        final isSelected = selected?.id == m.id;
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onSelect(m),
-            borderRadius: BorderRadius.circular(14),
-            splashColor: c.primary.withOpacity(0.07),
-            child: Ink(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: isSelected ? c.primary.withOpacity(0.06) : c.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isSelected ? c.primary : c.border.withOpacity(0.25),
-                  width: isSelected ? 1.5 : 1.2,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<PaymentMethodModel>(
+          value: selected,
+          isExpanded: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: c.textSecondary,
+            size: 20,
+          ),
+          dropdownColor: c.surface,
+          borderRadius: BorderRadius.circular(13),
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 14.5,
+            fontWeight: FontWeight.w500,
+          ),
+          hint: Text(
+            'Select payment method',
+            style: TextStyle(
+              color: c.textSecondary.withOpacity(0.5),
+              fontSize: 13.5,
+            ),
+          ),
+          items: methods.map((m) {
+            return DropdownMenuItem<PaymentMethodModel>(
+              value: m,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? c.primary.withOpacity(0.12)
-                              : c.border.withOpacity(0.07),
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Icon(
-                          Icons.account_balance_outlined,
-                          size: 14,
-                          color: isSelected ? c.primary : c.textSecondary,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (isSelected)
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 16,
-                          color: c.primary,
-                        ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    m.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      letterSpacing: -0.2,
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Icon(
+                      Icons.account_balance_outlined,
+                      size: 14,
+                      color: c.primary,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    m.code,
-                    style: TextStyle(
-                      color: isSelected
-                          ? c.primary.withOpacity(0.8)
-                          : c.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          m.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        Text(
+                          m.code,
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-        );
-      },
+            );
+          }).toList(),
+          onChanged: onChanged,
+          selectedItemBuilder: (context) => methods.map((m) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${m.name}  ·  ${m.code}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 }
@@ -551,20 +548,24 @@ class _MethodGrid extends StatelessWidget {
 
 class _AccountForm extends StatelessWidget {
   const _AccountForm({
+    required this.methods,
+    required this.selectedMethod,
+    required this.onMethodChanged,
     required this.accountNameCtrl,
     required this.accountNoCtrl,
     required this.labelCtrl,
-    required this.instructionsCtrl,
     required this.setAsActive,
     required this.saving,
     required this.onSetAsActiveChanged,
     required this.onSubmit,
     required this.c,
   });
+  final List<PaymentMethodModel> methods;
+  final PaymentMethodModel? selectedMethod;
+  final ValueChanged<PaymentMethodModel?> onMethodChanged;
   final TextEditingController accountNameCtrl;
   final TextEditingController accountNoCtrl;
   final TextEditingController labelCtrl;
-  final TextEditingController instructionsCtrl;
   final bool setAsActive;
   final bool saving;
   final ValueChanged<bool> onSetAsActiveChanged;
@@ -574,7 +575,17 @@ class _AccountForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Method dropdown
+        _MethodDropdown(
+          methods: methods,
+          selected: selectedMethod,
+          onChanged: onMethodChanged,
+          c: c,
+        ),
+        const SizedBox(height: 10),
+
         _FocusField(
           controller: accountNameCtrl,
           label: 'Account Name',
@@ -599,17 +610,7 @@ class _AccountForm extends StatelessWidget {
           label: 'Label',
           hint: 'e.g. My GCash',
           icon: Icons.label_outline_rounded,
-          action: TextInputAction.next,
-          c: c,
-        ),
-        const SizedBox(height: 10),
-        _FocusField(
-          controller: instructionsCtrl,
-          label: 'Instructions',
-          hint: 'Optional payment notes',
-          icon: Icons.notes_rounded,
           action: TextInputAction.done,
-          multiline: true,
           c: c,
         ),
         const SizedBox(height: 12),
