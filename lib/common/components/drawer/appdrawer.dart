@@ -11,6 +11,7 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
+import 'package:next_fi/features/merchant_flow/view/merchant_onboarding_flow_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
@@ -20,6 +21,8 @@ import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
 import 'package:next_fi/services/chat/chat_core_service.dart';
 import 'package:next_fi/services/chat/models/chat_dtos.dart';
+import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
+import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
@@ -39,10 +42,12 @@ class _AppDrawerState extends State<AppDrawer>
   final _chat = ChatCoreService.I;
   final _profile = ProfileCoreService.I;
   final _verification = VerificationCoreService.I;
+  final _merchantProfile = MerchantProfileCoreService.I;
 
   static User? _cachedUser;
   static PackageInfo? _cachedInfo;
   static ProfileModel? _cachedProfile;
+  static MerchantProfileModel? _cachedMerchantProfile;
 
   bool _loading = true;
   bool _loggingOut = false;
@@ -88,6 +93,7 @@ class _AppDrawerState extends State<AppDrawer>
     await Future.wait([
       _fetchRealUser(),
       _fetchProfileData(),
+      _fetchMerchantProfile(),
       _fetchAppInfo(),
       _fetchVerificationStatus(),
       _fetchUnreadChatCount(),
@@ -153,6 +159,19 @@ class _AppDrawerState extends State<AppDrawer>
     }
   }
 
+  Future<void> _fetchMerchantProfile() async {
+    try {
+      if (!await _auth.isAuthenticated) {
+        if (mounted) setState(() => _cachedMerchantProfile = null);
+        return;
+      }
+      final merchant = await _merchantProfile.getMe();
+      if (mounted) setState(() => _cachedMerchantProfile = merchant);
+    } catch (_) {
+      if (mounted) setState(() => _cachedMerchantProfile = null);
+    }
+  }
+
   Future<void> _handleLogout() async {
     if (_loggingOut) return;
     HapticFeedback.mediumImpact();
@@ -167,6 +186,7 @@ class _AppDrawerState extends State<AppDrawer>
     await _auth.logout();
     _cachedUser = null;
     _cachedProfile = null;
+    _cachedMerchantProfile = null;
     _trustStatus = TrustStatus.unknown;
     if (!mounted) return;
     Navigator.pop(context);
@@ -190,12 +210,17 @@ class _AppDrawerState extends State<AppDrawer>
     _push(const VerificationFlowScreen());
   }
 
-  void _handleMerchantRequestTap() {
+  Future<void> _handleMerchantRequestTap() async {
     if (_cachedUser == null) {
       _redirectToLogin();
       return;
     }
-
+    Navigator.pop(context);
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()),
+    );
+    if (mounted) await _fetchMerchantProfile();
   }
 
   void _handleMerchantOffersTap() {
@@ -250,7 +275,7 @@ class _AppDrawerState extends State<AppDrawer>
     // Merchant access is now determined solely by the verification service
     // since ProfileModel no longer exposes isMerchant. The drawer shows
     // merchant nav items only when the user is fully verified (TrustStatus.ready).
-    final isMerchant = user != null && _trustStatus == TrustStatus.ready;
+    final isMerchant = user != null && (_cachedMerchantProfile?.isApproved ?? false);
     final canRequestMerchant =
         user != null && _isVerifiedForTradeAccess && !isMerchant;
 
