@@ -47,44 +47,52 @@ class _LoginSuccessModal extends StatefulWidget {
 
 class _LoginSuccessModalState extends State<_LoginSuccessModal>
     with SingleTickerProviderStateMixin {
-  late AnimationController _checkController;
-  late Animation<double> _checkScale;
-  late Animation<double> _checkOpacity;
-  late Animation<double> _ripple;
+  late AnimationController _controller;
+  late Animation<double> _avatarScale;
+  late Animation<double> _avatarOpacity;
+  late Animation<double> _badgeScale;
+  late Animation<double> _contentFade;
 
   @override
   void initState() {
     super.initState();
-    _checkController = AnimationController(
+    _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 750),
     )..forward();
 
-    _checkScale = Tween<double>(begin: 0.4, end: 1.0).animate(
+    _avatarOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _checkController,
-        curve: const Interval(0.0, 0.55, curve: Curves.elasticOut),
+        parent: _controller,
+        curve: const Interval(0.0, 0.35, curve: Curves.easeIn),
       ),
     );
 
-    _checkOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _avatarScale = Tween<double>(begin: 0.55, end: 1.0).animate(
       CurvedAnimation(
-        parent: _checkController,
-        curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
+        parent: _controller,
+        curve: const Interval(0.0, 0.6, curve: Curves.elasticOut),
       ),
     );
 
-    _ripple = Tween<double>(begin: 0.6, end: 1.35).animate(
+    _badgeScale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _checkController,
-        curve: const Interval(0.25, 0.85, curve: Curves.easeOut),
+        parent: _controller,
+        curve: const Interval(0.45, 0.8, curve: Curves.elasticOut),
+      ),
+    );
+
+    _contentFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.3, 0.7, curve: Curves.easeOut),
       ),
     );
   }
 
   @override
   void dispose() {
-    _checkController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -98,12 +106,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
     final colors = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final surfaceColor = isDark
-        ? const Color(0xFF1C1C1E)
-        : Colors.white;
-    final cardBg = isDark
-        ? const Color(0xFF2C2C2E)
-        : const Color(0xFFF5F5F7);
+    final surfaceColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
     final dividerColor = isDark
         ? Colors.white.withOpacity(0.06)
         : Colors.black.withOpacity(0.06);
@@ -116,10 +119,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
             color: surfaceColor,
-            border: Border.all(
-              color: dividerColor,
-              width: 1,
-            ),
+            border: Border.all(color: dividerColor, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
@@ -158,152 +158,119 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ── Animated check icon ───────────────────────
+
+                      // ── Large centered avatar with check badge ────
                       AnimatedBuilder(
-                        animation: _checkController,
+                        animation: _controller,
                         builder: (context, _) {
-                          return SizedBox(
-                            width: 88,
-                            height: 88,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                // Ripple ring
-                                Opacity(
-                                  opacity: (1.0 - (_ripple.value - 0.6) / 0.75)
-                                      .clamp(0.0, 1.0),
-                                  child: Transform.scale(
-                                    scale: _ripple.value,
-                                    child: Container(
-                                      width: 88,
-                                      height: 88,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: colors.primary.withOpacity(0.3),
-                                          width: 2,
-                                        ),
+                          return Stack(
+                            alignment: Alignment.center,
+                            clipBehavior: Clip.none,
+                            children: [
+                              // Soft glow ring behind avatar
+                              Container(
+                                width: 104,
+                                height: 104,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: colors.primary.withOpacity(0.08),
+                                ),
+                              ),
+                              // Avatar
+                              FadeTransition(
+                                opacity: _avatarOpacity,
+                                child: ScaleTransition(
+                                  scale: _avatarScale,
+                                  child: Container(
+                                    width: 88,
+                                    height: 88,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: colors.primary.withOpacity(0.25),
+                                        width: 2.5,
+                                      ),
+                                    ),
+                                    child: ClipOval(
+                                      child: UserAvatar(
+                                        user: widget.user,
+                                        radius: 44,
+                                        colors: colors,
+                                        backgroundColor:
+                                        colors.primary.withOpacity(0.15),
+                                        fontSize: 30,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
                                 ),
-                                // Icon background
-                                Container(
-                                  width: 68,
-                                  height: 68,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: colors.primary.withOpacity(0.1),
-                                  ),
-                                ),
-                                // Check icon
-                                FadeTransition(
-                                  opacity: _checkOpacity,
-                                  child: ScaleTransition(
-                                    scale: _checkScale,
-                                    child: Container(
-                                      width: 68,
-                                      height: 68,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: colors.primary.withOpacity(0.12),
+                              ),
+                              // Check badge — bottom-right of avatar
+                              Positioned(
+                                right: 4,
+                                bottom: 4,
+                                child: ScaleTransition(
+                                  scale: _badgeScale,
+                                  child: Container(
+                                    width: 26,
+                                    height: 26,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: colors.primary,
+                                      border: Border.all(
+                                        color: surfaceColor,
+                                        width: 2.5,
                                       ),
-                                      child: Icon(
-                                        LucideIcons.checkCircle2,
-                                        color: colors.primary,
-                                        size: 32,
-                                      ),
+                                    ),
+                                    child: const Icon(
+                                      LucideIcons.check,
+                                      size: 13,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           );
                         },
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 18),
 
-                      // ── Heading ───────────────────────────────────
-                      Text(
-                        'Welcome back',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: colors.textPrimary,
-                          letterSpacing: -0.5,
-                          height: 1.1,
-                        ),
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      Text(
-                        "You're signed in and ready to go.",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: colors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // ── User card ─────────────────────────────────
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: cardBg,
-                          border: Border.all(
-                            color: dividerColor,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
+                      // ── Name + email + verified pill ──────────────
+                      FadeTransition(
+                        opacity: _contentFade,
+                        child: Column(
                           children: [
-                            UserAvatar(
-                              user: widget.user,
-                              radius: 22,
-                              colors: colors,
-                              backgroundColor: colors.primary.withOpacity(0.15),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.user.name,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: colors.textPrimary,
-                                      letterSpacing: -0.1,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    widget.user.email,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: colors.textSecondary,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                            Text(
+                              widget.user.name,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: colors.textPrimary,
+                                letterSpacing: -0.4,
+                                height: 1.1,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
                             ),
-                            // Verified badge
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.user.email,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: colors.textSecondary,
+                                height: 1.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                                  horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
                                 color: colors.primary.withOpacity(0.1),
@@ -313,20 +280,55 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                                 children: [
                                   Icon(
                                     LucideIcons.shieldCheck,
-                                    size: 11,
+                                    size: 12,
                                     color: colors.primary,
                                   ),
-                                  const SizedBox(width: 4),
+                                  const SizedBox(width: 5),
                                   Text(
                                     'Verified',
                                     style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: colors.primary,
                                     ),
                                   ),
                                 ],
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // ── Divider ───────────────────────────────────
+                      Container(height: 1, color: dividerColor),
+
+                      const SizedBox(height: 20),
+
+                      // ── Welcome text ──────────────────────────────
+                      FadeTransition(
+                        opacity: _contentFade,
+                        child: Column(
+                          children: [
+                            Text(
+                              'Welcome back',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: colors.textPrimary,
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "You're signed in and ready to go.",
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: colors.textSecondary,
+                                height: 1.4,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ],
                         ),
