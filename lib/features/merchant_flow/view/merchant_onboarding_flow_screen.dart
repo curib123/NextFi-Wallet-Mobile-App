@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
-import 'package:next_fi/features/merchant_flow/view/merchant_payment_account_setup_screen.dart';
 import 'package:next_fi/features/merchant_flow/view/merchant_profile_setup_screen.dart';
+import 'package:next_fi/features/verification_flow/view/payment_method_setup_screen.dart';
 import 'package:next_fi/services/merchant_profile/merchant_onboarding_flow_service.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
 
@@ -208,7 +208,7 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
     if (snapshot.nextStep == MerchantOnboardingStep.paymentAccount) {
       final changed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (_) => const MerchantPaymentAccountSetupScreen(),
+          builder: (_) => const PaymentAccountSetupScreen(isMerchant: true),
         ),
       );
       if (changed == true && mounted) await _load();

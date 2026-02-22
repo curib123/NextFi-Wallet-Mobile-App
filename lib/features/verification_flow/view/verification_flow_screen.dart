@@ -301,7 +301,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   Future<void> _openPaymentSetup() async {
     await Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const PaymentMethodSetupScreen()));
+    ).push(MaterialPageRoute(builder: (_) => const PaymentAccountSetupScreen()));
     if (mounted) await _load();
   }
 
@@ -327,7 +327,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
 
     if (step == 2) {
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const PaymentMethodSetupScreen()),
+        MaterialPageRoute(builder: (_) => const PaymentAccountSetupScreen()),
       );
       if (mounted) await _load();
       return;
