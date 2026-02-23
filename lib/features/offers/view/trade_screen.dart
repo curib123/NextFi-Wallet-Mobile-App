@@ -243,6 +243,24 @@ class _TradeScreenState extends State<TradeScreen> {
         ? _computedCrypto.toStringAsFixed(7)
         : _cryptoCtrl.text.trim();
 
+    // Validate amounts are positive numbers
+    final fiatParsed = double.tryParse(fiatAmount);
+    final cryptoParsed = double.tryParse(cryptoAmount);
+    
+    if (fiatParsed == null || fiatParsed <= 0) {
+      showFloatingSnackBar(context,
+          message: 'Please enter a valid fiat amount.',
+          type: SnackBarType.error);
+      return;
+    }
+    
+    if (cryptoParsed == null || cryptoParsed <= 0) {
+      showFloatingSnackBar(context,
+          message: 'Could not calculate crypto amount. Please try again.',
+          type: SnackBarType.error);
+      return;
+    }
+
     // For BUY offers: need paymentMethodId (from offer's paymentMethods)
     // For SELL offers: need paymentMethodId + optional buyerPaymentAccountId
     if (_selectedOfferMethod == null) {
@@ -441,7 +459,8 @@ class _TradeScreenState extends State<TradeScreen> {
               typeColor: typeColor,
               isBuy: isBuy,
               submitting: _submitting,
-              onTap: _submit,
+              // Disable if cannot calculate (no market price)
+              onTap: (_enterFiatMode && !_canCalculate) ? null : _submit,
             ),
     );
   }
@@ -1163,13 +1182,15 @@ class _SubmitBar extends StatelessWidget {
     required this.typeColor,
     required this.isBuy,
     required this.submitting,
-    required this.onTap,
+    this.onTap,
   });
   final AppColor c;
   final Color typeColor;
   final bool isBuy;
   final bool submitting;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+
+  bool get _isDisabled => onTap == null || submitting;
 
   @override
   Widget build(BuildContext context) {
@@ -1180,7 +1201,7 @@ class _SubmitBar extends StatelessWidget {
         border: Border(top: BorderSide(color: c.border.withOpacity(0.15))),
       ),
       child: GestureDetector(
-        onTap: submitting ? null : onTap,
+        onTap: _isDisabled ? null : onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           height: 54,
