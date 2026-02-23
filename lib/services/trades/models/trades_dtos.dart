@@ -32,8 +32,15 @@ class CreateTradeRequest {
 }
 
 class MarkFiatSentRequest {
-  const MarkFiatSentRequest();
-  Map<String, dynamic> toJson() => {};
+  final String? note;
+  final List<String>? proofUrls;
+
+  const MarkFiatSentRequest({this.note, this.proofUrls});
+
+  Map<String, dynamic> toJson() => {
+    if (note != null && note!.isNotEmpty) 'note': note,
+    if (proofUrls != null && proofUrls!.isNotEmpty) 'proofUrls': proofUrls,
+  };
 }
 
 class ConfirmFiatRequest {
@@ -84,5 +91,87 @@ class TradesListQuery {
       'fiatCurrency': fiatCurrency!,
     if (page != null && page! > 0) 'page': page!.toString(),
     if (limit != null && limit! > 0) 'limit': limit!.toString(),
+  };
+}
+
+/// Request to lock crypto into escrow (Step B in both flows)
+class LockCryptoRequest {
+  final String claimableBalanceId;
+  final String createTxHash;
+
+  const LockCryptoRequest({
+    required this.claimableBalanceId,
+    required this.createTxHash,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'claimableBalanceId': claimableBalanceId,
+    'createTxHash': createTxHash,
+  };
+}
+
+/// Request to claim crypto from escrow (Step E in both flows)
+class ClaimCryptoRequest {
+  final String claimTxHash;
+
+  const ClaimCryptoRequest({required this.claimTxHash});
+
+  Map<String, dynamic> toJson() => {
+    'claimTxHash': claimTxHash,
+  };
+}
+
+/// Request to refund crypto from expired escrow
+class RefundCryptoRequest {
+  final String refundTxHash;
+
+  const RefundCryptoRequest({required this.refundTxHash});
+
+  Map<String, dynamic> toJson() => {
+    'refundTxHash': refundTxHash,
+  };
+}
+
+/// Request to upload payment proof
+class UploadPaymentProofRequest {
+  final String tradeId;
+  final String type; // 'FIAT' or 'CRYPTO'
+  final String? description;
+  final List<String>? fileUrls;
+
+  const UploadPaymentProofRequest({
+    required this.tradeId,
+    required this.type,
+    this.description,
+    this.fileUrls,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'tradeId': tradeId,
+    'type': type,
+    if (description != null && description!.isNotEmpty) 'description': description,
+    if (fileUrls != null && fileUrls!.isNotEmpty) 'fileUrls': fileUrls,
+  };
+}
+
+/// Request to open a dispute
+class OpenDisputeRequest {
+  final String tradeId;
+  final String reason;
+  final String? description;
+  final List<String>? evidenceUrls;
+
+  const OpenDisputeRequest({
+    required this.tradeId,
+    required this.reason,
+    this.description,
+    this.evidenceUrls,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'tradeId': tradeId,
+    'reason': reason,
+    if (description != null && description!.isNotEmpty) 'description': description,
+    if (evidenceUrls != null && evidenceUrls!.isNotEmpty) 'evidenceUrls': evidenceUrls,
   };
 }

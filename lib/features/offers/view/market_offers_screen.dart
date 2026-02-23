@@ -174,7 +174,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      _selectedType == OfferType.buy ? Icons.south_west_rounded : Icons.north_east_rounded,
+                      _selectedType == OfferType.sell ? Icons.south_west_rounded : Icons.north_east_rounded,
                       color: c.primary,
                       size: 18,
                     ),
@@ -182,7 +182,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _selectedType == OfferType.buy ? 'P2P • Browse active BUY offers' : 'P2P • Browse active SELL offers',
+                      _selectedType == OfferType.sell ? 'P2P • Browse active BUY offers' : 'P2P • Browse active SELL offers',
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -250,9 +250,9 @@ class _TypeSwitch extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _TypeBtn(c: c, label: 'BUY', selected: selected == OfferType.buy, onTap: () => onChanged(OfferType.buy)),
+          _TypeBtn(c: c, label: 'BUY', selected: selected == OfferType.sell, onTap: () => onChanged(OfferType.sell)),
           const SizedBox(width: 4),
-          _TypeBtn(c: c, label: 'SELL', selected: selected == OfferType.sell, onTap: () => onChanged(OfferType.sell)),
+          _TypeBtn(c: c, label: 'SELL', selected: selected == OfferType.buy, onTap: () => onChanged(OfferType.buy)),
         ],
       ),
     );
@@ -335,7 +335,7 @@ class _EmptyState extends StatelessWidget {
             Icon(Icons.storefront_outlined, color: c.textSecondary, size: 28),
             const SizedBox(height: 10),
             Text(
-              'No ${type == OfferType.buy ? 'buy' : 'sell'} offers right now',
+              'No ${type == OfferType.sell ? 'buy' : 'sell'} offers right now',
               textAlign: TextAlign.center,
               style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
             ),

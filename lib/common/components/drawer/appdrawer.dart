@@ -12,6 +12,7 @@ import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
 import 'package:next_fi/features/merchant_flow/view/merchant_onboarding_flow_screen.dart';
+import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
 import 'package:next_fi/features/offers/view/market_offers_screen.dart';
 import 'package:next_fi/features/offers/view/manage_offers_screen.dart';
 import 'package:next_fi/features/verification_flow/view/payment_method_setup_screen.dart';
@@ -242,11 +243,12 @@ class _AppDrawerState extends State<AppDrawer>
   void _handleMerchantTradesTap() {
     if (_cachedUser == null) { _redirectToLogin(); return; }
     if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
+    _push(const MerchantTradesScreen());
   }
 
   void _handleP2PMarketplaceTap() {
     if (_cachedUser == null) { _redirectToLogin(); return; }
-    _push(const MarketOffersScreen(initialType: OfferType.buy));
+    _push(const MarketOffersScreen(initialType: OfferType.sell));
   }
 
   bool get _isVerifiedForTradeAccess =>

@@ -139,10 +139,11 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   // ─── Color helpers ──────────────────────────────────────────────────────────
 
-  bool get _isBuy => widget.offer.type == OfferType.buy;
+  // User-centric: merchant SELLS = user BUYS; merchant BUYS = user SELLS
+  bool get _isBuy => widget.offer.type == OfferType.sell;
 
-  Color get _typeColor =>
-      _isBuy ? const Color(0xFF00C48C) : const Color(0xFF6C6FFF);
+  // BUY = green (success), SELL = red (error) — uses AppColor theme values
+  Color _typeColor(AppColor c) => _isBuy ? c.success : c.error;
 
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
@@ -190,7 +191,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final offer = widget.offer;
-    final typeColor = _typeColor;
+    final typeColor = _typeColor(c);
     final statusText = offer.status?.name.toUpperCase() ?? 'UNKNOWN';
     final hasLivePrice = widget.marketPrice != null;
 

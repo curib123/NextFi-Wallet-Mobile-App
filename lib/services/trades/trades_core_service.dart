@@ -43,5 +43,35 @@ class TradesCoreService {
   Future<TradeModel> cancelTrade(String id, {String? reason}) =>
       _api.cancelTrade(id, reason: reason);
 
+  // Crypto escrow operations (Step B and E in both flows)
+  /// Lock crypto into escrow - called by the party who needs to lock:
+  /// - SELL offer: merchant locks crypto
+  /// - BUY offer: buyer locks crypto
+  Future<TradeModel> lockCrypto(String id, {
+    required String claimableBalanceId,
+    required String createTxHash,
+  }) => _api.lockCrypto(id, claimableBalanceId: claimableBalanceId, createTxHash: createTxHash);
+  
+  /// Claim crypto from escrow - called by the party receiving crypto:
+  /// - SELL offer: buyer claims crypto
+  /// - BUY offer: merchant claims crypto
+  Future<TradeModel> claimCrypto(String id, {required String claimTxHash}) =>
+      _api.claimCrypto(id, claimTxHash: claimTxHash);
+  
+  /// Refund crypto from expired escrow - only original locker can call
+  Future<TradeModel> refundCrypto(String id, {required String refundTxHash}) =>
+      _api.refundCrypto(id, refundTxHash: refundTxHash);
+
+  // Mark fiat sent with proof
+  Future<TradeModel> markFiatSentWithProof(String id, {String? note, List<String>? proofUrls}) =>
+      _api.markFiatSentWithProof(id, note: note, proofUrls: proofUrls);
+
+  // Dispute
+  Future<TradeModel> openDispute(String id, {
+    required String reason,
+    String? description,
+    List<String>? evidenceUrls,
+  }) => _api.openDispute(id, reason: reason, description: description, evidenceUrls: evidenceUrls);
+
   void dispose() => _api.dispose();
 }

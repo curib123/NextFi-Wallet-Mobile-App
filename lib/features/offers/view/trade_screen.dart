@@ -71,8 +71,29 @@ class _TradeScreenState extends State<TradeScreen> {
 
   void _onFiatChanged() {
     final v = double.tryParse(_fiatCtrl.text.trim()) ?? 0;
-    final rate = offer.marginPercent != null ? (1 + offer.marginPercent! / 100) : 1.0;
-    setState(() => _computedCrypto = rate > 0 ? v / rate : v);
+    
+    // Calculate crypto based on market price and margin
+    // If market price is available, use it for proper calculation
+    if (offer.marketPrice != null && offer.marketPrice! > 0) {
+      // Apply margin to get the effective price
+      // marginPercent: seller's margin above/below market
+      // For BUY: user gets less crypto due to margin (pays more)
+      // For SELL: user gets less fiat due to margin (sells at discount)
+      final effectivePrice = offer.marginPercent != null 
+          ? offer.marketPrice! * (1 + offer.marginPercent! / 100)
+          : offer.marketPrice!;
+      
+      if (effectivePrice > 0) {
+        setState(() => _computedCrypto = v / effectivePrice);
+      } else {
+        setState(() => _computedCrypto = 0);
+      }
+    } else {
+      // Fallback: if no market price, use simple division (legacy behavior)
+      // This is less accurate but maintains backward compatibility
+      final rate = offer.marginPercent != null ? (1 + offer.marginPercent! / 100) : 1.0;
+      setState(() => _computedCrypto = rate > 0 ? v / rate : v);
+    }
   }
 
   Future<void> _loadData() async {
@@ -210,7 +231,7 @@ class _TradeScreenState extends State<TradeScreen> {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final isBuy = _userIsBuyer;
-    final typeColor = isBuy ? const Color(0xFF00C48C) : const Color(0xFF6C6FFF);
+    final typeColor = isBuy ? c.success : c.error;
 
     return Scaffold(
       backgroundColor: c.background,
@@ -260,6 +281,7 @@ class _TradeScreenState extends State<TradeScreen> {
                           asset: offer.asset,
                           amount: _computedCrypto,
                           typeColor: typeColor,
+                          isBuy: isBuy,
                         ),
                       ],
                       const SizedBox(height: 18),
@@ -586,11 +608,13 @@ class _CryptoEquivalentRow extends StatelessWidget {
     required this.asset,
     required this.amount,
     required this.typeColor,
+    required this.isBuy,
   });
   final AppColor c;
   final String asset;
   final double amount;
   final Color typeColor;
+  final bool isBuy;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -605,7 +629,11 @@ class _CryptoEquivalentRow extends StatelessWidget {
         Icon(Icons.swap_horiz_rounded, size: 16, color: typeColor),
         const SizedBox(width: 8),
         Text(
-          'You receive ≈ ${amount.toStringAsFixed(7)} $asset',
+          // BUY: user pays fiat → receives crypto
+          // SELL: user enters fiat to receive → sends crypto
+          isBuy
+              ? 'You receive ≈ ${amount.toStringAsFixed(7)} $asset'
+              : 'You send ≈ ${amount.toStringAsFixed(7)} $asset',
           style: TextStyle(
             color: typeColor,
             fontWeight: FontWeight.w600,
@@ -696,16 +724,16 @@ class _MerchantAccountCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF00C48C).withOpacity(0.06),
+        color: c.success.withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF00C48C).withOpacity(0.2)),
+        border: Border.all(color: c.success.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.send_rounded, size: 14, color: const Color(0xFF00C48C)),
+              Icon(Icons.send_rounded, size: 14, color: c.success),
               const SizedBox(width: 6),
               Text(
                 'Send fiat to:',

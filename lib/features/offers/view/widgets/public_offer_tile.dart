@@ -136,11 +136,11 @@ class _PublicOfferTileState extends State<PublicOfferTile>
 
   // ─── Colors ────────────────────────────────────────────────────────────────
 
-  Color get _typeColor => widget.offer.type == OfferType.buy
-      ? const Color(0xFF00C48C)   // emerald-teal
-      : const Color(0xFF6C6FFF);  // soft indigo
+  // User-centric: merchant SELLS = user BUYS; merchant BUYS = user SELLS
+  bool get _isBuy => widget.offer.type == OfferType.sell;
 
-  bool get _isBuy => widget.offer.type == OfferType.buy;
+  // BUY = green (success), SELL = red (error) — from AppColor
+  Color get _typeColor => _isBuy ? widget.c.success : widget.c.error;
 
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
@@ -167,6 +167,10 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     final statusText = offer.status?.name ?? 'UNKNOWN';
     final hasLivePrice = widget.marketPrice != null;
 
+    // Detect light mode to adjust translucency values
+    final brightness = Theme.of(context).brightness;
+    final isLight = brightness == Brightness.light;
+
     return GestureDetector(
       onTapDown: (_) => _pressController.forward(),
       onTapUp: (_) {
@@ -182,19 +186,22 @@ class _PublicOfferTileState extends State<PublicOfferTile>
             color: c.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: c.border.withOpacity(0.07),
+              // Light mode: more visible border
+              color: c.border.withOpacity(isLight ? 0.16 : 0.07),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: typeColor.withOpacity(0.06),
-                blurRadius: 20,
+                // Light mode: tinted shadow is prominent; dark mode: subtle
+                color: typeColor.withOpacity(isLight ? 0.10 : 0.06),
+                blurRadius: isLight ? 24 : 20,
                 spreadRadius: 0,
                 offset: const Offset(0, 6),
               ),
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
+                // Light mode needs a stronger neutral shadow for depth
+                color: Colors.black.withOpacity(isLight ? 0.07 : 0.04),
+                blurRadius: isLight ? 14 : 10,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -203,17 +210,17 @@ class _PublicOfferTileState extends State<PublicOfferTile>
             borderRadius: BorderRadius.circular(20),
             child: Stack(
               children: [
-                // Soft accent glow top-right
+                // Soft accent glow top-right — stronger in light mode
                 Positioned(
                   top: -20,
                   right: -20,
                   child: Container(
-                    width: 100,
-                    height: 100,
+                    width: 110,
+                    height: 110,
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
                         colors: [
-                          typeColor.withOpacity(0.10),
+                          typeColor.withOpacity(isLight ? 0.14 : 0.10),
                           typeColor.withOpacity(0.0),
                         ],
                       ),
@@ -232,8 +239,8 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          typeColor.withOpacity(0.7),
-                          typeColor.withOpacity(0.15),
+                          typeColor.withOpacity(isLight ? 0.85 : 0.7),
+                          typeColor.withOpacity(0.08),
                         ],
                       ),
                     ),
@@ -257,10 +264,11 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                         averageRating: _averageRating,
                         reviewCount: _reviewCount,
                         loadingReviews: _loadingReviews,
+                        isLight: isLight,
                       ),
 
                       const SizedBox(height: 16),
-                      _Divider(c: c),
+                      _Divider(c: c, isLight: isLight),
                       const SizedBox(height: 14),
 
                       _PriceAssetRow(
@@ -269,6 +277,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                         typeColor: typeColor,
                         hasLivePrice: hasLivePrice,
                         marketPrice: widget.marketPrice,
+                        isLight: isLight,
                       ),
 
                       const SizedBox(height: 12),
@@ -281,6 +290,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                         loadingPaymentMethods: _loadingPaymentMethods,
                         paymentMethodsMap: _paymentMethodsMap,
                         getPaymentMethodNames: _getPaymentMethodNames,
+                        isLight: isLight,
                       ),
                     ],
                   ),
@@ -309,6 +319,7 @@ class _HeaderRow extends StatelessWidget {
     required this.averageRating,
     required this.reviewCount,
     required this.loadingReviews,
+    required this.isLight,
   });
 
   final AppColor c;
@@ -322,13 +333,14 @@ class _HeaderRow extends StatelessWidget {
   final double? averageRating;
   final int reviewCount;
   final bool loadingReviews;
+  final bool isLight;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Avatar / icon
+        // Avatar / icon — more visible background in light mode
         Container(
           width: 42,
           height: 42,
@@ -337,8 +349,8 @@ class _HeaderRow extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                typeColor.withOpacity(0.18),
-                typeColor.withOpacity(0.06),
+                typeColor.withOpacity(isLight ? 0.20 : 0.18),
+                typeColor.withOpacity(isLight ? 0.10 : 0.06),
               ],
             ),
             borderRadius: BorderRadius.circular(13),
@@ -375,8 +387,8 @@ class _HeaderRow extends StatelessWidget {
         _Pill(
           label: statusText,
           textColor: statusColor,
-          bgColor: statusColor.withOpacity(0.10),
-          borderColor: statusColor.withOpacity(0.18),
+          bgColor: statusColor.withOpacity(isLight ? 0.12 : 0.10),
+          borderColor: statusColor.withOpacity(isLight ? 0.30 : 0.18),
           fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
@@ -394,6 +406,7 @@ class _PriceAssetRow extends StatelessWidget {
     required this.typeColor,
     required this.hasLivePrice,
     required this.marketPrice,
+    required this.isLight,
   });
 
   final AppColor c;
@@ -401,6 +414,7 @@ class _PriceAssetRow extends StatelessWidget {
   final Color typeColor;
   final bool hasLivePrice;
   final String? marketPrice;
+  final bool isLight;
 
   @override
   Widget build(BuildContext context) {
@@ -435,7 +449,7 @@ class _PriceAssetRow extends StatelessWidget {
                     width: 4,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: c.border.withOpacity(0.3),
+                      color: c.border.withOpacity(isLight ? 0.4 : 0.3),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -462,8 +476,8 @@ class _PriceAssetRow extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                typeColor.withOpacity(0.14),
-                typeColor.withOpacity(0.06),
+                typeColor.withOpacity(isLight ? 0.14 : 0.14),
+                typeColor.withOpacity(isLight ? 0.07 : 0.06),
               ],
             )
                 : LinearGradient(
@@ -475,8 +489,8 @@ class _PriceAssetRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: hasLivePrice
-                  ? typeColor.withOpacity(0.22)
-                  : c.border.withOpacity(0.12),
+                  ? typeColor.withOpacity(isLight ? 0.32 : 0.22)
+                  : c.border.withOpacity(isLight ? 0.18 : 0.12),
             ),
           ),
           child: Row(
@@ -491,8 +505,8 @@ class _PriceAssetRow extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: typeColor.withOpacity(0.5),
-                        blurRadius: 4,
+                        color: typeColor.withOpacity(isLight ? 0.45 : 0.5),
+                        blurRadius: 5,
                       )
                     ],
                   ),
@@ -527,6 +541,7 @@ class _BottomRow extends StatelessWidget {
     required this.loadingPaymentMethods,
     required this.paymentMethodsMap,
     required this.getPaymentMethodNames,
+    required this.isLight,
   });
 
   final AppColor c;
@@ -536,6 +551,7 @@ class _BottomRow extends StatelessWidget {
   final bool loadingPaymentMethods;
   final Map<String, PaymentMethodModel> paymentMethodsMap;
   final String Function(List<String>) getPaymentMethodNames;
+  final bool isLight;
 
   @override
   Widget build(BuildContext context) {
@@ -549,8 +565,8 @@ class _BottomRow extends StatelessWidget {
         _Pill(
           label: isBuy ? 'BUY' : 'SELL',
           textColor: typeColor,
-          bgColor: typeColor.withOpacity(0.10),
-          borderColor: typeColor.withOpacity(0.18),
+          bgColor: typeColor.withOpacity(isLight ? 0.12 : 0.10),
+          borderColor: typeColor.withOpacity(isLight ? 0.28 : 0.18),
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -561,6 +577,7 @@ class _BottomRow extends StatelessWidget {
             c: c,
             icon: Icons.layers_outlined,
             label: '${offer.availableQty} avail.',
+            isLight: isLight,
           ),
         ],
 
@@ -568,7 +585,7 @@ class _BottomRow extends StatelessWidget {
 
         // Payment method
         if (loadingPaymentMethods)
-          _ShimmerBox(c: c, width: 90, height: 12, radius: 4)
+          _ShimmerBox(c: c, width: 90, height: 12, radius: 4, isLight: isLight)
         else if (effectiveIds.isNotEmpty)
           _PaymentMethodLogosRow(
             c: c,
@@ -586,7 +603,7 @@ class _BottomRow extends StatelessWidget {
           width: 30,
           height: 30,
           decoration: BoxDecoration(
-            color: typeColor.withOpacity(0.10),
+            color: typeColor.withOpacity(isLight ? 0.12 : 0.10),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
@@ -603,8 +620,10 @@ class _BottomRow extends StatelessWidget {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 class _Divider extends StatelessWidget {
-  const _Divider({required this.c});
+  const _Divider({required this.c, required this.isLight});
   final AppColor c;
+  final bool isLight;
+
   @override
   Widget build(BuildContext context) => Container(
     height: 1,
@@ -612,7 +631,7 @@ class _Divider extends StatelessWidget {
       gradient: LinearGradient(
         colors: [
           c.border.withOpacity(0),
-          c.border.withOpacity(0.12),
+          c.border.withOpacity(isLight ? 0.20 : 0.12),
           c.border.withOpacity(0),
         ],
       ),
@@ -657,10 +676,16 @@ class _Pill extends StatelessWidget {
 }
 
 class _SmallInfoChip extends StatelessWidget {
-  const _SmallInfoChip({required this.c, required this.icon, required this.label});
+  const _SmallInfoChip({
+    required this.c,
+    required this.icon,
+    required this.label,
+    required this.isLight,
+  });
   final AppColor c;
   final IconData icon;
   final String label;
+  final bool isLight;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -668,12 +693,16 @@ class _SmallInfoChip extends StatelessWidget {
     decoration: BoxDecoration(
       color: c.background,
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: c.border.withOpacity(0.10)),
+      border: Border.all(
+        color: c.border.withOpacity(isLight ? 0.18 : 0.10),
+      ),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 12, color: c.textSecondary.withOpacity(0.7)),
+        Icon(icon,
+            size: 12,
+            color: c.textSecondary.withOpacity(isLight ? 0.8 : 0.7)),
         const SizedBox(width: 4),
         Text(
           label,
@@ -758,10 +787,14 @@ class _PaymentMethodLogosRow extends StatelessWidget {
           width: shown.length * 16.0 + 8,
           height: 24,
           child: Stack(
-            children: shown.asMap().entries.map((e) => Positioned(
+            children: shown
+                .asMap()
+                .entries
+                .map((e) => Positioned(
               left: e.key * 16.0,
               child: _LogoAvatar(method: e.value, c: c, size: 24),
-            )).toList(),
+            ))
+                .toList(),
           ),
         ),
         if (extra > 0) ...[
@@ -810,18 +843,18 @@ class _LogoAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.background,
         borderRadius: BorderRadius.circular(size * 0.35),
-        border: Border.all(color: c.border.withOpacity(0.18), width: 1),
+        border: Border.all(color: c.border.withOpacity(0.22), width: 1),
       ),
       child: Padding(
         padding: EdgeInsets.all(size * 0.10),
         child: logo != null && logo.isNotEmpty
             ? Image.network(
-                logo,
-                width: size,
-                height: size,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => _fallback(),
-              )
+          logo,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => _fallback(),
+        )
             : _fallback(),
       ),
     );
@@ -845,18 +878,21 @@ class _ShimmerBox extends StatelessWidget {
     required this.width,
     required this.height,
     required this.radius,
+    required this.isLight,
   });
   final AppColor c;
   final double width;
   final double height;
   final double radius;
+  final bool isLight;
 
   @override
   Widget build(BuildContext context) => Container(
     width: width,
     height: height,
     decoration: BoxDecoration(
-      color: c.border.withOpacity(0.10),
+      // Light mode needs a more visible shimmer placeholder
+      color: c.border.withOpacity(isLight ? 0.18 : 0.10),
       borderRadius: BorderRadius.circular(radius),
     ),
   );
@@ -869,14 +905,17 @@ class _MerchantSkeleton extends StatelessWidget {
   final AppColor c;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _ShimmerBox(c: c, width: 110, height: 14, radius: 4),
-      const SizedBox(height: 5),
-      _ShimmerBox(c: c, width: 70, height: 11, radius: 3),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ShimmerBox(c: c, width: 110, height: 14, radius: 4, isLight: isLight),
+        const SizedBox(height: 5),
+        _ShimmerBox(c: c, width: 70, height: 11, radius: 3, isLight: isLight),
+      ],
+    );
+  }
 }
 
 class _MerchantInfo extends StatelessWidget {
@@ -928,6 +967,7 @@ class _MerchantInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final tierColor = _tierColor(profile.tier);
     final availColor = _availColor(profile.availability);
+    final isLight = Theme.of(context).brightness == Brightness.light;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -950,9 +990,11 @@ class _MerchantInfo extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: tierColor.withOpacity(0.10),
+                color: tierColor.withOpacity(isLight ? 0.12 : 0.10),
                 borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: tierColor.withOpacity(0.22)),
+                border: Border.all(
+                  color: tierColor.withOpacity(isLight ? 0.30 : 0.22),
+                ),
               ),
               child: Text(
                 _tierLabel(profile.tier),
@@ -970,7 +1012,8 @@ class _MerchantInfo extends StatelessWidget {
         Row(
           children: [
             if (profile.country != null && profile.country!.isNotEmpty) ...[
-              Icon(Icons.place_outlined, size: 11, color: c.textSecondary),
+              Icon(Icons.place_outlined,
+                  size: 11, color: c.textSecondary),
               const SizedBox(width: 2),
               Text(
                 profile.country!,
@@ -987,12 +1030,13 @@ class _MerchantInfo extends StatelessWidget {
                 width: 46,
                 height: 11,
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.13),
+                  color: c.border.withOpacity(isLight ? 0.18 : 0.13),
                   borderRadius: BorderRadius.circular(3),
                 ),
               )
             else if (averageRating != null) ...[
-              Icon(Icons.star_rounded, size: 12, color: const Color(0xFFFFAA00)),
+              Icon(Icons.star_rounded,
+                  size: 12, color: const Color(0xFFFFAA00)),
               const SizedBox(width: 3),
               Text(
                 averageRating!.toStringAsFixed(1),
@@ -1019,7 +1063,7 @@ class _MerchantInfo extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: availColor.withOpacity(0.45),
+                    color: availColor.withOpacity(isLight ? 0.35 : 0.45),
                     blurRadius: 5,
                   )
                 ],

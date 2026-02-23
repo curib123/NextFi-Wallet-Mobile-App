@@ -522,7 +522,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const MarketOffersScreen(initialType: OfferType.buy),
+        builder: (_) => const MarketOffersScreen(initialType: OfferType.sell),
       ),
     );
   }

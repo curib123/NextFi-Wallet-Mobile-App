@@ -193,6 +193,35 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     }, successMsg: 'Trade cancelled');
   }
 
+  // Lock crypto into escrow - Step B
+  Future<void> _lockCrypto() async {
+    final confirmed = await _showConfirm(
+      title: 'Lock Crypto in Escrow',
+      body: 'This will lock your crypto in a claimable balance until the trade is complete.',
+      confirmLabel: 'Lock Crypto',
+    );
+    if (!confirmed) return;
+    // Note: This would require the Stellar transaction hash from the app
+    // For now, we show a message that this feature requires the app
+    showFloatingSnackBar(context, 
+      message: 'Please use the wallet app to create the claimable balance first',
+      type: SnackBarType.info);
+  }
+
+  // Claim crypto from escrow - Step E
+  Future<void> _claimCrypto() async {
+    final confirmed = await _showConfirm(
+      title: 'Claim Crypto',
+      body: 'This will claim your crypto from the escrow to your wallet.',
+      confirmLabel: 'Claim Crypto',
+    );
+    if (!confirmed) return;
+    // Note: This would require the claim transaction hash
+    showFloatingSnackBar(context, 
+      message: 'Please use the wallet app to claim your crypto',
+      type: SnackBarType.info);
+  }
+
   Future<void> _runAction(
     Future<void> Function() action, {
     required String successMsg,
@@ -339,8 +368,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 const SizedBox(height: 14),
               ],
 
-              // ── Payment instructions (for buyer, if escrow funded) ────
-              if (isBuy && _trade.status == TradeStatus.escrowFunded) ...[
+              // ── Payment instructions (for buyer, if crypto is locked) ────
+              if (isBuy && _trade.status == TradeStatus.cryptoLocked) ...[
                 _PaymentInstructionsCard(c: c, trade: _trade),
                 const SizedBox(height: 14),
               ],
@@ -374,8 +403,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           trade: _trade,
           isBuy: isBuy,
           loading: _actionLoading,
+          onLockCrypto: _lockCrypto,
           onMarkFiatSent: _markFiatSent,
           onConfirmFiat: _confirmFiat,
+          onClaimCrypto: _claimCrypto,
           onCancel: _cancelTrade,
         ),
       ),
@@ -431,23 +462,102 @@ class _StatusHero extends StatelessWidget {
   final TradeModel trade;
   final bool isBuy;
 
-  static const _labels = {
-    TradeStatus.pending: ('Waiting for escrow', Icons.hourglass_empty_rounded, Color(0xFFFAA040)),
-    TradeStatus.escrowFunded: ('Ready to pay', Icons.lock_clock_rounded, Color(0xFF5B8DEF)),
-    TradeStatus.fiatSent: ('Payment sent – awaiting confirmation', Icons.pending_rounded, Color(0xFFFAA040)),
-    TradeStatus.completed: ('Trade completed', Icons.check_circle_rounded, Color(0xFF00C48C)),
-    TradeStatus.cancelled: ('Trade cancelled', Icons.cancel_rounded, Color(0xFFFF5C72)),
-    TradeStatus.disputed: ('Under dispute', Icons.report_rounded, Color(0xFFFF5C72)),
-    TradeStatus.unknown: ('Unknown status', Icons.help_outline_rounded, Color(0xFF9CA3AF)),
-  };
+  Color _getStatusColor(TradeStatus status) {
+    switch (status) {
+      case TradeStatus.created:
+        return const Color(0xFFFAA040); // Orange - waiting
+      case TradeStatus.cryptoLocked:
+        return const Color(0xFF5B8DEF); // Blue - ready to pay
+      case TradeStatus.fiatSent:
+        return const Color(0xFFFAA040); // Orange - awaiting confirmation
+      case TradeStatus.fiatConfirmed:
+        return const Color(0xFF00C48C); // Green - confirmed
+      case TradeStatus.completed:
+        return const Color(0xFF00C48C); // Green
+      case TradeStatus.cancelled:
+        return const Color(0xFFFF5C72); // Red
+      case TradeStatus.disputed:
+        return const Color(0xFFFF5C72); // Red
+      case TradeStatus.expired:
+        return const Color(0xFF9CA3AF); // Gray
+      case TradeStatus.unknown:
+        return const Color(0xFF9CA3AF);
+      case TradeStatus.pending:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.escrowFunded:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+    }
+  }
+
+  IconData _getStatusIcon(TradeStatus status) {
+    switch (status) {
+      case TradeStatus.created:
+        return Icons.hourglass_empty_rounded;
+      case TradeStatus.cryptoLocked:
+        return Icons.lock_clock_rounded;
+      case TradeStatus.fiatSent:
+        return Icons.pending_rounded;
+      case TradeStatus.fiatConfirmed:
+        return Icons.check_circle_outline_rounded;
+      case TradeStatus.completed:
+        return Icons.check_circle_rounded;
+      case TradeStatus.cancelled:
+        return Icons.cancel_rounded;
+      case TradeStatus.disputed:
+        return Icons.report_rounded;
+      case TradeStatus.expired:
+        return Icons.schedule_rounded;
+      case TradeStatus.unknown:
+        return Icons.help_outline_rounded;
+      case TradeStatus.pending:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.escrowFunded:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+    }
+  }
+
+  String _getStatusLabel(TradeStatus status, bool isBuy) {
+    switch (status) {
+      case TradeStatus.created:
+        return 'Waiting for Escrow';
+      case TradeStatus.cryptoLocked:
+        return isBuy ? 'Ready to Pay' : 'Escrow Funded - Awaiting Payment';
+      case TradeStatus.fiatSent:
+        return isBuy ? 'Payment Sent - Awaiting Confirmation' : 'Payment Sent';
+      case TradeStatus.fiatConfirmed:
+        return 'Payment Confirmed';
+      case TradeStatus.completed:
+        return 'Trade Completed';
+      case TradeStatus.cancelled:
+        return 'Trade Cancelled';
+      case TradeStatus.disputed:
+        return 'Under Dispute';
+      case TradeStatus.expired:
+        return 'Trade Expired';
+      case TradeStatus.unknown:
+        return 'Unknown Status';
+      case TradeStatus.pending:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.escrowFunded:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final info = _labels[trade.status] ??
-        ('Unknown', Icons.help_outline_rounded, const Color(0xFF9CA3AF));
-    final label = info.$1;
-    final icon = info.$2;
-    final color = info.$3;
+    final color = _getStatusColor(trade.status);
+    final icon = _getStatusIcon(trade.status);
+    final label = _getStatusLabel(trade.status, isBuy);
+
+    // Show auto-dispute trigger if present
+    final showDisputeBanner = trade.status == TradeStatus.disputed && 
+                              trade.autoDisputeTrigger != null;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -456,46 +566,73 @@ class _StatusHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: color, size: 24),
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15.5,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Trade ID: ${trade.id.length > 14 ? '${trade.id.substring(0, 10)}...' : trade.id}',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: trade.id));
+                  showFloatingSnackBar(context, message: 'Trade ID copied', type: SnackBarType.success);
+                },
+                child: Icon(Icons.copy_rounded, size: 16, color: c.textSecondary.withOpacity(0.5)),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15.5,
-                    letterSpacing: -0.3,
+          if (showDisputeBanner) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: c.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 14, color: c.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Auto-dispute: ${trade.autoDisputeTrigger}',
+                      style: TextStyle(color: c.error, fontSize: 11.5),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Trade ID: ${trade.id.length > 14 ? '${trade.id.substring(0, 10)}...' : trade.id}',
-                  style: TextStyle(color: c.textSecondary, fontSize: 12),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          GestureDetector(
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: trade.id));
-              showFloatingSnackBar(context, message: 'Trade ID copied', type: SnackBarType.success);
-            },
-            child: Icon(Icons.copy_rounded, size: 16, color: c.textSecondary.withOpacity(0.5)),
-          ),
+          ],
         ],
       ),
     );
@@ -664,7 +801,7 @@ class _EscrowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (escrow.status?.toUpperCase()) {
+    final statusColor = switch (escrow.status?.toString()) {
       'FUNDED' || 'ACTIVE' => const Color(0xFF00C48C),
       'RELEASED' => const Color(0xFF5B8DEF),
       'CANCELLED' || 'FAILED' => const Color(0xFFFF5C72),
@@ -689,7 +826,7 @@ class _EscrowCard extends StatelessWidget {
                     border: Border.all(color: statusColor.withOpacity(0.2)),
                   ),
                   child: Text(
-                    escrow.status!.toUpperCase(),
+                    escrow.status!.toString(),
                     style: TextStyle(
                       color: statusColor,
                       fontSize: 10.5,
@@ -735,30 +872,50 @@ class _StatusTimeline extends StatelessWidget {
   final TradeStatus status;
   final bool isBuy;
 
+  // Get timeline steps based on offer type (BUY vs SELL)
+  List<(TradeStatus, String, String)> _getSteps(bool isBuy) {
+    if (isBuy) {
+      // BUY flow: user is buying crypto, pays fiat, receives crypto
+      return [
+        (TradeStatus.created, 'Trade Created', 'Waiting for merchant to lock crypto in escrow'),
+        (TradeStatus.cryptoLocked, 'Crypto Locked', 'Crypto is in escrow — send your fiat payment'),
+        (TradeStatus.fiatSent, 'Payment Sent', 'Waiting for merchant to confirm receipt'),
+        (TradeStatus.fiatConfirmed, 'Payment Confirmed', 'Merchant confirmed — claim your crypto'),
+        (TradeStatus.completed, 'Completed', 'Crypto has been released to your wallet'),
+      ];
+    } else {
+      // SELL flow: user is selling crypto, receives fiat, locks crypto
+      return [
+        (TradeStatus.created, 'Trade Created', 'Waiting for you to lock crypto in escrow'),
+        (TradeStatus.cryptoLocked, 'Crypto Locked', 'Crypto is in escrow — buyer will send fiat'),
+        (TradeStatus.fiatSent, 'Payment Received', 'Buyer marked payment sent — confirm receipt'),
+        (TradeStatus.fiatConfirmed, 'Payment Confirmed', 'Fiat confirmed — release crypto'),
+        (TradeStatus.completed, 'Completed', 'Crypto released to buyer'),
+      ];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final steps = isBuy
-        ? [
-            (TradeStatus.pending, 'Trade opened', 'Waiting for crypto escrow to be set up'),
-            (TradeStatus.escrowFunded, 'Escrow funded', 'Crypto is locked — send your fiat payment'),
-            (TradeStatus.fiatSent, 'Payment sent', 'Waiting for merchant to confirm receipt'),
-            (TradeStatus.completed, 'Completed', 'Crypto has been released to your wallet'),
-          ]
-        : [
-            (TradeStatus.pending, 'Trade opened', 'Waiting for escrow to be funded'),
-            (TradeStatus.escrowFunded, 'Escrow funded', 'Buyer will send fiat payment'),
-            (TradeStatus.fiatSent, 'Payment received', 'Confirm you received the fiat'),
-            (TradeStatus.completed, 'Completed', 'Fiat confirmed — crypto released'),
-          ];
-
+    final steps = _getSteps(isBuy);
+    
     final statusOrder = [
-      TradeStatus.pending,
-      TradeStatus.escrowFunded,
+      TradeStatus.created,
+      TradeStatus.cryptoLocked,
       TradeStatus.fiatSent,
+      TradeStatus.fiatConfirmed,
       TradeStatus.completed,
     ];
 
-    final currentIdx = statusOrder.indexOf(status);
+    // Handle unknown status
+    final currentIdx = statusOrder.contains(status) 
+        ? statusOrder.indexOf(status) 
+        : -1;
+
+    // Check for terminal states
+    final isCancelled = status == TradeStatus.cancelled;
+    final isDisputed = status == TradeStatus.disputed;
+    final isExpired = status == TradeStatus.expired;
 
     return _Card(
       c: c,
@@ -773,11 +930,10 @@ class _StatusTimeline extends StatelessWidget {
             final stepStatus = step.$1;
             final stepIdx = statusOrder.indexOf(stepStatus);
 
-            final isDone = currentIdx > stepIdx ||
-                status == TradeStatus.completed;
+            final isCompleted = status == TradeStatus.completed;
+            final isDone = currentIdx > stepIdx || isCompleted;
             final isCurrent = stepIdx == currentIdx && status.isActive;
-            final isSkipped = status == TradeStatus.cancelled ||
-                status == TradeStatus.disputed;
+            final isSkipped = isCancelled || isDisputed || isExpired;
 
             Color dotColor;
             IconData dotIcon;
@@ -992,28 +1148,45 @@ class _BottomActions extends StatelessWidget {
     required this.trade,
     required this.isBuy,
     required this.loading,
+    required this.onLockCrypto,
     required this.onMarkFiatSent,
     required this.onConfirmFiat,
+    required this.onClaimCrypto,
     required this.onCancel,
   });
   final AppColor c;
   final TradeModel trade;
   final bool isBuy;
   final bool loading;
+  final VoidCallback onLockCrypto;
   final VoidCallback onMarkFiatSent;
   final VoidCallback onConfirmFiat;
+  final VoidCallback onClaimCrypto;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
     if (trade.status.isTerminal) return const SizedBox.shrink();
 
-    final showMarkFiatSent = isBuy && trade.status == TradeStatus.escrowFunded;
-    final showConfirmFiat = !isBuy && trade.status == TradeStatus.fiatSent;
-    final showCancel = trade.status == TradeStatus.pending ||
-        trade.status == TradeStatus.escrowFunded;
+    // Step B: Lock crypto - show when status is CREATED
+    final showLockCrypto = trade.status == TradeStatus.created;
+    
+    // Step C: Mark fiat sent - show when CRYPTO_LOCKED
+    final showMarkFiatSent = trade.status == TradeStatus.cryptoLocked;
+    
+    // Step D: Confirm fiat - show when FIAT_SENT
+    final showConfirmFiat = trade.status == TradeStatus.fiatSent;
+    
+    // Step E: Claim crypto - show when FIAT_CONFIRMED
+    final showClaimCrypto = trade.status == TradeStatus.fiatConfirmed;
+    
+    // Can cancel during created or crypto locked states
+    final showCancel = trade.status == TradeStatus.created ||
+        trade.status == TradeStatus.cryptoLocked;
 
-    if (!showMarkFiatSent && !showConfirmFiat && !showCancel) {
+    // If no actions to show
+    if (!showLockCrypto && !showMarkFiatSent && !showConfirmFiat && 
+        !showClaimCrypto && !showCancel) {
       return const SizedBox.shrink();
     }
 
@@ -1026,30 +1199,59 @@ class _BottomActions extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Step B: Lock crypto button
+          if (showLockCrypto)
+            _ActionButton(
+              label: isBuy ? 'Lock Crypto to Start' : 'Lock Your Crypto',
+              icon: Icons.lock_rounded,
+              color: const Color(0xFF5B8DEF),
+              loading: loading,
+              onTap: onLockCrypto,
+            ),
+          
+          // Step C: Mark fiat sent button
           if (showMarkFiatSent)
             _ActionButton(
-              label: "I've sent the payment",
-              icon: Icons.check_rounded,
+              label: "I've Sent Payment",
+              icon: Icons.send_rounded,
               color: const Color(0xFF5B8DEF),
               loading: loading,
               onTap: onMarkFiatSent,
             ),
+          
+          // Step D: Confirm fiat button
           if (showConfirmFiat)
             _ActionButton(
-              label: 'Confirm fiat received',
+              label: 'Confirm Payment Received',
               icon: Icons.verified_rounded,
               color: const Color(0xFF00C48C),
               loading: loading,
               onTap: onConfirmFiat,
             ),
-          if (showMarkFiatSent || showConfirmFiat) const SizedBox(height: 8),
+          
+          // Step E: Claim crypto button
+          if (showClaimCrypto)
+            _ActionButton(
+              label: 'Claim Your Crypto',
+              icon: Icons.account_balance_wallet_rounded,
+              color: const Color(0xFF00C48C),
+              loading: loading,
+              onTap: onClaimCrypto,
+            ),
+          
+          // Add spacing before cancel button
+          if ((showLockCrypto || showMarkFiatSent || showConfirmFiat || showClaimCrypto) 
+              && showCancel) 
+            const SizedBox(height: 8),
+            
+          // Cancel button
           if (showCancel)
             _ActionButton(
-              label: 'Cancel trade',
+              label: 'Cancel Trade',
               icon: Icons.close_rounded,
               color: c.error,
               outlined: true,
-              loading: loading && !showMarkFiatSent && !showConfirmFiat,
+              loading: loading,
               onTap: onCancel,
             ),
         ],

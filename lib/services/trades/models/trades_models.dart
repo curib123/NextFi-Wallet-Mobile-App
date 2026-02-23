@@ -1,24 +1,30 @@
 enum TradeStatus {
-  pending,
-  escrowFunded,
+  created,
+  cryptoLocked,
   fiatSent,
+  fiatConfirmed,
   completed,
   cancelled,
   disputed,
-  unknown;
+  expired,
+  unknown, pending, escrowFunded;
 
   static TradeStatus fromString(String? v) {
     switch (v?.toUpperCase().replaceAll('_', '').replaceAll('-', '')) {
-      case 'PENDING':
-        return TradeStatus.pending;
+      case 'CREATED':
+        return TradeStatus.created;
+      case 'CRYPTOLOCKED':
       case 'ESCROWFUNDED':
       case 'ACTIVE':
       case 'FUNDED':
-        return TradeStatus.escrowFunded;
+        return TradeStatus.cryptoLocked;
       case 'FIATSENT':
       case 'PAYMENTPENDING':
       case 'PAYMENTSENT':
         return TradeStatus.fiatSent;
+      case 'FIATCONFIRMED':
+      case 'PAYMENTRECEIVED':
+        return TradeStatus.fiatConfirmed;
       case 'COMPLETED':
       case 'RELEASED':
         return TradeStatus.completed;
@@ -27,36 +33,143 @@ enum TradeStatus {
         return TradeStatus.cancelled;
       case 'DISPUTED':
         return TradeStatus.disputed;
+      case 'EXPIRED':
+        return TradeStatus.expired;
       default:
         return TradeStatus.unknown;
     }
   }
 
+  /// Returns a user-friendly label for this status
+  String get label {
+    switch (this) {
+      case TradeStatus.created:
+        return 'Waiting for Escrow';
+      case TradeStatus.cryptoLocked:
+        return 'Ready to Pay';
+      case TradeStatus.fiatSent:
+        return 'Payment Sent';
+      case TradeStatus.fiatConfirmed:
+        return 'Payment Confirmed';
+      case TradeStatus.completed:
+        return 'Trade Completed';
+      case TradeStatus.cancelled:
+        return 'Trade Cancelled';
+      case TradeStatus.disputed:
+        return 'Under Dispute';
+      case TradeStatus.expired:
+        return 'Trade Expired';
+      case TradeStatus.unknown:
+        return 'Unknown Status';
+      case TradeStatus.pending:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.escrowFunded:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+    }
+  }
+
+  /// Returns the icon for this status
+  String get iconName {
+    switch (this) {
+      case TradeStatus.created:
+        return 'hourglass_empty';
+      case TradeStatus.cryptoLocked:
+        return 'lock_clock';
+      case TradeStatus.fiatSent:
+        return 'pending';
+      case TradeStatus.fiatConfirmed:
+        return 'check_circle';
+      case TradeStatus.completed:
+        return 'check_circle';
+      case TradeStatus.cancelled:
+        return 'cancel';
+      case TradeStatus.disputed:
+        return 'report';
+      case TradeStatus.expired:
+        return 'schedule';
+      case TradeStatus.unknown:
+        return 'help';
+      case TradeStatus.pending:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+      case TradeStatus.escrowFunded:
+        // TODO: Handle this case.
+        throw UnimplementedError();
+    }
+  }
+
   bool get isActive =>
-      this == TradeStatus.pending ||
-      this == TradeStatus.escrowFunded ||
+      this == TradeStatus.created ||
+      this == TradeStatus.cryptoLocked ||
       this == TradeStatus.fiatSent ||
+      this == TradeStatus.fiatConfirmed ||
       this == TradeStatus.disputed;
 
   bool get isTerminal =>
-      this == TradeStatus.completed || this == TradeStatus.cancelled;
+      this == TradeStatus.completed ||
+      this == TradeStatus.cancelled ||
+      this == TradeStatus.expired;
+}
+
+/// Status of the Claimable Balance escrow
+enum EscrowStatus {
+  pending,
+  cbCreated,
+  cbClaimed,
+  cbRefunded,
+  failed,
+  unknown;
+
+  static EscrowStatus fromString(String? v) {
+    switch (v?.toUpperCase().replaceAll('_', '').replaceAll('-', '')) {
+      case 'PENDING':
+        return EscrowStatus.pending;
+      case 'CBCREATED':
+      case 'ESCROWFUNDED':
+      case 'FUNDED':
+      case 'ACTIVE':
+        return EscrowStatus.cbCreated;
+      case 'CBCLAIMED':
+      case 'RELEASED':
+        return EscrowStatus.cbClaimed;
+      case 'CBREFUNDED':
+      case 'REFUNDED':
+        return EscrowStatus.cbRefunded;
+      case 'FAILED':
+        return EscrowStatus.failed;
+      default:
+        return EscrowStatus.unknown;
+    }
+  }
+
+  bool get isActive => this == EscrowStatus.cbCreated;
 }
 
 class TradeEscrowModel {
   final String id;
   final String? claimableBalanceId;
-  final String? status;
+  final EscrowStatus? status;
   final String? txHash;
+  final String? createTxHash;
+  final String? claimTxHash;
+  final String? refundTxHash;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? expiresAt;
 
   const TradeEscrowModel({
     required this.id,
     this.claimableBalanceId,
     this.status,
     this.txHash,
+    this.createTxHash,
+    this.claimTxHash,
+    this.refundTxHash,
     this.createdAt,
     this.updatedAt,
+    this.expiresAt,
   });
 
   factory TradeEscrowModel.fromJson(Map<String, dynamic> json) {
@@ -66,11 +179,63 @@ class TradeEscrowModel {
       id: json['id']?.toString() ?? '',
       claimableBalanceId: json['claimableBalanceId']?.toString() ??
           json['claimable_balance_id']?.toString(),
-      status: json['status']?.toString(),
+      status: EscrowStatus.fromString(json['status']?.toString()),
       txHash: json['txHash']?.toString() ?? json['tx_hash']?.toString(),
+      createTxHash: json['createTxHash']?.toString() ?? json['create_tx_hash']?.toString(),
+      claimTxHash: json['claimTxHash']?.toString() ?? json['claim_tx_hash']?.toString(),
+      refundTxHash: json['refundTxHash']?.toString() ?? json['refund_tx_hash']?.toString(),
       createdAt: readDate(json['createdAt'] ?? json['created_at']),
       updatedAt: readDate(json['updatedAt'] ?? json['updated_at']),
+      expiresAt: readDate(json['expiresAt'] ?? json['expires_at']),
     );
+  }
+
+  TradeEscrowModel copyWith({
+    String? claimableBalanceId,
+    EscrowStatus? status,
+    String? txHash,
+    String? createTxHash,
+    String? claimTxHash,
+    String? refundTxHash,
+    DateTime? expiresAt,
+  }) {
+    return TradeEscrowModel(
+      id: id,
+      claimableBalanceId: claimableBalanceId ?? this.claimableBalanceId,
+      status: status ?? this.status,
+      txHash: txHash ?? this.txHash,
+      createTxHash: createTxHash ?? this.createTxHash,
+      claimTxHash: claimTxHash ?? this.claimTxHash,
+      refundTxHash: refundTxHash ?? this.refundTxHash,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+    );
+  }
+}
+
+/// Type of offer - determines trade flow
+enum TradeOfferType {
+  buy,
+  sell,
+  unknown;
+
+  static TradeOfferType fromString(String? v) {
+    switch (v?.toUpperCase()) {
+      case 'BUY':
+        return TradeOfferType.buy;
+      case 'SELL':
+        return TradeOfferType.sell;
+      default:
+        return TradeOfferType.unknown;
+    }
+  }
+
+  /// Whether the current user is the buyer in this trade
+  bool isUserBuyer(String currentUserId, String buyerId, String sellerId) {
+    return this == TradeOfferType.sell 
+        ? currentUserId == buyerId  // SELL offer = user buys = user is buyer
+        : currentUserId == sellerId; // BUY offer = user sells = user is seller
   }
 }
 
@@ -78,10 +243,12 @@ class TradeModel {
   final String id;
   final String offerId;
   final TradeStatus status;
+  final TradeOfferType offerType;
   final String asset;
   final String fiatCurrency;
   final double cryptoAmount;
   final double fiatAmount;
+  final double? priceSnapshot;
   final String buyerId;
   final String sellerId;
   final String cryptoReceiverAddress;
@@ -92,18 +259,25 @@ class TradeModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? expiresAt;
+  final DateTime? paymentDueAt;
+  final DateTime? fiatSentAt;
+  final DateTime? fiatConfirmDueAt;
+  final String? autoDisputeTrigger;
   final TradeEscrowModel? escrow;
   final Map<String, dynamic>? offer;
   final Map<String, dynamic>? sellerPaymentAccount;
+  final Map<String, dynamic>? buyerPaymentAccount;
 
   const TradeModel({
     required this.id,
     required this.offerId,
     required this.status,
+    required this.offerType,
     required this.asset,
     required this.fiatCurrency,
     required this.cryptoAmount,
     required this.fiatAmount,
+    this.priceSnapshot,
     required this.buyerId,
     required this.sellerId,
     required this.cryptoReceiverAddress,
@@ -114,9 +288,14 @@ class TradeModel {
     this.createdAt,
     this.updatedAt,
     this.expiresAt,
+    this.paymentDueAt,
+    this.fiatSentAt,
+    this.fiatConfirmDueAt,
+    this.autoDisputeTrigger,
     this.escrow,
     this.offer,
     this.sellerPaymentAccount,
+    this.buyerPaymentAccount,
   });
 
   factory TradeModel.fromJson(Map<String, dynamic> json) {
@@ -130,6 +309,19 @@ class TradeModel {
         }
       }
       return 0.0;
+    }
+
+    double? readDoubleOrNull(List<String> keys) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v == null) continue;
+        if (v is num) return v.toDouble();
+        if (v is String) {
+          final p = double.tryParse(v.trim());
+          if (p != null) return p;
+        }
+      }
+      return null;
     }
 
     int? readInt(List<String> keys) {
@@ -168,15 +360,33 @@ class TradeModel {
     final escrowRaw = json['escrow'] ?? json['tradeEscrow'];
     final offerRaw = json['offer'];
     final spaRaw = json['sellerPaymentAccount'];
+    final bpaRaw = json['buyerPaymentAccount'];
+
+    // Read offer type from the nested offer object or directly from trade
+    TradeOfferType readOfferType() {
+      final type = json['offerType']?.toString() ?? 
+                   json['type']?.toString();
+      if (type != null && type.isNotEmpty) {
+        return TradeOfferType.fromString(type);
+      }
+      // Try to get from offer object
+      if (offerRaw is Map<String, dynamic>) {
+        final offerType = offerRaw['type']?.toString();
+        return TradeOfferType.fromString(offerType);
+      }
+      return TradeOfferType.unknown;
+    }
 
     return TradeModel(
       id: readStr(const ['id']),
       offerId: readStr(const ['offerId', 'offer_id']),
       status: TradeStatus.fromString(json['status']?.toString()),
+      offerType: readOfferType(),
       asset: readStr(const ['asset']),
       fiatCurrency: readStr(const ['fiatCurrency', 'fiat_currency']),
       cryptoAmount: readDouble(const ['cryptoAmount', 'crypto_amount']),
       fiatAmount: readDouble(const ['fiatAmount', 'fiat_amount']),
+      priceSnapshot: readDoubleOrNull(const ['priceSnapshot', 'price_snapshot']),
       buyerId: readStr(const ['buyerId', 'buyer_id']),
       sellerId: readStr(const ['sellerId', 'seller_id']),
       cryptoReceiverAddress: readStr(
@@ -207,24 +417,44 @@ class TradeModel {
       updatedAt: readDate(const ['updatedAt', 'updated_at']),
       expiresAt: readDate(const ['expiresAt', 'expires_at', 'paymentDeadline',
         'payment_deadline']),
+      paymentDueAt: readDate(const ['paymentDueAt', 'payment_due_at']),
+      fiatSentAt: readDate(const ['fiatSentAt', 'fiat_sent_at']),
+      fiatConfirmDueAt: readDate(const ['fiatConfirmDueAt', 'fiat_confirm_due_at']),
+      autoDisputeTrigger: (() {
+        final v = readStr(const ['autoDisputeTrigger', 'auto_dispute_trigger']);
+        return v.isEmpty ? null : v;
+      })(),
       escrow: escrowRaw is Map<String, dynamic>
           ? TradeEscrowModel.fromJson(escrowRaw)
           : null,
       offer: offerRaw is Map<String, dynamic> ? offerRaw : null,
       sellerPaymentAccount:
           spaRaw is Map<String, dynamic> ? spaRaw : null,
+      buyerPaymentAccount:
+          bpaRaw is Map<String, dynamic> ? bpaRaw : null,
     );
   }
 
-  TradeModel copyWith({TradeStatus? status, TradeEscrowModel? escrow}) {
+  TradeModel copyWith({
+    TradeStatus? status,
+    TradeEscrowModel? escrow,
+    TradeOfferType? offerType,
+    double? priceSnapshot,
+    DateTime? paymentDueAt,
+    DateTime? fiatSentAt,
+    DateTime? fiatConfirmDueAt,
+    String? autoDisputeTrigger,
+  }) {
     return TradeModel(
       id: id,
       offerId: offerId,
       status: status ?? this.status,
+      offerType: offerType ?? this.offerType,
       asset: asset,
       fiatCurrency: fiatCurrency,
       cryptoAmount: cryptoAmount,
       fiatAmount: fiatAmount,
+      priceSnapshot: priceSnapshot ?? this.priceSnapshot,
       buyerId: buyerId,
       sellerId: sellerId,
       cryptoReceiverAddress: cryptoReceiverAddress,
@@ -235,9 +465,14 @@ class TradeModel {
       createdAt: createdAt,
       updatedAt: updatedAt,
       expiresAt: expiresAt,
+      paymentDueAt: paymentDueAt ?? this.paymentDueAt,
+      fiatSentAt: fiatSentAt ?? this.fiatSentAt,
+      fiatConfirmDueAt: fiatConfirmDueAt ?? this.fiatConfirmDueAt,
+      autoDisputeTrigger: autoDisputeTrigger ?? this.autoDisputeTrigger,
       escrow: escrow ?? this.escrow,
       offer: offer,
       sellerPaymentAccount: sellerPaymentAccount,
+      buyerPaymentAccount: buyerPaymentAccount,
     );
   }
 }
