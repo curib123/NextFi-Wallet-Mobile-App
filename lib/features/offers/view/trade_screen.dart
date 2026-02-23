@@ -17,9 +17,14 @@ import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 
 class TradeScreen extends StatefulWidget {
-  const TradeScreen({super.key, required this.offer});
+  const TradeScreen({
+    super.key,
+    required this.offer,
+    this.marketPrice,
+  });
 
   final OfferModel offer;
+  final String? marketPrice; // Passed from offer modal
 
   @override
   State<TradeScreen> createState() => _TradeScreenState();
@@ -63,12 +68,25 @@ class _TradeScreenState extends State<TradeScreen> {
   // Formula: finalPrice = marketPrice * (1 + marginPercent/100)
   // Then: crypto = fiatAmount / finalPrice
   double get _effectivePrice {
-    if (offer.marketPrice != null && offer.marketPrice! > 0) {
+    // First try to use marketPrice passed from offer modal
+    double? price;
+    
+    // Try widget.marketPrice first (passed from offer modal)
+    if (widget.marketPrice != null && widget.marketPrice!.isNotEmpty) {
+      price = double.tryParse(widget.marketPrice!);
+    }
+    
+    // Fallback to offer.marketPrice if not available
+    if (price == null && offer.marketPrice != null && offer.marketPrice! > 0) {
+      price = offer.marketPrice;
+    }
+    
+    if (price != null && price > 0) {
       // Use market price with margin
       if (offer.marginPercent != null) {
-        return offer.marketPrice! * (1 + offer.marginPercent! / 100);
+        return price * (1 + offer.marginPercent! / 100);
       }
-      return offer.marketPrice!;
+      return price;
     }
     
     // Fallback: if no market price, cannot calculate accurately
@@ -395,6 +413,15 @@ class _TradeScreenState extends State<TradeScreen> {
                           isBuy: isBuy,
                         ),
                       ],
+                      // Show warning if no market price
+                      if (_enterFiatMode && !_canCalculate) ...[
+                        const SizedBox(height: 8),
+                        _InfoChip(
+                          c: c,
+                          message: 'No market price available. Toggle to enter crypto amount directly.',
+                          isWarning: true,
+                        ),
+                      ],
                       const SizedBox(height: 18),
 
                       // ── Merchant payment account (where to send fiat) ──
@@ -460,9 +487,10 @@ class _TradeScreenState extends State<TradeScreen> {
               isBuy: isBuy,
               submitting: _submitting,
               // Disable if cannot calculate (no market price)
-              onTap: (_enterFiatMode && !_canCalculate) ? null : _submit,
+              disabled: _enterFiatMode && !_canCalculate,
+              onTap: _submit,
             ),
-    );
+    ); 
   }
 }
 
@@ -1182,15 +1210,17 @@ class _SubmitBar extends StatelessWidget {
     required this.typeColor,
     required this.isBuy,
     required this.submitting,
+    required this.disabled,
     this.onTap,
   });
   final AppColor c;
   final Color typeColor;
   final bool isBuy;
   final bool submitting;
+  final bool disabled;
   final VoidCallback? onTap;
 
-  bool get _isDisabled => onTap == null || submitting;
+  bool get _isDisabled => disabled || submitting;
 
   @override
   Widget build(BuildContext context) {
@@ -1207,12 +1237,14 @@ class _SubmitBar extends StatelessWidget {
           height: 54,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: submitting
-                  ? [typeColor.withOpacity(0.5), typeColor.withOpacity(0.4)]
-                  : [typeColor, typeColor.withOpacity(0.82)],
+              colors: _isDisabled
+                  ? [Colors.grey.shade400, Colors.grey.shade500]
+                  : submitting
+                      ? [typeColor.withOpacity(0.5), typeColor.withOpacity(0.4)]
+                      : [typeColor, typeColor.withOpacity(0.82)],
             ),
             borderRadius: BorderRadius.circular(16),
-            boxShadow: submitting
+            boxShadow: _isDisabled || submitting
                 ? []
                 : [
                     BoxShadow(
@@ -1239,7 +1271,9 @@ class _SubmitBar extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        isBuy ? 'Start Trade — Buy' : 'Start Trade — Sell',
+                        disabled 
+                            ? 'Toggle to enter amount' 
+                            : (isBuy ? 'Start Trade — Buy' : 'Start Trade — Sell'),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,

@@ -110,7 +110,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
           Navigator.of(context).pop();
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => TradeScreen(offer: offer),
+              builder: (_) => TradeScreen(
+                offer: offer,
+                marketPrice: _marketPriceForAsset(offer.asset),
+              ),
             ),
           );
         },
