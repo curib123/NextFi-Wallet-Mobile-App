@@ -1,0 +1,201 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../helpers/trades_exceptions.dart';
+import '../helpers/trades_helpers.dart';
+import '../models/trades_dtos.dart';
+import '../models/trades_models.dart';
+import 'trades_endpoints.dart';
+
+typedef TokenProvider = Future<String?> Function();
+
+class TradesService {
+  TradesService({required this.tokenProvider, http.Client? client})
+      : _client = client ?? http.Client();
+
+  final TokenProvider tokenProvider;
+  final http.Client _client;
+
+  static const Set<String> _envelopeKeys = {
+    'data', 'item', 'items', 'trade', 'trades', 'meta', 'pagination',
+    'page', 'limit', 'total', 'totalPages', 'success', 'ok',
+    'status', 'message', 'error', 'errors',
+  };
+
+  Future<Map<String, String>> _headers({bool idempotencyKey = false}) async {
+    final token = await tokenProvider();
+    if (token == null || token.isEmpty) {
+      throw TradeApiException(401, 'Missing auth token');
+    }
+    final h = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+    if (idempotencyKey) {
+      h['x-idempotency-key'] = DateTime.now().millisecondsSinceEpoch.toString();
+    }
+    return h;
+  }
+
+  bool _isEnvelope(Map<String, dynamic> map) =>
+      map.keys.every((k) => _envelopeKeys.contains(k));
+
+  Map<String, dynamic>? _extractMap(dynamic data, {int depth = 0}) {
+    if (depth > 6 || data == null) return null;
+    if (data is List) {
+      for (final item in data) {
+        final r = _extractMap(item, depth: depth + 1);
+        if (r != null) return r;
+      }
+      return null;
+    }
+    if (data is! Map) return null;
+    final map = Map<String, dynamic>.from(data);
+    if (map.isEmpty) return null;
+
+    for (final key in const ['data', 'item', 'trade']) {
+      if (!map.containsKey(key)) continue;
+      final r = _extractMap(map[key], depth: depth + 1);
+      if (r != null) return r;
+    }
+    if (!_isEnvelope(map)) return map;
+    for (final v in map.values) {
+      final r = _extractMap(v, depth: depth + 1);
+      if (r != null) return r;
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _extractList(dynamic data, {int depth = 0}) {
+    if (depth > 6 || data == null) return const [];
+    if (data is List) {
+      final direct = data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (direct.isNotEmpty) return direct;
+      for (final item in data) {
+        final r = _extractList(item, depth: depth + 1);
+        if (r.isNotEmpty) return r;
+      }
+      return const [];
+    }
+    if (data is! Map) return const [];
+    final map = Map<String, dynamic>.from(data);
+    for (final key in const ['items', 'data', 'trades', 'list']) {
+      final v = map[key];
+      if (v is List) {
+        return v
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
+    for (final v in map.values) {
+      final r = _extractList(v, depth: depth + 1);
+      if (r.isNotEmpty) return r;
+    }
+    return const [];
+  }
+
+  TradesPagedMeta _extractMeta(dynamic data, {required int fallbackCount}) {
+    if (data is Map<String, dynamic>) {
+      final m = data['meta'] ?? data['pagination'];
+      if (m is Map<String, dynamic>) return TradesPagedMeta.fromJson(m);
+      if (data.containsKey('page') || data.containsKey('total')) {
+        return TradesPagedMeta.fromJson(data);
+      }
+    }
+    return TradesPagedMeta(
+      total: fallbackCount,
+      page: 1,
+      limit: fallbackCount == 0 ? 20 : fallbackCount,
+      totalPages: 1,
+    );
+  }
+
+  // ── User routes ─────────────────────────────────────────────────────────────
+
+  Future<TradeModel> create(CreateTradeRequest req) async {
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.create()),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
+    if (map != null) return TradeModel.fromJson(map);
+    throw TradeApiException(res.statusCode, 'Unexpected response for POST /trades', body: res.body);
+  }
+
+  Future<TradesPagedResponse> listPaged({
+    TradesListQuery query = const TradesListQuery(),
+  }) async {
+    final res = await _client.get(
+      TradesHttp.uri(TradesEndpoints.list(), queryParams: query.toQueryMap()),
+      headers: await _headers(),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final items = _extractList(data).map(TradeModel.fromJson).toList();
+    return TradesPagedResponse(
+      items: items,
+      meta: _extractMeta(data, fallbackCount: items.length),
+    );
+  }
+
+  Future<TradeModel> getOne(String id) async {
+    final res = await _client.get(
+      TradesHttp.uri(TradesEndpoints.getOne(id)),
+      headers: await _headers(),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
+    if (map != null) return TradeModel.fromJson(map);
+    throw TradeApiException(res.statusCode, 'Unexpected response for GET /trades/$id');
+  }
+
+  Future<TradeModel> markFiatSent(String id) async {
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.markFiatSent(id)),
+      headers: await _headers(idempotencyKey: true),
+      body: jsonEncode({}),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
+    if (map != null) return TradeModel.fromJson(map);
+    throw TradeApiException(res.statusCode, 'Unexpected response for mark-fiat-sent');
+  }
+
+  Future<TradeModel> confirmFiat(String id, {String? fiatRefNo}) async {
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.confirmFiat(id)),
+      headers: await _headers(idempotencyKey: true),
+      body: jsonEncode(ConfirmFiatRequest(fiatRefNo: fiatRefNo).toJson()),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
+    if (map != null) return TradeModel.fromJson(map);
+    throw TradeApiException(res.statusCode, 'Unexpected response for confirm-fiat');
+  }
+
+  Future<TradeModel> cancelTrade(String id, {String? reason}) async {
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.cancel(id)),
+      headers: await _headers(idempotencyKey: true),
+      body: jsonEncode(CancelTradeRequest(reason: reason).toJson()),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
+    if (map != null) return TradeModel.fromJson(map);
+    throw TradeApiException(res.statusCode, 'Unexpected response for cancel');
+  }
+
+  void dispose() => _client.close();
+}
