@@ -41,11 +41,12 @@ class OffersListQuery {
   final String? fiatCurrency;
   final String? sellerId;
   final String? paymentMethodId;
-  final bool? visibleOnly;
-  final num? minAmount;
-  final num? maxAmount;
-  final int? page;
-  final int? limit;
+  final String? visibleOnly;
+  final String? minAmount;
+  final String? maxAmount;
+  final String? receiverStellarAddress;
+  final String? page;
+  final String? limit;
 
   const OffersListQuery({
     this.q,
@@ -58,6 +59,7 @@ class OffersListQuery {
     this.visibleOnly,
     this.minAmount,
     this.maxAmount,
+    this.receiverStellarAddress,
     this.page,
     this.limit,
   });
@@ -72,11 +74,17 @@ class OffersListQuery {
     if (sellerId != null && sellerId!.trim().isNotEmpty) 'sellerId': sellerId!.trim(),
     if (paymentMethodId != null && paymentMethodId!.trim().isNotEmpty)
       'paymentMethodId': paymentMethodId!.trim(),
-    if (visibleOnly != null) 'visibleOnly': visibleOnly! ? 'true' : 'false',
-    if (minAmount != null) 'minAmount': minAmount.toString(),
-    if (maxAmount != null) 'maxAmount': maxAmount.toString(),
-    if (page != null && page! > 0) 'page': page!.toString(),
-    if (limit != null && limit! > 0) 'limit': limit!.toString(),
+    if (visibleOnly != null && visibleOnly!.trim().isNotEmpty)
+      'visibleOnly': visibleOnly!.trim(),
+    if (minAmount != null && minAmount!.trim().isNotEmpty)
+      'minAmount': minAmount!.trim(),
+    if (maxAmount != null && maxAmount!.trim().isNotEmpty)
+      'maxAmount': maxAmount!.trim(),
+    if (receiverStellarAddress != null &&
+        receiverStellarAddress!.trim().isNotEmpty)
+      'receiverStellarAddress': receiverStellarAddress!.trim(),
+    if (page != null && page!.trim().isNotEmpty) 'page': page!.trim(),
+    if (limit != null && limit!.trim().isNotEmpty) 'limit': limit!.trim(),
   };
 }
 
@@ -84,6 +92,7 @@ class CreateOfferRequest {
   final OfferType type;
   final String asset;
   final String fiatCurrency;
+  final String? receiverStellarAddress;
   final num marginPercent;
   final num minAmount;
   final num maxAmount;
@@ -98,6 +107,7 @@ class CreateOfferRequest {
     required this.type,
     required this.asset,
     required this.fiatCurrency,
+    this.receiverStellarAddress,
     required this.marginPercent,
     required this.minAmount,
     required this.maxAmount,
@@ -125,6 +135,8 @@ class CreateOfferRequest {
       'type': _offerTypeWire(type),
       'asset': _normalizeUpper(asset),
       'fiatCurrency': _normalizeUpper(fiatCurrency),
+      if (_trim(receiverStellarAddress) != null)
+        'receiverStellarAddress': _trim(receiverStellarAddress),
       'marginPercent': marginPercent,
       'minAmount': minAmount,
       'maxAmount': maxAmount,
@@ -143,6 +155,7 @@ class UpdateOfferRequest {
   final OfferType? type;
   final String? asset;
   final String? fiatCurrency;
+  final String? receiverStellarAddress;
   final num? marginPercent;
   final num? minAmount;
   final num? maxAmount;
@@ -157,6 +170,7 @@ class UpdateOfferRequest {
     this.type,
     this.asset,
     this.fiatCurrency,
+    this.receiverStellarAddress,
     this.marginPercent,
     this.minAmount,
     this.maxAmount,
@@ -187,6 +201,8 @@ class UpdateOfferRequest {
       if (_trim(asset) != null) 'asset': _normalizeUpper(asset!),
       if (_trim(fiatCurrency) != null)
         'fiatCurrency': _normalizeUpper(fiatCurrency!),
+      if (_trim(receiverStellarAddress) != null)
+        'receiverStellarAddress': _trim(receiverStellarAddress),
       if (marginPercent != null) 'marginPercent': marginPercent,
       if (minAmount != null) 'minAmount': minAmount,
       if (maxAmount != null) 'maxAmount': maxAmount,

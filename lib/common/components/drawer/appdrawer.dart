@@ -12,6 +12,7 @@ import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
 import 'package:next_fi/features/merchant_flow/view/merchant_onboarding_flow_screen.dart';
+import 'package:next_fi/features/offers/view/market_offers_screen.dart';
 import 'package:next_fi/features/offers/view/manage_offers_screen.dart';
 import 'package:next_fi/features/verification_flow/view/payment_method_setup_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
@@ -25,6 +26,7 @@ import 'package:next_fi/services/chat/chat_core_service.dart';
 import 'package:next_fi/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
+import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
@@ -75,7 +77,7 @@ class _AppDrawerState extends State<AppDrawer>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
 
-    _itemAnims = List.generate(10, (i) {
+    _itemAnims = List.generate(16, (i) {
       final start = 0.1 + i * 0.06;
       final end = (start + 0.35).clamp(0.0, 1.0);
       return CurvedAnimation(
@@ -242,6 +244,11 @@ class _AppDrawerState extends State<AppDrawer>
     if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
   }
 
+  void _handleP2PMarketplaceTap() {
+    if (_cachedUser == null) { _redirectToLogin(); return; }
+    _push(const MarketOffersScreen(initialType: OfferType.buy));
+  }
+
   bool get _isVerifiedForTradeAccess =>
       _trustStatus == TrustStatus.ready ||
           (_cachedProfile?.isVerificationIdentityComplete ?? false);
@@ -276,7 +283,8 @@ class _AppDrawerState extends State<AppDrawer>
     final mq = MediaQuery.of(context);
     final user = _cachedUser;
 
-    final isMerchant = user != null && (_cachedMerchantProfile?.isApproved ?? false);
+    final merchantApproved = _cachedMerchantProfile?.isApproved ?? false;
+    final isMerchant = user != null && merchantApproved;
     final canRequestMerchant = user != null && _trustStatus == TrustStatus.ready;
 
     return Drawer(
@@ -309,20 +317,14 @@ class _AppDrawerState extends State<AppDrawer>
                   padding: EdgeInsets.zero,
                   children: [
                     const SizedBox(height: 10),
-                    _staggered(0, _SectionLabel(label: 'QUICK ACTIONS', colors: c)),
+                    _staggered(0, _SectionLabel(label: 'P2P MARKET', colors: c)),
                     _staggered(1, _NavTile(
-                      icon: LucideIcons.download, label: 'Buy Trades',
-                      description: 'Open buy trades template', colors: c,
-                      accentColor: const Color(0xFF10B981), onTap: () {},
+                      icon: LucideIcons.store, label: 'P2P Marketplace',
+                      description: 'Browse buy and sell offers', colors: c,
+                      accentColor: const Color(0xFF10B981), onTap: _handleP2PMarketplaceTap,
                       requiresAuth: user == null,
                     )),
                     _staggered(2, _NavTile(
-                      icon: LucideIcons.upload, label: 'Sell Trades',
-                      description: 'Open sell trades template', colors: c,
-                      accentColor: const Color(0xFFF59E0B), onTap: () {},
-                      requiresAuth: user == null,
-                    )),
-                    _staggered(3, _NavTile(
                       icon: LucideIcons.messageSquare, label: 'Messenger',
                       description: 'Friends, threads & secure chat', colors: c,
                       accentColor: const Color(0xFF6366F1),
@@ -331,6 +333,9 @@ class _AppDrawerState extends State<AppDrawer>
                           : null,
                       onTap: _handleMessengerTap, requiresAuth: user == null,
                     )),
+
+                    const SizedBox(height: 2),
+                    _staggered(3, _SectionLabel(label: 'ACCOUNT', colors: c)),
                     _staggered(4, _NavTile(
                       icon: LucideIcons.checkCircle2, label: 'Verification',
                       description: 'Complete identity steps', colors: c,
@@ -341,7 +346,7 @@ class _AppDrawerState extends State<AppDrawer>
                       onTap: _handleVerificationTap, requiresAuth: user == null,
                     )),
 
-                    _staggered(4, _NavTile(
+                    _staggered(5, _NavTile(
                       icon: LucideIcons.checkCircle2, label: 'Payment Account',
                       description: 'User Payment Account', colors: c,
                       accentColor: const Color(0xFF0EA5E9),
@@ -349,48 +354,58 @@ class _AppDrawerState extends State<AppDrawer>
                           ? _TrustStatusChip(status: _trustStatus, colors: c)
                           : null,
                       onTap: () => _redirectToPaymentAccount(false),
+                      requiresAuth: user == null,
                     )),
 
                     if (canRequestMerchant)
-                      _staggered(5, _NavTile(
+                      _staggered(6, _SectionLabel(label: 'MERCHANT', colors: c)),
+
+                    if (canRequestMerchant)
+                      _staggered(7, _NavTile(
                         icon: LucideIcons.store, label: 'Merchant Request',
                         description: 'Request merchant account access', colors: c,
                         accentColor: const Color(0xFFF97316),
+                        trailing: merchantApproved
+                            ? _TrustStatusChip(status: TrustStatus.ready, colors: c)
+                            : null,
                         onTap: _handleMerchantRequestTap,
                       )),
 
                     if (isMerchant) ...[
-                      const SizedBox(height: 4),
-                      _staggered(5, _SectionLabel(label: 'MERCHANT', colors: c)),
-                      _staggered(6, _NavTile(
-                        icon: LucideIcons.badgeDollarSign, label: 'Manage Offers',
-                        description: 'Create and edit merchant offers', colors: c,
-                        accentColor: const Color(0xFFF97316), onTap: _handleMerchantOffersTap,
-                      )),
-                      _staggered(7, _NavTile(
-                        icon: LucideIcons.messageSquare, label: 'Merchant Trades',
-                        description: 'Incoming trades and chat inbox', colors: c,
-                        accentColor: const Color(0xFF8B5CF6), onTap: _handleMerchantTradesTap,
-                      )),
-                      _staggered(7, _NavTile(
+                      if (!canRequestMerchant) ...[
+                        const SizedBox(height: 2),
+                        _staggered(8, _SectionLabel(label: 'MERCHANT', colors: c)),
+                      ],
+                      _staggered(9, _NavTile(
                         icon: LucideIcons.badgeDollarSign,
                         label: 'Merchant Payment',
                         description: 'Merchant Payment Account',
                         colors: c,
                         accentColor: const Color(0xFFF97316),
-                        onTap: () => _redirectToPaymentAccount(isMerchant), // ✅ lambda, not a call
-                      ))
+                        trailing: _TrustStatusChip(status: TrustStatus.ready, colors: c),
+                        onTap: () => _redirectToPaymentAccount(isMerchant),
+                      )),
+                      _staggered(10, _NavTile(
+                        icon: LucideIcons.badgeDollarSign, label: 'Manage Offers',
+                        description: 'Create and edit merchant offers', colors: c,
+                        accentColor: const Color(0xFFF97316), onTap: _handleMerchantOffersTap,
+                      )),
+                      _staggered(11, _NavTile(
+                        icon: LucideIcons.messageSquare, label: 'Merchant Trades',
+                        description: 'Incoming trades and chat inbox', colors: c,
+                        accentColor: const Color(0xFF8B5CF6), onTap: _handleMerchantTradesTap,
+                      )),
                     ],
 
                     const SizedBox(height: 4),
-                    _staggered(8, _SectionLabel(label: 'SETTINGS', colors: c)),
-                    _staggered(8, _NavTile(
+                    _staggered(12, _SectionLabel(label: 'SETTINGS', colors: c)),
+                    _staggered(13, _NavTile(
                       icon: LucideIcons.wallet, label: 'Manage Wallet',
                       description: 'Keys & backup', colors: c,
                       accentColor: const Color(0xFF14B8A6),
                       onTap: () => _push(const WalletScreenSettings()),
                     )),
-                    _staggered(9, _NavTile(
+                    _staggered(14, _NavTile(
                       icon: LucideIcons.settings, label: 'Preferences',
                       description: 'App settings', colors: c,
                       onTap: () => _push(const SettingsScreen()),

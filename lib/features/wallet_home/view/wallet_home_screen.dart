@@ -6,6 +6,7 @@ import 'package:next_fi/common/components/modal/chat_consent_modal.dart';
 import 'package:next_fi/features/auth/view/login.dart';
 import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
 import 'package:next_fi/features/chat/view/chat_thread_screen.dart';
+import 'package:next_fi/features/offers/view/market_offers_screen.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:next_fi/features/wallet_home/view/widgets/asset_widget.dart';
 import 'package:provider/provider.dart';
@@ -35,6 +36,7 @@ import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
+import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 
@@ -275,8 +277,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           onSwap: _openHeaderScanner,
                           onSend: () => vm.onSendPressed(),
                           onReceive: () => vm.onReceivePressed(),
-                          onBuy: () => vm.onBuyPressed(),
-                          onSell: () => vm.onSellPressed(),
+                          onP2P: _openP2PMarketplace,
                           livePulse: _livePulse,
                           incomingStrip: s.hasWallet
                               ? IncomingHintsStrip(
@@ -515,6 +516,15 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         await vm.refresh(force: true);
       }
     }
+  }
+
+  void _openP2PMarketplace() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MarketOffersScreen(initialType: OfferType.buy),
+      ),
+    );
   }
 
   Future<bool> _ensureVerifiedForTradeAccess() async {

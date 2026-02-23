@@ -19,8 +19,7 @@ class HeaderSection extends StatefulWidget {
     required this.livePulse,
     required this.incomingStrip,
     this.animateTotal = false,
-    this.onBuy,
-    this.onSell,
+    this.onP2P,
   });
 
   final AppColor colors;
@@ -37,11 +36,8 @@ class HeaderSection extends StatefulWidget {
   /// If false, the total is shown immediately (no counting animation).
   final bool animateTotal;
 
-  /// Optional: Called when Buy is tapped (Buy XLM)
-  final VoidCallback? onBuy;
-
-  /// Optional: Called when Sell is tapped (Sell XLM)
-  final VoidCallback? onSell;
+  /// Optional: Called when P2P is tapped
+  final VoidCallback? onP2P;
 
   @override
   State<HeaderSection> createState() => _HeaderSectionState();
@@ -328,15 +324,9 @@ class _HeaderSectionState extends State<HeaderSection> {
               ),
               _ActionTile(
                 colors: widget.colors,
-                icon: LucideIcons.arrowDown,
-                label: 'Buy',
-                onTap: widget.onBuy ?? () => debugPrint('Buy'),
-              ),
-              _ActionTile(
-                colors: widget.colors,
-                icon: LucideIcons.arrowUp,
-                label: 'Sell',
-                onTap: widget.onSell ?? () => debugPrint('Sell'),
+                icon: LucideIcons.store,
+                label: 'P2P',
+                onTap: widget.onP2P ?? () => debugPrint('P2P'),
               ),
             ],
           ),
