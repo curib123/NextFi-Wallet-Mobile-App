@@ -34,7 +34,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
   List<OfferModel> _offers = const [];
 
   @override
-  void initState() {  
+  void initState() {
     super.initState();
     final currency = context.read<CurrencyVM>();
     _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
