@@ -9,9 +9,9 @@ class OfferPaymentMethodModel {
   final PaymentMethodModel paymentMethod;
   final OfferModel? offer;
 
-  const OfferPaymentMethodModel({
-    required this.id,
-    required this.offerId,
+  const OfferPaymentMethodModel({ 
+    required this.id, 
+    required this.offerId, 
     required this.paymentMethodId,
     required this.paymentMethod,
     this.offer,

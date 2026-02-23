@@ -277,6 +277,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                                   availLabel: _availLabel(_merchantProfile!.availability),
                                   availColor: _availColor(_merchantProfile!.availability),
                                   paymentMethodIds: _effectivePaymentMethodIds,
+                                  paymentMethodsMap: _paymentMethodsMap,
                                   getPaymentMethodNames: _getPaymentMethodNames,
                                   averageRating: _averageRating,
                                   reviewCount: _reviews.length,
@@ -296,6 +297,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                                 offer: offer,
                                 loadingPaymentMethods: _loadingPaymentMethods,
                                 effectivePaymentMethodIds: _effectivePaymentMethodIds,
+                                paymentMethodsMap: _paymentMethodsMap,
                                 getPaymentMethodNames: _getPaymentMethodNames,
                               ),
 
@@ -552,6 +554,7 @@ class _MerchantCard extends StatelessWidget {
     required this.availLabel,
     required this.availColor,
     required this.paymentMethodIds,
+    required this.paymentMethodsMap,
     required this.getPaymentMethodNames,
     required this.loadingReviews,
     this.averageRating,
@@ -565,6 +568,7 @@ class _MerchantCard extends StatelessWidget {
   final String availLabel;
   final Color availColor;
   final List<String> paymentMethodIds;
+  final Map<String, PaymentMethodModel> paymentMethodsMap;
   final String Function(List<String>) getPaymentMethodNames;
   final double? averageRating;
   final int? reviewCount;
@@ -706,26 +710,25 @@ class _MerchantCard extends StatelessWidget {
           // Payment methods
           if (paymentMethodIds.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 13,
-                  color: c.textSecondary.withOpacity(0.6),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    getPaymentMethodNames(paymentMethodIds),
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+            _SectionDivider(c: c),
+            const SizedBox(height: 10),
+            Text(
+              'Accepts',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: paymentMethodIds.map((id) {
+                final method = paymentMethodsMap[id];
+                if (method == null) return const SizedBox.shrink();
+                return _PaymentMethodChip(c: c, method: method);
+              }).toList(),
             ),
           ],
         ],
@@ -812,6 +815,7 @@ class _DetailsCard extends StatelessWidget {
     required this.offer,
     required this.loadingPaymentMethods,
     required this.effectivePaymentMethodIds,
+    required this.paymentMethodsMap,
     required this.getPaymentMethodNames,
   });
 
@@ -819,6 +823,7 @@ class _DetailsCard extends StatelessWidget {
   final OfferModel offer;
   final bool loadingPaymentMethods;
   final List<String> effectivePaymentMethodIds;
+  final Map<String, PaymentMethodModel> paymentMethodsMap;
   final String Function(List<String>) getPaymentMethodNames;
 
   @override
@@ -840,16 +845,38 @@ class _DetailsCard extends StatelessWidget {
             label: 'Visible',
             value: offer.isVisible ? 'Yes' : 'No',
           ),
-          _DetailRow(
-            c: c,
-            label: 'Payment methods',
-            value: loadingPaymentMethods
-                ? '...'
-                : effectivePaymentMethodIds.isEmpty
-                ? '—'
-                : getPaymentMethodNames(effectivePaymentMethodIds),
-            isLast: true,
-          ),
+          if (loadingPaymentMethods)
+            _DetailRow(c: c, label: 'Payment methods', value: '...', isLast: true)
+          else if (effectivePaymentMethodIds.isEmpty)
+            _DetailRow(c: c, label: 'Payment methods', value: '—', isLast: true)
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: Text(
+                    'Payment methods',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: effectivePaymentMethodIds.map((id) {
+                      final method = paymentMethodsMap[id];
+                      if (method == null) return const SizedBox.shrink();
+                      return _PaymentMethodChip(c: c, method: method);
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -1326,12 +1353,68 @@ class _ReviewItem extends StatelessWidget {
   );
 }
 
+// ─── Payment Method Chip ──────────────────────────────────────────────────────
+
+class _PaymentMethodChip extends StatelessWidget {
+  const _PaymentMethodChip({required this.c, required this.method});
+
+  final AppColor c;
+  final PaymentMethodModel method;
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = method.logo;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: c.border.withOpacity(0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (logo != null && logo.isNotEmpty)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: Image.network(
+                logo,
+                width: 18,
+                height: 18,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _fallbackIcon(),
+              ),
+            )
+          else
+            _fallbackIcon(),
+          const SizedBox(width: 6),
+          Text(
+            method.name,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fallbackIcon() => Icon(
+    Icons.account_balance_wallet_outlined,
+    size: 14,
+    color: const Color(0xFF6C6FFF),
+  );
+}
+
 class _Skeleton extends StatelessWidget {
   const _Skeleton({required this.c, required this.height, this.width});
   final AppColor c;
   final double height;
-  final double? width;
- 
+  final double? width; 
+
  
   @override
   Widget build(BuildContext context) => Container(

@@ -570,28 +570,13 @@ class _BottomRow extends StatelessWidget {
         if (loadingPaymentMethods)
           _ShimmerBox(c: c, width: 90, height: 12, radius: 4)
         else if (effectiveIds.isNotEmpty)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.account_balance_wallet_outlined,
-                size: 13,
-                color: c.textSecondary.withOpacity(0.6),
-              ),
-              const SizedBox(width: 5),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 130),
-                child: Text(
-                  getPaymentMethodNames(effectiveIds),
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          _PaymentMethodLogosRow(
+            c: c,
+            methods: effectiveIds
+                .map((id) => paymentMethodsMap[id])
+                .whereType<PaymentMethodModel>()
+                .toList(),
+            fallbackNames: getPaymentMethodNames(effectiveIds),
           ),
 
         const SizedBox(width: 10),
@@ -715,6 +700,141 @@ class _RangeTag extends StatelessWidget {
       color: c.textSecondary,
       fontSize: 12,
       fontWeight: FontWeight.w500,
+    ),
+  );
+}
+
+// ─── Payment Method Logo Widgets ─────────────────────────────────────────────
+
+class _PaymentMethodLogosRow extends StatelessWidget {
+  const _PaymentMethodLogosRow({
+    required this.c,
+    required this.methods,
+    required this.fallbackNames,
+  });
+
+  final AppColor c;
+  final List<PaymentMethodModel> methods;
+  final String fallbackNames;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLogos = methods.any((m) => m.logo != null && m.logo!.isNotEmpty);
+
+    if (!hasLogos) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 13,
+            color: c.textSecondary.withOpacity(0.6),
+          ),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 130),
+            child: Text(
+              fallbackNames,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+
+    const maxLogos = 3;
+    final shown = methods.take(maxLogos).toList();
+    final extra = methods.length - maxLogos;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: shown.length * 16.0 + 8,
+          height: 24,
+          child: Stack(
+            children: shown.asMap().entries.map((e) => Positioned(
+              left: e.key * 16.0,
+              child: _LogoAvatar(method: e.value, c: c, size: 24),
+            )).toList(),
+          ),
+        ),
+        if (extra > 0) ...[
+          const SizedBox(width: 5),
+          Text(
+            '+$extra',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ] else if (methods.length == 1) ...[
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 90),
+            child: Text(
+              methods.first.name,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LogoAvatar extends StatelessWidget {
+  const _LogoAvatar({required this.method, required this.c, this.size = 24});
+
+  final PaymentMethodModel method;
+  final AppColor c;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = method.logo;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: BorderRadius.circular(size * 0.35),
+        border: Border.all(color: c.border.withOpacity(0.18), width: 1),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.10),
+        child: logo != null && logo.isNotEmpty
+            ? Image.network(
+                logo,
+                width: size,
+                height: size,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _fallback(),
+              )
+            : _fallback(),
+      ),
+    );
+  }
+
+  Widget _fallback() => Center(
+    child: Text(
+      method.name.isNotEmpty ? method.name[0].toUpperCase() : '?',
+      style: TextStyle(
+        fontSize: size * 0.42,
+        fontWeight: FontWeight.w700,
+        color: c.textSecondary,
+      ),
     ),
   );
 }
