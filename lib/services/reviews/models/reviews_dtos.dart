@@ -1,0 +1,44 @@
+/// Request DTO for creating a review
+class CreateReviewRequest {
+  final String tradeId;
+  final int rating;
+  final String? comment;
+
+  const CreateReviewRequest({
+    required this.tradeId,
+    required this.rating,
+    this.comment,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'tradeId': tradeId,
+      'rating': rating,
+      if (comment != null && comment!.isNotEmpty) 'comment': comment,
+    };
+  }
+}
+
+/// Query parameters for listing reviews
+class ReviewsListQuery {
+  final String? userId;
+  final String? page;
+  final String? limit;
+  final String? search;
+
+  const ReviewsListQuery({
+    this.userId,
+    this.page,
+    this.limit,
+    this.search,
+  });
+
+  Map<String, String> toQueryParams() {
+    final params = <String, String>{};
+    if (userId != null && userId!.isNotEmpty) params['userId'] = userId!;
+    if (page != null && page!.isNotEmpty) params['page'] = page!;
+    if (limit != null && limit!.isNotEmpty) params['limit'] = limit!;
+    if (search != null && search!.isNotEmpty) params['q'] = search!;
+    return params;
+  }
+}

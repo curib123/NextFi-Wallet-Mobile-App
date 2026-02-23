@@ -5,6 +5,7 @@ import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/offer_details_modal.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/offers/view/trade_screen.dart';
+import 'package:next_fi/features/offers/view/widgets/public_offer_tile.dart';
 import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
@@ -173,9 +174,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      _selectedType == OfferType.buy
-                          ? Icons.south_west_rounded
-                          : Icons.north_east_rounded,
+                      _selectedType == OfferType.buy ? Icons.south_west_rounded : Icons.north_east_rounded,
                       color: c.primary,
                       size: 18,
                     ),
@@ -183,9 +182,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _selectedType == OfferType.buy
-                          ? 'P2P • Browse active BUY offers'
-                          : 'P2P • Browse active SELL offers',
+                      _selectedType == OfferType.buy ? 'P2P • Browse active BUY offers' : 'P2P • Browse active SELL offers',
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -199,11 +196,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: _TypeSwitch(
-              c: c,
-              selected: _selectedType,
-              onChanged: _onTypeChanged,
-            ),
+            child: _TypeSwitch(c: c, selected: _selectedType, onChanged: _onTypeChanged),
           ),
           Expanded(
             child: _loading
@@ -213,9 +206,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: _offers.isEmpty
-                            ? ListView(children: [
-                                _EmptyState(c: c, type: _selectedType),
-                              ])
+                            ? ListView(children: [_EmptyState(c: c, type: _selectedType)])
                             : ListView.builder(
                                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
                                 itemCount: _offers.length,
@@ -223,12 +214,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
                                   final offer = _offers[i];
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 10),
-                                    child: _PublicOfferTile(
+                                    child: PublicOfferTile(
                                       c: c,
                                       offer: offer,
-                                      marketPrice: _marketPriceForAsset(
-                                        offer.asset,
-                                      ),
+                                      marketPrice: _marketPriceForAsset(offer.asset),
                                       onTap: () => _openOfferDetails(offer),
                                     ),
                                   );
@@ -243,11 +232,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
 }
 
 class _TypeSwitch extends StatelessWidget {
-  const _TypeSwitch({
-    required this.c,
-    required this.selected,
-    required this.onChanged,
-  });
+  const _TypeSwitch({required this.c, required this.selected, required this.onChanged});
 
   final AppColor c;
   final OfferType selected;
@@ -265,19 +250,9 @@ class _TypeSwitch extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _TypeBtn(
-            c: c,
-            label: 'BUY',
-            selected: selected == OfferType.buy,
-            onTap: () => onChanged(OfferType.buy),
-          ),
+          _TypeBtn(c: c, label: 'BUY', selected: selected == OfferType.buy, onTap: () => onChanged(OfferType.buy)),
           const SizedBox(width: 4),
-          _TypeBtn(
-            c: c,
-            label: 'SELL',
-            selected: selected == OfferType.sell,
-            onTap: () => onChanged(OfferType.sell),
-          ),
+          _TypeBtn(c: c, label: 'SELL', selected: selected == OfferType.sell, onTap: () => onChanged(OfferType.sell)),
         ],
       ),
     );
@@ -285,12 +260,7 @@ class _TypeSwitch extends StatelessWidget {
 }
 
 class _TypeBtn extends StatelessWidget {
-  const _TypeBtn({
-    required this.c,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _TypeBtn({required this.c, required this.label, required this.selected, required this.onTap});
 
   final AppColor c;
   final String label;
@@ -308,194 +278,15 @@ class _TypeBtn extends StatelessWidget {
             color: selected ? c.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : c.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          child: Text(label, style: TextStyle(color: selected ? Colors.white : c.textSecondary, fontWeight: FontWeight.w700)),
         ),
-      ),
-    );
-  }
-}
-
-class _PublicOfferTile extends StatelessWidget {
-  const _PublicOfferTile({
-    required this.c,
-    required this.offer,
-    required this.marketPrice,
-    required this.onTap,
-  });
-
-  final AppColor c;
-  final OfferModel offer;
-  final String? marketPrice;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final typeText = offer.type == OfferType.buy ? 'BUY' : 'SELL';
-    final typeColor =
-        offer.type == OfferType.buy ? const Color(0xFF0EA968) : c.primary;
-    final statusText = offer.status?.name.toUpperCase() ?? 'UNKNOWN';
-    final livePriceText = marketPrice == null ? 'No live price' : 'Live $marketPrice';
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 11, 10, 12),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border.withOpacity(0.22)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.025),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: typeColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                offer.type == OfferType.buy
-                    ? Icons.south_west_rounded
-                    : Icons.north_east_rounded,
-                size: 18,
-                color: typeColor,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _InfoBadge(
-                        c: c,
-                        label: typeText,
-                        fg: typeColor,
-                        bg: typeColor.withOpacity(0.12),
-                        border: typeColor.withOpacity(0.25),
-                      ),
-                      _InfoBadge(
-                        c: c,
-                        label: statusText,
-                        fg: c.textPrimary,
-                        bg: c.background.withOpacity(0.45),
-                        border: c.border.withOpacity(0.22),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    '${offer.asset}/${offer.fiatCurrency}',
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Min ${offer.minAmount ?? '-'} · Max ${offer.maxAmount ?? '-'}',
-                    style: TextStyle(color: c.textSecondary, fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  _InfoBadge(
-                    c: c,
-                    label: livePriceText,
-                    fg: marketPrice == null ? c.textSecondary : c.primary,
-                    bg: marketPrice == null
-                        ? c.background.withOpacity(0.42)
-                        : c.primary.withOpacity(0.12),
-                    border: marketPrice == null
-                        ? c.border.withOpacity(0.22)
-                        : c.primary.withOpacity(0.28),
-                    icon: marketPrice == null
-                        ? Icons.info_outline_rounded
-                        : Icons.bolt_rounded,
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: c.textSecondary.withOpacity(0.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoBadge extends StatelessWidget {
-  const _InfoBadge({
-    required this.c,
-    required this.label,
-    required this.fg,
-    required this.bg,
-    required this.border,
-    this.icon,
-  });
-
-  final AppColor c;
-  final String label;
-  final Color fg;
-  final Color bg;
-  final Color border;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: fg),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-              height: 1,
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.c,
-    required this.error,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.c, required this.error, required this.onRetry});
 
   final AppColor c;
   final String error;
@@ -511,16 +302,9 @@ class _ErrorState extends StatelessWidget {
           children: [
             Icon(Icons.wifi_off_rounded, color: c.error, size: 30),
             const SizedBox(height: 10),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 13),
-            ),
+            Text(error, textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 13)),
             const SizedBox(height: 14),
-            AppOutlinedButton(
-              onPressed: onRetry,
-              child: const Text('Try again'),
-            ),
+            AppOutlinedButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
       ),
@@ -553,18 +337,10 @@ class _EmptyState extends StatelessWidget {
             Text(
               'No ${type == OfferType.buy ? 'buy' : 'sell'} offers right now',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: c.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
             ),
             const SizedBox(height: 4),
-            Text(
-              'Pull down to refresh the marketplace list.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-            ),
+            Text('Pull down to refresh the marketplace list.', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
           ],
         ),
       ),
