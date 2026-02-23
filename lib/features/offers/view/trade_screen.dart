@@ -28,6 +28,7 @@ class TradeScreen extends StatefulWidget {
 class _TradeScreenState extends State<TradeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fiatCtrl = TextEditingController();
+  final _cryptoCtrl = TextEditingController();
   final _tradesCore = TradesCoreService.I;
   final _walletCore = WalletCoreService.I;
   final _offerPaymentCore = OfferPaymentMethodCoreService.I;
@@ -48,80 +49,106 @@ class _TradeScreenState extends State<TradeScreen> {
   WalletAddress? _selectedWallet;
   UserPaymentAccountModel? _selectedUserAccount;
 
+  // Input mode: true = entering fiat, false = entering crypto
+  bool _enterFiatMode = true;
   double _computedCrypto = 0;
+  double _computedFiat = 0;
 
   OfferModel get offer => widget.offer;
 
   // User is buyer if offer type is SELL (merchant sells → user buys)
   bool get _userIsBuyer => offer.type == OfferType.sell;
 
+  // Calculate effective price from market price and margin
+  double get _effectivePrice {
+    if (offer.marketPrice != null && offer.marketPrice! > 0) {
+      if (offer.marginPercent != null) {
+        return offer.marketPrice! * (1 + offer.marginPercent! / 100);
+      }
+      return offer.marketPrice!;
+    }
+    // Fallback: if no market price, return 1 (legacy behavior)
+    return 1.0;
+  }
+
   @override
   void initState() {
     super.initState();
     _fiatCtrl.addListener(_onFiatChanged);
+    _cryptoCtrl.addListener(_onCryptoChanged);
     _loadData();
   }
 
   @override
   void dispose() {
     _fiatCtrl.removeListener(_onFiatChanged);
+    _cryptoCtrl.removeListener(_onCryptoChanged);
     _fiatCtrl.dispose();
+    _cryptoCtrl.dispose();
     super.dispose();
   }
 
   void _onFiatChanged() {
     final v = double.tryParse(_fiatCtrl.text.trim()) ?? 0;
-    
-    // Calculate crypto based on market price and margin
-    // If market price is available, use it for proper calculation
-    if (offer.marketPrice != null && offer.marketPrice! > 0) {
-      // Apply margin to get the effective price
-      // marginPercent: seller's margin above/below market
-      // For BUY: user gets less crypto due to margin (pays more)
-      // For SELL: user gets less fiat due to margin (sells at discount)
-      final effectivePrice = offer.marginPercent != null 
-          ? offer.marketPrice! * (1 + offer.marginPercent! / 100)
-          : offer.marketPrice!;
-      
-      if (effectivePrice > 0) {
-        setState(() => _computedCrypto = v / effectivePrice);
-      } else {
-        setState(() => _computedCrypto = 0);
-      }
-    } else {
-      // Fallback: if no market price, use simple division (legacy behavior)
-      // This is less accurate but maintains backward compatibility
-      final rate = offer.marginPercent != null ? (1 + offer.marginPercent! / 100) : 1.0;
-      setState(() => _computedCrypto = rate > 0 ? v / rate : v);
+    if (_effectivePrice > 0) {
+      setState(() => _computedCrypto = v / _effectivePrice);
     }
+  }
+
+  void _onCryptoChanged() {
+    final v = double.tryParse(_cryptoCtrl.text.trim()) ?? 0;
+    setState(() => _computedFiat = v * _effectivePrice);
+  }
+
+  void _toggleInputMode() {
+    setState(() {
+      _enterFiatMode = !_enterFiatMode;
+      if (_enterFiatMode) {
+        _cryptoCtrl.clear();
+        _computedFiat = 0;
+      } else {
+        _fiatCtrl.clear();
+        _computedCrypto = 0;
+      }
+    });
   }
 
   Future<void> _loadData() async {
     setState(() { _loading = true; _loadError = null; });
     try {
+      // Load all required data in parallel
       final results = await Future.wait([
         _offerPaymentCore.getPaymentMethodsForOffer(offer.id),
         _walletCore.list(),
         _userAccountCore.listMyPaymentAccounts(activeOnly: true),
         _loadMerchantAccounts(),
       ]);
+      
       if (!mounted) return;
+      
       setState(() {
         _offerPaymentMethods = results[0] as List<PaymentMethodModel>;
         _wallets = results[1] as List<WalletAddress>;
         _userAccounts = results[2] as List<UserPaymentAccountModel>;
         _merchantAccounts = results[3] as List<MerchantPaymentAccountModel>;
-        final wallets = _wallets;
-        if (wallets.isNotEmpty) {
-          _selectedWallet = wallets.firstWhere(
+        
+        // Select default wallet
+        if (_wallets.isNotEmpty) {
+          _selectedWallet = _wallets.firstWhere(
             (w) => w.isActive,
-            orElse: () => wallets.first,
+            orElse: () => _wallets.first,
           );
         }
-        final pm = _offerPaymentMethods;
-        if (pm.isNotEmpty) _selectedOfferMethod = pm.first;
+        
+        // Select first payment method if available
+        if (_offerPaymentMethods.isNotEmpty) {
+          _selectedOfferMethod = _offerPaymentMethods.first;
+        }
+        
         _loading = false;
       });
+      
+      // Refresh merchant accounts for selected payment method
       _refreshMerchantAccountsForMethod();
     } catch (e) {
       if (!mounted) return;
@@ -133,6 +160,7 @@ class _TradeScreenState extends State<TradeScreen> {
     try {
       final sellerId = offer.sellerId ?? '';
       if (sellerId.isEmpty) return [];
+      
       final resp = await _merchantAccountCore.listPaged(
         query: MerchantPaymentAccountListQuery(
           activeOnly: true,
@@ -141,17 +169,22 @@ class _TradeScreenState extends State<TradeScreen> {
         ),
       );
       return resp.items;
-    } catch (_) {
+    } catch (e) {
       return [];
     }
   }
 
   void _refreshMerchantAccountsForMethod() {
-    if (_selectedOfferMethod == null) return;
+    if (_selectedOfferMethod == null) {
+      setState(() => _selectedMerchantAccount = null);
+      return;
+    }
+    
     final methodId = _selectedOfferMethod!.id;
     final filtered = _merchantAccounts
         .where((a) => a.paymentMethodId == methodId && a.isActive)
         .toList();
+    
     setState(() {
       _selectedMerchantAccount = filtered.isNotEmpty ? filtered.first : null;
     });
@@ -172,30 +205,65 @@ class _TradeScreenState extends State<TradeScreen> {
     return null;
   }
 
+  String? _validateCrypto(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Enter an amount';
+    final parsed = double.tryParse(v.trim());
+    if (parsed == null || parsed <= 0) return 'Invalid amount';
+    // Optional: validate against available qty
+    if (offer.availableQty != null && parsed > offer.availableQty!) {
+      return 'Maximum available is ${offer.availableQty} ${offer.asset}';
+    }
+    return null;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    
     if (_selectedWallet == null) {
       showFloatingSnackBar(context,
           message: 'No wallet address found. Please add a wallet first.',
           type: SnackBarType.error);
       return;
     }
-    if (_selectedMerchantAccount == null && _userIsBuyer) {
-      showFloatingSnackBar(context,
-          message: 'No payment account available for this method.',
-          type: SnackBarType.warning);
-    }
 
-    final fiatAmount = _fiatCtrl.text.trim();
-    final cryptoAmount = _computedCrypto.toStringAsFixed(7);
+    // Get the fiat and crypto amounts
+    final fiatAmount = _enterFiatMode 
+        ? _fiatCtrl.text.trim() 
+        : _computedFiat.toStringAsFixed(2);
+    final cryptoAmount = _enterFiatMode 
+        ? _computedCrypto.toStringAsFixed(7)
+        : _cryptoCtrl.text.trim();
 
-    // For seller account ID, try merchant account or use placeholder
-    final sellAccId = _selectedMerchantAccount?.id ?? '';
-    if (sellAccId.isEmpty) {
-      showFloatingSnackBar(context,
-          message: 'Could not resolve seller payment account.',
-          type: SnackBarType.error);
-      return;
+    // For SELL offers: need merchant payment account
+    // For BUY offers: need buyer payment account (optional)
+    String? sellerPaymentAccountId;
+    
+    if (_userIsBuyer) {
+      // For BUY: need seller (merchant) payment account
+      if (_selectedMerchantAccount == null) {
+        // Try to load merchant accounts again if not loaded
+        await _loadMerchantAccounts();
+        _refreshMerchantAccountsForMethod();
+        
+        if (_selectedMerchantAccount == null) {
+          showFloatingSnackBar(context,
+              message: 'No seller payment account available for this method.',
+              type: SnackBarType.error);
+          return;
+        }
+      }
+      sellerPaymentAccountId = _selectedMerchantAccount!.id;
+    } else {
+      // For SELL: user is the seller, so they don't need a merchant account
+      // Use their own payment account if available
+      if (_userAccounts.isNotEmpty) {
+        sellerPaymentAccountId = _selectedUserAccount?.id ?? _userAccounts.first.id;
+      } else {
+        showFloatingSnackBar(context,
+            message: 'No payment account found. Please add a payment account first.',
+            type: SnackBarType.error);
+        return;
+      }
     }
 
     setState(() => _submitting = true);
@@ -203,8 +271,8 @@ class _TradeScreenState extends State<TradeScreen> {
       final trade = await _tradesCore.create(
         CreateTradeRequest(
           offerId: offer.id,
-          sellerPaymentAccountId: sellAccId,
-          buyerPaymentAccountId: _selectedUserAccount?.id,
+          sellerPaymentAccountId: sellerPaymentAccountId!,
+          buyerPaymentAccountId: _userIsBuyer ? null : _selectedUserAccount?.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
           cryptoReceiverAddress: _selectedWallet!.publicAddress,
@@ -263,23 +331,62 @@ class _TradeScreenState extends State<TradeScreen> {
                       _OfferSummaryCard(c: c, offer: offer, typeColor: typeColor),
                       const SizedBox(height: 14),
 
-                      // ── Amount input ───────────────────────────────────
-                      _SectionLabel(c: c, label: isBuy ? 'You pay (fiat)' : 'You receive (fiat)'),
+                      // ── Amount input with toggle ───────────────────────────
+                      _SectionLabel(c: c, label: _enterFiatMode 
+                          ? (isBuy ? 'You pay (fiat)' : 'You receive (fiat)')
+                          : (isBuy ? 'You receive (${offer.asset})' : 'You send (${offer.asset})')),
                       const SizedBox(height: 8),
-                      _AmountField(
-                        c: c,
-                        controller: _fiatCtrl,
-                        currency: offer.fiatCurrency,
-                        validator: _validateFiat,
-                        min: offer.minAmount,
-                        max: offer.maxAmount,
+                      
+                      // Toggle button
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _AmountField(
+                              c: c,
+                              controller: _enterFiatMode ? _fiatCtrl : _cryptoCtrl,
+                              currency: _enterFiatMode ? offer.fiatCurrency : offer.asset,
+                              validator: _enterFiatMode ? _validateFiat : _validateCrypto,
+                              min: _enterFiatMode ? offer.minAmount : null,
+                              max: _enterFiatMode ? offer.maxAmount : null,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: _toggleInputMode,
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: c.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: c.primary.withOpacity(0.3)),
+                              ),
+                              child: Icon(
+                                Icons.swap_horiz_rounded,
+                                color: c.primary,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      if (_computedCrypto > 0) ...[
+                      
+                      // Show equivalent
+                      if (_enterFiatMode && _computedCrypto > 0) ...[
                         const SizedBox(height: 8),
                         _CryptoEquivalentRow(
                           c: c,
                           asset: offer.asset,
                           amount: _computedCrypto,
+                          typeColor: typeColor,
+                          isBuy: isBuy,
+                        ),
+                      ],
+                      if (!_enterFiatMode && _computedFiat > 0) ...[
+                        const SizedBox(height: 8),
+                        _FiatEquivalentRow(
+                          c: c,
+                          currency: offer.fiatCurrency,
+                          amount: _computedFiat,
                           typeColor: typeColor,
                           isBuy: isBuy,
                         ),
@@ -305,9 +412,6 @@ class _TradeScreenState extends State<TradeScreen> {
                             c: c,
                             account: _selectedMerchantAccount!,
                           ),
-                        ] else if (_offerPaymentMethods.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _InfoChip(c: c, message: 'Payment account details will be shown after trade starts'),
                         ],
                         const SizedBox(height: 18),
                       ],
@@ -327,8 +431,8 @@ class _TradeScreenState extends State<TradeScreen> {
                       const SizedBox(height: 18),
 
                       // ── User payment account (optional for buyer) ──────
-                      if (_userAccounts.isNotEmpty) ...[
-                        _SectionLabel(c: c, label: 'Your payment account (optional)'),
+                      if (_userAccounts.isNotEmpty && !isBuy) ...[
+                        _SectionLabel(c: c, label: 'Your payment account (for receiving fiat)'),
                         const SizedBox(height: 8),
                         _UserAccountSelector(
                           c: c,
@@ -552,7 +656,7 @@ class _AmountField extends StatelessWidget {
       validator: validator,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+        FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,7}')),
       ],
       style: TextStyle(
         color: c.textPrimary,
@@ -629,11 +733,52 @@ class _CryptoEquivalentRow extends StatelessWidget {
         Icon(Icons.swap_horiz_rounded, size: 16, color: typeColor),
         const SizedBox(width: 8),
         Text(
-          // BUY: user pays fiat → receives crypto
-          // SELL: user enters fiat to receive → sends crypto
           isBuy
               ? 'You receive ≈ ${amount.toStringAsFixed(7)} $asset'
               : 'You send ≈ ${amount.toStringAsFixed(7)} $asset',
+          style: TextStyle(
+            color: typeColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ─── Fiat equivalent ─────────────────────────────────────────────────────────
+
+class _FiatEquivalentRow extends StatelessWidget {
+  const _FiatEquivalentRow({
+    required this.c,
+    required this.currency,
+    required this.amount,
+    required this.typeColor,
+    required this.isBuy,
+  });
+  final AppColor c;
+  final String currency;
+  final double amount;
+  final Color typeColor;
+  final bool isBuy;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: typeColor.withOpacity(0.07),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: typeColor.withOpacity(0.15)),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.swap_horiz_rounded, size: 16, color: typeColor),
+        const SizedBox(width: 8),
+        Text(
+          isBuy
+              ? 'You pay ≈ $currency ${amount.toStringAsFixed(2)}'
+              : 'You receive ≈ $currency ${amount.toStringAsFixed(2)}',
           style: TextStyle(
             color: typeColor,
             fontWeight: FontWeight.w600,
