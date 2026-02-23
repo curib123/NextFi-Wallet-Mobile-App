@@ -2,7 +2,7 @@ import 'package:next_fi/services/trades/models/trades_models.dart';
 
 class CreateTradeRequest {
   final String offerId;
-  final String sellerPaymentAccountId;
+  final String paymentMethodId;  // UUID, from offer's paymentMethods
   final String? buyerPaymentAccountId;
   final String cryptoAmount;
   final String fiatAmount;
@@ -11,7 +11,7 @@ class CreateTradeRequest {
 
   const CreateTradeRequest({
     required this.offerId,
-    required this.sellerPaymentAccountId,
+    required this.paymentMethodId,
     this.buyerPaymentAccountId,
     required this.cryptoAmount,
     required this.fiatAmount,
@@ -21,7 +21,7 @@ class CreateTradeRequest {
 
   Map<String, dynamic> toJson() => {
     'offerId': offerId,
-    'sellerPaymentAccountId': sellerPaymentAccountId,
+    'paymentMethodId': paymentMethodId,
     if (buyerPaymentAccountId != null)
       'buyerPaymentAccountId': buyerPaymentAccountId,
     'cryptoAmount': cryptoAmount,

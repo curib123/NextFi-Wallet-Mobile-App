@@ -60,16 +60,25 @@ class _TradeScreenState extends State<TradeScreen> {
   bool get _userIsBuyer => offer.type == OfferType.sell;
 
   // Calculate effective price from market price and margin
+  // Formula: finalPrice = marketPrice * (1 + marginPercent/100)
+  // Then: crypto = fiatAmount / finalPrice
   double get _effectivePrice {
     if (offer.marketPrice != null && offer.marketPrice! > 0) {
+      // Use market price with margin
       if (offer.marginPercent != null) {
         return offer.marketPrice! * (1 + offer.marginPercent! / 100);
       }
       return offer.marketPrice!;
     }
-    // Fallback: if no market price, return 1 (legacy behavior)
-    return 1.0;
+    
+    // Fallback: if no market price, cannot calculate accurately
+    // Return 0 to indicate invalid calculation
+    return 0.0;
   }
+  
+  // Check if we can calculate the conversion
+  bool get _canCalculate => _effectivePrice > 0;
+
 
   @override
   void initState() {
@@ -234,36 +243,13 @@ class _TradeScreenState extends State<TradeScreen> {
         ? _computedCrypto.toStringAsFixed(7)
         : _cryptoCtrl.text.trim();
 
-    // For SELL offers: need merchant payment account
-    // For BUY offers: need buyer payment account (optional)
-    String? sellerPaymentAccountId;
-    
-    if (_userIsBuyer) {
-      // For BUY: need seller (merchant) payment account
-      if (_selectedMerchantAccount == null) {
-        // Try to load merchant accounts again if not loaded
-        await _loadMerchantAccounts();
-        _refreshMerchantAccountsForMethod();
-        
-        if (_selectedMerchantAccount == null) {
-          showFloatingSnackBar(context,
-              message: 'No seller payment account available for this method.',
-              type: SnackBarType.error);
-          return;
-        }
-      }
-      sellerPaymentAccountId = _selectedMerchantAccount!.id;
-    } else {
-      // For SELL: user is the seller, so they don't need a merchant account
-      // Use their own payment account if available
-      if (_userAccounts.isNotEmpty) {
-        sellerPaymentAccountId = _selectedUserAccount?.id ?? _userAccounts.first.id;
-      } else {
-        showFloatingSnackBar(context,
-            message: 'No payment account found. Please add a payment account first.',
-            type: SnackBarType.error);
-        return;
-      }
+    // For BUY offers: need paymentMethodId (from offer's paymentMethods)
+    // For SELL offers: need paymentMethodId + optional buyerPaymentAccountId
+    if (_selectedOfferMethod == null) {
+      showFloatingSnackBar(context,
+          message: 'Please select a payment method.',
+          type: SnackBarType.error);
+      return;
     }
 
     setState(() => _submitting = true);
@@ -271,7 +257,7 @@ class _TradeScreenState extends State<TradeScreen> {
       final trade = await _tradesCore.create(
         CreateTradeRequest(
           offerId: offer.id,
-          sellerPaymentAccountId: sellerPaymentAccountId!,
+          paymentMethodId: _selectedOfferMethod!.id,
           buyerPaymentAccountId: _userIsBuyer ? null : _selectedUserAccount?.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
