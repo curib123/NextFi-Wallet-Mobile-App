@@ -10,7 +10,9 @@ class ChatEndpoints {
   static String listUserPublicKeys(String userId) => '/chat/keys/$userId';
 
   // Friend Requests
-  static String sendFriendRequest() => '$friendsBase/requests';
+  /// Send a friend request (POST /friends/request)
+  static String sendFriendRequest() => '$friendsBase/request';
+  /// List received friend requests (GET /friends/requests)
   static String listFriendRequests() => '$friendsBase/requests';
   static String listSentFriendRequests() => '$friendsBase/requests/sent';
   static String getFriendRequest(String requestId) =>

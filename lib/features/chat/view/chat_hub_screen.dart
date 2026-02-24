@@ -142,207 +142,13 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   }
 
   Future<void> _sendFriendRequest() async {
-    final c = AppColor.of(context);
-    final usernameCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-
     final payload = await showModalBottomSheet<(String, String?)>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (ctx, setS) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(28),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 36,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: c.border.withOpacity(0.4),
-                            borderRadius: BorderRadius.circular(99),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: c.primary.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Icon(
-                              Icons.person_add_alt_1_rounded,
-                              color: c.primary,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Add Friend',
-                                style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.3,
-                                ),
-                              ),
-                              Text(
-                                'Search by username',
-                                style: TextStyle(
-                                  color: c.textSecondary,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      TextField(
-                        controller: usernameCtrl,
-                        autofocus: true,
-                        textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(
-                          labelText: 'Username',
-                          hintText: 'e.g. alice_merchant',
-                          prefixIcon: Icon(
-                            Icons.alternate_email_rounded,
-                            color: c.textSecondary,
-                            size: 18,
-                          ),
-                          filled: true,
-                          fillColor: c.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: c.border.withOpacity(0.22),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: c.border.withOpacity(0.22),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: c.primary.withOpacity(0.55),
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: noteCtrl,
-                        minLines: 2,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          labelText: 'Note (optional)',
-                          hintText: "Hi! I'd like to connect with you.",
-                          filled: true,
-                          fillColor: c.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: c.border.withOpacity(0.22),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: c.border.withOpacity(0.22),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: c.primary.withOpacity(0.55),
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: AppOutlinedButton(
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(50),
-                                foregroundColor: c.textPrimary,
-                                side: BorderSide(
-                                  color: c.border.withOpacity(0.35),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: AppElevatedButton(
-                              onPressed: () {
-                                final username = usernameCtrl.text.trim();
-                                if (username.isEmpty) return;
-                                final note = noteCtrl.text.trim();
-                                Navigator.of(ctx).pop(
-                                  (username, note.isEmpty ? null : note),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(50),
-                                backgroundColor: c.primary,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: const Text('Send Request'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (_) => const _AddFriendSheet(),
     );
 
-    usernameCtrl.dispose();
-    noteCtrl.dispose();
     if (payload == null) return;
 
     setState(() => _busy = true);
@@ -1408,6 +1214,205 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Add Friend bottom sheet ────────────────────────────────────────────────────
+
+class _AddFriendSheet extends StatefulWidget {
+  const _AddFriendSheet();
+
+  @override
+  State<_AddFriendSheet> createState() => _AddFriendSheetState();
+}
+
+class _AddFriendSheetState extends State<_AddFriendSheet> {
+  final _usernameCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _usernameCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: c.border.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(
+                      Icons.person_add_alt_1_rounded,
+                      color: c.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Add Friend',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      Text(
+                        'Search by username',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _usernameCtrl,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                decoration: InputDecoration(
+                  labelText: 'Username',
+                  hintText: 'e.g. alice_merchant',
+                  prefixIcon: Icon(
+                    Icons.alternate_email_rounded,
+                    color: c.textSecondary,
+                    size: 18,
+                  ),
+                  filled: true,
+                  fillColor: c.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: c.primary.withOpacity(0.55),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _noteCtrl,
+                minLines: 2,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Note (optional)',
+                  hintText: "Hi! I'd like to connect with you.",
+                  filled: true,
+                  fillColor: c.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: c.primary.withOpacity(0.55),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppOutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        foregroundColor: c.textPrimary,
+                        side: BorderSide(color: c.border.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppElevatedButton(
+                      onPressed: () {
+                        final username = _usernameCtrl.text.trim();
+                        if (username.isEmpty) return;
+                        final note = _noteCtrl.text.trim();
+                        Navigator.of(context).pop(
+                          (username, note.isEmpty ? null : note),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        backgroundColor: c.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Send Request'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

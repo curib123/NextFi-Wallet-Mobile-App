@@ -8,6 +8,11 @@ import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/reviews/reviews_core_service.dart';
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
+// BUY  → flat green palette  (#16A34A family)
+// SELL → flat red palette    (#DC2626 family)
+// No glows. No radial gradients. No color-tinted shadows.
+
 class PublicOfferTile extends StatefulWidget {
   const PublicOfferTile({
     super.key,
@@ -22,7 +27,6 @@ class PublicOfferTile extends StatefulWidget {
   final OfferModel offer;
   final String? marketPrice;
   final VoidCallback onTap;
-  /// True while live prices are still being fetched; shows shimmer instead of "No price".
   final bool priceLoading;
 
   @override
@@ -51,10 +55,10 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     super.initState();
     _pressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 120),
-      reverseDuration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 180),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.972).animate(
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.975).animate(
       CurvedAnimation(parent: _pressController, curve: Curves.easeOut),
     );
     _loadData();
@@ -137,30 +141,27 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     }
   }
 
-  // ─── Colors ────────────────────────────────────────────────────────────────
-
-  // User-centric: merchant SELLS = user BUYS; merchant BUYS = user SELLS
+  // User-centric: merchant SELLS = user BUYS
   bool get _isBuy => widget.offer.type == OfferType.sell;
 
-  // BUY = green (success), SELL = red (error) — from AppColor
-  Color get _typeColor => _isBuy ? widget.c.success : widget.c.error;
+  // Flat, non-glowing type colors
+  Color get _typeColor =>
+      _isBuy ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
 
   Color _statusColor(String status) {
     switch (status.toUpperCase()) {
       case 'ACTIVE':
-        return const Color(0xFF00C48C);
+        return const Color(0xFF16A34A);
       case 'PAUSED':
-        return const Color(0xFFFAA040);
+        return const Color(0xFFD97706);
       case 'COMPLETED':
-        return const Color(0xFF5B8DEF);
+        return const Color(0xFF2563EB);
       case 'CANCELLED':
-        return const Color(0xFFFF5C72);
+        return const Color(0xFFDC2626);
       default:
-        return const Color(0xFF9CA3AF);
+        return const Color(0xFF6B7280);
     }
   }
-
-  // ─── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -168,11 +169,8 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     final offer = widget.offer;
     final typeColor = _typeColor;
     final statusText = offer.status?.name ?? 'UNKNOWN';
-    final hasLivePrice = widget.marketPrice != null;
 
-    // Detect light mode to adjust translucency values
-    final brightness = Theme.of(context).brightness;
-    final isLight = brightness == Brightness.light;
+    final isLight = Theme.of(context).brightness == Brightness.light;
 
     return GestureDetector(
       onTapDown: (_) => _pressController.forward(),
@@ -184,74 +182,37 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       child: ScaleTransition(
         scale: _scaleAnim,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             color: c.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              // Light mode: more visible border
-              color: c.border.withOpacity(isLight ? 0.16 : 0.07),
+              color: c.border.withOpacity(isLight ? 0.18 : 0.10),
               width: 1,
             ),
+            // Neutral shadow only — no color tinting
             boxShadow: [
               BoxShadow(
-                // Light mode: tinted shadow is prominent; dark mode: subtle
-                color: typeColor.withOpacity(isLight ? 0.10 : 0.06),
-                blurRadius: isLight ? 24 : 20,
+                color: Colors.black.withOpacity(isLight ? 0.06 : 0.18),
+                blurRadius: 12,
                 spreadRadius: 0,
-                offset: const Offset(0, 6),
+                offset: const Offset(0, 3),
               ),
               BoxShadow(
-                // Light mode needs a stronger neutral shadow for depth
-                color: Colors.black.withOpacity(isLight ? 0.07 : 0.04),
-                blurRadius: isLight ? 14 : 10,
-                offset: const Offset(0, 2),
+                color: Colors.black.withOpacity(isLight ? 0.03 : 0.10),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Stack(
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
               children: [
-                // Soft accent glow top-right — stronger in light mode
-                Positioned(
-                  top: -20,
-                  right: -20,
-                  child: Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        colors: [
-                          typeColor.withOpacity(isLight ? 0.14 : 0.10),
-                          typeColor.withOpacity(0.0),
-                        ],
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-
-                // Thin colored top strip
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 3,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          typeColor.withOpacity(isLight ? 0.85 : 0.7),
-                          typeColor.withOpacity(0.08),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
+                // Thin 2px left-side accent bar (rendered via a Row trick)
+                _TypeAccentBar(typeColor: typeColor),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -269,23 +230,19 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                         loadingReviews: _loadingReviews,
                         isLight: isLight,
                       ),
-
-                      const SizedBox(height: 16),
-                      _Divider(c: c, isLight: isLight),
                       const SizedBox(height: 14),
-
+                      _FlatDivider(c: c, isLight: isLight),
+                      const SizedBox(height: 12),
                       _PriceAssetRow(
                         c: c,
                         offer: offer,
                         typeColor: typeColor,
-                        hasLivePrice: hasLivePrice,
+                        hasLivePrice: widget.marketPrice != null,
                         marketPrice: widget.marketPrice,
                         priceLoading: widget.priceLoading,
                         isLight: isLight,
                       ),
-
                       const SizedBox(height: 12),
-
                       _BottomRow(
                         c: c,
                         offer: offer,
@@ -308,7 +265,23 @@ class _PublicOfferTileState extends State<PublicOfferTile>
   }
 }
 
-// ─── Header Row ─────────────────────────────────────────────────────────────
+// ─── Accent bar ───────────────────────────────────────────────────────────────
+// A thin top strip showing the buy/sell color — flat, no gradient, no glow.
+
+class _TypeAccentBar extends StatelessWidget {
+  const _TypeAccentBar({required this.typeColor});
+  final Color typeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 2,
+      color: typeColor,
+    );
+  }
+}
+
+// ─── Header Row ───────────────────────────────────────────────────────────────
 
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
@@ -344,32 +317,23 @@ class _HeaderRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Avatar / icon — more visible background in light mode
+        // Flat icon container — no gradient, just a light tint
         Container(
-          width: 42,
-          height: 42,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                typeColor.withOpacity(isLight ? 0.20 : 0.18),
-                typeColor.withOpacity(isLight ? 0.10 : 0.06),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(13),
+            color: typeColor.withOpacity(isLight ? 0.08 : 0.12),
+            borderRadius: BorderRadius.circular(10),
           ),
-          child: Center(
-            child: Icon(
-              isBuy
-                  ? Icons.arrow_downward_rounded
-                  : Icons.arrow_upward_rounded,
-              size: 20,
-              color: typeColor,
-            ),
+          child: Icon(
+            isBuy
+                ? Icons.arrow_downward_rounded
+                : Icons.arrow_upward_rounded,
+            size: 18,
+            color: typeColor,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 11),
 
         Expanded(
           child: loadingMerchant
@@ -387,12 +351,12 @@ class _HeaderRow extends StatelessWidget {
 
         const SizedBox(width: 10),
 
-        // Status pill
-        _Pill(
+        // Status pill — flat
+        _FlatPill(
           label: statusText,
           textColor: statusColor,
-          bgColor: statusColor.withOpacity(isLight ? 0.12 : 0.10),
-          borderColor: statusColor.withOpacity(isLight ? 0.30 : 0.18),
+          bgColor: statusColor.withOpacity(isLight ? 0.08 : 0.12),
+          borderColor: statusColor.withOpacity(isLight ? 0.20 : 0.25),
           fontSize: 10,
           fontWeight: FontWeight.w700,
         ),
@@ -401,7 +365,7 @@ class _HeaderRow extends StatelessWidget {
   }
 }
 
-// ─── Price / Asset Row ───────────────────────────────────────────────────────
+// ─── Price / Asset Row ────────────────────────────────────────────────────────
 
 class _PriceAssetRow extends StatelessWidget {
   const _PriceAssetRow({
@@ -445,31 +409,29 @@ class _PriceAssetRow extends StatelessWidget {
                     '${offer.asset} / ${offer.fiatCurrency.toUpperCase()}',
                     style: TextStyle(
                       color: c.textPrimary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.4,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
                       height: 1.1,
                     ),
                   ),
                   if (marginLabel != null) ...[
                     const SizedBox(width: 7),
+                    // Margin badge — flat tint, no border glow
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: typeColor.withOpacity(isLight ? 0.12 : 0.10),
+                        color: typeColor.withOpacity(isLight ? 0.08 : 0.12),
                         borderRadius: BorderRadius.circular(5),
-                        border: Border.all(
-                            color:
-                                typeColor.withOpacity(isLight ? 0.28 : 0.18)),
                       ),
                       child: Text(
                         marginLabel,
                         style: TextStyle(
                           color: typeColor,
                           fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.2,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
                         ),
                       ),
                     ),
@@ -479,27 +441,30 @@ class _PriceAssetRow extends StatelessWidget {
               const SizedBox(height: 5),
               Row(
                 children: [
-                  _RangeTag(
-                    c: c,
-                    label: offer.minAmount != null
-                        ? 'Min ${offer.minAmount}'
-                        : 'Min —',
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: c.border.withOpacity(isLight ? 0.4 : 0.3),
-                      shape: BoxShape.circle,
+                  Text(
+                    offer.minAmount != null ? 'Min ${offer.minAmount}' : 'Min —',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  _RangeTag(
-                    c: c,
-                    label: offer.maxAmount != null
-                        ? 'Max ${offer.maxAmount}'
-                        : 'Max —',
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      '·',
+                      style: TextStyle(
+                          color: c.textSecondary.withOpacity(0.4),
+                          fontSize: 12),
+                    ),
+                  ),
+                  Text(
+                    offer.maxAmount != null ? 'Max ${offer.maxAmount}' : 'Max —',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -507,84 +472,69 @@ class _PriceAssetRow extends StatelessWidget {
           ),
         ),
 
-        // Price chip — shows effective offer price, shimmer while loading, "No price" as fallback
+        // Price chip — flat, no glow on the dot
         AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          padding: hasLivePrice
-              ? const EdgeInsets.symmetric(horizontal: 14, vertical: 9)
-              : (priceLoading
-                  ? const EdgeInsets.symmetric(horizontal: 10, vertical: 10)
-                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 9)),
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            gradient: hasLivePrice
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      typeColor.withOpacity(isLight ? 0.14 : 0.14),
-                      typeColor.withOpacity(isLight ? 0.07 : 0.06),
-                    ],
-                  )
-                : LinearGradient(
-                    colors: [c.background, c.background],
-                  ),
-            borderRadius: BorderRadius.circular(12),
+            color: hasLivePrice
+                ? typeColor.withOpacity(isLight ? 0.08 : 0.12)
+                : c.background,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: hasLivePrice
-                  ? typeColor.withOpacity(isLight ? 0.32 : 0.22)
-                  : c.border.withOpacity(isLight ? 0.18 : 0.12),
+                  ? typeColor.withOpacity(isLight ? 0.22 : 0.28)
+                  : c.border.withOpacity(isLight ? 0.16 : 0.12),
+              width: 1,
             ),
           ),
           child: hasLivePrice
               ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: typeColor,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: typeColor
-                                .withOpacity(isLight ? 0.45 : 0.5),
-                            blurRadius: 5,
-                          )
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      marketPrice!,
-                      style: TextStyle(
-                        color: typeColor,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.5,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                )
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Solid dot — no boxShadow glow
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: typeColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                marketPrice!,
+                style: TextStyle(
+                  color: typeColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          )
               : (priceLoading
-                  ? _ShimmerBox(
-                      c: c, width: 72, height: 14, radius: 4, isLight: isLight)
-                  : Text(
-                      'No price',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.5,
-                        letterSpacing: -0.2,
-                      ),
-                    )),
+              ? _ShimmerBox(
+              c: c,
+              width: 72,
+              height: 14,
+              radius: 4,
+              isLight: isLight)
+              : Text(
+            'No price',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          )),
         ),
       ],
     );
   }
 }
 
-// ─── Bottom Row ──────────────────────────────────────────────────────────────
+// ─── Bottom Row ───────────────────────────────────────────────────────────────
 
 class _BottomRow extends StatelessWidget {
   const _BottomRow({
@@ -615,14 +565,14 @@ class _BottomRow extends StatelessWidget {
 
     return Row(
       children: [
-        // BUY / SELL tag
-        _Pill(
+        // BUY / SELL pill — flat
+        _FlatPill(
           label: isBuy ? 'BUY' : 'SELL',
           textColor: typeColor,
-          bgColor: typeColor.withOpacity(isLight ? 0.12 : 0.10),
-          borderColor: typeColor.withOpacity(isLight ? 0.28 : 0.18),
+          bgColor: typeColor.withOpacity(isLight ? 0.08 : 0.12),
+          borderColor: typeColor.withOpacity(isLight ? 0.20 : 0.25),
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
 
         if (offer.availableQty != null) ...[
@@ -637,7 +587,7 @@ class _BottomRow extends StatelessWidget {
 
         const Spacer(),
 
-        // Payment method
+        // Payment methods
         if (loadingPaymentMethods)
           _ShimmerBox(c: c, width: 90, height: 12, radius: 4, isLight: isLight)
         else if (effectiveIds.isNotEmpty)
@@ -652,18 +602,22 @@ class _BottomRow extends StatelessWidget {
 
         const SizedBox(width: 10),
 
-        // Chevron
+        // Flat chevron button — no color fill, just a border
         Container(
-          width: 30,
-          height: 30,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(
-            color: typeColor.withOpacity(isLight ? 0.12 : 0.10),
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: c.border.withOpacity(isLight ? 0.22 : 0.14),
+              width: 1,
+            ),
           ),
           child: Icon(
             Icons.chevron_right_rounded,
-            size: 18,
-            color: typeColor,
+            size: 16,
+            color: c.textSecondary,
           ),
         ),
       ],
@@ -671,30 +625,22 @@ class _BottomRow extends StatelessWidget {
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-class _Divider extends StatelessWidget {
-  const _Divider({required this.c, required this.isLight});
+class _FlatDivider extends StatelessWidget {
+  const _FlatDivider({required this.c, required this.isLight});
   final AppColor c;
   final bool isLight;
 
   @override
   Widget build(BuildContext context) => Container(
     height: 1,
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [
-          c.border.withOpacity(0),
-          c.border.withOpacity(isLight ? 0.20 : 0.12),
-          c.border.withOpacity(0),
-        ],
-      ),
-    ),
+    color: c.border.withOpacity(isLight ? 0.12 : 0.08),
   );
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({
+class _FlatPill extends StatelessWidget {
+  const _FlatPill({
     required this.label,
     required this.textColor,
     required this.bgColor,
@@ -702,6 +648,7 @@ class _Pill extends StatelessWidget {
     required this.fontSize,
     required this.fontWeight,
   });
+
   final String label;
   final Color textColor;
   final Color bgColor;
@@ -711,11 +658,11 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
     decoration: BoxDecoration(
       color: bgColor,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: borderColor),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: borderColor, width: 1),
     ),
     child: Text(
       label,
@@ -723,7 +670,7 @@ class _Pill extends StatelessWidget {
         color: textColor,
         fontSize: fontSize,
         fontWeight: fontWeight,
-        letterSpacing: 0.2,
+        letterSpacing: 0.3,
       ),
     ),
   );
@@ -743,20 +690,18 @@ class _SmallInfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
     decoration: BoxDecoration(
       color: c.background,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(6),
       border: Border.all(
-        color: c.border.withOpacity(isLight ? 0.18 : 0.10),
+        color: c.border.withOpacity(isLight ? 0.15 : 0.10),
       ),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon,
-            size: 12,
-            color: c.textSecondary.withOpacity(isLight ? 0.8 : 0.7)),
+        Icon(icon, size: 11, color: c.textSecondary.withOpacity(0.7)),
         const SizedBox(width: 4),
         Text(
           label,
@@ -771,23 +716,7 @@ class _SmallInfoChip extends StatelessWidget {
   );
 }
 
-class _RangeTag extends StatelessWidget {
-  const _RangeTag({required this.c, required this.label});
-  final AppColor c;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    label,
-    style: TextStyle(
-      color: c.textSecondary,
-      fontSize: 12,
-      fontWeight: FontWeight.w500,
-    ),
-  );
-}
-
-// ─── Payment Method Logo Widgets ─────────────────────────────────────────────
+// ─── Payment Method Logo Widgets ──────────────────────────────────────────────
 
 class _PaymentMethodLogosRow extends StatelessWidget {
   const _PaymentMethodLogosRow({
@@ -810,8 +739,8 @@ class _PaymentMethodLogosRow extends StatelessWidget {
         children: [
           Icon(
             Icons.account_balance_wallet_outlined,
-            size: 13,
-            color: c.textSecondary.withOpacity(0.6),
+            size: 12,
+            color: c.textSecondary.withOpacity(0.5),
           ),
           const SizedBox(width: 5),
           ConstrainedBox(
@@ -897,7 +826,7 @@ class _LogoAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.background,
         borderRadius: BorderRadius.circular(size * 0.35),
-        border: Border.all(color: c.border.withOpacity(0.22), width: 1),
+        border: Border.all(color: c.border.withOpacity(0.18), width: 1),
       ),
       child: Padding(
         padding: EdgeInsets.all(size * 0.10),
@@ -925,6 +854,8 @@ class _LogoAvatar extends StatelessWidget {
     ),
   );
 }
+
+// ─── Shimmer ──────────────────────────────────────────────────────────────────
 
 class _ShimmerBox extends StatefulWidget {
   const _ShimmerBox({
@@ -970,8 +901,8 @@ class _ShimmerBoxState extends State<_ShimmerBox>
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) {
-        final lo = widget.isLight ? 0.10 : 0.06;
-        final hi = widget.isLight ? 0.23 : 0.14;
+        final lo = widget.isLight ? 0.08 : 0.05;
+        final hi = widget.isLight ? 0.18 : 0.12;
         final op = lo + (hi - lo) * _anim.value;
         return Container(
           width: widget.width,
@@ -986,7 +917,7 @@ class _ShimmerBoxState extends State<_ShimmerBox>
   }
 }
 
-// ─── Merchant Info ───────────────────────────────────────────────────────────
+// ─── Merchant Info ────────────────────────────────────────────────────────────
 
 class _MerchantSkeleton extends StatelessWidget {
   const _MerchantSkeleton({required this.c});
@@ -998,9 +929,9 @@ class _MerchantSkeleton extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ShimmerBox(c: c, width: 110, height: 14, radius: 4, isLight: isLight),
+        _ShimmerBox(c: c, width: 110, height: 13, radius: 4, isLight: isLight),
         const SizedBox(height: 5),
-        _ShimmerBox(c: c, width: 70, height: 11, radius: 3, isLight: isLight),
+        _ShimmerBox(c: c, width: 70, height: 10, radius: 3, isLight: isLight),
       ],
     );
   }
@@ -1030,11 +961,11 @@ class _MerchantInfo extends StatelessWidget {
   }[t]!;
 
   Color _tierColor(MerchantTier t) => const {
-    MerchantTier.vip: Color(0xFFFFAA00),
-    MerchantTier.premium: Color(0xFFA855F7),
-    MerchantTier.standard: Color(0xFF5B8DEF),
-    MerchantTier.basic: Color(0xFF9CA3AF),
-    MerchantTier.unknown: Color(0xFF9CA3AF),
+    MerchantTier.vip: Color(0xFFB45309),
+    MerchantTier.premium: Color(0xFF7C3AED),
+    MerchantTier.standard: Color(0xFF2563EB),
+    MerchantTier.basic: Color(0xFF6B7280),
+    MerchantTier.unknown: Color(0xFF6B7280),
   }[t]!;
 
   String _availLabel(SellerAvailability a) => const {
@@ -1045,10 +976,10 @@ class _MerchantInfo extends StatelessWidget {
   }[a]!;
 
   Color _availColor(SellerAvailability a) => const {
-    SellerAvailability.available: Color(0xFF00C48C),
-    SellerAvailability.unavailable: Color(0xFF9CA3AF),
-    SellerAvailability.onBreak: Color(0xFFFAA040),
-    SellerAvailability.unknown: Color(0xFF9CA3AF),
+    SellerAvailability.available: Color(0xFF16A34A),
+    SellerAvailability.unavailable: Color(0xFF6B7280),
+    SellerAvailability.onBreak: Color(0xFFD97706),
+    SellerAvailability.unknown: Color(0xFF6B7280),
   }[a]!;
 
   @override
@@ -1067,22 +998,21 @@ class _MerchantInfo extends StatelessWidget {
                 profile.displayName,
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
                   letterSpacing: -0.2,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 7),
+            // Tier badge — flat, no border, just tinted bg
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: tierColor.withOpacity(isLight ? 0.12 : 0.10),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: tierColor.withOpacity(isLight ? 0.30 : 0.22),
-                ),
+                color: tierColor.withOpacity(isLight ? 0.08 : 0.12),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 _tierLabel(profile.tier),
@@ -1096,12 +1026,12 @@ class _MerchantInfo extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 4),
         Row(
           children: [
             if (profile.country != null && profile.country!.isNotEmpty) ...[
               Icon(Icons.place_outlined,
-                  size: 11, color: c.textSecondary),
+                  size: 11, color: c.textSecondary.withOpacity(0.7)),
               const SizedBox(width: 2),
               Text(
                 profile.country!,
@@ -1116,16 +1046,16 @@ class _MerchantInfo extends StatelessWidget {
             if (loadingReviews)
               Container(
                 width: 46,
-                height: 11,
+                height: 10,
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(isLight ? 0.18 : 0.13),
+                  color: c.border.withOpacity(isLight ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(3),
                 ),
               )
             else if (averageRating != null) ...[
               Icon(Icons.star_rounded,
-                  size: 12, color: const Color(0xFFFFAA00)),
-              const SizedBox(width: 3),
+                  size: 11, color: const Color(0xFFD97706)),
+              const SizedBox(width: 2),
               Text(
                 averageRating!.toStringAsFixed(1),
                 style: TextStyle(
@@ -1138,23 +1068,19 @@ class _MerchantInfo extends StatelessWidget {
                 const SizedBox(width: 2),
                 Text(
                   '($reviewCount)',
-                  style: TextStyle(color: c.textSecondary, fontSize: 10),
+                  style: TextStyle(
+                      color: c.textSecondary.withOpacity(0.7), fontSize: 10),
                 ),
               ],
               const SizedBox(width: 10),
             ],
+            // Availability dot — solid, no glow/boxShadow
             Container(
-              width: 7,
-              height: 7,
+              width: 6,
+              height: 6,
               decoration: BoxDecoration(
                 color: availColor,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: availColor.withOpacity(isLight ? 0.35 : 0.45),
-                    blurRadius: 5,
-                  )
-                ],
               ),
             ),
             const SizedBox(width: 4),

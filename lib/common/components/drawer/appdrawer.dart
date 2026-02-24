@@ -1,7 +1,6 @@
 // lib/features/app_drawer/view/app_drawer.dart
 
 import 'dart:async';
-import 'dart:ffi';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,6 +33,65 @@ import 'package:next_fi/services/profile/profile_core_service.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TTL CACHE ENTRY
+// Wraps any value with a timestamp so we can expire stale data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CacheEntry<T> {
+  _CacheEntry(this.value) : _at = DateTime.now();
+
+  final T value;
+  final DateTime _at;
+
+  /// Returns true when the entry is still within [ttl].
+  bool isFresh(Duration ttl) => DateTime.now().difference(_at) < ttl;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DRAWER CACHE  (static — survives widget rebuilds/closes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DrawerCache {
+  // TTLs — adjust to taste.
+  static const _userTtl        = Duration(minutes: 30);
+  static const _profileTtl     = Duration(minutes: 5);
+  static const _merchantTtl    = Duration(minutes: 5);
+  static const _verificationTtl= Duration(minutes: 5);
+  static const _chatTtl        = Duration(minutes: 1);
+  static const _appInfoTtl     = Duration(days: 1); // basically never re-fetch
+
+  static _CacheEntry<User>?                 user;
+  static _CacheEntry<PackageInfo>?          appInfo;
+  static _CacheEntry<ProfileModel?>?        profile;
+  static _CacheEntry<MerchantProfileModel?>? merchantProfile;
+  static _CacheEntry<TrustStatus>?          trustStatus;
+  static _CacheEntry<int>?                  unreadCount;
+
+  static bool get hasUser            => user        != null && user!.isFresh(_userTtl);
+  static bool get hasAppInfo         => appInfo     != null && appInfo!.isFresh(_appInfoTtl);
+  static bool get hasProfile         => profile     != null && profile!.isFresh(_profileTtl);
+  static bool get hasMerchantProfile => merchantProfile != null && merchantProfile!.isFresh(_merchantTtl);
+  static bool get hasTrustStatus     => trustStatus != null && trustStatus!.isFresh(_verificationTtl);
+  static bool get hasUnreadCount     => unreadCount != null && unreadCount!.isFresh(_chatTtl);
+
+  /// Wipe everything on logout so the next user starts clean.
+  static void invalidateAll() {
+    user = merchantProfile = profile = null;
+    trustStatus = unreadCount = null;
+    // Keep appInfo — it never changes per session.
+  }
+
+  /// Only wipe per-profile data (e.g. after profile edit).
+  static void invalidateProfile() {
+    profile = null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET
+// ─────────────────────────────────────────────────────────────────────────────
+
 class AppDrawer extends StatefulWidget {
   final VoidCallback? onLogout;
   const AppDrawer({super.key, this.onLogout});
@@ -44,31 +102,36 @@ class AppDrawer extends StatefulWidget {
 
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
-  final _auth = AuthService();
-  final _chat = ChatCoreService.I;
-  final _profile = ProfileCoreService.I;
-  final _verification = VerificationCoreService.I;
-  final _merchantProfile = MerchantProfileCoreService.I;
+  // ── services ──────────────────────────────────────────────────────────────
+  final _auth             = AuthService();
+  final _chat             = ChatCoreService.I;
+  final _profile          = ProfileCoreService.I;
+  final _verification     = VerificationCoreService.I;
+  final _merchantProfileSvc = MerchantProfileCoreService.I;
 
-  static User? _cachedUser;
-  static PackageInfo? _cachedInfo;
-  static ProfileModel? _cachedProfile;
-  static MerchantProfileModel? _cachedMerchantProfile;
+  // ── live state (fed from _DrawerCache) ────────────────────────────────────
+  bool           _loggingOut   = false;
+  StreamSubscription<void>? _profileChangeSub;
 
-  bool _loading = true;
-  bool _loggingOut = false;
-  TrustStatus _trustStatus = TrustStatus.unknown;
-  int _unreadChatCount = 0;
-  StreamSubscription<void>? _profileChangesSub;
+  // ── entry animation ───────────────────────────────────────────────────────
+  late final AnimationController        _entryCtrl;
+  late final Animation<double>          _fadeAnim;
+  late final Animation<Offset>          _slideAnim;
+  late final List<Animation<double>>    _itemAnims;
 
-  late final AnimationController _entryCtrl;
-  late final Animation<double> _fadeAnim;
-  late final Animation<Offset> _slideAnim;
-  late final List<Animation<double>> _itemAnims;
+  // ── convenience getters straight from cache ───────────────────────────────
+  User?                 get _user            => _DrawerCache.user?.value;
+  PackageInfo?          get _appInfo         => _DrawerCache.appInfo?.value;
+  ProfileModel?         get _cachedProfile   => _DrawerCache.profile?.value;
+  MerchantProfileModel? get _merchantProfile => _DrawerCache.merchantProfile?.value;
+  TrustStatus           get _trustStatus     => _DrawerCache.trustStatus?.value ?? TrustStatus.unknown;
+  int                   get _unreadChatCount => _DrawerCache.unreadCount?.value ?? 0;
 
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
+
     _entryCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 560),
@@ -81,112 +144,125 @@ class _AppDrawerState extends State<AppDrawer>
 
     _itemAnims = List.generate(16, (i) {
       final start = 0.1 + i * 0.06;
-      final end = (start + 0.35).clamp(0.0, 1.0);
+      final end   = (start + 0.35).clamp(0.0, 1.0);
       return CurvedAnimation(
         parent: _entryCtrl,
         curve: Interval(start, end, curve: Curves.easeOutCubic),
       );
     });
 
-    _profileChangesSub = ProfileCoreService.changes.listen((_) {
+    // Listen for profile edits in other screens.
+    _profileChangeSub = ProfileCoreService.changes.listen((_) {
       if (!mounted) return;
-      _fetchProfileData();
+      _DrawerCache.invalidateProfile();
+      _fetchProfile();
     });
+
     _bootstrap();
   }
 
   @override
   void dispose() {
-    _profileChangesSub?.cancel();
-    _profileChangesSub = null;
+    _profileChangeSub?.cancel();
     _entryCtrl.dispose();
     super.dispose();
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // BOOTSTRAP — render immediately from cache, then refresh stale entries
+  // ─────────────────────────────────────────────────────────────────────────
+
   Future<void> _bootstrap() async {
-    setState(() => _loading = false);
+    // If we already have data in cache, start animation right away so the
+    // drawer feels instant. Stale fetches run in the background.
     _entryCtrl.forward();
-    await Future.wait([
-      _fetchRealUser(),
-      _fetchProfileData(),
-      _fetchMerchantProfile(),
-      _fetchAppInfo(),
-      _fetchVerificationStatus(),
-      _fetchUnreadChatCount(),
-    ]);
+
+    final isAuth = await _auth.isAuthenticated;
+
+    // Fire only the fetches whose cache entry is missing or expired.
+    final futures = <Future<void>>[
+      if (!_DrawerCache.hasAppInfo)         _fetchAppInfo(),
+      if (isAuth && !_DrawerCache.hasUser)              _fetchUser(),
+      if (isAuth && !_DrawerCache.hasProfile)           _fetchProfile(),
+      if (isAuth && !_DrawerCache.hasMerchantProfile)   _fetchMerchantProfileData(),
+      if (isAuth && !_DrawerCache.hasTrustStatus)       _fetchVerification(),
+      if (isAuth && !_DrawerCache.hasUnreadCount)       _fetchUnreadCount(),
+    ];
+
+    if (futures.isNotEmpty) await Future.wait(futures);
+
+    // Trigger a single rebuild after all background fetches finish.
+    if (mounted) setState(() {});
   }
 
-  Future<void> _fetchRealUser() async {
+  // ─────────────────────────────────────────────────────────────────────────
+  // INDIVIDUAL FETCHERS — each writes into _DrawerCache, then setState.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchUser() async {
     try {
-      if (!await _auth.isAuthenticated) return;
-      _cachedUser = await _auth.currentUser;
+      final u = await _auth.currentUser;
+      if (u != null) _DrawerCache.user = _CacheEntry(u);
       if (mounted) setState(() {});
     } catch (_) {}
   }
 
   Future<void> _fetchAppInfo() async {
-    if (_cachedInfo != null) return;
-    _cachedInfo = await PackageInfo.fromPlatform();
-    if (mounted) setState(() {});
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _DrawerCache.appInfo = _CacheEntry(info);
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
-  Future<void> _fetchVerificationStatus() async {
+  Future<void> _fetchProfile() async {
     try {
-      if (!await _auth.isAuthenticated) {
-        if (mounted) setState(() => _trustStatus = TrustStatus.unknown);
-        return;
-      }
-      final data = await _verification.getMe();
-      if (mounted) setState(() => _trustStatus = data.status);
-    } catch (_) {
-      if (mounted) setState(() => _trustStatus = TrustStatus.basic);
-    }
-  }
-
-  Future<void> _fetchProfileData() async {
-    try {
-      if (!await _auth.isAuthenticated) {
-        if (mounted) setState(() => _cachedProfile = null);
-        return;
-      }
       final p = await _profile.getMe();
-      if (mounted) setState(() => _cachedProfile = p);
+      _DrawerCache.profile = _CacheEntry(p);
+      if (mounted) setState(() {});
     } catch (_) {
-      if (mounted) setState(() => _cachedProfile = null);
+      _DrawerCache.profile = _CacheEntry(null);
     }
   }
 
-  Future<void> _fetchUnreadChatCount() async {
+  Future<void> _fetchVerification() async {
     try {
-      if (!await _auth.isAuthenticated) {
-        if (mounted) setState(() => _unreadChatCount = 0);
-        return;
-      }
+      final data = await _verification.getMe();
+      _DrawerCache.trustStatus = _CacheEntry(data.status);
+      if (mounted) setState(() {});
+    } catch (_) {
+      _DrawerCache.trustStatus = _CacheEntry(TrustStatus.basic);
+    }
+  }
+
+  Future<void> _fetchUnreadCount() async {
+    try {
       final threads = await _chat.listThreads(
         const ChatListQuery(page: 1, limit: 50),
       );
-      final unread = threads.items.fold<int>(
-        0,
-            (sum, thread) => sum + thread.unreadCount,
+      final count = threads.items.fold<int>(
+        0, (sum, t) => sum + t.unreadCount,
       );
-      if (mounted) setState(() => _unreadChatCount = unread);
+      _DrawerCache.unreadCount = _CacheEntry(count);
+      if (mounted) setState(() {});
     } catch (_) {
-      if (mounted) setState(() => _unreadChatCount = 0);
+      _DrawerCache.unreadCount = _CacheEntry(0);
     }
   }
 
-  Future<void> _fetchMerchantProfile() async {
+  Future<void> _fetchMerchantProfileData() async {
     try {
-      if (!await _auth.isAuthenticated) {
-        if (mounted) setState(() => _cachedMerchantProfile = null);
-        return;
-      }
-      final merchant = await _merchantProfile.getMe();
-      if (mounted) setState(() => _cachedMerchantProfile = merchant);
+      final m = await _merchantProfileSvc.getMe();
+      _DrawerCache.merchantProfile = _CacheEntry(m);
+      if (mounted) setState(() {});
     } catch (_) {
-      if (mounted) setState(() => _cachedMerchantProfile = null);
+      _DrawerCache.merchantProfile = _CacheEntry(null);
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ACTIONS
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _handleLogout() async {
     if (_loggingOut) return;
@@ -198,12 +274,13 @@ class _AppDrawerState extends State<AppDrawer>
       builder: (_) => const _LogoutConfirmationModal(),
     );
     if (confirm != true || !mounted) return;
+
     setState(() => _loggingOut = true);
     await _auth.logout();
-    _cachedUser = null;
-    _cachedProfile = null;
-    _cachedMerchantProfile = null;
-    _trustStatus = TrustStatus.unknown;
+
+    // Wipe ALL cached data on logout.
+    _DrawerCache.invalidateAll();
+
     if (!mounted) return;
     Navigator.pop(context);
     widget.onLogout?.call();
@@ -217,59 +294,68 @@ class _AppDrawerState extends State<AppDrawer>
 
   void _redirectToPaymentAccount(bool isMerchant) {
     Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) =>PaymentAccountSetupScreen(isMerchant:isMerchant)));
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PaymentAccountSetupScreen(isMerchant: isMerchant)),
+    );
   }
 
   void _handleVerificationTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_user == null) { _redirectToLogin(); return; }
     _push(const VerificationFlowScreen());
   }
 
   Future<void> _handleMerchantRequestTap() async {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_user == null) { _redirectToLogin(); return; }
     Navigator.pop(context);
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()),
     );
-    if (mounted) await _fetchMerchantProfile();
+    // Force re-fetch merchant status after the flow.
+    _DrawerCache.merchantProfile = null;
+    if (mounted) await _fetchMerchantProfileData();
   }
 
   void _handleMerchantOffersTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_user == null) { _redirectToLogin(); return; }
     if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
     _push(const ManageOffersScreen());
   }
 
   void _handleMerchantTradesTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_user == null) { _redirectToLogin(); return; }
     if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
     _push(const MerchantTradesScreen());
   }
 
   void _handleP2PMarketplaceTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
+    if (_user == null) { _redirectToLogin(); return; }
     _push(const MarketOffersScreen(initialType: OfferType.sell));
+  }
+
+  void _handleMessengerTap() {
+    if (_user == null) { _redirectToLogin(); return; }
+    _push(const ChatHubScreen());
+  }
+
+  void _handleTradeHistoryTap() {
+    if (_user == null) { _redirectToLogin(); return; }
+    _push(const TradeHistoryScreen());
   }
 
   bool get _isVerifiedForTradeAccess =>
       _trustStatus == TrustStatus.ready ||
           (_cachedProfile?.isVerificationIdentityComplete ?? false);
 
-  void _handleMessengerTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
-    _push(const ChatHubScreen());
-  }
-
-  void _handleTradeHistoryTap() {
-    if (_cachedUser == null) { _redirectToLogin(); return; }
-    _push(const TradeHistoryScreen());
-  }
-
   void _push(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STAGGER HELPER
+  // ─────────────────────────────────────────────────────────────────────────
 
   Widget _staggered(int index, Widget child) {
     if (index >= _itemAnims.length) return child;
@@ -285,15 +371,22 @@ class _AppDrawerState extends State<AppDrawer>
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final mq = MediaQuery.of(context);
-    final user = _cachedUser;
+    final c   = AppColor.of(context);
+    final mq  = MediaQuery.of(context);
+    final user = _user;
 
-    final merchantApproved = _cachedMerchantProfile?.isApproved ?? false;
-    final isMerchant = user != null && merchantApproved;
-    final canRequestMerchant = user != null && _trustStatus == TrustStatus.ready;
+    final merchantApproved    = _merchantProfile?.isApproved ?? false;
+    final isMerchant          = user != null && merchantApproved;
+    final canRequestMerchant  = user != null && _trustStatus == TrustStatus.ready;
+
+    // Show shimmer only when we have NO cached user data at all.
+    final showShimmer = user == null && !_DrawerCache.hasProfile;
 
     return Drawer(
       backgroundColor: c.background,
@@ -304,7 +397,8 @@ class _AppDrawerState extends State<AppDrawer>
           position: _slideAnim,
           child: Column(
             children: [
-              if (_loading)
+              // ── Header ──────────────────────────────────────────────────
+              if (showShimmer)
                 _ProfileShimmer(topPadding: mq.padding.top, colors: c)
               else if (user != null)
                 _ProfileHeader(
@@ -320,6 +414,7 @@ class _AppDrawerState extends State<AppDrawer>
                   onTap: _redirectToLogin,
                 ),
 
+              // ── Nav list ────────────────────────────────────────────────
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
@@ -359,7 +454,6 @@ class _AppDrawerState extends State<AppDrawer>
                           : null,
                       onTap: _handleVerificationTap, requiresAuth: user == null,
                     )),
-
                     _staggered(5, _NavTile(
                       icon: LucideIcons.checkCircle2, label: 'Payment Account',
                       description: 'User Payment Account', colors: c,
@@ -371,10 +465,8 @@ class _AppDrawerState extends State<AppDrawer>
                       requiresAuth: user == null,
                     )),
 
-                    if (canRequestMerchant)
+                    if (canRequestMerchant) ...[
                       _staggered(6, _SectionLabel(label: 'MERCHANT', colors: c)),
-
-                    if (canRequestMerchant)
                       _staggered(7, _NavTile(
                         icon: LucideIcons.store, label: 'Merchant Request',
                         description: 'Request merchant account access', colors: c,
@@ -384,6 +476,7 @@ class _AppDrawerState extends State<AppDrawer>
                             : null,
                         onTap: _handleMerchantRequestTap,
                       )),
+                    ],
 
                     if (isMerchant) ...[
                       if (!canRequestMerchant) ...[
@@ -425,15 +518,16 @@ class _AppDrawerState extends State<AppDrawer>
                       onTap: () => _push(const SettingsScreen()),
                     )),
 
-                    if (_cachedInfo != null) ...[
+                    if (_appInfo != null) ...[
                       const SizedBox(height: 24),
-                      _AppVersionInfo(info: _cachedInfo!, colors: c),
+                      _AppVersionInfo(info: _appInfo!, colors: c),
                     ],
                     const SizedBox(height: 8),
                   ],
                 ),
               ),
 
+              // ── Logout ──────────────────────────────────────────────────
               if (user != null) ...[
                 _DrawerDivider(colors: c),
                 _LogoutButton(isLoading: _loggingOut, colors: c, onTap: _handleLogout),
@@ -449,7 +543,7 @@ class _AppDrawerState extends State<AppDrawer>
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// PROFILE HEADER — solid surface, no glass
+// PROFILE HEADER
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _ProfileHeader extends StatelessWidget {
@@ -477,12 +571,11 @@ class _ProfileHeader extends StatelessWidget {
   }
   String? get _email => user.email.trim().isEmpty ? null : user.email.trim();
   String? get _country => _s(profile?.country);
-  String get _line1 => _displayName ?? _email ?? 'Anonymous';
-  String? get _line2 => _handle;
+  String  get _line1   => _displayName ?? _email ?? 'Anonymous';
+  String? get _line2   => _handle;
   String? get _line3 {
     final e = _email;
-    if (e == null) return null;
-    if (_line1 == e) return null;
+    if (e == null || _line1 == e) return null;
     return e;
   }
 
@@ -513,7 +606,7 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final tc = _trust;
+    final tc  = _trust;
     final ctry = _country;
 
     return Container(
@@ -523,7 +616,6 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thin primary accent bar at top
           Container(
             height: 3,
             decoration: BoxDecoration(
@@ -536,7 +628,6 @@ class _ProfileHeader extends StatelessWidget {
               ),
             ),
           ),
-
           Padding(
             padding: EdgeInsets.fromLTRB(20, top + 22, 20, 20),
             child: Column(
@@ -550,51 +641,37 @@ class _ProfileHeader extends StatelessWidget {
                     _TrustPill(icon: tc.icon, label: tc.label, bg: tc.bg, glow: tc.glow),
                   ],
                 ),
-
                 const SizedBox(height: 14),
-
                 Text(
                   _line1,
                   style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
-                    height: 1.1,
+                    color: colors.textPrimary, fontSize: 22,
+                    fontWeight: FontWeight.w800, letterSpacing: -0.8, height: 1.1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                 ),
-
                 if (_line2 != null) ...[
                   const SizedBox(height: 3),
                   Text(
                     _line2!,
                     style: TextStyle(
-                      color: colors.primary.withOpacity(0.8),
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
+                      color: colors.primary.withOpacity(0.8), fontSize: 13.5,
+                      fontWeight: FontWeight.w600, letterSpacing: 0.1,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
                 ],
-
                 if (_line3 != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     _line3!,
                     style: TextStyle(
                       color: colors.textSecondary.withOpacity(0.55),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
+                      fontSize: 12, fontWeight: FontWeight.w400,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
                   ),
                 ],
-
                 if (ctry != null) ...[
                   const SizedBox(height: 10),
                   _CountryChip(country: ctry, colors: colors),
@@ -602,7 +679,6 @@ class _ProfileHeader extends StatelessWidget {
               ],
             ),
           ),
-
           Container(
             height: 1,
             decoration: BoxDecoration(
@@ -628,12 +704,7 @@ class _ProfileHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TrustPill extends StatelessWidget {
-  const _TrustPill({
-    required this.icon,
-    required this.label,
-    required this.bg,
-    required this.glow,
-  });
+  const _TrustPill({required this.icon, required this.label, required this.bg, required this.glow});
 
   final IconData icon;
   final String label;
@@ -657,10 +728,7 @@ class _TrustPill extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: bg),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: bg, letterSpacing: 0.1),
-          ),
+          Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: bg, letterSpacing: 0.1)),
         ],
       ),
     );
@@ -719,7 +787,7 @@ class _DrawerAvatar extends StatefulWidget {
 class _DrawerAvatarState extends State<_DrawerAvatar>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
-  late final Animation<double> _pulseAnim;
+  late final Animation<double>   _pulseAnim;
 
   @override
   void initState() {
@@ -758,8 +826,7 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
                 colors: [c.primary.withOpacity(0.6), c.primary.withOpacity(0.2)],
               ),
             ),
@@ -767,7 +834,6 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
             child: ClipOval(child: UserAvatar(user: widget.user, radius: 27, colors: c)),
           ),
         ),
-
         Positioned(
           bottom: 2, right: 2,
           child: AnimatedBuilder(
@@ -800,7 +866,7 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LOGIN PROMPT — solid surface, no glass
+// LOGIN PROMPT
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LoginPrompt extends StatelessWidget {
@@ -821,7 +887,6 @@ class _LoginPrompt extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Accent bar
           Container(
             height: 3,
             decoration: BoxDecoration(
@@ -834,7 +899,6 @@ class _LoginPrompt extends StatelessWidget {
               ),
             ),
           ),
-
           Padding(
             padding: EdgeInsets.fromLTRB(20, topPadding + 22, 20, 20),
             child: Row(
@@ -849,8 +913,7 @@ class _LoginPrompt extends StatelessWidget {
                   ),
                   child: Icon(
                     LucideIcons.userCircle2,
-                    color: colors.textSecondary.withOpacity(0.35),
-                    size: 28,
+                    color: colors.textSecondary.withOpacity(0.35), size: 28,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -868,17 +931,22 @@ class _LoginPrompt extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         'Sign in to unlock all features',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: colors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500,
+                          color: colors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 14),
-                      _GradientButton(label: 'Sign In', icon: Icons.login_rounded, primaryColor: colors.primary, onTap: onTap),
+                      _GradientButton(
+                        label: 'Sign In', icon: Icons.login_rounded,
+                        primaryColor: colors.primary, onTap: onTap,
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-
           Container(
             height: 1,
             decoration: BoxDecoration(
@@ -1007,7 +1075,7 @@ class _NavTile extends StatefulWidget {
 
 class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin {
   late final AnimationController _pressCtrl;
-  late final Animation<double> _scaleAnim;
+  late final Animation<double>   _scaleAnim;
   bool _isPressed = false;
 
   @override
@@ -1021,13 +1089,13 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
   @override
   void dispose() { _pressCtrl.dispose(); super.dispose(); }
 
-  void _onTapDown(_) { setState(() => _isPressed = true); _pressCtrl.forward(); }
-  void _onTapUp(_) { setState(() => _isPressed = false); _pressCtrl.reverse(); }
-  void _onTapCancel() { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+  void _onTapDown(_)   { setState(() => _isPressed = true);  _pressCtrl.forward(); }
+  void _onTapUp(_)     { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+  void _onTapCancel()  { setState(() => _isPressed = false); _pressCtrl.reverse(); }
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.colors;
+    final c      = widget.colors;
     final accent = widget.accentColor ?? c.primary;
 
     return GestureDetector(
@@ -1138,10 +1206,10 @@ class _TrustStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, label) = switch (status) {
-      TrustStatus.ready => (const Color(0xFF10B981), 'Verified'),
+      TrustStatus.ready     => (const Color(0xFF10B981), 'Verified'),
       TrustStatus.reviewing => (const Color(0xFFF59E0B), 'Pending'),
       TrustStatus.suspended => (const Color(0xFFEF4444), 'Suspended'),
-      _ => (colors.textSecondary.withOpacity(0.4), 'Basic'),
+      _                     => (colors.textSecondary.withOpacity(0.4), 'Basic'),
     };
 
     return Container(
@@ -1212,7 +1280,11 @@ class _DrawerDivider extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [colors.border.withOpacity(0.0), colors.border.withOpacity(0.3), colors.border.withOpacity(0.0)],
+          colors: [
+            colors.border.withOpacity(0.0),
+            colors.border.withOpacity(0.3),
+            colors.border.withOpacity(0.0),
+          ],
         ),
       ),
     );
@@ -1246,7 +1318,10 @@ class _AppVersionInfo extends StatelessWidget {
             const SizedBox(width: 5),
             Text(
               '${info.appName}  v${info.version}',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: colors.textSecondary.withOpacity(0.45), letterSpacing: 0.1),
+              style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w600,
+                color: colors.textSecondary.withOpacity(0.45), letterSpacing: 0.1,
+              ),
             ),
           ],
         ),
@@ -1294,8 +1369,10 @@ class _LogoutButtonState extends State<_LogoutButton> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: widget.isLoading
-                  ? SizedBox(key: const ValueKey('l'), width: 18, height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(c.error)))
+                  ? SizedBox(
+                key: const ValueKey('l'), width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(c.error)),
+              )
                   : Icon(key: const ValueKey('i'), LucideIcons.logOut, color: c.error, size: 18),
             ),
             const SizedBox(width: 14),
@@ -1333,12 +1410,12 @@ class _ProfileShimmer extends StatefulWidget {
 class _ProfileShimmerState extends State<_ProfileShimmer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double> _sweep;
+  late final Animation<double>   _sweep;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+    _ctrl  = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
     _sweep = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
 
@@ -1357,8 +1434,12 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
             borderRadius: BorderRadius.circular(r),
             gradient: LinearGradient(
               begin: Alignment(-1 + _sweep.value * 2.5, 0),
-              end: Alignment(-0.5 + _sweep.value * 2.5, 0),
-              colors: [c.border.withOpacity(0.08), c.border.withOpacity(0.17), c.border.withOpacity(0.08)],
+              end:   Alignment(-0.5 + _sweep.value * 2.5, 0),
+              colors: [
+                c.border.withOpacity(0.08),
+                c.border.withOpacity(0.17),
+                c.border.withOpacity(0.08),
+              ],
             ),
           ),
         );
