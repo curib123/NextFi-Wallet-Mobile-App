@@ -245,8 +245,6 @@ class _TradeTile extends StatelessWidget {
   final VoidCallback onTap;
 
   Color _statusColor(TradeStatus s) => switch (s) {
-    TradeStatus.pending    => c.warning,
-    TradeStatus.escrowFunded => c.primary,
     TradeStatus.fiatSent   => c.warning,
     TradeStatus.completed  => c.success,
     TradeStatus.cancelled  => c.error,
@@ -263,8 +261,6 @@ class _TradeTile extends StatelessWidget {
   };
 
   String _statusLabel(TradeStatus s) => switch (s) {
-    TradeStatus.pending      => 'Pending',
-    TradeStatus.escrowFunded => 'Funded',
     TradeStatus.fiatSent     => 'Fiat Sent',
     TradeStatus.completed    => 'Completed',
     TradeStatus.cancelled    => 'Cancelled',

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 import 'package:next_fi/services/trades/api/trades_service.dart';
 import 'package:next_fi/services/trades/models/trades_dtos.dart';
@@ -72,6 +74,35 @@ class TradesCoreService {
     String? description,
     List<String>? evidenceUrls,
   }) => _api.openDispute(id, reason: reason, description: description, evidenceUrls: evidenceUrls);
+
+  // Payment proof upload
+  Future<void> uploadProof(
+    String id, {
+    required File file,
+    String type = 'FIAT',
+    String? note,
+    String? referenceNo,
+  }) => _api.uploadPaymentProof(id, file: file, type: type, note: note, referenceNo: referenceNo);
+
+  // Trade messages
+  Future<List<Map<String, dynamic>>> getTradeMessages(String id) =>
+      _api.getTradeMessages(id);
+
+  Future<void> sendTradeMessage(
+    String id, {
+    required String ciphertext,
+    required String algorithm,
+    required String senderKeyId,
+    required String nonce,
+    String kind = 'TEXT',
+  }) => _api.sendTradeMessage(
+        id,
+        ciphertext: ciphertext,
+        algorithm: algorithm,
+        senderKeyId: senderKeyId,
+        nonce: nonce,
+        kind: kind,
+      );
 
   void dispose() => _api.dispose();
 }

@@ -7,7 +7,7 @@ enum TradeStatus {
   cancelled,
   disputed,
   expired,
-  unknown, pending, escrowFunded;
+  unknown;
 
   static TradeStatus fromString(String? v) {
     switch (v?.toUpperCase().replaceAll('_', '').replaceAll('-', '')) {
@@ -61,12 +61,6 @@ enum TradeStatus {
         return 'Trade Expired';
       case TradeStatus.unknown:
         return 'Unknown Status';
-      case TradeStatus.pending:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.escrowFunded:
-        // TODO: Handle this case.
-        throw UnimplementedError();
     }
   }
 
@@ -91,12 +85,6 @@ enum TradeStatus {
         return 'schedule';
       case TradeStatus.unknown:
         return 'help';
-      case TradeStatus.pending:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.escrowFunded:
-        // TODO: Handle this case.
-        throw UnimplementedError();
     }
   }
 

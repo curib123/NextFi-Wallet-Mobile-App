@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import '../helpers/trades_exceptions.dart';
 import '../helpers/trades_helpers.dart';
@@ -33,7 +35,7 @@ class TradesService {
       'Authorization': 'Bearer $token',
     };
     if (idempotencyKey) {
-      h['x-idempotency-key'] = DateTime.now().millisecondsSinceEpoch.toString();
+      h['x-idempotency-key'] = const Uuid().v4();
     }
     return h;
   }
@@ -288,6 +290,69 @@ class TradesService {
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
     throw TradeApiException(res.statusCode, 'Unexpected response for open-dispute');
+  }
+
+  // ── Messages ─────────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getTradeMessages(String id) async {
+    final res = await _client.get(
+      TradesHttp.uri(TradesEndpoints.messages(id)),
+      headers: await _headers(),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final items = _extractList(data);
+    return items;
+  }
+
+  Future<void> sendTradeMessage(
+    String id, {
+    required String ciphertext,
+    required String algorithm,
+    required String senderKeyId,
+    required String nonce,
+    String kind = 'TEXT',
+  }) async {
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.messages(id)),
+      headers: await _headers(),
+      body: jsonEncode({
+        'kind': kind,
+        'ciphertext': ciphertext,
+        'algorithm': algorithm,
+        'senderKeyId': senderKeyId,
+        'nonce': nonce,
+      }),
+    );
+    TradesHttp.ensureOk(res);
+  }
+
+  // ── Payment proof upload (multipart) ─────────────────────────────────────
+
+  Future<void> uploadPaymentProof(
+    String id, {
+    required File file,
+    String type = 'FIAT',
+    String? note,
+    String? referenceNo,
+  }) async {
+    final token = await tokenProvider();
+    if (token == null || token.isEmpty) {
+      throw TradeApiException(401, 'Missing auth token');
+    }
+    final uri = TradesHttp.uri(TradesEndpoints.proofs(id));
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..headers['x-idempotency-key'] = const Uuid().v4()
+      ..fields['type'] = type;
+    if (note != null && note.isNotEmpty) request.fields['note'] = note;
+    if (referenceNo != null && referenceNo.isNotEmpty) {
+      request.fields['referenceNo'] = referenceNo;
+    }
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    TradesHttp.ensureOk(res);
   }
 
   void dispose() => _client.close();

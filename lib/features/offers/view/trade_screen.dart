@@ -6,6 +6,7 @@ import 'package:next_fi/features/offers/view/trade_order_screen.dart';
 import 'package:next_fi/services/merchant_payment_account/merchant_payment_account_core_service.dart';
 import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_dtos.dart';
 import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
+import 'package:next_fi/services/offer_payment_method/models/offer_payment_method_dtos.dart';
 import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
@@ -24,7 +25,7 @@ class TradeScreen extends StatefulWidget {
   });
 
   final OfferModel offer;
-  final String? marketPrice; // Passed from offer modal
+  final double? marketPrice; // Raw market price passed from offer list
 
   @override
   State<TradeScreen> createState() => _TradeScreenState();
@@ -44,12 +45,12 @@ class _TradeScreenState extends State<TradeScreen> {
   bool _submitting = false;
   String? _loadError;
 
-  List<PaymentMethodModel> _offerPaymentMethods = [];
+  List<OfferPaymentMethodResponse> _offerPaymentMethods = [];
   List<MerchantPaymentAccountModel> _merchantAccounts = [];
   List<WalletAddress> _wallets = [];
   List<UserPaymentAccountModel> _userAccounts = [];
 
-  PaymentMethodModel? _selectedOfferMethod;
+  OfferPaymentMethodResponse? _selectedOfferMethod;
   MerchantPaymentAccountModel? _selectedMerchantAccount;
   WalletAddress? _selectedWallet;
   UserPaymentAccountModel? _selectedUserAccount;
@@ -68,29 +69,24 @@ class _TradeScreenState extends State<TradeScreen> {
   // Formula: finalPrice = marketPrice * (1 + marginPercent/100)
   // Then: crypto = fiatAmount / finalPrice
   double get _effectivePrice {
-    // First try to use marketPrice passed from offer modal
-    double? price;
-    
-    // Try widget.marketPrice first (passed from offer modal)
-    if (widget.marketPrice != null && widget.marketPrice!.isNotEmpty) {
-      price = double.tryParse(widget.marketPrice!);
-    }
-    
-    // Fallback to offer.marketPrice if not available
+    // Use raw market price passed from offer list (already a double, no parsing needed)
+    double? price = (widget.marketPrice != null && widget.marketPrice! > 0)
+        ? widget.marketPrice
+        : null;
+
+    // Fallback to offer.marketPrice stored on the offer model
     if (price == null && offer.marketPrice != null && offer.marketPrice! > 0) {
       price = offer.marketPrice;
     }
-    
+
     if (price != null && price > 0) {
-      // Use market price with margin
       if (offer.marginPercent != null) {
         return price * (1 + offer.marginPercent! / 100);
       }
       return price;
     }
-    
-    // Fallback: if no market price, cannot calculate accurately
-    // Return 0 to indicate invalid calculation
+
+    // No market price available — conversion not possible
     return 0.0;
   }
   
@@ -123,6 +119,7 @@ class _TradeScreenState extends State<TradeScreen> {
   }
 
   void _onCryptoChanged() {
+    if (_effectivePrice <= 0) return;
     final v = double.tryParse(_cryptoCtrl.text.trim()) ?? 0;
     setState(() => _computedFiat = v * _effectivePrice);
   }
@@ -145,16 +142,16 @@ class _TradeScreenState extends State<TradeScreen> {
     try {
       // Load all required data in parallel
       final results = await Future.wait([
-        _offerPaymentCore.getPaymentMethodsForOffer(offer.id),
+        _offerPaymentCore.getOfferPaymentMethodsWithId(offer.id),
         _walletCore.list(),
         _userAccountCore.listMyPaymentAccounts(activeOnly: true),
         _loadMerchantAccounts(),
       ]);
-      
+
       if (!mounted) return;
-      
+
       setState(() {
-        _offerPaymentMethods = results[0] as List<PaymentMethodModel>;
+        _offerPaymentMethods = results[0] as List<OfferPaymentMethodResponse>;
         _wallets = results[1] as List<WalletAddress>;
         _userAccounts = results[2] as List<UserPaymentAccountModel>;
         _merchantAccounts = results[3] as List<MerchantPaymentAccountModel>;
@@ -206,8 +203,9 @@ class _TradeScreenState extends State<TradeScreen> {
       setState(() => _selectedMerchantAccount = null);
       return;
     }
-    
-    final methodId = _selectedOfferMethod!.id;
+
+    // Use paymentMethodId (the PaymentMethod FK), not id (the junction record PK)
+    final methodId = _selectedOfferMethod!.paymentMethodId;
     final filtered = _merchantAccounts
         .where((a) => a.paymentMethodId == methodId && a.isActive)
         .toList();
@@ -833,16 +831,16 @@ class _PaymentMethodSelector extends StatelessWidget {
     required this.onChanged,
   });
   final AppColor c;
-  final List<PaymentMethodModel> methods;
-  final PaymentMethodModel? selected;
-  final ValueChanged<PaymentMethodModel?> onChanged;
+  final List<OfferPaymentMethodResponse> methods;
+  final OfferPaymentMethodResponse? selected;
+  final ValueChanged<OfferPaymentMethodResponse?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: methods.map((m) {
         final isSelected = selected?.id == m.id;
-        final logo = m.logo;
+        final logo = m.paymentMethod.logo;
         return GestureDetector(
           onTap: () => onChanged(m),
           child: Container(
@@ -871,7 +869,7 @@ class _PaymentMethodSelector extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    m.name,
+                    m.paymentMethod.name,
                     style: TextStyle(
                       color: c.textPrimary,
                       fontWeight: FontWeight.w600,

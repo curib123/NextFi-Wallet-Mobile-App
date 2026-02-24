@@ -4,6 +4,7 @@ import 'package:next_fi/services/payment_method_and_accounts/models/payment_meth
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 
 import 'api/offer_payment_method_service.dart';
+import 'models/offer_payment_method_dtos.dart';
 import 'models/offer_payment_method_models.dart';
 
 class OfferPaymentMethodCoreService {
@@ -95,6 +96,21 @@ class OfferPaymentMethodCoreService {
         print('Error fetching relationship by ID: $e');
       }
       return null;
+    }
+  }
+
+  /// Get full OfferPaymentMethodResponse records for an offer, preserving the
+  /// junction record ID needed by CreateTradeRequest.paymentMethodId.
+  Future<List<OfferPaymentMethodResponse>> getOfferPaymentMethodsWithId(
+      String offerId) async {
+    try {
+      final response = await _service.getPaymentMethodsForOffer(offerId);
+      return response.items.whereType<OfferPaymentMethodResponse>().toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error fetching offer payment method records: $e');
+      }
+      return [];
     }
   }
 

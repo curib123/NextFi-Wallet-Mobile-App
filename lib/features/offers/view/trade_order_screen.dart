@@ -1,14 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
+import 'package:next_fi/services/reviews/models/reviews_dtos.dart';
+import 'package:next_fi/services/reviews/reviews_core_service.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/services/trades/models/trades_models.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
+import 'package:provider/provider.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 class TradeOrderScreen extends StatefulWidget {
   const TradeOrderScreen({
@@ -161,6 +169,11 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     );
     if (!confirmed) return;
     _runAction(() async {
+      // Optionally attach proof of payment before marking sent
+      final proofFile = await _showProofPickSheet();
+      if (proofFile != null) {
+        await _tradesCore.uploadProof(_trade.id, file: proofFile, type: 'FIAT');
+      }
       final updated = await _tradesCore.markFiatSent(_trade.id);
       if (mounted) setState(() => _trade = updated);
     }, successMsg: 'Payment marked as sent');
@@ -193,33 +206,148 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     }, successMsg: 'Trade cancelled');
   }
 
-  // Lock crypto into escrow - Step B
+  // Lock crypto into escrow — only shown for BUY offers where user is the seller
   Future<void> _lockCrypto() async {
     final confirmed = await _showConfirm(
       title: 'Lock Crypto in Escrow',
-      body: 'This will lock your crypto in a claimable balance until the trade is complete.',
+      body: 'Your crypto will be locked in a Stellar Claimable Balance. '
+            'The merchant can claim it after confirming your payment.',
       confirmLabel: 'Lock Crypto',
     );
     if (!confirmed) return;
-    // Note: This would require the Stellar transaction hash from the app
-    // For now, we show a message that this feature requires the app
-    showFloatingSnackBar(context, 
-      message: 'Please use the wallet app to create the claimable balance first',
-      type: SnackBarType.info);
+    _runAction(() async {
+      final stellarSvc = context.read<StellarWalletServices>();
+      final seedVM = context.read<SeedKeypairVM>();
+      final kp = await seedVM.deriveKeyPair();
+
+      final asset = _trade.asset.toUpperCase() == 'XLM'
+          ? Asset.NATIVE
+          : AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer);
+
+      final merchantAddress = (_trade.offer?['seller']?['walletAddress'] ??
+                               _trade.offer?['seller']?['stellarAddress'] ??
+                               '').toString();
+      if (merchantAddress.isEmpty) {
+        throw Exception('Merchant Stellar address not available. Contact support.');
+      }
+
+      final expiry = _trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24));
+
+      final createTxHash = await stellarSvc.claimableBalanceService
+          .createUnconditionalWithExpiry(
+        keyPair: kp,
+        asset: asset,
+        amount: _trade.cryptoAmount,
+        recipientId: merchantAddress,
+        expiryTime: expiry,
+      );
+
+      // Fetch the Claimable Balance ID from the transaction's operations
+      final ops = await stellarSvc.sdk.operations
+          .forTransaction(createTxHash)
+          .execute();
+      final cbOp = ops.records.whereType<CreateClaimableBalanceOperationResponse>()
+          .firstOrNull;
+      final cbId = cbOp?.claimants;
+      if (cbId == null) {
+        throw Exception('Could not retrieve Claimable Balance ID from transaction.');
+      }
+
+      final updated = await _tradesCore.lockCrypto(
+        _trade.id,
+        claimableBalanceId: cbId.toString(),
+        createTxHash: createTxHash,
+      );
+      if (mounted) setState(() => _trade = updated);
+    }, successMsg: 'Crypto locked in escrow');
   }
 
-  // Claim crypto from escrow - Step E
+  // Claim crypto from escrow — only shown for SELL offers where user is the buyer
   Future<void> _claimCrypto() async {
+    final cbId = _trade.escrow?.claimableBalanceId;
+    if (cbId == null) {
+      showFloatingSnackBar(context,
+          message: 'Escrow balance ID not available. Refresh and try again.',
+          type: SnackBarType.error);
+      return;
+    }
     final confirmed = await _showConfirm(
-      title: 'Claim Crypto',
-      body: 'This will claim your crypto from the escrow to your wallet.',
+      title: 'Claim Your Crypto',
+      body: 'This will claim ${_trade.cryptoAmount.toStringAsFixed(7)} '
+            '${_trade.asset} to your wallet.',
       confirmLabel: 'Claim Crypto',
     );
     if (!confirmed) return;
-    // Note: This would require the claim transaction hash
-    showFloatingSnackBar(context, 
-      message: 'Please use the wallet app to claim your crypto',
-      type: SnackBarType.info);
+    _runAction(() async {
+      final stellarSvc = context.read<StellarWalletServices>();
+      final seedVM = context.read<SeedKeypairVM>();
+      final kp = await seedVM.deriveKeyPair();
+      final claimTxHash = await stellarSvc.claimableBalanceService
+          .claimClaimableBalance(keyPair: kp, balanceId: cbId);
+      final updated = await _tradesCore.claimCrypto(
+        _trade.id,
+        claimTxHash: claimTxHash,
+      );
+      if (mounted) setState(() => _trade = updated);
+    }, successMsg: 'Crypto claimed to your wallet');
+  }
+
+  // Refund expired escrow — only the original locker (user in BUY offer) can reclaim
+  Future<void> _refundCrypto() async {
+    final cbId = _trade.escrow?.claimableBalanceId;
+    if (cbId == null) {
+      showFloatingSnackBar(context,
+          message: 'No escrow to refund.',
+          type: SnackBarType.error);
+      return;
+    }
+    final confirmed = await _showConfirm(
+      title: 'Refund Escrow',
+      body: 'The trade has expired. Reclaim your crypto back to your wallet.',
+      confirmLabel: 'Refund',
+    );
+    if (!confirmed) return;
+    _runAction(() async {
+      final stellarSvc = context.read<StellarWalletServices>();
+      final seedVM = context.read<SeedKeypairVM>();
+      final kp = await seedVM.deriveKeyPair();
+      final refundTxHash = await stellarSvc.claimableBalanceService
+          .claimClaimableBalance(keyPair: kp, balanceId: cbId);
+      final updated = await _tradesCore.refundCrypto(
+        _trade.id,
+        refundTxHash: refundTxHash,
+      );
+      if (mounted) setState(() => _trade = updated);
+    }, successMsg: 'Crypto refunded to your wallet');
+  }
+
+  // Open a dispute
+  Future<void> _openDispute() async {
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DisputeSheet(c: AppColor.of(context)),
+    );
+    if (reason == null || reason.isEmpty) return;
+    _runAction(() async {
+      final updated = await _tradesCore.openDispute(_trade.id, reason: reason);
+      if (mounted) setState(() => _trade = updated);
+    }, successMsg: 'Dispute opened. Support will contact you.');
+  }
+
+  // Proof picker sheet — returns File or null (skip)
+  Future<File?> _showProofPickSheet() async {
+    final c = AppColor.of(context);
+    final pick = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProofPickSheet(c: c),
+    );
+    if (pick != true) return null;
+    final result = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (result == null) return null;
+    return File(result.path);
   }
 
   Future<void> _runAction(
@@ -408,6 +536,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           onConfirmFiat: _confirmFiat,
           onClaimCrypto: _claimCrypto,
           onCancel: _cancelTrade,
+          onDispute: _openDispute,
+          onRefund: _refundCrypto,
         ),
       ),
     );
@@ -482,12 +612,6 @@ class _StatusHero extends StatelessWidget {
         return const Color(0xFF9CA3AF); // Gray
       case TradeStatus.unknown:
         return const Color(0xFF9CA3AF);
-      case TradeStatus.pending:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.escrowFunded:
-        // TODO: Handle this case.
-        throw UnimplementedError();
     }
   }
 
@@ -511,12 +635,6 @@ class _StatusHero extends StatelessWidget {
         return Icons.schedule_rounded;
       case TradeStatus.unknown:
         return Icons.help_outline_rounded;
-      case TradeStatus.pending:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.escrowFunded:
-        // TODO: Handle this case.
-        throw UnimplementedError();
     }
   }
 
@@ -540,12 +658,6 @@ class _StatusHero extends StatelessWidget {
         return 'Trade Expired';
       case TradeStatus.unknown:
         return 'Unknown Status';
-      case TradeStatus.pending:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.escrowFunded:
-        // TODO: Handle this case.
-        throw UnimplementedError();
     }
   }
 
@@ -888,8 +1000,8 @@ class _StatusTimeline extends StatelessWidget {
       return [
         (TradeStatus.created, 'Trade Created', 'Waiting for you to lock crypto in escrow'),
         (TradeStatus.cryptoLocked, 'Crypto Locked', 'Crypto is in escrow — buyer will send fiat'),
-        (TradeStatus.fiatSent, 'Payment Received', 'Buyer marked payment sent — confirm receipt'),
-        (TradeStatus.fiatConfirmed, 'Payment Confirmed', 'Fiat confirmed — release crypto'),
+        (TradeStatus.fiatSent, 'Payment Received', 'Merchant sent fiat — confirm you received it'),
+        (TradeStatus.fiatConfirmed, 'Payment Confirmed', 'You confirmed — merchant will now claim crypto'),
         (TradeStatus.completed, 'Completed', 'Crypto released to buyer'),
       ];
     }
@@ -1071,40 +1183,125 @@ class _ErrorBanner extends StatelessWidget {
 
 // ─── Completed card ────────────────────────────────────────────────────────────
 
-class _CompletedCard extends StatelessWidget {
+class _CompletedCard extends StatefulWidget {
   const _CompletedCard({required this.c, required this.trade});
   final AppColor c;
   final TradeModel trade;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: const Color(0xFF00C48C).withOpacity(0.08),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFF00C48C).withOpacity(0.25)),
-    ),
-    child: Column(
-      children: [
-        const Icon(Icons.check_circle_rounded, color: Color(0xFF00C48C), size: 48),
-        const SizedBox(height: 12),
-        Text(
-          'Trade completed!',
-          style: TextStyle(
-            color: c.textPrimary,
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
+  State<_CompletedCard> createState() => _CompletedCardState();
+}
+
+class _CompletedCardState extends State<_CompletedCard> {
+  bool _reviewSubmitted = false;
+
+  Future<void> _openReviewSheet() async {
+    final c = widget.c;
+    final result = await showModalBottomSheet<_ReviewResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReviewSheet(c: c, tradeId: widget.trade.id),
+    );
+    if (result == null) return;
+    try {
+      await ReviewsCoreService.I.create(CreateReviewRequest(
+        tradeId: widget.trade.id,
+        rating: result.rating,
+        comment: result.comment.isNotEmpty ? result.comment : null,
+      ));
+      if (mounted) setState(() => _reviewSubmitted = true);
+      if (mounted) {
+        showFloatingSnackBar(context,
+            message: 'Review submitted. Thank you!',
+            type: SnackBarType.success);
+      }
+    } catch (e) {
+      if (mounted) {
+        showFloatingSnackBar(context,
+            message: 'Failed to submit review: $e',
+            type: SnackBarType.error);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final trade = widget.trade;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00C48C).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFF00C48C).withOpacity(0.25)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.check_circle_rounded, color: Color(0xFF00C48C), size: 48),
+          const SizedBox(height: 12),
+          Text(
+            'Trade completed!',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '${trade.cryptoAmount.toStringAsFixed(7)} ${trade.asset} has been released.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: c.textSecondary, fontSize: 13.5),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: 6),
+          Text(
+            '${trade.cryptoAmount.toStringAsFixed(7)} ${trade.asset} has been released.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.textSecondary, fontSize: 13.5),
+          ),
+          const SizedBox(height: 16),
+          _reviewSubmitted
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle_rounded,
+                        size: 16, color: const Color(0xFF00C48C)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Review submitted',
+                      style: TextStyle(
+                        color: const Color(0xFF00C48C),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                )
+              : GestureDetector(
+                  onTap: _openReviewSheet,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: c.primary.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.star_rounded, size: 17, color: c.primary),
+                        const SizedBox(width: 7),
+                        Text(
+                          'Rate this trade',
+                          style: TextStyle(
+                            color: c.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Cancelled card ────────────────────────────────────────────────────────────
@@ -1153,6 +1350,8 @@ class _BottomActions extends StatelessWidget {
     required this.onConfirmFiat,
     required this.onClaimCrypto,
     required this.onCancel,
+    required this.onDispute,
+    required this.onRefund,
   });
   final AppColor c;
   final TradeModel trade;
@@ -1163,30 +1362,30 @@ class _BottomActions extends StatelessWidget {
   final VoidCallback onConfirmFiat;
   final VoidCallback onClaimCrypto;
   final VoidCallback onCancel;
+  final VoidCallback onDispute;
+  final VoidCallback onRefund;
 
   @override
   Widget build(BuildContext context) {
-    if (trade.status.isTerminal) return const SizedBox.shrink();
+    final status = trade.status;
 
-    // Step B: Lock crypto - show when status is CREATED
-    final showLockCrypto = trade.status == TradeStatus.created;
-    
-    // Step C: Mark fiat sent - show when CRYPTO_LOCKED
-    final showMarkFiatSent = trade.status == TradeStatus.cryptoLocked;
-    
-    // Step D: Confirm fiat - show when FIAT_SENT
-    final showConfirmFiat = trade.status == TradeStatus.fiatSent;
-    
-    // Step E: Claim crypto - show when FIAT_CONFIRMED
-    final showClaimCrypto = trade.status == TradeStatus.fiatConfirmed;
-    
-    // Can cancel during created or crypto locked states
-    final showCancel = trade.status == TradeStatus.created ||
-        trade.status == TradeStatus.cryptoLocked;
+    // Role-gated primary actions:
+    // SELL offer (isBuy=true):  merchant locks → user pays fiat → merchant confirms → user claims
+    // BUY  offer (isBuy=false): user locks     → merchant pays  → user confirms    → merchant claims
+    final showLockCrypto   = status == TradeStatus.created      && !isBuy;
+    final showMarkFiatSent = status == TradeStatus.cryptoLocked &&  isBuy;
+    final showConfirmFiat  = status == TradeStatus.fiatSent     && !isBuy;
+    final showClaimCrypto  = status == TradeStatus.fiatConfirmed &&  isBuy;
 
-    // If no actions to show
-    if (!showLockCrypto && !showMarkFiatSent && !showConfirmFiat && 
-        !showClaimCrypto && !showCancel) {
+    final showCancel  = (status == TradeStatus.created || status == TradeStatus.cryptoLocked);
+    final showDispute = status.isActive && status != TradeStatus.disputed;
+    final showRefund  = status == TradeStatus.expired && !isBuy
+                        && trade.escrow?.claimableBalanceId != null;
+
+    final hasPrimary = showLockCrypto || showMarkFiatSent ||
+                       showConfirmFiat || showClaimCrypto;
+
+    if (!hasPrimary && !showCancel && !showDispute && !showRefund) {
       return const SizedBox.shrink();
     }
 
@@ -1199,17 +1398,15 @@ class _BottomActions extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Step B: Lock crypto button
+          // Primary action button
           if (showLockCrypto)
             _ActionButton(
-              label: isBuy ? 'Lock Crypto to Start' : 'Lock Your Crypto',
+              label: 'Lock Your Crypto',
               icon: Icons.lock_rounded,
               color: const Color(0xFF5B8DEF),
               loading: loading,
               onTap: onLockCrypto,
             ),
-          
-          // Step C: Mark fiat sent button
           if (showMarkFiatSent)
             _ActionButton(
               label: "I've Sent Payment",
@@ -1218,8 +1415,6 @@ class _BottomActions extends StatelessWidget {
               loading: loading,
               onTap: onMarkFiatSent,
             ),
-          
-          // Step D: Confirm fiat button
           if (showConfirmFiat)
             _ActionButton(
               label: 'Confirm Payment Received',
@@ -1228,8 +1423,6 @@ class _BottomActions extends StatelessWidget {
               loading: loading,
               onTap: onConfirmFiat,
             ),
-          
-          // Step E: Claim crypto button
           if (showClaimCrypto)
             _ActionButton(
               label: 'Claim Your Crypto',
@@ -1238,21 +1431,45 @@ class _BottomActions extends StatelessWidget {
               loading: loading,
               onTap: onClaimCrypto,
             ),
-          
-          // Add spacing before cancel button
-          if ((showLockCrypto || showMarkFiatSent || showConfirmFiat || showClaimCrypto) 
-              && showCancel) 
-            const SizedBox(height: 8),
-            
-          // Cancel button
-          if (showCancel)
+          if (showRefund)
             _ActionButton(
-              label: 'Cancel Trade',
-              icon: Icons.close_rounded,
-              color: c.error,
-              outlined: true,
+              label: 'Refund Expired Escrow',
+              icon: Icons.replay_rounded,
+              color: c.warning,
               loading: loading,
-              onTap: onCancel,
+              onTap: onRefund,
+            ),
+
+          if (hasPrimary || showRefund) const SizedBox(height: 8),
+
+          // Secondary actions row (cancel + dispute)
+          if (showCancel || showDispute)
+            Row(
+              children: [
+                if (showCancel)
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Cancel',
+                      icon: Icons.close_rounded,
+                      color: c.error,
+                      outlined: true,
+                      loading: loading,
+                      onTap: onCancel,
+                    ),
+                  ),
+                if (showCancel && showDispute) const SizedBox(width: 8),
+                if (showDispute)
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Dispute',
+                      icon: Icons.flag_rounded,
+                      color: c.error,
+                      outlined: true,
+                      loading: loading,
+                      onTap: onDispute,
+                    ),
+                  ),
+              ],
             ),
         ],
       ),
@@ -1527,4 +1744,327 @@ class _Row extends StatelessWidget {
       ],
     ),
   );
+}
+
+// ─── Dispute bottom sheet ──────────────────────────────────────────────────────
+
+class _DisputeSheet extends StatefulWidget {
+  const _DisputeSheet({required this.c});
+  final AppColor c;
+
+  @override
+  State<_DisputeSheet> createState() => _DisputeSheetState();
+}
+
+class _DisputeSheetState extends State<_DisputeSheet> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: c.border.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Open a Dispute',
+            style: TextStyle(
+                color: c.textPrimary, fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Describe the issue. Our support team will review and contact you.',
+            style: TextStyle(color: c.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _ctrl,
+            maxLines: 4,
+            style: TextStyle(color: c.textPrimary, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'e.g. Merchant is not responding...',
+              hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.5)),
+              filled: true,
+              fillColor: c.background,
+              contentPadding: const EdgeInsets.all(14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.primary, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(null),
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(color: c.border.withOpacity(0.2)),
+                    ),
+                    child: Center(
+                      child: Text('Cancel',
+                          style: TextStyle(
+                              color: c.textSecondary, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    final reason = _ctrl.text.trim();
+                    if (reason.isEmpty) return;
+                    Navigator.of(context).pop(reason);
+                  },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: c.error,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: const Center(
+                      child: Text('Submit',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Proof pick sheet ──────────────────────────────────────────────────────────
+
+class _ProofPickSheet extends StatelessWidget {
+  const _ProofPickSheet({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      decoration: BoxDecoration(
+          color: c.surface, borderRadius: BorderRadius.circular(24)),
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).padding.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+                color: c.border.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          Text('Attach Payment Proof?',
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16)),
+          const SizedBox(height: 8),
+          Text('Optionally attach a screenshot of your payment.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.textSecondary, fontSize: 13.5)),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(true),
+            child: Container(
+              height: 50,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                  color: c.primary, borderRadius: BorderRadius.circular(14)),
+              child: const Center(
+                child: Text('Pick from Gallery',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(false),
+            child: Container(
+              height: 50,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: c.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: c.border.withOpacity(0.2)),
+              ),
+              child: Center(
+                child: Text('Skip',
+                    style: TextStyle(
+                        color: c.textSecondary, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Review sheet ──────────────────────────────────────────────────────────────
+
+class _ReviewResult {
+  final int rating;
+  final String comment;
+  const _ReviewResult({required this.rating, required this.comment});
+}
+
+class _ReviewSheet extends StatefulWidget {
+  const _ReviewSheet({required this.c, required this.tradeId});
+  final AppColor c;
+  final String tradeId;
+
+  @override
+  State<_ReviewSheet> createState() => _ReviewSheetState();
+}
+
+class _ReviewSheetState extends State<_ReviewSheet> {
+  int _rating = 5;
+  final _commentCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      decoration: BoxDecoration(
+          color: c.surface, borderRadius: BorderRadius.circular(24)),
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+                color: c.border.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          Text('Rate Your Experience',
+              style: TextStyle(
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16)),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final star = i + 1;
+              return GestureDetector(
+                onTap: () => setState(() => _rating = star),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: Icon(
+                    star <= _rating ? Icons.star_rounded : Icons.star_border_rounded,
+                    color: star <= _rating
+                        ? const Color(0xFFFAC748)
+                        : c.textSecondary.withOpacity(0.3),
+                    size: 36,
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _commentCtrl,
+            maxLines: 3,
+            style: TextStyle(color: c.textPrimary, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Leave a comment (optional)',
+              hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.5)),
+              filled: true,
+              fillColor: c.background,
+              contentPadding: const EdgeInsets.all(14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.primary, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(
+                _ReviewResult(rating: _rating, comment: _commentCtrl.text.trim())),
+            child: Container(
+              height: 50,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                  color: c.primary, borderRadius: BorderRadius.circular(14)),
+              child: const Center(
+                child: Text('Submit Review',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

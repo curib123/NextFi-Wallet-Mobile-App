@@ -63,6 +63,8 @@ dependencies:
   timezone: ^0.10.0
   image_picker: ^1.1.2
   socket_io_client: ^3.1.2
+  http: ^1.2.0
+  uuid: ^4.4.0
 
 
 

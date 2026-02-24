@@ -98,7 +98,6 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
   }
 
   Future<void> _openOfferDetails(OfferModel offer) async {
-    final c = AppColor.of(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -112,7 +111,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
             MaterialPageRoute(
               builder: (_) => TradeScreen(
                 offer: offer,
-                marketPrice: _marketPriceForAsset(offer.asset),
+                marketPrice: _rawPriceForAsset(offer.asset),
               ),
             ),
           );
@@ -121,6 +120,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
     );
   }
 
+  /// Returns the formatted display string for the offer tile / modal header.
   String? _marketPriceForAsset(String assetCode) {
     final code = assetCode.trim().toUpperCase();
     final vm = switch (code) {
@@ -132,6 +132,19 @@ class _MarketOffersScreenState extends State<MarketOffersScreen> {
     final p = vm.priceNow;
     if (!p.isFinite || p <= 0) return null;
     return '${fmtFiat(vm.fiatSym, p)} ${vm.fiatCode}';
+  }
+
+  /// Returns the raw numeric market price for use in fiat↔crypto calculations.
+  double? _rawPriceForAsset(String assetCode) {
+    final code = assetCode.trim().toUpperCase();
+    final vm = switch (code) {
+      'XLM' => _xlmPriceVm,
+      'USDC' => _usdcPriceVm,
+      _ => null,
+    };
+    if (vm == null) return null;
+    final p = vm.priceNow;
+    return (p.isFinite && p > 0) ? p : null;
   }
 
   @override
