@@ -489,7 +489,7 @@ class _TradeScreenState extends State<TradeScreen> {
               submitting: _submitting,
               // Disable if cannot calculate (no market price)
               disabled: _enterFiatMode && !_canCalculate,
-              onTap: _submit, 
+              onTap: _submit,
             ),
     ); 
   }

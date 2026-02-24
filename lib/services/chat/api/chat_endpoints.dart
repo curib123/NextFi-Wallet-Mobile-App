@@ -1,4 +1,4 @@
-eclass ChatEndpoints {
+class ChatEndpoints {
   static const String base = '/direct-messages';
   static const String friendsBase = '/friends';
 
@@ -26,7 +26,7 @@ eclass ChatEndpoints {
       '$friendsBase/$friendshipId';
 
   // Direct Messages - Thread Management
-  static String createThread() => '$base/threads'; 
+  static String createThread() => '$base/threads';
   static String listThreads() => '$base/threads';
   static String getThread(String threadId) => '$base/threads/$threadId';
   static String getThreadWithFriend(String friendId) =>

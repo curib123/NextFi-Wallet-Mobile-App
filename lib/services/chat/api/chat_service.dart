@@ -259,9 +259,9 @@ class ChatService {
       return ChatFriendRequestModel(
         id: '',
         senderId: '',
-        receiverId: req.receiverId,
+        receiverId: req.receiverId ?? req.receiverUsername ?? '',
         status: ChatFriendRequestStatus.pending,
-      );
+      ); 
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
@@ -271,7 +271,7 @@ class ChatService {
     return ChatFriendRequestModel(
       id: '',
       senderId: '',
-      receiverId: req.receiverId,
+      receiverId: req.receiverId ?? req.receiverUsername ?? '',
       status: ChatFriendRequestStatus.pending,
     );
   }

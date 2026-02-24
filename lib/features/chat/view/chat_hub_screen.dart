@@ -351,7 +351,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     try {
       await _chat.sendFriendRequest(
         SendChatFriendRequestRequest(
-          receiverId: payload.$1,
+          receiverUsername: payload.$1,
           note: payload.$2,
         ),
       );
