@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
@@ -200,26 +200,26 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
       child: SlideTransition(
         position: _slideAnim,
         child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           decoration: BoxDecoration(
             color: c.surface,
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: typeColor.withOpacity(0.08),
-                blurRadius: 40,
+                color: typeColor.withOpacity(0.10),
+                blurRadius: 36,
                 spreadRadius: 0,
-                offset: const Offset(0, 12),
+                offset: const Offset(0, 10),
               ),
               BoxShadow(
                 color: Colors.black.withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
+            borderRadius: BorderRadius.circular(28),
             child: Stack(
               children: [
                 // Ambient glow top
@@ -262,13 +262,13 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                         ),
 
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                          padding: const EdgeInsets.fromLTRB(18, 2, 18, 24),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Merchant
                               if (_loadingMerchant)
-                                _Skeleton(c: c, height: 110)
+                                _MerchantCardSkeleton(c: c)
                               else if (_merchantProfile != null)
                                 _MerchantCard(
                                   c: c,
@@ -283,14 +283,15 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                                   averageRating: _averageRating,
                                   reviewCount: _reviews.length,
                                   loadingReviews: _loadingReviews,
+                                  loadingPaymentMethods: _loadingPaymentMethods,
                                 ),
 
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
 
                               // Trade limits
                               _TradeLimitsCard(c: c, offer: offer),
 
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
 
                               // Details
                               _DetailsCard(
@@ -303,8 +304,11 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                               ),
 
                               // Reviews
-                              if (!_loadingReviews && _reviews.isNotEmpty) ...[
-                                const SizedBox(height: 12),
+                              if (_loadingReviews) ...[
+                                const SizedBox(height: 14),
+                                _ReviewsLoadingCard(c: c),
+                              ] else if (_reviews.isNotEmpty) ...[
+                                const SizedBox(height: 14),
                                 _ReviewsCard(
                                   c: c,
                                   reviews: _reviews,
@@ -363,18 +367,18 @@ class _HeroHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            typeColor.withOpacity(0.10),
-            typeColor.withOpacity(0.03),
+            typeColor.withOpacity(0.14),
+            typeColor.withOpacity(0.04),
           ],
         ),
         border: Border(
-          bottom: BorderSide(color: c.border.withOpacity(0.08)),
+          bottom: BorderSide(color: c.border.withOpacity(0.10)),
         ),
       ),
       child: Column(
@@ -385,7 +389,7 @@ class _HeroHeader extends StatelessWidget {
             child: Container(
               width: 36,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: c.border.withOpacity(0.25),
                 borderRadius: BorderRadius.circular(2),
@@ -420,8 +424,8 @@ class _HeroHeader extends StatelessWidget {
                       style: TextStyle(
                         color: typeColor,
                         fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                        letterSpacing: 0.3,
+                        fontSize: 11.5,
+                        letterSpacing: 0.35,
                       ),
                     ),
                   ],
@@ -441,7 +445,7 @@ class _HeroHeader extends StatelessWidget {
                   style: TextStyle(
                     color: statusColor,
                     fontWeight: FontWeight.w700,
-                    fontSize: 11,
+                    fontSize: 10.8,
                     letterSpacing: 0.2,
                   ),
                 ),
@@ -453,14 +457,14 @@ class _HeroHeader extends StatelessWidget {
                 style: TextStyle(
                   color: c.textPrimary,
                   fontWeight: FontWeight.w900,
-                  fontSize: 19,
-                  letterSpacing: -0.5,
+                  fontSize: 20,
+                  letterSpacing: -0.55,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
 
           // Live price hero
           Row(
@@ -492,8 +496,8 @@ class _HeroHeader extends StatelessWidget {
                           hasLivePrice ? 'Live Market Price' : 'Price',
                           style: TextStyle(
                             color: c.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 12.2,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -504,8 +508,8 @@ class _HeroHeader extends StatelessWidget {
                       style: TextStyle(
                         color: hasLivePrice ? c.textPrimary : c.textSecondary,
                         fontWeight: FontWeight.w900,
-                        fontSize: 28,
-                        letterSpacing: -1,
+                        fontSize: 30,
+                        letterSpacing: -1.1,
                         height: 1.0,
                       ),
                     ),
@@ -530,7 +534,7 @@ class _HeroHeader extends StatelessWidget {
                       style: TextStyle(
                         color: typeColor,
                         fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                        fontSize: 11.8,
                       ),
                     ),
                   ],
@@ -558,6 +562,7 @@ class _MerchantCard extends StatelessWidget {
     required this.paymentMethodsMap,
     required this.getPaymentMethodNames,
     required this.loadingReviews,
+    required this.loadingPaymentMethods,
     this.averageRating,
     this.reviewCount,
   });
@@ -574,6 +579,7 @@ class _MerchantCard extends StatelessWidget {
   final double? averageRating;
   final int? reviewCount;
   final bool loadingReviews;
+  final bool loadingPaymentMethods;
 
   @override
   Widget build(BuildContext context) {
@@ -586,8 +592,8 @@ class _MerchantCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -595,9 +601,9 @@ class _MerchantCard extends StatelessWidget {
                       c.primary.withOpacity(0.05),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.store_rounded, color: c.primary, size: 20),
+                child: Icon(Icons.store_rounded, color: c.primary, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -617,8 +623,8 @@ class _MerchantCard extends StatelessWidget {
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        letterSpacing: -0.3,
+                        fontSize: 15.8,
+                        letterSpacing: -0.35,
                       ),
                     ),
                   ],
@@ -651,7 +657,7 @@ class _MerchantCard extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           _SectionDivider(c: c),
           const SizedBox(height: 12),
 
@@ -662,7 +668,7 @@ class _MerchantCard extends StatelessWidget {
             children: [
               // Rating
               if (loadingReviews)
-                _Skeleton(c: c, height: 28, width: 70)
+                _Skeleton(c: c, height: 26, width: 88)
               else if (averageRating != null)
                 _StatPill(
                   icon: Icons.star_rounded,
@@ -700,7 +706,7 @@ class _MerchantCard extends StatelessWidget {
               profile.bio!,
               style: TextStyle(
                 color: c.textSecondary,
-                fontSize: 12.5,
+                fontSize: 12.8,
                 height: 1.5,
               ),
               maxLines: 2,
@@ -722,15 +728,26 @@ class _MerchantCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: paymentMethodIds.map((id) {
-                final method = paymentMethodsMap[id];
-                if (method == null) return const SizedBox.shrink();
-                return _PaymentMethodChip(c: c, method: method);
-              }).toList(),
-            ),
+            if (loadingPaymentMethods)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: const [
+                  _SkeletonChip(width: 88),
+                  _SkeletonChip(width: 110),
+                  _SkeletonChip(width: 96),
+                ],
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: paymentMethodIds.map((id) {
+                  final method = paymentMethodsMap[id];
+                  if (method == null) return const SizedBox.shrink();
+                  return _PaymentMethodChip(c: c, method: method);
+                }).toList(),
+              ),
           ],
         ],
       ),
@@ -847,7 +864,7 @@ class _DetailsCard extends StatelessWidget {
             value: offer.isVisible ? 'Yes' : 'No',
           ),
           if (loadingPaymentMethods)
-            _DetailRow(c: c, label: 'Payment methods', value: '...', isLast: true)
+            _LoadingDetailMethodsRow(c: c)
           else if (effectivePaymentMethodIds.isEmpty)
             _DetailRow(c: c, label: 'Payment methods', value: '—', isLast: true)
           else
@@ -913,8 +930,8 @@ class _ReviewsCard extends StatelessWidget {
                 'Reviews',
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.2,
                 ),
               ),
               const Spacer(),
@@ -934,8 +951,8 @@ class _ReviewsCard extends StatelessWidget {
                         averageRating!.toStringAsFixed(1),
                         style: const TextStyle(
                           color: Color(0xFFFFAA00),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.2,
                         ),
                       ),
                     ],
@@ -943,7 +960,7 @@ class _ReviewsCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 13),
           ...shown.asMap().entries.map((e) => Column(
             children: [
               _ReviewItem(c: c, review: e.value),
@@ -1070,9 +1087,16 @@ class _SectionCard extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: c.background.withOpacity(0.55),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: c.border.withOpacity(0.08)),
+      color: c.background.withOpacity(0.62),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: c.border.withOpacity(0.10)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.035),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
     ),
     child: child,
   );
@@ -1112,8 +1136,8 @@ class _SectionLabel extends StatelessWidget {
         label,
         style: TextStyle(
           color: c.textPrimary,
-          fontWeight: FontWeight.w700,
-          fontSize: 13.5,
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
         ),
       ),
     ],
@@ -1139,8 +1163,8 @@ class _LimitBox extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: c.surface,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: c.border.withOpacity(0.08)),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: c.border.withOpacity(0.10)),
     ),
     child: Row(
       children: [
@@ -1161,8 +1185,8 @@ class _LimitBox extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: c.textSecondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 1),
@@ -1170,8 +1194,8 @@ class _LimitBox extends StatelessWidget {
                 value,
                 style: TextStyle(
                   color: c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
                 ),
               ),
             ],
@@ -1206,8 +1230,8 @@ class _DetailRow extends StatelessWidget {
             label,
             style: TextStyle(
               color: c.textSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
+              fontSize: 12.4,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -1216,8 +1240,8 @@ class _DetailRow extends StatelessWidget {
             value,
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
+              fontSize: 12.8,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -1251,10 +1275,10 @@ class _StatPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final textColor = labelColor ?? const Color(0xFF6B7280);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(9),
         border: border != null ? Border.all(color: border!) : null,
       ),
       child: Row(
@@ -1281,7 +1305,7 @@ class _StatPill extends StatelessWidget {
             label,
             style: TextStyle(
               color: textColor,
-              fontSize: 11.5,
+              fontSize: 11.7,
               fontWeight: fontWeight ?? FontWeight.w600,
             ),
           ),
@@ -1309,8 +1333,8 @@ class _ReviewItem extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: c.surface,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: c.border.withOpacity(0.08)),
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: c.border.withOpacity(0.10)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1366,11 +1390,11 @@ class _PaymentMethodChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final logo = method.logo;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.border.withOpacity(0.12)),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.border.withOpacity(0.14)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1394,11 +1418,11 @@ class _PaymentMethodChip extends StatelessWidget {
             method.name,
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontSize: 12.2,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ],
+        ], 
       ),
     );
   }
@@ -1418,12 +1442,190 @@ class _Skeleton extends StatelessWidget {
 
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: height,
-    width: width ?? double.infinity,
-    decoration: BoxDecoration(
-      color: c.border.withOpacity(0.09),
-      borderRadius: BorderRadius.circular(12),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final base = c.border.withOpacity(0.15);
+    final highlight = Colors.white.withOpacity(0.65);
+    return Shimmer.fromColors(
+      baseColor: base,
+      highlightColor: highlight,
+      period: const Duration(milliseconds: 1100),
+      child: Container(
+        height: height,
+        width: width ?? double.infinity,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonChip extends StatelessWidget {
+  const _SkeletonChip({this.width = 90});
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return _Skeleton(c: c, height: 30, width: width);
+  }
+}
+
+class _LoadingDetailMethodsRow extends StatelessWidget {
+  const _LoadingDetailMethodsRow({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              'Payment methods',
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 12.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: const [
+                _SkeletonChip(width: 96),
+                _SkeletonChip(width: 104),
+                _SkeletonChip(width: 86),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MerchantCardSkeleton extends StatelessWidget {
+  const _MerchantCardSkeleton({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      c: c,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _Skeleton(c: c, height: 44, width: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Skeleton(c: c, height: 10, width: 70),
+                    const SizedBox(height: 6),
+                    _Skeleton(c: c, height: 14, width: 160),
+                  ],
+                ),
+              ),
+              _Skeleton(c: c, height: 24, width: 72),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SectionDivider(c: c),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: const [
+              _SkeletonChip(width: 90),
+              _SkeletonChip(width: 84),
+              _SkeletonChip(width: 94),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _Skeleton(c: c, height: 11),
+          const SizedBox(height: 8),
+          _Skeleton(c: c, height: 11, width: 230),
+          const SizedBox(height: 12),
+          _SectionDivider(c: c),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: const [
+              _SkeletonChip(width: 88),
+              _SkeletonChip(width: 110),
+              _SkeletonChip(width: 96),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewsLoadingCard extends StatelessWidget {
+  const _ReviewsLoadingCard({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      c: c,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _Skeleton(c: c, height: 16, width: 16),
+              const SizedBox(width: 8),
+              _Skeleton(c: c, height: 14, width: 64),
+              const Spacer(),
+              _Skeleton(c: c, height: 24, width: 46),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...List.generate(
+            2,
+            (index) => Padding(
+              padding: EdgeInsets.only(bottom: index == 1 ? 0 : 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: c.border.withOpacity(0.10)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _Skeleton(c: c, height: 12, width: 76),
+                        const Spacer(),
+                        _Skeleton(c: c, height: 10, width: 46),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _Skeleton(c: c, height: 10),
+                    const SizedBox(height: 6),
+                    _Skeleton(c: c, height: 10, width: 210),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
