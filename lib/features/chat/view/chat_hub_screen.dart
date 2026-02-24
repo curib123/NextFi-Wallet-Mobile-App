@@ -26,7 +26,6 @@ class _ChatHubScreenState extends State<ChatHubScreen>
 
   final _chat = ChatCoreService.I;
   final _searchCtrl = TextEditingController();
-  final _time = DateFormat('MMM d, HH:mm');
 
   late final TabController _tabCtrl;
   late final AnimationController _fadeCtrl;
@@ -47,7 +46,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     _tabCtrl = TabController(length: 3, vsync: this);
     _fadeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 380),
     );
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -63,6 +62,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     _searchCtrl.dispose();
     super.dispose();
   }
+
+  // ── service ───────────────────────────────────────────────────────────────
 
   Future<void> _load({required bool showLoader}) async {
     if (showLoader) {
@@ -127,11 +128,9 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       final stored = await SecurityStorage.read(_kChatConsentKey);
       if (stored == 'accepted') return true;
     } catch (_) {}
-
     if (!mounted) return false;
     final accepted = await showChatConsentModal(context);
     if (!accepted) return false;
-
     try {
       await SecurityStorage.save(_kChatConsentKey, 'accepted');
       await SecurityStorage.save(
@@ -160,11 +159,10 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               ),
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 decoration: BoxDecoration(
                   color: c.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: c.border.withOpacity(0.25)),
+                  borderRadius: BorderRadius.circular(28),
                 ),
                 child: SafeArea(
                   top: false,
@@ -174,31 +172,31 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                     children: [
                       Center(
                         child: Container(
-                          width: 40,
+                          width: 36,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: c.border.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(20),
+                            color: c.border.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(99),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       Row(
                         children: [
                           Container(
-                            width: 36,
-                            height: 36,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
-                              color: c.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(11),
+                              color: c.primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(13),
                             ),
                             child: Icon(
                               Icons.person_add_alt_1_rounded,
                               color: c.primary,
-                              size: 18,
+                              size: 20,
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -212,17 +210,17 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                                 ),
                               ),
                               Text(
-                                'Find user by username',
+                                'Search by username',
                                 style: TextStyle(
                                   color: c.textSecondary,
-                                  fontSize: 12.2,
+                                  fontSize: 12.5,
                                 ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
                       TextField(
                         controller: usernameCtrl,
                         autofocus: true,
@@ -240,20 +238,20 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: c.border.withOpacity(0.24),
+                              color: c.border.withOpacity(0.22),
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: c.border.withOpacity(0.24),
+                              color: c.border.withOpacity(0.22),
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: c.primary.withOpacity(0.5),
-                              width: 1.4,
+                              color: c.primary.withOpacity(0.55),
+                              width: 1.5,
                             ),
                           ),
                         ),
@@ -271,35 +269,35 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: c.border.withOpacity(0.24),
+                              color: c.border.withOpacity(0.22),
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: c.border.withOpacity(0.24),
+                              color: c.border.withOpacity(0.22),
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                              color: c.primary.withOpacity(0.5),
-                              width: 1.4,
+                              color: c.primary.withOpacity(0.55),
+                              width: 1.5,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 18),
                       Row(
                         children: [
                           Expanded(
                             child: AppOutlinedButton(
                               onPressed: () => Navigator.of(ctx).pop(),
                               style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
+                                minimumSize: const Size.fromHeight(50),
                                 foregroundColor: c.textPrimary,
                                 side: BorderSide(
-                                  color: c.border.withOpacity(0.4),
+                                  color: c.border.withOpacity(0.35),
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
@@ -320,7 +318,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                                 );
                               },
                               style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
+                                minimumSize: const Size.fromHeight(50),
                                 backgroundColor: c.primary,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
@@ -416,11 +414,10 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: c.border.withOpacity(0.2)),
+          borderRadius: BorderRadius.circular(28),
         ),
         child: SafeArea(
           top: false,
@@ -428,24 +425,28 @@ class _ChatHubScreenState extends State<ChatHubScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40,
+                width: 36,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
+                margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(20),
+                  color: c.border.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
               Container(
-                width: 52,
-                height: 52,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
                   color: c.error.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.person_remove_rounded, color: c.error, size: 24),
+                child: Icon(
+                  Icons.person_remove_rounded,
+                  color: c.error,
+                  size: 26,
+                ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
                 'Remove Friend',
                 style: TextStyle(
@@ -454,26 +455,26 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
                 'Remove $name from your friends?\nYou can add them again later.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: c.textSecondary,
-                  fontSize: 13,
-                  height: 1.45,
+                  fontSize: 13.5,
+                  height: 1.5,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
                     child: AppOutlinedButton(
                       onPressed: () => Navigator.of(context).pop(false),
                       style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
+                        minimumSize: const Size.fromHeight(50),
                         foregroundColor: c.textPrimary,
-                        side: BorderSide(color: c.border.withOpacity(0.4)),
+                        side: BorderSide(color: c.border.withOpacity(0.35)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -486,7 +487,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                     child: AppElevatedButton(
                       onPressed: () => Navigator.of(context).pop(true),
                       style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
+                        minimumSize: const Size.fromHeight(50),
                         backgroundColor: c.error,
                         foregroundColor: Colors.white,
                         elevation: 0,
@@ -518,7 +519,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     }
   }
 
-  // ── helpers ──────────────────────────────────────────────────────────────
+  // ── helpers ───────────────────────────────────────────────────────────────
 
   String _friendName(ChatUserLite? user, String fallback) {
     if (user == null) return fallback;
@@ -536,31 +537,23 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     if (user == null) return fallback;
     final username = user.username?.trim() ?? '';
     final email = user.email.trim();
-    if (username.isNotEmpty && email.isNotEmpty) return '@$username · $email';
     if (username.isNotEmpty) return '@$username';
     if (email.isNotEmpty) return email;
     return fallback;
   }
 
-  Widget _empty(AppColor c, String text) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.inbox_rounded,
-            size: 38,
-            color: c.textSecondary.withOpacity(0.4),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.4),
-          ),
-        ],
-      ),
-    );
+  String _relativeTime(DateTime dt) {
+    final now = DateTime.now();
+    final local = dt.toLocal();
+    final diff = now.difference(local);
+    if (diff.inSeconds < 60) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7 && local.year == now.year) {
+      return DateFormat('EEE').format(local);
+    }
+    return DateFormat('MMM d').format(local);
   }
 
   // ── build ─────────────────────────────────────────────────────────────────
@@ -573,64 +566,12 @@ class _ChatHubScreenState extends State<ChatHubScreen>
         .length;
     final unreadCount = _threads.fold<int>(
       0,
-      (sum, thread) => sum + thread.unreadCount,
+      (sum, t) => sum + t.unreadCount,
     );
 
     return Scaffold(
       backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 20,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Messages',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 20,
-                letterSpacing: -0.4,
-              ),
-            ),
-            if (!_loading && (unreadCount > 0 || pendingCount > 0))
-              Text(
-                [
-                  if (unreadCount > 0) '$unreadCount unread',
-                  if (pendingCount > 0)
-                    '$pendingCount request${pendingCount > 1 ? 's' : ''}',
-                ].join(' · '),
-                style: TextStyle(
-                  color: c.primary,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          if (_busy)
-            Padding(
-              padding: const EdgeInsets.only(right: 14),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: c.primary,
-                ),
-              ),
-            )
-          else
-            IconButton(
-              onPressed: () => _load(showLoader: true),
-              icon: Icon(Icons.refresh_rounded, color: c.textSecondary, size: 20),
-              tooltip: 'Refresh',
-            ),
-        ],
-      ),
+      appBar: _buildAppBar(c),
       body: _loading
           ? const PageLoader(label: 'Loading messages...')
           : _error != null
@@ -639,136 +580,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               opacity: _fade,
               child: Column(
                 children: [
-                  // Search + add friend bar
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
-                            decoration: BoxDecoration(
-                              color: c.surface,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: c.border.withOpacity(0.26),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.search_rounded,
-                                  color: c.textSecondary.withOpacity(0.6),
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _searchCtrl,
-                                    onSubmitted: (_) =>
-                                        _load(showLoader: false),
-                                    style: TextStyle(
-                                      color: c.textPrimary,
-                                      fontSize: 13.5,
-                                    ),
-                                    decoration: InputDecoration(
-                                      hintText: 'Search messages, friends…',
-                                      hintStyle: TextStyle(
-                                        color:
-                                            c.textSecondary.withOpacity(0.6),
-                                        fontSize: 13.5,
-                                      ),
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            vertical: 12,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: _busy ? null : _sendFriendRequest,
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: c.primary,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(
-                              Icons.person_add_alt_1_rounded,
-                              color: Colors.white,
-                              size: 19,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Tabs
-                  Container(
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: c.border.withOpacity(0.26)),
-                    ),
-                    child: TabBar(
-                      controller: _tabCtrl,
-                      labelColor: c.primary,
-                      unselectedLabelColor: c.textSecondary,
-                      indicatorColor: c.primary,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                      tabs: [
-                        Tab(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('Chats'),
-                              if (unreadCount > 0) ...[
-                                const SizedBox(width: 5),
-                                _badge(c, unreadCount),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Tab(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('Friends'),
-                              if (_friends.isNotEmpty) ...[
-                                const SizedBox(width: 5),
-                                _countChip(c, _friends.length),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Tab(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('Requests'),
-                              if (pendingCount > 0) ...[
-                                const SizedBox(width: 5),
-                                _badge(c, pendingCount),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildSearchBar(c),
+                  _buildTabs(c, pendingCount, unreadCount),
                   Expanded(
                     child: TabBarView(
                       controller: _tabCtrl,
@@ -785,23 +598,203 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     );
   }
 
+  PreferredSizeWidget _buildAppBar(AppColor c) {
+    return AppBar(
+      backgroundColor: c.background,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 20,
+      title: Text(
+        'Messages',
+        style: TextStyle(
+          color: c.textPrimary,
+          fontWeight: FontWeight.w800,
+          fontSize: 26,
+          letterSpacing: -0.6,
+        ),
+      ),
+      actions: [
+        if (_busy)
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: c.primary,
+              ),
+            ),
+          )
+        else ...[
+          IconButton(
+            onPressed: () => _load(showLoader: true),
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: c.textSecondary,
+              size: 20,
+            ),
+            tooltip: 'Refresh',
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: GestureDetector(
+              onTap: _busy ? null : _sendFriendRequest,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: c.primary,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSearchBar(AppColor c) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Container(
+        height: 42,
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(21),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: [
+            Icon(
+              Icons.search_rounded,
+              color: c.textSecondary.withOpacity(0.55),
+              size: 19,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                onSubmitted: (_) => _load(showLoader: false),
+                style: TextStyle(color: c.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search messages, friends…',
+                  hintStyle: TextStyle(
+                    color: c.textSecondary.withOpacity(0.55),
+                    fontSize: 14,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabs(AppColor c, int pendingCount, int unreadCount) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: TabBar(
+          controller: _tabCtrl,
+          padding: EdgeInsets.zero,
+          indicatorPadding: const EdgeInsets.all(3),
+          labelColor: Colors.white,
+          unselectedLabelColor: c.textSecondary,
+          indicator: BoxDecoration(
+            color: c.primary,
+            borderRadius: BorderRadius.circular(17),
+            boxShadow: [
+              BoxShadow(
+                color: c.primary.withOpacity(0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          dividerColor: Colors.transparent,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+          tabs: [
+            _tab('Chats', unreadCount),
+            _tab('Friends', _friends.length),
+            _tab('Requests', pendingCount),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Tab _tab(String label, int count) {
+    return Tab(
+      height: 40,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (count > 0) ...[
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                count > 99 ? '99+' : count.toString(),
+                style: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildError(AppColor c) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 26),
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: c.error.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.wifi_off_rounded, color: c.error, size: 26),
+              child: Icon(Icons.wifi_off_rounded, color: c.error, size: 28),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               'Could not load messages',
               style: TextStyle(
@@ -817,10 +810,10 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               style: TextStyle(
                 color: c.textSecondary,
                 fontSize: 13,
-                height: 1.4,
+                height: 1.45,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             AppFilledButton(
               onPressed: () => _load(showLoader: true),
               child: const Text('Retry'),
@@ -834,147 +827,238 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   // ── Chats tab ─────────────────────────────────────────────────────────────
 
   Widget _buildThreadsTab(AppColor c) {
-    if (_threads.isEmpty) {
-      return _empty(c, 'No conversations yet.\nMessage a friend to get started.');
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      itemCount: _threads.length,
-      itemBuilder: (_, i) {
-        final t = _threads[i];
-        final title = _friendName(t.friendUser, 'Direct Chat');
-        final subtitle = _friendSubtitle(t.friendUser, '');
-        final preview = t.lastMessage == null
-            ? 'No messages yet'
-            : ChatEnvelopeCodec.decodeText(t.lastMessage!.ciphertext);
-        final at = t.updatedAt == null
-            ? ''
-            : _time.format(t.updatedAt!.toLocal());
-        final unread = t.unreadCount;
-
-        return GestureDetector(
-          onTap: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => ChatThreadScreen(thread: t)),
-            );
-            if (mounted) _load(showLoader: false);
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-            decoration: BoxDecoration(
-              color: unread > 0 ? c.primary.withOpacity(0.04) : c.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: unread > 0
-                    ? c.primary.withOpacity(0.18)
-                    : c.border.withOpacity(0.24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_friends.isNotEmpty) _buildFriendsStrip(c),
+        if (_threads.isEmpty)
+          Expanded(
+            child: _buildEmpty(
+              c,
+              'No conversations yet',
+              'Message a friend to get started.',
+              Icons.chat_bubble_outline_rounded,
+            ),
+          )
+        else ...[
+          if (_friends.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+              child: Text(
+                'RECENT',
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
               ),
             ),
-            child: Row(
-              children: [
-                // Avatar
-                ChatUserAvatar(
-                  name: title,
-                  avatarUrl: t.friendUser?.avatarUrl,
-                  size: 44,
-                ),
-                const SizedBox(width: 11),
-                Expanded(
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.only(bottom: 24),
+              itemCount: _threads.length,
+              itemBuilder: (_, i) => _buildThreadTile(c, _threads[i]),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFriendsStrip(AppColor c) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Text(
+            'FRIENDS',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 84,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+            itemCount: _friends.length,
+            itemBuilder: (_, i) {
+              final f = _friends[i];
+              final name = _friendName(f.friend, f.friendUserId);
+              final firstName = name.split(' ').first;
+              return GestureDetector(
+                onTap: _busy ? null : () => _openThreadWithFriend(f),
+                child: Container(
+                  width: 62,
+                  margin: const EdgeInsets.only(right: 6),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 13.5,
-                                fontWeight: unread > 0
-                                    ? FontWeight.w700
-                                    : FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (at.isNotEmpty)
-                            Text(
-                              at,
-                              style: TextStyle(
-                                color: unread > 0
-                                    ? c.primary
-                                    : c.textSecondary,
-                                fontSize: 10.8,
-                                fontWeight: unread > 0
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                        ],
+                      ChatUserAvatar(
+                        name: name,
+                        avatarUrl: f.friend.avatarUrl,
+                        size: 50,
                       ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 1),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: c.textSecondary.withOpacity(0.7),
-                            fontSize: 11.2,
-                          ),
+                      const SizedBox(height: 5),
+                      Text(
+                        firstName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              preview,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: unread > 0
-                                    ? c.textPrimary.withOpacity(0.8)
-                                    : c.textSecondary,
-                                fontSize: 12.4,
-                                fontWeight: unread > 0
-                                    ? FontWeight.w500
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          if (unread > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: c.primary,
-                                borderRadius: BorderRadius.circular(99),
-                              ),
-                              child: Text(
-                                unread > 99 ? '99+' : unread.toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                        ],
                       ),
                     ],
                   ),
                 ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildThreadTile(AppColor c, ChatDirectThreadModel t) {
+    final title = _friendName(t.friendUser, 'Direct Chat');
+    final preview = t.lastMessage == null
+        ? 'No messages yet'
+        : ChatEnvelopeCodec.decodeText(t.lastMessage!.ciphertext);
+    final at = t.updatedAt == null ? '' : _relativeTime(t.updatedAt!);
+    final unread = t.unreadCount;
+
+    return InkWell(
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ChatThreadScreen(thread: t)),
+        );
+        if (mounted) _load(showLoader: false);
+      },
+      splashColor: c.primary.withOpacity(0.05),
+      highlightColor: c.primary.withOpacity(0.03),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                ChatUserAvatar(
+                  name: title,
+                  avatarUrl: t.friendUser?.avatarUrl,
+                  size: 52,
+                ),
+                if (unread > 0)
+                  Positioned(
+                    bottom: 1,
+                    right: 1,
+                    child: Container(
+                      width: 13,
+                      height: 13,
+                      decoration: BoxDecoration(
+                        color: c.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: c.background, width: 2.5),
+                      ),
+                    ),
+                  ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 15,
+                            fontWeight: unread > 0
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (at.isNotEmpty)
+                        Text(
+                          at,
+                          style: TextStyle(
+                            color: unread > 0
+                                ? c.primary
+                                : c.textSecondary,
+                            fontSize: 11.5,
+                            fontWeight: unread > 0
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: unread > 0
+                                ? c.textPrimary.withOpacity(0.82)
+                                : c.textSecondary,
+                            fontSize: 13,
+                            fontWeight: unread > 0
+                                ? FontWeight.w500
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      if (unread > 1) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: c.primary,
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            unread > 99 ? '99+' : '$unread',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -982,35 +1066,31 @@ class _ChatHubScreenState extends State<ChatHubScreen>
 
   Widget _buildFriendsTab(AppColor c) {
     if (_friends.isEmpty) {
-      return _empty(
+      return _buildEmpty(
         c,
-        'No friends yet.\nTap + to send a friend request.',
+        'No friends yet',
+        'Tap + to send a friend request.',
+        Icons.people_outline_rounded,
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       itemCount: _friends.length,
       itemBuilder: (_, i) {
         final f = _friends[i];
         final name = _friendName(f.friend, f.friendUserId);
         final subtitle = _friendSubtitle(f.friend, '');
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.border.withOpacity(0.24)),
-          ),
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
           child: Row(
             children: [
               ChatUserAvatar(
                 name: name,
                 avatarUrl: f.friend.avatarUrl,
-                size: 44,
+                size: 50,
               ),
-              const SizedBox(width: 11),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1019,7 +1099,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                       name,
                       style: TextStyle(
                         color: c.textPrimary,
-                        fontSize: 13.5,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1028,53 +1108,50 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                         subtitle,
                         style: TextStyle(
                           color: c.textSecondary,
-                          fontSize: 12,
+                          fontSize: 12.5,
                         ),
                       ),
                   ],
                 ),
               ),
-              // Action buttons
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppTextButton(
-                    onPressed: _busy ? null : () => _openThreadWithFriend(f),
-                    style: TextButton.styleFrom(
-                      backgroundColor: c.primary.withOpacity(0.1),
-                      foregroundColor: c.primary,
-                      minimumSize: const Size(64, 36),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                    ),
-                    child: const Text(
-                      'Chat',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                      ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _busy ? null : () => _openThreadWithFriend(f),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Message',
+                    style: TextStyle(
+                      color: c.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: _busy ? null : () => _confirmRemoveFriend(f),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: c.error.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.person_remove_outlined,
-                        color: c.error.withOpacity(0.8),
-                        size: 16,
-                      ),
-                    ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _busy ? null : () => _confirmRemoveFriend(f),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: c.error.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(11),
                   ),
-                ],
+                  child: Icon(
+                    Icons.person_remove_outlined,
+                    color: c.error.withOpacity(0.75),
+                    size: 16,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1087,181 +1164,71 @@ class _ChatHubScreenState extends State<ChatHubScreen>
 
   Widget _buildRequestsTab(AppColor c) {
     if (_incoming.isEmpty && _outgoing.isEmpty) {
-      return _empty(c, 'No pending requests.');
+      return _buildEmpty(
+        c,
+        'No pending requests',
+        'Send a friend request to connect with someone.',
+        Icons.inbox_outlined,
+      );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         if (_incoming.isNotEmpty) ...[
           _sectionLabel(c, 'INCOMING'),
           for (final req in _incoming)
-            _requestCard(
-              c,
-              name: _friendName(req.sender, req.senderId),
-              subtitle: req.note ?? '',
-              avatarUrl: req.sender?.avatarUrl,
-              isIncoming: true,
-              actions: [
-                Expanded(
-                  child: AppElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _applyRequest(
-                              req,
-                              () => _chat.respondFriendRequest(
-                                req.id,
-                                RespondFriendRequestRequest(action: 'ACCEPTED'),
-                              ),
-                            ),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(38),
-                      backgroundColor: c.success,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('Accept'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AppOutlinedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _applyRequest(
-                              req,
-                              () => _chat.respondFriendRequest(
-                                req.id,
-                                RespondFriendRequestRequest(action: 'REJECTED'),
-                              ),
-                            ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(38),
-                      foregroundColor: c.error,
-                      side: BorderSide(color: c.error.withOpacity(0.35)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('Decline'),
-                  ),
-                ),
-              ],
-            ),
+            _buildRequestCard(c, req, isIncoming: true),
         ],
         if (_outgoing.isNotEmpty) ...[
-          if (_incoming.isNotEmpty) const SizedBox(height: 10),
+          if (_incoming.isNotEmpty) const SizedBox(height: 16),
           _sectionLabel(c, 'SENT'),
           for (final req in _outgoing)
-            _requestCard(
-              c,
-              name: _friendName(req.receiver, req.receiverId),
-              subtitle: req.note ?? '',
-              avatarUrl: req.receiver?.avatarUrl,
-              isIncoming: false,
-              actions: [
-                Expanded(
-                  child: AppOutlinedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _applyRequest(
-                              req,
-                              () => _chat.cancelFriendRequest(req.id),
-                            ),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(38),
-                      foregroundColor: c.textSecondary,
-                      side: BorderSide(color: c.border.withOpacity(0.4)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: const Text('Cancel Request'),
-                  ),
-                ),
-              ],
-            ),
+            _buildRequestCard(c, req, isIncoming: false),
         ],
       ],
     );
   }
 
-  // ── small helpers ─────────────────────────────────────────────────────────
-
   Widget _sectionLabel(AppColor c, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 2),
+      padding: const EdgeInsets.only(bottom: 8, top: 4, left: 2),
       child: Text(
         text,
         style: TextStyle(
           color: c.textSecondary,
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
-          letterSpacing: 1.1,
+          letterSpacing: 1.2,
         ),
       ),
     );
   }
 
-  Widget _badge(AppColor c, int count) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: c.primary,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        count > 99 ? '99+' : count.toString(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _countChip(AppColor c, int count) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: c.textSecondary.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        count.toString(),
-        style: TextStyle(
-          color: c.textSecondary,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _requestCard(
-    AppColor c, {
-    required String name,
-    required String subtitle,
-    required String? avatarUrl,
+  Widget _buildRequestCard(
+    AppColor c,
+    ChatFriendRequestModel req, {
     required bool isIncoming,
-    required List<Widget> actions,
   }) {
+    final name = isIncoming
+        ? _friendName(req.sender, req.senderId)
+        : _friendName(req.receiver, req.receiverId);
+    final avatarUrl = isIncoming
+        ? req.sender?.avatarUrl
+        : req.receiver?.avatarUrl;
+    final note = req.note ?? '';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.26)),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ChatUserAvatar(name: name, avatarUrl: avatarUrl, size: 42),
-          const SizedBox(width: 10),
+          ChatUserAvatar(name: name, avatarUrl: avatarUrl, size: 46),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1273,20 +1240,20 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                         name,
                         style: TextStyle(
                           color: c.textPrimary,
-                          fontSize: 13.5,
+                          fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
+                        horizontal: 8,
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
                         color: (isIncoming ? c.primary : c.textSecondary)
                             .withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(
                         isIncoming ? 'Incoming' : 'Sent',
@@ -1299,22 +1266,149 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                     ),
                   ],
                 ),
-                if (subtitle.trim().isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                if (note.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12.2,
-                    ),
+                    note,
+                    style: TextStyle(color: c.textSecondary, fontSize: 12.5),
                   ),
                 ],
-                const SizedBox(height: 10),
-                Row(children: actions),
+                const SizedBox(height: 12),
+                if (isIncoming)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppElevatedButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _applyRequest(
+                                    req,
+                                    () => _chat.respondFriendRequest(
+                                      req.id,
+                                      RespondFriendRequestRequest(
+                                        action: 'ACCEPTED',
+                                      ),
+                                    ),
+                                  ),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(38),
+                            backgroundColor: c.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                          child: const Text(
+                            'Accept',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: AppOutlinedButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _applyRequest(
+                                    req,
+                                    () => _chat.respondFriendRequest(
+                                      req.id,
+                                      RespondFriendRequestRequest(
+                                        action: 'REJECTED',
+                                      ),
+                                    ),
+                                  ),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(38),
+                            foregroundColor: c.error,
+                            side: BorderSide(
+                              color: c.error.withOpacity(0.3),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                          ),
+                          child: const Text('Decline'),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppOutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _applyRequest(
+                                req,
+                                () => _chat.cancelFriendRequest(req.id),
+                              ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(38),
+                        foregroundColor: c.textSecondary,
+                        side: BorderSide(color: c.border.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      child: const Text('Cancel Request'),
+                    ),
+                  ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmpty(
+    AppColor c,
+    String title,
+    String subtitle,
+    IconData icon,
+  ) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: c.textSecondary.withOpacity(0.07),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 32,
+                color: c.textSecondary.withOpacity(0.35),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 13.5,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/services/chat/chat_core_service.dart';
@@ -42,6 +41,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   bool _loading = true;
   bool _sending = false;
+  bool _inputHasText = false;
   String? _error;
   String? _socketError;
   String? _currentUserId;
@@ -57,11 +57,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void initState() {
     super.initState();
+    _inputCtrl.addListener(_onInputChanged);
     _bootstrap();
   }
 
   @override
   void dispose() {
+    _inputCtrl.removeListener(_onInputChanged);
     _socketStatusSub?.cancel();
     _socketMessageSub?.cancel();
     _socketAckSub?.cancel();
@@ -71,6 +73,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _scrollCtrl.dispose();
     super.dispose();
   }
+
+  void _onInputChanged() {
+    final has = _inputCtrl.text.trim().isNotEmpty;
+    if (has != _inputHasText) setState(() => _inputHasText = has);
+  }
+
+  // ── service ───────────────────────────────────────────────────────────────
 
   Future<void> _bootstrap() async {
     setState(() {
@@ -87,9 +96,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -174,9 +181,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _socketStatus = status;
         if (status.ready) _socketError = null;
       });
-      if (status.connected && !status.joined) {
-        socket.retryJoin();
-      }
+      if (status.connected && !status.joined) socket.retryJoin();
     });
 
     _socketMessageSub = socket.messagesStream.listen((message) {
@@ -309,6 +314,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // ── message grouping helpers ───────────────────────────────────────────────
+
+  bool _isSameSenderAsPrev(int index) {
+    if (index == 0) return false;
+    final prev = _messages[index - 1];
+    final curr = _messages[index];
+    if (prev.senderId != curr.senderId) return false;
+    final a = prev.createdAt;
+    final b = curr.createdAt;
+    if (a == null || b == null) return false;
+    return b.difference(a).inMinutes < 5;
+  }
+
+  bool _isSameSenderAsNext(int index) {
+    if (index >= _messages.length - 1) return false;
+    final curr = _messages[index];
+    final next = _messages[index + 1];
+    if (curr.senderId != next.senderId) return false;
+    final a = curr.createdAt;
+    final b = next.createdAt;
+    if (a == null || b == null) return false;
+    return b.difference(a).inMinutes < 5;
+  }
+
+  BorderRadius _bubbleRadius({
+    required bool mine,
+    required bool prevSame,
+    required bool nextSame,
+  }) {
+    const full = Radius.circular(20);
+    const tight = Radius.circular(5);
+    if (mine) {
+      return BorderRadius.only(
+        topLeft: full,
+        topRight: prevSame ? tight : full,
+        bottomLeft: full,
+        bottomRight: nextSame ? tight : full,
+      );
+    } else {
+      return BorderRadius.only(
+        topLeft: prevSame ? tight : full,
+        topRight: full,
+        bottomLeft: nextSame ? tight : full,
+        bottomRight: full,
+      );
+    }
+  }
+
+  // ── string helpers ─────────────────────────────────────────────────────────
+
   String get _friendTitle {
     final f = widget.thread.friendUser;
     if (f == null) return 'Direct Chat';
@@ -325,13 +380,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final f = widget.thread.friendUser;
     if (f == null) return '';
     final username = f.username?.trim() ?? '';
-    final email = f.email.trim();
     if (username.isNotEmpty) return '@$username';
-    if (email.isNotEmpty) return email;
-    return '';
+    final email = f.email.trim();
+    return email.isNotEmpty ? email : '';
   }
 
-  Color _statusDotColor(AppColor c) {
+  Color _statusColor(AppColor c) {
     if (_socketStatus.ready) return c.success;
     if (_socketStatus.connecting || _socketStatus.connected) return c.warning;
     return c.error;
@@ -339,9 +393,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _statusText() {
     if (_socketStatus.ready) return 'End-to-end encrypted';
-    if (_socketStatus.connecting) return 'Connecting...';
-    if (_socketStatus.connected) return 'Joining room...';
-    return 'Reconnecting — messages may be delayed';
+    if (_socketStatus.connecting) return 'Connecting…';
+    if (_socketStatus.connected) return 'Joining room…';
+    return 'Reconnecting…';
   }
 
   bool _showDateHeader(int index) {
@@ -354,7 +408,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return p.year != c.year || p.month != c.month || p.day != c.day;
   }
 
-  String _dateHeader(DateTime dt) {
+  String _dateLabel(DateTime dt) {
     final now = DateTime.now();
     final local = dt.toLocal();
     if (local.year == now.year &&
@@ -371,6 +425,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return DateFormat('MMMM d, y').format(local);
   }
 
+  // ── build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -386,12 +442,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   PreferredSizeWidget _buildAppBar(AppColor c) {
-    final dotColor = _statusDotColor(c);
     return AppBar(
-      backgroundColor: c.background,
+      backgroundColor: c.surface,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleSpacing: 4,
+      titleSpacing: 0,
       leading: IconButton(
         icon: Icon(
           Icons.arrow_back_ios_new_rounded,
@@ -402,11 +457,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
       title: Row(
         children: [
-          // Avatar with network image support
           ChatUserAvatar(
             name: _friendTitle,
             avatarUrl: widget.thread.friendUser?.avatarUrl,
-            size: 36,
+            size: 38,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -428,23 +482,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       width: 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: dotColor,
+                        color: _statusColor(c),
                         shape: BoxShape.circle,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        _friendSubtitle.isNotEmpty
-                            ? _socketStatus.ready
-                                ? '$_friendSubtitle · ${_statusText()}'
-                                : _friendSubtitle
+                        _friendSubtitle.isNotEmpty && _socketStatus.ready
+                            ? '$_friendSubtitle · ${_statusText()}'
+                            : _socketStatus.ready && _friendSubtitle.isEmpty
+                            ? _statusText()
+                            : _friendSubtitle.isNotEmpty
+                            ? _friendSubtitle
                             : _statusText(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: c.textSecondary,
-                          fontSize: 11.2,
+                          fontSize: 11.5,
                         ),
                       ),
                     ),
@@ -459,29 +515,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         IconButton(
           tooltip: 'Refresh',
           onPressed: () => _loadMessages(showLoader: false),
-          icon: Icon(Icons.refresh_rounded, color: c.textSecondary, size: 19),
+          icon: Icon(
+            Icons.refresh_rounded,
+            color: c.textSecondary,
+            size: 19,
+          ),
         ),
+        const SizedBox(width: 4),
       ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          height: 1,
+          color: AppColor.of(context).border.withOpacity(0.15),
+        ),
+      ),
     );
   }
 
   Widget _buildErrorState(AppColor c) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: c.error.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.wifi_off_rounded, color: c.error, size: 26),
+              child: Icon(Icons.wifi_off_rounded, color: c.error, size: 28),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               'Cannot open thread',
               style: TextStyle(
@@ -496,12 +564,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: c.textSecondary,
-                fontSize: 12.5,
+                fontSize: 13,
                 height: 1.45,
               ),
             ),
-            const SizedBox(height: 16),
-            AppFilledButton.icon(
+            const SizedBox(height: 18),
+            FilledButton.icon(
               onPressed: _bootstrap,
               icon: const Icon(Icons.refresh_rounded, size: 16),
               label: const Text('Retry'),
@@ -520,39 +588,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _buildContent(AppColor c) {
     return Column(
       children: [
-        // Connection status banner (only show when not ready)
-        if (!_socketStatus.ready)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            color: _socketStatus.connecting
-                ? c.warning.withOpacity(0.08)
-                : c.error.withOpacity(0.07),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 11,
-                  height: 11,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: _socketStatus.connecting ? c.warning : c.error,
-                  ),
-                ),
-                const SizedBox(width: 7),
-                Text(
-                  _statusText(),
-                  style: TextStyle(
-                    color: _socketStatus.connecting ? c.warning : c.error,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        // Error banner
+        // Connection status banner — only when not ready
+        if (!_socketStatus.ready) _buildStatusBanner(c),
+        // Socket error banner
         if (_socketError != null && _socketError!.trim().isNotEmpty)
           Container(
             width: double.infinity,
@@ -560,271 +598,384 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             color: c.error.withOpacity(0.07),
             child: Text(
               _socketError!,
-              style: TextStyle(color: c.error, fontSize: 11.2),
+              style: TextStyle(color: c.error, fontSize: 11.5),
               textAlign: TextAlign.center,
             ),
           ),
+        // E2EE notice (only when ready and no messages yet)
+        if (_socketStatus.ready && _messages.isEmpty) _buildE2ENotice(c),
         // Messages
         Expanded(
           child: _messages.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lock_rounded,
-                        size: 32,
-                        color: c.textSecondary.withOpacity(0.4),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'End-to-end encrypted',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Messages are encrypted on your device.\nSay hello!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: c.textSecondary.withOpacity(0.65),
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-                  itemCount: _messages.length,
-                  itemBuilder: (_, i) {
-                    final m = _messages[i];
-                    final mine =
-                        _currentUserId != null && m.senderId == _currentUserId;
-                    final text = ChatEnvelopeCodec.decodeText(m.ciphertext);
-                    final timestamp = m.createdAt == null
-                        ? ''
-                        : _timeShort.format(m.createdAt!.toLocal());
-                    final pending = (() {
-                      final cid = m.clientMessageId?.trim() ?? '';
-                      if (cid.isEmpty) return false;
-                      return _pendingClientMessageIds.contains(cid);
-                    })();
-                    final showDate =
-                        m.createdAt != null && _showDateHeader(i);
-
-                    return Column(
-                      children: [
-                        if (showDate) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: c.border.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(99),
-                                ),
-                                child: Text(
-                                  _dateHeader(m.createdAt!),
-                                  style: TextStyle(
-                                    color: c.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        Align(
-                          alignment: mine
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            constraints: BoxConstraints(
-                              maxWidth:
-                                  MediaQuery.of(context).size.width * 0.72,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: mine
-                                  ? CrossAxisAlignment.end
-                                  : CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    12,
-                                    9,
-                                    12,
-                                    9,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: mine ? c.primary : c.surface,
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: const Radius.circular(18),
-                                      topRight: const Radius.circular(18),
-                                      bottomLeft: mine
-                                          ? const Radius.circular(18)
-                                          : const Radius.circular(4),
-                                      bottomRight: mine
-                                          ? const Radius.circular(4)
-                                          : const Radius.circular(18),
-                                    ),
-                                    border: mine
-                                        ? null
-                                        : Border.all(
-                                            color: c.border.withOpacity(0.28),
-                                          ),
-                                  ),
-                                  child: Text(
-                                    text,
-                                    style: TextStyle(
-                                      color: mine
-                                          ? Colors.white
-                                          : c.textPrimary,
-                                      fontSize: 13.5,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      timestamp,
-                                      style: TextStyle(
-                                        color: c.textSecondary.withOpacity(0.7),
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
-                                    if (mine) ...[
-                                      const SizedBox(width: 3),
-                                      Icon(
-                                        pending
-                                            ? Icons.schedule_rounded
-                                            : Icons.done_all_rounded,
-                                        size: 13,
-                                        color: pending
-                                            ? c.textSecondary
-                                            : c.primary,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+              ? _buildEmptyMessages(c)
+              : _buildMessageList(c),
         ),
         // Input bar
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-          decoration: BoxDecoration(
-            color: c.surface,
-            border: Border(
-              top: BorderSide(color: c.border.withOpacity(0.2)),
+        _buildInputBar(c),
+      ],
+    );
+  }
+
+  Widget _buildStatusBanner(AppColor c) {
+    final isConnecting =
+        _socketStatus.connecting || _socketStatus.connected;
+    final color = isConnecting ? c.warning : c.error;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      color: color.withOpacity(0.08),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 10,
+            height: 10,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: color,
             ),
           ),
-          child: SafeArea(
-            top: false,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: c.background,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: c.border.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.lock_outline_rounded,
-                          size: 14,
-                          color: c.textSecondary.withOpacity(0.5),
+          const SizedBox(width: 8),
+          Text(
+            _statusText(),
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildE2ENotice(AppColor c) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.lock_rounded,
+            size: 11,
+            color: c.textSecondary.withOpacity(0.5),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'End-to-end encrypted',
+            style: TextStyle(
+              color: c.textSecondary.withOpacity(0.6),
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyMessages(AppColor c) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: c.primary.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.lock_rounded,
+              size: 28,
+              color: c.primary.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'End-to-end encrypted',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Messages are encrypted on your device.\nSay hello!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageList(AppColor c) {
+    return ListView.builder(
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      itemCount: _messages.length,
+      itemBuilder: (_, i) => _buildMessageItem(c, i),
+    );
+  }
+
+  Widget _buildMessageItem(AppColor c, int i) {
+    final m = _messages[i];
+    final mine = _currentUserId != null && m.senderId == _currentUserId;
+    final text = ChatEnvelopeCodec.decodeText(m.ciphertext);
+    final timestamp = m.createdAt == null
+        ? ''
+        : _timeShort.format(m.createdAt!.toLocal());
+    final pending = (() {
+      final cid = m.clientMessageId?.trim() ?? '';
+      if (cid.isEmpty) return false;
+      return _pendingClientMessageIds.contains(cid);
+    })();
+    final showDate = m.createdAt != null && _showDateHeader(i);
+    final prevSame = _isSameSenderAsPrev(i);
+    final nextSame = _isSameSenderAsNext(i);
+    // Avatar shown for the last received message in a consecutive group
+    final showAvatar = !mine && !nextSame;
+
+    return Column(
+      children: [
+        // Date separator
+        if (showDate)
+          Padding(
+            padding: EdgeInsets.only(top: i == 0 ? 0 : 16, bottom: 12),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: c.border.withOpacity(0.22),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  _dateLabel(m.createdAt!),
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        // Message row
+        Padding(
+          padding: EdgeInsets.only(bottom: nextSame ? 2 : 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment:
+                mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              // Avatar slot (received only)
+              if (!mine) ...[
+                SizedBox(
+                  width: 30,
+                  child: showAvatar
+                      ? ChatUserAvatar(
+                          name: _friendTitle,
+                          avatarUrl: widget.thread.friendUser?.avatarUrl,
+                          size: 28,
+                        )
+                      : const SizedBox(width: 28),
+                ),
+                const SizedBox(width: 6),
+              ],
+              // Bubble
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.70,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: mine
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
+                        decoration: BoxDecoration(
+                          color: mine ? c.primary : c.surface,
+                          borderRadius: _bubbleRadius(
+                            mine: mine,
+                            prevSame: prevSame,
+                            nextSame: nextSame,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: TextField(
-                            controller: _inputCtrl,
-                            minLines: 1,
-                            maxLines: 4,
-                            onSubmitted: (_) => _sendMessage(),
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 13.5,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'Message…',
-                              hintStyle: TextStyle(
-                                color: c.textSecondary.withOpacity(0.6),
-                                fontSize: 13.5,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 11),
-                            ),
+                        child: Text(
+                          text,
+                          style: TextStyle(
+                            color: mine ? Colors.white : c.textPrimary,
+                            fontSize: 14,
+                            height: 1.38,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sending ? null : _sendMessage,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: _sending
-                          ? c.primary.withOpacity(0.5)
-                          : c.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: _sending
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
+                      ),
+                      // Timestamp + status (only on last in group)
+                      if (!nextSame) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              timestamp,
+                              style: TextStyle(
+                                color: c.textSecondary.withOpacity(0.65),
+                                fontSize: 10.5,
                               ),
-                            )
-                          : const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 18,
                             ),
-                    ),
+                            if (mine) ...[
+                              const SizedBox(width: 3),
+                              Icon(
+                                pending
+                                    ? Icons.schedule_rounded
+                                    : Icons.done_all_rounded,
+                                size: 13,
+                                color: pending
+                                    ? c.textSecondary.withOpacity(0.6)
+                                    : c.primary,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Right spacer for received messages
+              if (!mine) const SizedBox(width: 40),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInputBar(AppColor c) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(
+          top: BorderSide(color: c.border.withOpacity(0.15)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Text field
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
+                decoration: BoxDecoration(
+                  color: c.background,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: c.border.withOpacity(0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _inputCtrl,
+                        minLines: 1,
+                        maxLines: 5,
+                        onSubmitted: (_) => _sendMessage(),
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Message…',
+                          hintStyle: TextStyle(
+                            color: c.textSecondary.withOpacity(0.6),
+                            fontSize: 14,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 11),
+                        ),
+                      ),
+                    ),
+                    // Lock icon for E2EE indicator
+                    Icon(
+                      Icons.lock_outline_rounded,
+                      size: 13,
+                      color: c.textSecondary.withOpacity(0.35),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Send button
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _inputHasText
+                    ? (_sending ? c.primary.withOpacity(0.6) : c.primary)
+                    : c.primary.withOpacity(0.15),
+                shape: BoxShape.circle,
+                boxShadow: _inputHasText
+                    ? [
+                        BoxShadow(
+                          color: c.primary.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: GestureDetector(
+                onTap: (_sending || !_inputHasText) ? null : _sendMessage,
+                child: Center(
+                  child: _sending
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          Icons.send_rounded,
+                          color: _inputHasText
+                              ? Colors.white
+                              : c.primary.withOpacity(0.5),
+                          size: 18,
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
