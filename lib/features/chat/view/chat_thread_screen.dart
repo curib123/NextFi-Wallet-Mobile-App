@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
+import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/services/chat/chat_core_service.dart';
 import 'package:next_fi/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/services/chat/models/chat_dtos.dart';
@@ -31,7 +32,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _auth = AuthService();
   final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  final _timeFull = DateFormat('MMM d, HH:mm');
   final _timeShort = DateFormat('HH:mm');
 
   MiniChatSocketService? _socket;
@@ -325,7 +325,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final f = widget.thread.friendUser;
     if (f == null) return '';
     final username = f.username?.trim() ?? '';
+    final email = f.email.trim();
     if (username.isNotEmpty) return '@$username';
+    if (email.isNotEmpty) return email;
     return '';
   }
 
@@ -400,24 +402,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
       title: Row(
         children: [
-          // Avatar
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                _friendTitle.isNotEmpty ? _friendTitle[0].toUpperCase() : '?',
-                style: TextStyle(
-                  color: c.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-            ),
+          // Avatar with network image support
+          ChatUserAvatar(
+            name: _friendTitle,
+            avatarUrl: widget.thread.friendUser?.avatarUrl,
+            size: 36,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -444,13 +433,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      _friendSubtitle.isNotEmpty
-                          ? _friendSubtitle
-                          : _statusText(),
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 11.2,
+                    Flexible(
+                      child: Text(
+                        _friendSubtitle.isNotEmpty
+                            ? _socketStatus.ready
+                                ? '$_friendSubtitle · ${_statusText()}'
+                                : _friendSubtitle
+                            : _statusText(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11.2,
+                        ),
                       ),
                     ),
                   ],

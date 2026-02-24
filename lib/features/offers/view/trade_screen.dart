@@ -288,10 +288,13 @@ class _TradeScreenState extends State<TradeScreen> {
 
     setState(() => _submitting = true);
     try {
+      // Use paymentMethodId (the PaymentMethod FK) to identify which merchant 
+      // payment account to use for this trade. The seller's payment account is 
+      // obtained from the OfferPaymentMethod linked to the offer.
       final trade = await _tradesCore.create(
         CreateTradeRequest(
           offerId: offer.id,
-          paymentMethodId: _selectedOfferMethod!.id,
+          paymentMethodId: _selectedOfferMethod!.paymentMethodId,
           buyerPaymentAccountId: _userIsBuyer ? null : _selectedUserAccount?.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
@@ -486,7 +489,7 @@ class _TradeScreenState extends State<TradeScreen> {
               submitting: _submitting,
               // Disable if cannot calculate (no market price)
               disabled: _enterFiatMode && !_canCalculate,
-              onTap: _submit,
+              onTap: _submit, 
             ),
     ); 
   }

@@ -1,33 +1,43 @@
-class ChatEndpoints {
-  static const String base = '/chat';
+eclass ChatEndpoints {
+  static const String base = '/direct-messages';
+  static const String friendsBase = '/friends';
 
-  static String listMyKeys() => '$base/keys/me';
-  static String upsertMyKey() => '$base/keys/me';
+  // Encryption Keys
+  static String listMyKeys() => '/chat/keys/me';
+  static String upsertMyKey() => '/chat/keys/me';
   static String deactivateMyKey(String keyId) =>
-      '$base/keys/me/$keyId/deactivate';
-  static String listUserPublicKeys(String userId) => '$base/keys/$userId';
+      '/chat/keys/me/$keyId/deactivate';
+  static String listUserPublicKeys(String userId) => '/chat/keys/$userId';
 
-  static String sendFriendRequest() => '$base/friends/requests';
-  static String listIncomingFriendRequests() =>
-      '$base/friends/requests/incoming';
-  static String listOutgoingFriendRequests() =>
-      '$base/friends/requests/outgoing';
-  static String acceptFriendRequest(String requestId) =>
-      '$base/friends/requests/$requestId/accept';
-  static String rejectFriendRequest(String requestId) =>
-      '$base/friends/requests/$requestId/reject';
+  // Friend Requests
+  static String sendFriendRequest() => '$friendsBase/request';
+  static String listFriendRequests() => '$friendsBase/requests';
+  static String listSentFriendRequests() => '$friendsBase/requests/sent';
+  static String getFriendRequest(String requestId) =>
+      '$friendsBase/requests/$requestId';
+  static String respondFriendRequest(String requestId) =>
+      '/friends/requests/$requestId/respond';
   static String cancelFriendRequest(String requestId) =>
-      '$base/friends/requests/$requestId/cancel';
+      '$friendsBase/requests/$requestId';
 
-  static String listFriends() => '$base/friends';
-  static String removeFriend(String friendUserId) =>
-      '$base/friends/$friendUserId';
+  // Friends
+  static String listFriends() => '$friendsBase';
+  static String removeFriendship(String friendshipId) =>
+      '$friendsBase/$friendshipId';
 
-  static String openThreadWithFriend(String friendUserId) =>
-      '$base/threads/with/$friendUserId/open';
+  // Direct Messages - Thread Management
+  static String createThread() => '$base/threads'; 
   static String listThreads() => '$base/threads';
+  static String getThread(String threadId) => '$base/threads/$threadId';
+  static String getThreadWithFriend(String friendId) =>
+      '$base/threads/with/$friendId';
+  static String openThreadWithFriend(String friendUserId) =>
+      '/chat/threads/with/$friendUserId/open';
+
+  // Direct Messages - Message Management
   static String listThreadMessages(String threadId) =>
       '$base/threads/$threadId/messages';
   static String sendThreadMessage(String threadId) =>
       '$base/threads/$threadId/messages';
+  static String getMessage(String messageId) => '$base/messages/$messageId';
 }

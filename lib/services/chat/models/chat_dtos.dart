@@ -43,16 +43,31 @@ class UpsertChatEncryptionKeyRequest {
 }
 
 class SendChatFriendRequestRequest {
-  final String receiverUsername;
+  final String receiverId;
   final String? note;
 
   const SendChatFriendRequestRequest({
-    required this.receiverUsername,
+    required this.receiverId,
     this.note,
   });
 
   Map<String, dynamic> toJson() => {
-    'receiverUsername': receiverUsername.trim(),
+    'receiverId': receiverId.trim(),
+    if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
+  };
+}
+
+class RespondFriendRequestRequest {
+  final String action;
+  final String? note;
+
+  const RespondFriendRequestRequest({
+    required this.action,
+    this.note,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'action': action.trim().toUpperCase(),
     if (note != null && note!.trim().isNotEmpty) 'note': note!.trim(),
   };
 }
@@ -88,5 +103,17 @@ class SendEncryptedChatMessageRequest {
     if (signature != null && signature!.trim().isNotEmpty)
       'signature': signature!.trim(),
     if (metadata != null) 'metadata': metadata,
+  };
+}
+
+class CreateThreadRequest {
+  final String friendId;
+
+  const CreateThreadRequest({
+    required this.friendId,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'friendId': friendId.trim(),
   };
 }
