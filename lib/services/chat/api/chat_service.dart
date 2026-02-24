@@ -259,7 +259,7 @@ class ChatService {
       return ChatFriendRequestModel(
         id: '',
         senderId: '',
-        receiverId: req.receiverId ?? req.receiverUsername ?? '',
+        receiverId: req.receiverUsername,
         status: ChatFriendRequestStatus.pending,
       );
     }
@@ -271,7 +271,7 @@ class ChatService {
     return ChatFriendRequestModel(
       id: '',
       senderId: '',
-      receiverId: req.receiverId ?? req.receiverUsername ?? '',
+      receiverId: req.receiverUsername,
       status: ChatFriendRequestStatus.pending,
     );
   }

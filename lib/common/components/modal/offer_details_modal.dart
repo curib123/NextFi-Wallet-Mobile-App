@@ -1414,9 +1414,9 @@ class _Skeleton extends StatelessWidget {
   const _Skeleton({required this.c, required this.height, this.width});
   final AppColor c;
   final double height;
-  final double? width; 
+  final double? width;
 
- 
+
   @override
   Widget build(BuildContext context) => Container(
     height: height,

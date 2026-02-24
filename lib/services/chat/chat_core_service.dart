@@ -86,14 +86,6 @@ class ChatCoreService {
         RespondFriendRequestRequest(action: 'REJECTED'),
       );
 
-  Future<bool> removeFriend(String friendUserId) async {
-    // Get friends list to find the friendshipId
-    final friends = await _api.listFriends(const ChatListQuery(page: 1, limit: 100));
-    final friend = friends.items.where((f) => f.friendUserId == friendUserId).firstOrNull;
-    if (friend == null) return false;
-    return _api.removeFriendship(friend.friendshipId);
-  }
-
   Future<ChatDirectThreadModel> openThreadWithFriend(
     String friendUserId,
   ) async => _api.openThreadWithFriend(friendUserId);

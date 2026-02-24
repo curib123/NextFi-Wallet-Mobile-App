@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
@@ -20,6 +19,7 @@ import 'package:provider/provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANAGE OFFERS SCREEN
+// Design: Stripe-grade fintech — precise rhythm, confident type, clean density
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ManageOffersScreen extends StatefulWidget {
@@ -42,13 +42,14 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   List<WalletAddress> _wallets = const [];
   String? _error;
 
-  final _marginCtrl = TextEditingController(text: '0');
-  final _minCtrl = TextEditingController(text: '0');
-  final _maxCtrl = TextEditingController(text: '0');
-  final _totalQtyCtrl = TextEditingController();
-  final _availableQtyCtrl = TextEditingController();
+  final _marginCtrl        = TextEditingController(text: '0');
+  final _minCtrl           = TextEditingController(text: '0');
+  final _maxCtrl           = TextEditingController(text: '0');
+  final _totalQtyCtrl      = TextEditingController();
+  final _availableQtyCtrl  = TextEditingController();
   final _paymentWindowCtrl = TextEditingController(text: '15');
-  final _autoReplyCtrl = TextEditingController();
+  final _autoReplyCtrl     = TextEditingController();
+
   OfferType _type = OfferType.sell;
   PaymentMethodModel? _selectedPaymentMethod;
   WalletAddress? _selectedReceiverWallet;
@@ -59,29 +60,23 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   late final AnimationController _heroCtrl;
   late final Animation<double> _pageAnim;
   late final Animation<Offset> _slideAnim;
+  late final TabController _tabCtrl;
 
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
     _pageEnterCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 550),
     );
     _heroCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 900),
     );
-    _pageAnim = CurvedAnimation(
-      parent: _pageEnterCtrl,
-      curve: Curves.easeOutCubic,
-    );
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _pageEnterCtrl,
-      curve: Curves.easeOutCubic,
-    ));
+    _pageAnim = CurvedAnimation(parent: _pageEnterCtrl, curve: Curves.easeOutCubic);
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _pageEnterCtrl, curve: Curves.easeOutCubic));
     _load();
   }
 
@@ -96,142 +91,94 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     _autoReplyCtrl.dispose();
     _pageEnterCtrl.dispose();
     _heroCtrl.dispose();
+    _tabCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
       final methods = await _paymentMethodsCore.listPaymentMethods(activeOnly: true);
       final wallets = await _walletCore.list();
-      final offers = await _offersCore.listMine(
+      final offers  = await _offersCore.listMine(
         query: const OffersListQuery(page: '1', limit: '50'),
       );
-      WalletAddress? selectedWallet;
-      for (final w in wallets) {
-        if (w.isActive) {
-          selectedWallet = w;
-          break;
-        }
-      }
-      selectedWallet ??= wallets.isEmpty ? null : wallets.first;
+      WalletAddress? selected;
+      for (final w in wallets) { if (w.isActive) { selected = w; break; } }
+      selected ??= wallets.isEmpty ? null : wallets.first;
       if (!mounted) return;
       setState(() {
-        _paymentMethods = methods;
-        _wallets = wallets;
-        _selectedPaymentMethod = methods.isEmpty ? null : methods.first;
-        _selectedReceiverWallet = selectedWallet;
-        _offers = offers;
-        _loading = false;
+        _paymentMethods          = methods;
+        _wallets                 = wallets;
+        _selectedPaymentMethod   = methods.isEmpty ? null : methods.first;
+        _selectedReceiverWallet  = selected;
+        _offers                  = offers;
+        _loading                 = false;
       });
       _pageEnterCtrl.forward(from: 0);
       _heroCtrl.forward(from: 0);
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
   Future<void> _createOffer() async {
     final paymentMethod = _selectedPaymentMethod;
-    if (paymentMethod == null) {
-      _showSnack('Select a payment method first.', isError: true);
-      return;
-    }
+    if (paymentMethod == null) { _snack('Select a payment method first.', error: true); return; }
     final assets = context.read<AssetVM>().assets;
-    if (assets.isEmpty) {
-      _showSnack('No assets available.', isError: true);
-      return;
-    }
-    final fallbackAsset = assets.first.symbol.toUpperCase();
-    final asset = (_selectedAssetSymbol ?? fallbackAsset).trim().toUpperCase();
-    final fiat = context.read<CurrencyVM>().fiat.trim().toUpperCase();
-    final margin = double.tryParse(_marginCtrl.text.trim());
-    final minAmount = double.tryParse(_minCtrl.text.trim());
-    final maxAmount = double.tryParse(_maxCtrl.text.trim());
-    final totalQty = double.tryParse(_totalQtyCtrl.text.trim());
-    final availableQty = double.tryParse(_availableQtyCtrl.text.trim());
-    final paymentWindowMinutes = int.tryParse(_paymentWindowCtrl.text.trim());
-    final receiverStellarAddress = _selectedReceiverWallet?.publicAddress.trim() ?? '';
+    if (assets.isEmpty) { _snack('No assets available.', error: true); return; }
+    final asset   = (_selectedAssetSymbol ?? assets.first.symbol.toUpperCase()).trim().toUpperCase();
+    final fiat    = context.read<CurrencyVM>().fiat.trim().toUpperCase();
+    final margin  = double.tryParse(_marginCtrl.text.trim());
+    final minAmt  = double.tryParse(_minCtrl.text.trim());
+    final maxAmt  = double.tryParse(_maxCtrl.text.trim());
+    final totalQ  = double.tryParse(_totalQtyCtrl.text.trim());
+    final availQ  = double.tryParse(_availableQtyCtrl.text.trim());
+    final window  = int.tryParse(_paymentWindowCtrl.text.trim());
+    final addr    = _selectedReceiverWallet?.publicAddress.trim() ?? '';
 
-    if (asset.isEmpty || fiat.isEmpty) {
-      _showSnack('Asset and fiat currency are required.', isError: true);
-      return;
-    }
-    if (margin == null || minAmount == null || maxAmount == null) {
-      _showSnack('Enter valid numbers for margin, min and max.', isError: true);
-      return;
-    }
-    if (maxAmount < minAmount) {
-      _showSnack('Max must be ≥ min amount.', isError: true);
-      return;
-    }
-    if (_totalQtyCtrl.text.trim().isNotEmpty && totalQty == null) {
-      _showSnack('Enter a valid total quantity.', isError: true);
-      return;
-    }
-    if (_availableQtyCtrl.text.trim().isNotEmpty && availableQty == null) {
-      _showSnack('Enter a valid available quantity.', isError: true);
-      return;
-    }
-    if (totalQty != null && availableQty != null && availableQty > totalQty) {
-      _showSnack('Available quantity cannot exceed total quantity.', isError: true);
-      return;
-    }
-    if (_paymentWindowCtrl.text.trim().isNotEmpty && paymentWindowMinutes == null) {
-      _showSnack('Enter a valid payment window (minutes).', isError: true);
-      return;
-    }
-    // Wallet service provides persisted addresses, but keep safe guard.
-    if (receiverStellarAddress.isNotEmpty &&
-        !RegExp(r'^G[A-Z2-7]{55}$').hasMatch(receiverStellarAddress)) {
-      _showSnack('Selected wallet has invalid Stellar address format.', isError: true);
-      return;
-    }
+    if (asset.isEmpty || fiat.isEmpty)    { _snack('Asset and fiat are required.',          error: true); return; }
+    if (margin == null || minAmt == null || maxAmt == null) { _snack('Enter valid numbers for margin, min and max.', error: true); return; }
+    if (maxAmt < minAmt)                  { _snack('Max must be ≥ min amount.',             error: true); return; }
+    if (_totalQtyCtrl.text.trim().isNotEmpty && totalQ == null) { _snack('Enter a valid total quantity.',  error: true); return; }
+    if (_availableQtyCtrl.text.trim().isNotEmpty && availQ == null) { _snack('Enter a valid available quantity.', error: true); return; }
+    if (totalQ != null && availQ != null && availQ > totalQ) { _snack('Available qty cannot exceed total qty.', error: true); return; }
+    if (_paymentWindowCtrl.text.trim().isNotEmpty && window == null) { _snack('Enter a valid payment window (minutes).', error: true); return; }
+    if (addr.isNotEmpty && !RegExp(r'^G[A-Z2-7]{55}$').hasMatch(addr)) { _snack('Invalid Stellar address format.', error: true); return; }
 
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
-      await _offersCore.create(
-        CreateOfferRequest(
-          type: _type,
-          asset: asset,
-          fiatCurrency: fiat,
-          receiverStellarAddress:
-              receiverStellarAddress.isEmpty ? null : receiverStellarAddress,
-          marginPercent: margin,
-          minAmount: minAmount,
-          maxAmount: maxAmount,
-          totalQty: totalQty,
-          availableQty: availableQty,
-          paymentWindowMinutes: paymentWindowMinutes,
-          autoReply: _autoReplyCtrl.text.trim().isEmpty
-              ? null
-              : _autoReplyCtrl.text.trim(),
-          isVisible: _isVisible,
-          paymentMethodIds: [paymentMethod.id],
-        ),
-      );
+      await _offersCore.create(CreateOfferRequest(
+        type: _type,
+        asset: asset,
+        fiatCurrency: fiat,
+        receiverStellarAddress: addr.isEmpty ? null : addr,
+        marginPercent: margin,
+        minAmount: minAmt,
+        maxAmount: maxAmt,
+        totalQty: totalQ,
+        availableQty: availQ,
+        paymentWindowMinutes: window,
+        autoReply: _autoReplyCtrl.text.trim().isEmpty ? null : _autoReplyCtrl.text.trim(),
+        isVisible: _isVisible,
+        paymentMethodIds: [paymentMethod.id],
+      ));
       _marginCtrl.text = '0';
-      _minCtrl.text = '0';
-      _maxCtrl.text = '0';
+      _minCtrl.text    = '0';
+      _maxCtrl.text    = '0';
       _totalQtyCtrl.clear();
       _availableQtyCtrl.clear();
       _paymentWindowCtrl.text = '15';
       _autoReplyCtrl.clear();
       if (!mounted) return;
       HapticFeedback.lightImpact();
-      _showSnack('Offer created successfully!', isError: false);
+      _snack('Offer created successfully!', error: false);
       await _load();
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Failed to create offer: $e', isError: true);
+      _snack('Failed to create offer: $e', error: true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -240,166 +187,172 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   Future<void> _pauseOrResume(OfferModel offer) async {
     HapticFeedback.selectionClick();
     try {
-      if (offer.status == OfferStatus.active) {
-        await _offersCore.pause(offer.id);
-      } else if (offer.status == OfferStatus.paused) {
-        await _offersCore.resume(offer.id);
-      }
+      if (offer.status == OfferStatus.active)       await _offersCore.pause(offer.id);
+      else if (offer.status == OfferStatus.paused)  await _offersCore.resume(offer.id);
       if (!mounted) return;
       await _load();
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Failed to update offer: $e', isError: true);
+      _snack('Failed to update offer: $e', error: true);
     }
   }
 
   Future<void> _cancel(OfferModel offer) async {
-    showAppAlert(
-      context,
+    showAppAlert(context,
       type: AppAlertType.warning,
       title: 'Cancel Offer?',
-      subtitle:
-          'This offer will be permanently cancelled and removed from the marketplace.',
+      subtitle: 'This offer will be permanently cancelled and removed from the marketplace.',
       primaryText: 'Cancel Offer',
       barrierDismissible: true,
-      onPrimary: () => _performCancelOffer(offer),
+      onPrimary: () => _performCancel(offer),
     );
   }
 
-  Future<void> _performCancelOffer(OfferModel offer) async {
+  Future<void> _performCancel(OfferModel offer) async {
     HapticFeedback.mediumImpact();
     try {
       await _offersCore.cancel(offer.id);
       if (!mounted) return;
-      _showSnack('Offer cancelled.', isError: false);
+      _snack('Offer cancelled.', error: false);
       await _load();
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Failed to cancel offer: $e', isError: true);
+      _snack('Failed to cancel offer: $e', error: true);
     }
   }
 
-  void _showSnack(String message, {required bool isError}) {
-    showFloatingSnackBar(
-      context,
-      message: message,
-      type: isError ? SnackBarType.error : SnackBarType.success,
-      position: SnackBarPosition.top,
-    );
-  }
+  void _snack(String message, {required bool error}) => showFloatingSnackBar(
+    context,
+    message: message,
+    type: error ? SnackBarType.error : SnackBarType.success,
+    position: SnackBarPosition.top,
+  );
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColor.of(context);
+    final c      = AppColor.of(context);
     final assets = context.select<AssetVM, List<AssetModel>>((vm) => vm.assets);
-    final resolvedSelectedAsset = _selectedAssetSymbol != null &&
+    final fiat   = context.select<CurrencyVM, String>((vm) => vm.fiat.toUpperCase());
+    final resolvedAsset = _selectedAssetSymbol != null &&
         assets.any((a) => a.symbol.toUpperCase() == _selectedAssetSymbol)
         ? _selectedAssetSymbol
         : (assets.isEmpty ? null : assets.first.symbol.toUpperCase());
 
     return Scaffold(
       backgroundColor: c.background,
-      appBar: _buildAppBar(c),
-      body: _loading
-          ? const PageLoader(label: 'Loading offers...')
-          : _error != null
-          ? _ErrorState(c: c, error: _error!, onRetry: _load)
-          : FadeTransition(
-        opacity: _pageAnim,
-        child: SlideTransition(
-          position: _slideAnim,
-          child: RefreshIndicator(
-            onRefresh: _load,
-            color: c.primary,
-            backgroundColor: c.surface,
-            displacement: 60,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _OffersHeroCard(
-                        c: c,
-                        offers: _offers,
-                        accountCount: _paymentMethods.length,
-                        animCtrl: _heroCtrl,
-                      ),
-                      if (_paymentMethods.isEmpty) ...[
-                        const SizedBox(height: 12),
-                        _NoticeBanner(
-                          c: c,
-                          icon: Icons.account_balance_wallet_outlined,
-                          title: 'No Active Payment Method',
-                          body:
-                          'No active payment method found. Enable at least one payment method before posting offers.',
-                          accent: c.warning,
+      body: SafeArea(
+        child: _loading
+            ? const PageLoader(label: 'Loading offers…')
+            : _error != null
+            ? _ErrorState(c: c, error: _error!, onRetry: _load)
+            : FadeTransition(
+          opacity: _pageAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header
+                _ScreenHeader(c: c, onRefresh: _load),
+
+                // ── Dashboard summary card (always visible)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: _DashboardCard(
+                    c: c,
+                    offers: _offers,
+                    accountCount: _paymentMethods.length,
+                    animCtrl: _heroCtrl,
+                  ),
+                ),
+
+                // ── Warning banner
+                if (_paymentMethods.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: _AlertBanner(
+                      c: c,
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'No active payment method',
+                      body: 'Enable at least one payment method before posting offers.',
+                      accent: c.warning,
+                    ),
+                  ),
+
+                const SizedBox(height: 20),
+
+                // ── Custom Tab Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _TabBar(c: c, controller: _tabCtrl),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Tab Views
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabCtrl,
+                    children: [
+                      // ── Tab 1: Create Offer
+                      RefreshIndicator(
+                        onRefresh: _load,
+                        color: c.primary,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                          children: [
+                            _CreateOfferCard(
+                              c: c,
+                              assets: assets,
+                              selectedAssetSymbol: resolvedAsset,
+                              fiatCode: fiat,
+                              marginCtrl: _marginCtrl,
+                              minCtrl: _minCtrl,
+                              maxCtrl: _maxCtrl,
+                              totalQtyCtrl: _totalQtyCtrl,
+                              availableQtyCtrl: _availableQtyCtrl,
+                              paymentWindowCtrl: _paymentWindowCtrl,
+                              wallets: _wallets,
+                              selectedReceiverWallet: _selectedReceiverWallet,
+                              autoReplyCtrl: _autoReplyCtrl,
+                              type: _type,
+                              methods: _paymentMethods,
+                              selectedMethod: _selectedPaymentMethod,
+                              isVisible: _isVisible,
+                              submitting: _submitting,
+                              onTypeChanged: (v)   => setState(() => _type = v),
+                              onAssetChanged: (v)  => setState(() => _selectedAssetSymbol = v),
+                              onMethodChanged: (v) => setState(() => _selectedPaymentMethod = v),
+                              onReceiverWalletChanged: (v) => setState(() => _selectedReceiverWallet = v),
+                              onVisibleChanged: (v) => setState(() => _isVisible = v),
+                              onSubmit: _createOffer,
+                            ),
+                          ],
                         ),
-                      ],
-                      const SizedBox(height: 28),
-                      _SectionLabel(
-                        c: c,
-                        label: 'Create Offer',
-                        icon: Icons.add_circle_outline_rounded,
                       ),
-                      const SizedBox(height: 12),
-                      _CreateOfferCard(
-                        c: c,
-                        assets: assets,
-                        selectedAssetSymbol: resolvedSelectedAsset,
-                        fiatCode: context.select<CurrencyVM, String>(
-                              (vm) => vm.fiat.toUpperCase(),
-                        ),
-                        marginCtrl: _marginCtrl,
-                        minCtrl: _minCtrl,
-                        maxCtrl: _maxCtrl,
-                        totalQtyCtrl: _totalQtyCtrl,
-                        availableQtyCtrl: _availableQtyCtrl,
-                        paymentWindowCtrl: _paymentWindowCtrl,
-                        wallets: _wallets,
-                        selectedReceiverWallet: _selectedReceiverWallet,
-                        autoReplyCtrl: _autoReplyCtrl,
-                        type: _type,
-                        methods: _paymentMethods,
-                        selectedMethod: _selectedPaymentMethod,
-                        isVisible: _isVisible,
-                        submitting: _submitting,
-                        onTypeChanged: (v) => setState(() => _type = v),
-                        onAssetChanged: (v) =>
-                            setState(() => _selectedAssetSymbol = v),
-                        onMethodChanged: (v) =>
-                            setState(() => _selectedPaymentMethod = v),
-                        onReceiverWalletChanged: (v) =>
-                            setState(() => _selectedReceiverWallet = v),
-                        onVisibleChanged: (v) =>
-                            setState(() => _isVisible = v),
-                        onSubmit: _createOffer,
-                      ),
-                      const SizedBox(height: 28),
-                      _SectionLabel(
-                        c: c,
-                        label: 'My Offers',
-                        icon: Icons.list_alt_rounded,
-                        badge: _offers.isEmpty ? null : '${_offers.length}',
-                      ),
-                      const SizedBox(height: 12),
-                      if (_offers.isEmpty)
-                        _EmptyOffersCard(c: c)
-                      else
-                        ..._offers.asMap().entries.map(
-                              (entry) => _AnimatedOfferTile(
-                            index: entry.key,
+
+                      // ── Tab 2: My Offers
+                      RefreshIndicator(
+                        onRefresh: _load,
+                        color: c.primary,
+                        child: _offers.isEmpty
+                            ? ListView(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                          children: [_EmptyOffersCard(c: c)],
+                        )
+                            : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                          itemCount: _offers.length,
+                          itemBuilder: (_, i) => _AnimatedOfferTile(
+                            index: i,
                             c: c,
-                            offer: entry.value,
-                            onPauseOrResume: () =>
-                                _pauseOrResume(entry.value),
-                            onCancel: () => _cancel(entry.value),
+                            offer: _offers[i],
+                            onPauseOrResume: () => _pauseOrResume(_offers[i]),
+                            onCancel: () => _cancel(_offers[i]),
                           ),
                         ),
-                    ]),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -409,94 +362,227 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       ),
     );
   }
+}
 
-  PreferredSizeWidget _buildAppBar(AppColor c) {
-    return AppBar(
-      backgroundColor: c.background,
-      elevation: 0,
-      scrolledUnderElevation: 0.5,
-      shadowColor: c.border.withOpacity(0.15),
-      centerTitle: false,
-      titleSpacing: 20,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+// ─────────────────────────────────────────────────────────────────────────────
+// SCREEN HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ScreenHeader extends StatelessWidget {
+  const _ScreenHeader({required this.c, required this.onRefresh});
+  final AppColor c;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+      child: Row(
         children: [
-          Text(
-            'Manage Offers',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontWeight: FontWeight.w800,
-              fontSize: 19,
-              letterSpacing: -0.6,
+          if (canPop) ...[
+            _IconBtn(c: c, icon: Icons.arrow_back_ios_new_rounded,
+                onTap: () => Navigator.of(context).pop()),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Manage Offers',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    letterSpacing: -0.8,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Configure your marketplace presence',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
             ),
           ),
+          _RefreshBtn(c: c, onTap: onRefresh),
         ],
       ),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 14),
-          child: _AnimatedRefreshButton(c: c, onTap: _load),
-        ),
-      ],
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ANIMATED REFRESH BUTTON
+// CUSTOM TAB BAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _AnimatedRefreshButton extends StatefulWidget {
-  const _AnimatedRefreshButton({required this.c, required this.onTap});
+class _TabBar extends StatefulWidget {
+  const _TabBar({required this.c, required this.controller});
   final AppColor c;
-  final VoidCallback onTap;
+  final TabController controller;
 
   @override
-  State<_AnimatedRefreshButton> createState() => _AnimatedRefreshButtonState();
+  State<_TabBar> createState() => _TabBarState();
 }
 
-class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
+class _TabBarState extends State<_TabBar> {
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
+    widget.controller.addListener(() => setState(() {}));
   }
 
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
-    return GestureDetector(
-      onTap: () {
-        _ctrl.forward(from: 0);
-        widget.onTap();
-      },
-      child: Container(
-        width: 38,
-        height: 38,
+    final idx = widget.controller.index;
+
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: c.border.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          _TabOption(
+            c: c,
+            label: 'Create Offer',
+            icon: Icons.add_rounded,
+            active: idx == 0,
+            onTap: () { HapticFeedback.selectionClick(); widget.controller.animateTo(0); },
+          ),
+          const SizedBox(width: 3),
+          _TabOption(
+            c: c,
+            label: 'My Offers',
+            icon: Icons.list_alt_rounded,
+            active: idx == 1,
+            onTap: () { HapticFeedback.selectionClick(); widget.controller.animateTo(1); },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabOption extends StatelessWidget {
+  const _TabOption({
+    required this.c,
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+  final AppColor c;
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.border.withOpacity(0.3)),
+          color: active ? c.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: active
+              ? [BoxShadow(color: c.primary.withOpacity(0.22), blurRadius: 8, offset: const Offset(0, 3))]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: active ? Colors.white : c.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : c.textSecondary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REUSABLE ICON BUTTONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.c, required this.icon, required this.onTap});
+  final AppColor c;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 38, height: 38,
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.border.withOpacity(0.25)),
+      ),
+      child: Icon(icon, size: 17, color: c.textSecondary),
+    ),
+  );
+}
+
+class _RefreshBtn extends StatefulWidget {
+  const _RefreshBtn({required this.c, required this.onTap});
+  final AppColor c;
+  final VoidCallback onTap;
+
+  @override
+  State<_RefreshBtn> createState() => _RefreshBtnState();
+}
+
+class _RefreshBtnState extends State<_RefreshBtn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this, duration: const Duration(milliseconds: 700),
+  );
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () { _ctrl.forward(from: 0); widget.onTap(); },
+      child: Container(
+        width: 38, height: 38,
+        decoration: BoxDecoration(
+          color: widget.c.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: widget.c.border.withOpacity(0.25)),
         ),
         child: RotationTransition(
           turns: _ctrl,
-          child: Icon(
-            Icons.refresh_rounded,
-            color: c.textSecondary,
-            size: 19,
-          ),
+          child: Icon(Icons.refresh_rounded, size: 17, color: widget.c.textSecondary),
         ),
       ),
     );
@@ -504,17 +590,16 @@ class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HERO CARD
+// DASHBOARD CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _OffersHeroCard extends StatelessWidget {
-  const _OffersHeroCard({
+class _DashboardCard extends StatelessWidget {
+  const _DashboardCard({
     required this.c,
     required this.offers,
     required this.accountCount,
     required this.animCtrl,
   });
-
   final AppColor c;
   final List<OfferModel> offers;
   final int accountCount;
@@ -522,301 +607,169 @@ class _OffersHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeCount = offers.where((o) => o.status == OfferStatus.active).length;
-    final pausedCount = offers.where((o) => o.status == OfferStatus.paused).length;
-    final total = offers.length;
-    final progress = total == 0 ? 0.0 : (activeCount / total).clamp(0.0, 1.0);
+    final active  = offers.where((o) => o.status == OfferStatus.active).length;
+    final paused  = offers.where((o) => o.status == OfferStatus.paused).length;
+    final total   = offers.length;
+    final progress = total == 0 ? 0.0 : (active / total).clamp(0.0, 1.0);
 
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: c.border.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withOpacity(0.18)),
         boxShadow: [
-          BoxShadow(
-            color: c.primary.withOpacity(0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: c.primary.withOpacity(0.05), blurRadius: 24, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'MERCHANT DASHBOARD',
-                    style: TextStyle(
-                      color: c.primary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.0,
-                    ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Label row
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  'MERCHANT',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
                   ),
                 ),
-                const Spacer(),
-                _StatPill(
-                  c: c,
-                  value: '$total',
-                  label: 'total',
-                  color: c.textSecondary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Your Marketplace\nOffers',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.8,
-                height: 1.1,
               ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: c.background,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: c.border.withOpacity(0.2)),
+                ),
+                child: Text(
+                  '$total total',
+                  style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Title
+          Text(
+            'Your Marketplace\nOffers',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+              height: 1.15,
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _StatChip(
-                  c: c,
-                  value: '$activeCount',
-                  label: 'Active',
-                  color: c.success,
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Stat chips
+          Row(
+            children: [
+              _StatChip(c: c, value: '$active',       label: 'Active',   accent: c.success),
+              const SizedBox(width: 8),
+              _StatChip(c: c, value: '$paused',       label: 'Paused',   accent: c.warning),
+              const SizedBox(width: 8),
+              _StatChip(c: c, value: '$accountCount', label: 'Accounts', accent: c.primary),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ── Progress bar
+          Row(
+            children: [
+              Text(
+                'ACTIVITY',
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
                 ),
-                const SizedBox(width: 8),
-                _StatChip(
-                  c: c,
-                  value: '$pausedCount',
-                  label: 'Paused',
-                  color: c.warning,
-                ),
-                const SizedBox(width: 8),
-                _StatChip(
-                  c: c,
-                  value: '$accountCount',
-                  label: 'Accounts',
-                  color: c.primary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Activity',
-                            style: TextStyle(
-                              color: c.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            total == 0
-                                ? '–'
-                                : '${(progress * 100).toStringAsFixed(0)}% active',
-                            style: TextStyle(
-                              color: c.primary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      AnimatedBuilder(
-                        animation: animCtrl,
-                        builder: (_, __) {
-                          final animated = Curves.easeOutCubic
-                              .transform(animCtrl.value);
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: progress * animated,
-                              minHeight: 7,
-                              backgroundColor: c.border.withOpacity(0.25),
-                              valueColor:
-                              AlwaysStoppedAnimation<Color>(c.primary),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+              ),
+              const Spacer(),
+              AnimatedBuilder(
+                animation: animCtrl,
+                builder: (_, __) => Text(
+                  total == 0 ? '–' : '${(progress * 100).toStringAsFixed(0)}% active',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          AnimatedBuilder(
+            animation: animCtrl,
+            builder: (_, __) {
+              final t = Curves.easeOutCubic.transform(animCtrl.value);
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: progress * t,
+                  minHeight: 6,
+                  backgroundColor: c.border.withOpacity(0.2),
+                  valueColor: AlwaysStoppedAnimation(c.primary),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 }
 
 class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.c,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
+  const _StatChip({required this.c, required this.value, required this.label, required this.accent});
   final AppColor c;
   final String value;
   final String label;
-  final Color color;
+  final Color accent;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.15)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 1),
-          Text(
-            label,
-            style: TextStyle(
-              color: color.withOpacity(0.8),
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.c,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
-  final AppColor c;
-  final String value;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: c.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Text(
-        '$value $label',
-        style: TextStyle(
-          color: c.textSecondary,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SECTION LABEL
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({
-    required this.c,
-    required this.label,
-    required this.icon,
-    this.badge,
-  });
-
-  final AppColor c;
-  final String label;
-  final IconData icon;
-  final String? badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    decoration: BoxDecoration(
+      color: accent.withOpacity(0.07),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: accent.withOpacity(0.14)),
+    ),
+    child: Column(
       children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: c.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: c.primary, size: 15),
+        Text(
+          value,
+          style: TextStyle(color: accent, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.4),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.3,
-          ),
+          style: TextStyle(color: accent.withOpacity(0.75), fontSize: 10, fontWeight: FontWeight.w600),
         ),
-        if (badge != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              badge!,
-              style: TextStyle(
-                color: c.primary,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
       ],
-    );
-  }
+    ),
+  );
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATE OFFER CARD
@@ -881,198 +834,155 @@ class _CreateOfferCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.2)),
+        border: Border.all(color: c.border.withOpacity(0.18)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.025), blurRadius: 12, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Type Selector
+          // ── Type selector
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _TypeSelectorBar(
-              c: c,
-              selected: type,
-              onChanged: onTypeChanged,
-            ),
+            child: _TypeToggle(c: c, selected: type, onChanged: onTypeChanged),
           ),
 
-          const _CardDivider(),
+          _HDivider(c: c),
 
-          // ── Fields
+          // ── Form fields
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _FieldLabel(c: c, label: 'Asset & Currency'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StyledDropdown<String>(
-                        c: c,
-                        value: selectedAssetSymbol,
-                        hint: 'Asset',
-                        icon: Icons.currency_bitcoin_rounded,
-                        items: assets
-                            .map((a) => DropdownMenuItem(
-                          value: a.symbol.toUpperCase(),
-                          child: Text(a.symbol.toUpperCase()),
-                        ))
-                            .toList(),
-                        onChanged: onAssetChanged,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _FiatSelector(c: c, fiatCode: fiatCode),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _FieldLabel(c: c, label: 'Margin'),
-                const SizedBox(height: 8),
-                _PercentField(c: c, controller: marginCtrl),
-                const SizedBox(height: 16),
-                _FieldLabel(c: c, label: 'Trade Limits'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Field(
-                        c: c,
-                        controller: minCtrl,
-                        label: 'Min',
-                        prefixIcon: Icons.arrow_downward_rounded,
-                        isNumber: true,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _Field(
-                        c: c,
-                        controller: maxCtrl,
-                        label: 'Max',
-                        prefixIcon: Icons.arrow_upward_rounded,
-                        isNumber: true,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _FieldLabel(c: c, label: 'Quantity & Window (optional)'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Field(
-                        c: c,
-                        controller: totalQtyCtrl,
-                        label: 'Total Qty',
-                        prefixIcon: Icons.inventory_2_outlined,
-                        isNumber: true,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _Field(
-                        c: c,
-                        controller: availableQtyCtrl,
-                        label: 'Available Qty',
-                        prefixIcon: Icons.dataset_outlined,
-                        isNumber: true,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _Field(
+                // Asset & Currency
+                _FormGroup(
                   c: c,
-                  controller: paymentWindowCtrl,
-                  label: 'Payment Window (minutes)',
-                  prefixIcon: Icons.timer_outlined,
-                  isNumber: true,
-                ),
-                const SizedBox(height: 16),
-                _FieldLabel(c: c, label: 'Receiver Stellar Address (optional)'),
-                const SizedBox(height: 8),
-                _StyledDropdown<WalletAddress>(
-                  c: c,
-                  value: selectedReceiverWallet,
-                  hint: wallets.isEmpty ? 'No wallet available' : 'Select receiver wallet',
-                  icon: Icons.alternate_email_rounded,
-                  items: wallets
-                      .map(
-                        (w) => DropdownMenuItem<WalletAddress>(
-                          value: w,
-                          child: Text(
-                            _walletLabel(w),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                  label: 'Asset & Currency',
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _Dropdown<String>(
+                          c: c,
+                          value: selectedAssetSymbol,
+                          hint: 'Asset',
+                          icon: Icons.generating_tokens_rounded,
+                          items: assets.map((a) => DropdownMenuItem(
+                            value: a.symbol.toUpperCase(),
+                            child: Text(a.symbol.toUpperCase()),
+                          )).toList(),
+                          onChanged: onAssetChanged,
                         ),
-                      )
-                      .toList(),
-                  onChanged: onReceiverWalletChanged,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: _FiatPicker(c: c, fiatCode: fiatCode)),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _FieldLabel(c: c, label: 'Auto Reply Message'),
-                const SizedBox(height: 8),
-                _Field(
+
+                // Margin
+                _FormGroup(
                   c: c,
-                  controller: autoReplyCtrl,
-                  label: 'Optional greeting to buyers',
-                  prefixIcon: Icons.chat_bubble_outline_rounded,
-                  maxLines: 2,
+                  label: 'Price Margin',
+                  child: _MarginField(c: c, controller: marginCtrl),
                 ),
-                const SizedBox(height: 16),
-                _FieldLabel(c: c, label: 'Payment Method'),
-                const SizedBox(height: 8),
-                _StyledDropdown<PaymentMethodModel>(
+
+                // Trade limits
+                _FormGroup(
                   c: c,
-                  value: selectedMethod,
-                  hint: 'Select method',
-                  icon: Icons.account_balance_rounded,
-                  items: methods
-                      .map((m) => DropdownMenuItem(
-                    value: m,
-                    child: Text(
-                      '${m.name} (${m.code})',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ))
-                      .toList(),
-                  onChanged: onMethodChanged,
+                  label: 'Trade Limits',
+                  child: Row(
+                    children: [
+                      Expanded(child: _Field(c: c, controller: minCtrl, hint: 'Min amount', icon: Icons.south_rounded, isNumber: true)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _Field(c: c, controller: maxCtrl, hint: 'Max amount', icon: Icons.north_rounded, isNumber: true)),
+                    ],
+                  ),
+                ),
+
+                // Quantity & Window
+                _FormGroup(
+                  c: c,
+                  label: 'Quantity & Payment Window',
+                  sublabel: 'Optional',
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _Field(c: c, controller: totalQtyCtrl, hint: 'Total qty', icon: Icons.inventory_2_outlined, isNumber: true)),
+                          const SizedBox(width: 10),
+                          Expanded(child: _Field(c: c, controller: availableQtyCtrl, hint: 'Available qty', icon: Icons.dataset_outlined, isNumber: true)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _Field(c: c, controller: paymentWindowCtrl, hint: 'Payment window (minutes)', icon: Icons.timer_outlined, isNumber: true),
+                    ],
+                  ),
+                ),
+
+                // Receiver wallet
+                _FormGroup(
+                  c: c,
+                  label: 'Receiver Wallet',
+                  sublabel: 'Optional',
+                  child: _Dropdown<WalletAddress>(
+                    c: c,
+                    value: selectedReceiverWallet,
+                    hint: wallets.isEmpty ? 'No wallet available' : 'Select wallet',
+                    icon: Icons.account_balance_wallet_outlined,
+                    items: wallets.map((w) => DropdownMenuItem<WalletAddress>(
+                      value: w,
+                      child: Text(_walletLabel(w), overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: onReceiverWalletChanged,
+                  ),
+                ),
+
+                // Auto reply
+                _FormGroup(
+                  c: c,
+                  label: 'Auto Reply Message',
+                  sublabel: 'Optional',
+                  child: _Field(
+                    c: c,
+                    controller: autoReplyCtrl,
+                    hint: 'Greeting shown to buyers when trade starts',
+                    icon: Icons.chat_bubble_outline_rounded,
+                    maxLines: 2,
+                  ),
+                ),
+
+                // Payment method
+                _FormGroup(
+                  c: c,
+                  label: 'Payment Method',
+                  child: _Dropdown<PaymentMethodModel>(
+                    c: c,
+                    value: selectedMethod,
+                    hint: 'Select method',
+                    icon: Icons.account_balance_rounded,
+                    items: methods.map((m) => DropdownMenuItem(
+                      value: m,
+                      child: Text('${m.name} (${m.code})', overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: onMethodChanged,
+                  ),
                 ),
               ],
             ),
           ),
 
-          const _CardDivider(),
+          _HDivider(c: c),
 
-          // ── Visibility toggle + submit
+          // ── Visibility + submit
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
             child: Column(
               children: [
-                _VisibilityToggle(
-                  c: c,
-                  isVisible: isVisible,
-                  onChanged: onVisibleChanged,
-                ),
+                _VisibilityRow(c: c, isVisible: isVisible, onChanged: onVisibleChanged),
                 const SizedBox(height: 14),
-                _SubmitButton(
-                  c: c,
-                  submitting: submitting,
-                  type: type,
-                  onSubmit: onSubmit,
-                ),
+                _SubmitBtn(c: c, submitting: submitting, type: type, onSubmit: onSubmit),
               ],
             ),
           ),
@@ -1081,262 +991,242 @@ class _CreateOfferCard extends StatelessWidget {
     );
   }
 
-  String _walletLabel(WalletAddress wallet) {
-    final label = (wallet.label ?? '').trim();
-    final shortAddress = wallet.publicAddress.length > 14
-        ? '${wallet.publicAddress.substring(0, 6)}...${wallet.publicAddress.substring(wallet.publicAddress.length - 6)}'
-        : wallet.publicAddress;
-    final prefix = wallet.isActive ? 'Active' : 'Wallet';
-    if (label.isNotEmpty) return '$prefix · $label · $shortAddress';
-    return '$prefix · $shortAddress';
+  String _walletLabel(WalletAddress w) {
+    final label  = (w.label ?? '').trim();
+    final addr   = w.publicAddress;
+    final short  = addr.length > 14
+        ? '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}'
+        : addr;
+    final prefix = w.isActive ? '✦ Active' : 'Wallet';
+    return label.isNotEmpty ? '$prefix · $label · $short' : '$prefix · $short';
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPE SELECTOR BAR
+// FORM GROUP WRAPPER — adds consistent label + spacing
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TypeSelectorBar extends StatelessWidget {
-  const _TypeSelectorBar({
+class _FormGroup extends StatelessWidget {
+  const _FormGroup({
     required this.c,
-    required this.selected,
-    required this.onChanged,
+    required this.label,
+    required this.child,
+    this.sublabel,
   });
+  final AppColor c;
+  final String label;
+  final String? sublabel;
+  final Widget child;
 
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.1,
+              ),
+            ),
+            if (sublabel != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: c.textSecondary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  sublabel!,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPE TOGGLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TypeToggle extends StatelessWidget {
+  const _TypeToggle({required this.c, required this.selected, required this.onChanged});
   final AppColor c;
   final OfferType selected;
   final ValueChanged<OfferType> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: c.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          _TypeChip(
-            c: c,
-            selected: selected == OfferType.buy,
-            label: 'BUY',
-            icon: Icons.south_west_rounded,
-            activeColor: c.success,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onChanged(OfferType.buy);
-            },
-          ),
-          const SizedBox(width: 4),
-          _TypeChip(
-            c: c,
-            selected: selected == OfferType.sell,
-            label: 'SELL',
-            icon: Icons.north_east_rounded,
-            activeColor: c.primary,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              onChanged(OfferType.sell);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    height: 46,
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: c.background,
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: c.border.withOpacity(0.2)),
+    ),
+    child: Row(
+      children: [
+        _TypeOption(
+          c: c,
+          label: 'BUY',
+          icon: Icons.south_west_rounded,
+          active: selected == OfferType.buy,
+          activeColor: c.success,
+          onTap: () { HapticFeedback.selectionClick(); onChanged(OfferType.buy); },
+        ),
+        const SizedBox(width: 4),
+        _TypeOption(
+          c: c,
+          label: 'SELL',
+          icon: Icons.north_east_rounded,
+          active: selected == OfferType.sell,
+          activeColor: c.primary,
+          onTap: () { HapticFeedback.selectionClick(); onChanged(OfferType.sell); },
+        ),
+      ],
+    ),
+  );
 }
 
-class _TypeChip extends StatelessWidget {
-  const _TypeChip({
+class _TypeOption extends StatelessWidget {
+  const _TypeOption({
     required this.c,
-    required this.selected,
     required this.label,
     required this.icon,
+    required this.active,
     required this.activeColor,
     required this.onTap,
   });
-
   final AppColor c;
-  final bool selected;
   final String label;
   final IconData icon;
+  final bool active;
   final Color activeColor;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: selected ? activeColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 15,
-                color: selected ? Colors.white : c.textSecondary,
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: active ? activeColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: active
+              ? [BoxShadow(color: activeColor.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 3))]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: active ? Colors.white : c.textSecondary),
+            const SizedBox(width: 6),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              style: TextStyle(
+                color: active ? Colors.white : c.textSecondary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.6,
               ),
-              const SizedBox(width: 6),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: TextStyle(
-                  color: selected ? Colors.white : c.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                  letterSpacing: 0.5,
-                ),
-                child: Text(label),
-              ),
-            ],
-          ),
+              child: Text(label),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIELD COMPONENTS
+// FORM FIELD COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.c, required this.label});
-  final AppColor c;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        color: c.textSecondary,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.4,
-      ),
-    );
-  }
-}
 
 class _Field extends StatelessWidget {
   const _Field({
     required this.c,
     required this.controller,
-    required this.label,
-    this.prefixIcon,
+    required this.hint,
+    this.icon,
     this.isNumber = false,
     this.maxLines = 1,
   });
-
   final AppColor c;
   final TextEditingController controller;
-  final String label;
-  final IconData? prefixIcon;
+  final String hint;
+  final IconData? icon;
   final bool isNumber;
   final int maxLines;
 
+  InputDecoration _dec() => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.5), fontSize: 13, fontWeight: FontWeight.w400),
+    prefixIcon: icon != null ? Icon(icon, size: 16, color: c.textSecondary.withOpacity(0.6)) : null,
+    filled: true,
+    fillColor: c.background,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.border.withOpacity(0.2))),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.border.withOpacity(0.2))),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.primary, width: 1.5)),
+  );
+
   @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      maxLines: maxLines,
-      style: TextStyle(
-        color: c.textPrimary,
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-      ),
-      decoration: InputDecoration(
-        hintText: label,
-        hintStyle: TextStyle(
-          color: c.textSecondary.withOpacity(0.6),
-          fontSize: 13.5,
-          fontWeight: FontWeight.w400,
-        ),
-        prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, size: 17, color: c.textSecondary.withOpacity(0.7))
-            : null,
-        filled: true,
-        fillColor: c.background.withOpacity(0.6),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.primary, width: 1.6),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+    maxLines: maxLines,
+    style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+    decoration: _dec(),
+  );
 }
 
-class _PercentField extends StatelessWidget {
-  const _PercentField({required this.c, required this.controller});
+class _MarginField extends StatelessWidget {
+  const _MarginField({required this.c, required this.controller});
   final AppColor c;
   final TextEditingController controller;
 
   @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(
-        color: c.textPrimary,
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-      ),
-      decoration: InputDecoration(
-        hintText: '0',
-        hintStyle: TextStyle(
-          color: c.textSecondary.withOpacity(0.4),
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-        ),
-        suffixText: '%',
-        suffixStyle: TextStyle(
-          color: c.primary,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-        ),
-        filled: true,
-        fillColor: c.background.withOpacity(0.6),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.primary, width: 1.6),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+    decoration: InputDecoration(
+      hintText: '0',
+      hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.3), fontSize: 22, fontWeight: FontWeight.w800),
+      suffixText: '%',
+      suffixStyle: TextStyle(color: c.primary, fontSize: 20, fontWeight: FontWeight.w800),
+      filled: true,
+      fillColor: c.background,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.border.withOpacity(0.2))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.border.withOpacity(0.2))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.primary, width: 1.5)),
+    ),
+  );
 }
 
-class _StyledDropdown<T> extends StatelessWidget {
-  const _StyledDropdown({
+class _Dropdown<T> extends StatelessWidget {
+  const _Dropdown({
     required this.c,
     required this.value,
     required this.hint,
@@ -1344,7 +1234,6 @@ class _StyledDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
   });
-
   final AppColor c;
   final T? value;
   final String hint;
@@ -1353,186 +1242,124 @@ class _StyledDropdown<T> extends StatelessWidget {
   final ValueChanged<T?> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      isExpanded: true,
-      icon: Icon(Icons.keyboard_arrow_down_rounded,
-          color: c.textSecondary.withOpacity(0.7), size: 20),
-      items: items,
-      onChanged: onChanged,
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(
-          color: c.textSecondary.withOpacity(0.6),
-          fontSize: 13.5,
-        ),
-        prefixIcon: Icon(icon, size: 17, color: c.textSecondary.withOpacity(0.7)),
-        filled: true,
-        fillColor: c.background.withOpacity(0.6),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.primary, width: 1.6),
-        ),
-      ),
-      style: TextStyle(
-        color: c.textPrimary,
-        fontSize: 13.5,
-        fontWeight: FontWeight.w600,
-      ),
-      dropdownColor: c.surface,
-    );
-  }
+  Widget build(BuildContext context) => DropdownButtonFormField<T>(
+    value: value,
+    isExpanded: true,
+    icon: Icon(Icons.keyboard_arrow_down_rounded, color: c.textSecondary.withOpacity(0.6), size: 20),
+    items: items,
+    onChanged: onChanged,
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: c.textSecondary.withOpacity(0.5), fontSize: 13),
+      prefixIcon: Icon(icon, size: 16, color: c.textSecondary.withOpacity(0.6)),
+      filled: true,
+      fillColor: c.background,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.border.withOpacity(0.2))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.border.withOpacity(0.2))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.primary, width: 1.5)),
+    ),
+    style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w600),
+    dropdownColor: c.surface,
+  );
 }
 
-class _FiatSelector extends StatelessWidget {
-  const _FiatSelector({required this.c, required this.fiatCode});
+class _FiatPicker extends StatelessWidget {
+  const _FiatPicker({required this.c, required this.fiatCode});
   final AppColor c;
   final String fiatCode;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        showFiatPickerBottomSheet(context);
-      },
-      child: Container(
-        height: 52,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: c.background.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: c.border.withOpacity(0.25)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.paid_outlined,
-                size: 17, color: c.textSecondary.withOpacity(0.7)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                fiatCode,
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Icon(Icons.keyboard_arrow_down_rounded,
-                color: c.textSecondary.withOpacity(0.7), size: 20),
-          ],
-        ),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () { HapticFeedback.selectionClick(); showFiatPickerBottomSheet(context); },
+    child: Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: c.border.withOpacity(0.2)),
       ),
-    );
-  }
+      child: Row(
+        children: [
+          Icon(Icons.paid_outlined, size: 16, color: c.textSecondary.withOpacity(0.6)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(fiatCode,
+                style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w600)),
+          ),
+          Icon(Icons.keyboard_arrow_down_rounded, color: c.textSecondary.withOpacity(0.6), size: 20),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VISIBILITY TOGGLE
+// VISIBILITY ROW
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _VisibilityToggle extends StatelessWidget {
-  const _VisibilityToggle({
-    required this.c,
-    required this.isVisible,
-    required this.onChanged,
-  });
-
+class _VisibilityRow extends StatelessWidget {
+  const _VisibilityRow({required this.c, required this.isVisible, required this.onChanged});
   final AppColor c;
   final bool isVisible;
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: isVisible
-            ? c.primary.withOpacity(0.06)
-            : c.background.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isVisible
-              ? c.primary.withOpacity(0.2)
-              : c.border.withOpacity(0.2),
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 200),
+    padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+    decoration: BoxDecoration(
+      color: isVisible ? c.primary.withOpacity(0.05) : c.background,
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(
+        color: isVisible ? c.primary.withOpacity(0.2) : c.border.withOpacity(0.2),
+      ),
+    ),
+    child: Row(
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: Icon(
+            isVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+            key: ValueKey(isVisible),
+            size: 17,
+            color: isVisible ? c.primary : c.textSecondary,
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: Icon(
-              isVisible
-                  ? Icons.visibility_rounded
-                  : Icons.visibility_off_rounded,
-              key: ValueKey(isVisible),
-              size: 18,
-              color: isVisible ? c.primary : c.textSecondary,
-            ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Marketplace visibility',
+                style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                isVisible ? 'Visible to buyers' : 'Hidden from marketplace',
+                style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Marketplace visibility',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  isVisible
-                      ? 'Visible to buyers'
-                      : 'Hidden from marketplace',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: isVisible,
-            onChanged: (v) {
-              HapticFeedback.selectionClick();
-              onChanged(v);
-            },
-            activeColor: c.primary,
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        Switch.adaptive(
+          value: isVisible,
+          onChanged: (v) { HapticFeedback.selectionClick(); onChanged(v); },
+          activeColor: c.primary,
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUBMIT BUTTON
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SubmitButton extends StatelessWidget {
-  const _SubmitButton({
-    required this.c,
-    required this.submitting,
-    required this.type,
-    required this.onSubmit,
-  });
-
+class _SubmitBtn extends StatelessWidget {
+  const _SubmitBtn({required this.c, required this.submitting, required this.type, required this.onSubmit});
   final AppColor c;
   final bool submitting;
   final OfferType type;
@@ -1545,19 +1372,13 @@ class _SubmitButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      height: 54,
+      height: 52,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: submitting
-              ? null
-              : [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: submitting ? null : [
+            BoxShadow(color: color.withOpacity(0.28), blurRadius: 16, offset: const Offset(0, 5)),
           ],
         ),
         child: ElevatedButton(
@@ -1565,53 +1386,30 @@ class _SubmitButton extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
             foregroundColor: Colors.white,
-            disabledBackgroundColor: color.withOpacity(0.5),
+            disabledBackgroundColor: color.withOpacity(0.45),
             elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 180),
             child: submitting
                 ? Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                    const AlwaysStoppedAnimation(Colors.white),
-                  ),
-                ),
+                const SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white))),
                 const SizedBox(width: 10),
-                const Text(
-                  'Creating offer...',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
+                const Text('Creating offer…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
               ],
             )
                 : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  isBuy
-                      ? Icons.south_west_rounded
-                      : Icons.north_east_rounded,
-                  size: 16,
-                ),
+                Icon(isBuy ? Icons.south_west_rounded : Icons.north_east_rounded, size: 16),
                 const SizedBox(width: 8),
                 Text(
                   isBuy ? 'Post Buy Offer' : 'Post Sell Offer',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.2),
                 ),
               ],
             ),
@@ -1623,7 +1421,7 @@ class _SubmitButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OFFER TILE (with animation)
+// OFFER TILE (animated)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AnimatedOfferTile extends StatefulWidget {
@@ -1634,7 +1432,6 @@ class _AnimatedOfferTile extends StatefulWidget {
     required this.onPauseOrResume,
     required this.onCancel,
   });
-
   final int index;
   final AppColor c;
   final OfferModel offer;
@@ -1647,111 +1444,106 @@ class _AnimatedOfferTile extends StatefulWidget {
 
 class _AnimatedOfferTileState extends State<_AnimatedOfferTile>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: Duration(milliseconds: 380 + widget.index * 55),
+  );
+  late final Animation<double>  _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+  late final Animation<Offset>  _slide = Tween<Offset>(
+    begin: const Offset(0, 0.12), end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 400 + widget.index * 60),
-    );
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    Future.delayed(Duration(milliseconds: widget.index * 60), () {
-      if (mounted) _ctrl.forward();
-    });
+    Future.delayed(Duration(milliseconds: widget.index * 55), () { if (mounted) _ctrl.forward(); });
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _OfferTile(
-            c: widget.c,
-            offer: widget.offer,
-            onPauseOrResume: widget.onPauseOrResume,
-            onCancel: widget.onCancel,
-          ),
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _fade,
+    child: SlideTransition(
+      position: _slide,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _OfferTile(
+          c: widget.c,
+          offer: widget.offer,
+          onPauseOrResume: widget.onPauseOrResume,
+          onCancel: widget.onCancel,
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _OfferTile extends StatelessWidget {
-  const _OfferTile({
-    required this.c,
-    required this.offer,
-    required this.onPauseOrResume,
-    required this.onCancel,
-  });
-
+  const _OfferTile({required this.c, required this.offer, required this.onPauseOrResume, required this.onCancel});
   final AppColor c;
   final OfferModel offer;
   final VoidCallback onPauseOrResume;
   final VoidCallback onCancel;
 
+  bool get _isBuy => offer.type == OfferType.buy;
+
+  Color _accent(OfferStatus? s) => switch (s) {
+    OfferStatus.active    => c.success,
+    OfferStatus.paused    => c.warning,
+    OfferStatus.completed => c.primary,
+    OfferStatus.cancelled => c.error,
+    _                     => c.textSecondary,
+  };
+
+  String _fmt(dynamic v) {
+    if (v == null) return '–';
+    if (v is double) return v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+    return v.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final status = offer.status;
-    final isBuy = offer.type == OfferType.buy;
-    final canPauseResume =
-        status == OfferStatus.active || status == OfferStatus.paused;
-    final accent = _statusAccent(c, status);
-    final typeColor = isBuy ? c.success : c.primary;
+    final isBuy      = _isBuy;
+    final typeColor  = isBuy ? c.success : c.primary;
+    final accent     = _accent(offer.status);
+    final canToggle  = offer.status == OfferStatus.active || offer.status == OfferStatus.paused;
+    final isActive   = offer.status == OfferStatus.active;
 
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.border.withOpacity(0.18)),
+        border: Border.all(
+          color: isActive ? accent.withOpacity(0.25) : c.border.withOpacity(0.18),
+          width: isActive ? 1.5 : 1,
+        ),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
         children: [
-          // ── Header
+          // ── Header row
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
             child: Row(
               children: [
+                // Type badge
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 42, height: 42,
                   decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [typeColor.withOpacity(0.15), typeColor.withOpacity(0.05)],
+                    ),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: typeColor.withOpacity(0.15)),
                   ),
-                  child: Icon(
-                    isBuy
-                        ? Icons.south_west_rounded
-                        : Icons.north_east_rounded,
-                    size: 18,
-                    color: typeColor,
-                  ),
+                  child: Icon(isBuy ? Icons.south_west_rounded : Icons.north_east_rounded, size: 18, color: typeColor),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 11),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1759,89 +1551,99 @@ class _OfferTile extends StatelessWidget {
                       Text(
                         '${isBuy ? 'BUY' : 'SELL'} ${offer.asset}/${offer.fiatCurrency}',
                         style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
+                          color: c.textPrimary, fontSize: 14.5,
+                          fontWeight: FontWeight.w800, letterSpacing: -0.4,
                         ),
                       ),
-                      const SizedBox(height: 1),
+                      const SizedBox(height: 2),
                       Text(
                         'Margin ${offer.marginPercent ?? 0}%',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
                 ),
-                _StatusBadge(c: c, status: status, accent: accent),
+                // Status badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: accent.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isActive)
+                        Container(
+                          width: 5, height: 5,
+                          margin: const EdgeInsets.only(right: 5),
+                          decoration: BoxDecoration(
+                            color: accent, shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: accent.withOpacity(0.5), blurRadius: 5, spreadRadius: 1)],
+                          ),
+                        ),
+                      Text(
+                        (offer.status?.name ?? 'unknown').toUpperCase(),
+                        style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
 
-          // ── Metrics Row
+          const SizedBox(height: 12),
+
+          // ── Metrics strip
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 14),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
-              color: c.background.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(12),
+              color: c.background,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: c.border.withOpacity(0.12)),
             ),
             child: Row(
               children: [
-                _MetricItem(
-                  c: c,
-                  label: 'Min',
-                  value: _fmt(offer.minAmount),
-                  icon: Icons.arrow_downward_rounded,
-                ),
-                _VerticalDivider(c: c),
-                _MetricItem(
-                  c: c,
-                  label: 'Max',
-                  value: _fmt(offer.maxAmount),
-                  icon: Icons.arrow_upward_rounded,
-                ),
-                _VerticalDivider(c: c),
-                _MetricItem(
-                  c: c,
-                  label: 'Margin',
-                  value: '${offer.marginPercent ?? 0}%',
-                  icon: Icons.percent_rounded,
-                ),
+                _Metric(c: c, label: 'MIN',    value: _fmt(offer.minAmount)),
+                _MetricSep(c: c),
+                _Metric(c: c, label: 'MAX',    value: _fmt(offer.maxAmount)),
+                _MetricSep(c: c),
+                _Metric(c: c, label: 'MARGIN', value: '${_fmt(offer.marginPercent)}%'),
               ],
             ),
           ),
 
-          // ── Actions
+          const SizedBox(height: 10),
+
+          // ── Action buttons
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
             child: Row(
               children: [
-                if (canPauseResume) ...[
+                if (canToggle) ...[
                   Expanded(
-                    child: _ActionButton(
+                    child: _ActionBtn(
                       c: c,
-                      label: status == OfferStatus.active ? 'Pause' : 'Resume',
-                      icon: status == OfferStatus.active
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
+                      label: offer.status == OfferStatus.active ? 'Pause' : 'Resume',
+                      icon: offer.status == OfferStatus.active ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       color: c.textPrimary,
-                      borderColor: c.border.withOpacity(0.3),
+                      bg: c.textPrimary.withOpacity(0.06),
+                      border: c.border.withOpacity(0.25),
                       onTap: onPauseOrResume,
                     ),
                   ),
                   const SizedBox(width: 8),
                 ],
-                _ActionButton(
+                _ActionBtn(
                   c: c,
                   label: 'Cancel',
                   icon: Icons.close_rounded,
                   color: c.error,
-                  borderColor: c.error.withOpacity(0.25),
+                  bg: c.error.withOpacity(0.06),
+                  border: c.error.withOpacity(0.2),
                   onTap: onCancel,
                 ),
               ],
@@ -1851,196 +1653,78 @@ class _OfferTile extends StatelessWidget {
       ),
     );
   }
-
-  String _fmt(dynamic val) {
-    if (val == null) return '–';
-    if (val is double) {
-      return val == val.truncate()
-          ? val.toInt().toString()
-          : val.toStringAsFixed(2);
-    }
-    return val.toString();
-  }
-
-  Color _statusAccent(AppColor c, OfferStatus? status) {
-    switch (status) {
-      case OfferStatus.active:
-        return c.success;
-      case OfferStatus.paused:
-        return c.warning;
-      case OfferStatus.completed:
-        return c.primary;
-      case OfferStatus.cancelled:
-        return c.error;
-      default:
-        return c.textSecondary;
-    }
-  }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.c,
-    required this.status,
-    required this.accent,
-  });
-
-  final AppColor c;
-  final OfferStatus? status;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final isActive = status == OfferStatus.active;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (isActive)
-          Container(
-            width: 7,
-            height: 7,
-            margin: const EdgeInsets.only(right: 6),
-            decoration: BoxDecoration(
-              color: accent,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withOpacity(0.6),
-                  blurRadius: 6,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-          ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: accent.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: accent.withOpacity(0.2)),
-          ),
-          child: Text(
-            status?.name.toUpperCase() ?? 'UNKNOWN',
-            style: TextStyle(
-              color: accent,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MetricItem extends StatelessWidget {
-  const _MetricItem({
-    required this.c,
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
+class _Metric extends StatelessWidget {
+  const _Metric({required this.c, required this.label, required this.value});
   final AppColor c;
   final String label;
   final String value;
-  final IconData icon;
 
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Expanded(
+    child: Column(
+      children: [
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w700, letterSpacing: -0.2),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    ),
+  );
 }
 
-class _VerticalDivider extends StatelessWidget {
-  const _VerticalDivider({required this.c});
+class _MetricSep extends StatelessWidget {
+  const _MetricSep({required this.c});
   final AppColor c;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 28,
-      color: c.border.withOpacity(0.3),
-    );
-  }
+  Widget build(BuildContext context) =>
+      Container(width: 1, height: 26, color: c.border.withOpacity(0.25));
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
+class _ActionBtn extends StatelessWidget {
+  const _ActionBtn({
     required this.c,
     required this.label,
     required this.icon,
     required this.color,
-    required this.borderColor,
+    required this.bg,
+    required this.border,
     required this.onTap,
   });
-
   final AppColor c;
   final String label;
   final IconData icon;
   final Color color;
-  final Color borderColor;
+  final Color bg;
+  final Color border;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: border),
       ),
-    );
-  }
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EMPTY STATE
+// EMPTY OFFERS CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyOffersCard extends StatelessWidget {
@@ -2048,63 +1732,43 @@ class _EmptyOffersCard extends StatelessWidget {
   final AppColor c;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.18)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.storefront_outlined, color: c.primary, size: 26),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+    decoration: BoxDecoration(
+      color: c.surface,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: c.border.withOpacity(0.18)),
+    ),
+    child: Column(
+      children: [
+        Container(
+          width: 52, height: 52,
+          decoration: BoxDecoration(
+            color: c.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
           ),
-          const SizedBox(height: 14),
-          Text(
-            'No offers yet',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Create your first offer above to\nstart trading on the marketplace.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 13,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+          child: Icon(Icons.storefront_outlined, color: c.primary, size: 24),
+        ),
+        const SizedBox(height: 14),
+        Text('No offers yet',
+            style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+        const SizedBox(height: 6),
+        Text(
+          'Create your first offer above to\nstart trading on the marketplace.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5),
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTICE BANNER
+// ALERT BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NoticeBanner extends StatelessWidget {
-  const _NoticeBanner({
-    required this.c,
-    required this.icon,
-    required this.title,
-    required this.body,
-    required this.accent,
-  });
-
+class _AlertBanner extends StatelessWidget {
+  const _AlertBanner({required this.c, required this.icon, required this.title, required this.body, required this.accent});
   final AppColor c;
   final IconData icon;
   final String title;
@@ -2112,74 +1776,51 @@ class _NoticeBanner extends StatelessWidget {
   final Color accent;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withOpacity(0.2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(icon, color: accent, size: 18),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: accent.withOpacity(0.05),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: accent.withOpacity(0.18)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(color: accent.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, color: accent, size: 17),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: -0.1)),
+              const SizedBox(height: 3),
+              Text(body, style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.5)),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13.5,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  body,
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12.5,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CARD DIVIDER
+// HORIZONTAL DIVIDER
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CardDivider extends StatelessWidget {
-  const _CardDivider();
+class _HDivider extends StatelessWidget {
+  const _HDivider({required this.c});
+  final AppColor c;
 
   @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 14),
-      height: 1,
-      color: c.border.withOpacity(0.15),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 14),
+    height: 1,
+    color: c.border.withOpacity(0.12),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2187,77 +1828,47 @@ class _CardDivider extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.c,
-    required this.error,
-    required this.onRetry,
-  });
-
+  const _ErrorState({required this.c, required this.error, required this.onRetry});
   final AppColor c;
   final String error;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: c.error.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(Icons.cloud_off_rounded, color: c.error, size: 28),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Something went wrong',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 13,
-                height: 1.5,
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(color: c.error.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+            child: Icon(Icons.cloud_off_rounded, color: c.error, size: 26),
+          ),
+          const SizedBox(height: 18),
+          Text('Something went wrong',
+              style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+          const SizedBox(height: 8),
+          Text(error, textAlign: TextAlign.center,
+              style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5)),
+          const SizedBox(height: 22),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Try Again', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
               ),
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 17),
-                label: const Text(
-                  'Try Again',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: c.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }

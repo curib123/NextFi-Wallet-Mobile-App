@@ -54,11 +54,11 @@ class _CacheEntry<T> {
 
 class _DrawerCache {
   // TTLs — adjust to taste.
-  static const _userTtl        = Duration(minutes: 30);
-  static const _profileTtl     = Duration(minutes: 5);
-  static const _merchantTtl    = Duration(minutes: 5);
-  static const _verificationTtl= Duration(minutes: 5);
-  static const _chatTtl        = Duration(minutes: 1);
+  static const _userTtl        = Duration(seconds: 30);
+  static const _profileTtl     = Duration(seconds: 5);
+  static const _merchantTtl    = Duration(seconds: 5);
+  static const _verificationTtl= Duration(seconds: 5);
+  static const _chatTtl        = Duration(seconds: 1);
   static const _appInfoTtl     = Duration(days: 1); // basically never re-fetch
 
   static _CacheEntry<User>?                 user;

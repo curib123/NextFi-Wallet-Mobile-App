@@ -315,7 +315,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     if (confirmed != true) return;
     setState(() => _busy = true);
     try {
-      await _chat.removeFriend(friend.friendUserId);
+      await _chat.removeFriendship(friend.friendshipId);
       await _load(showLoader: false);
     } catch (e) {
       if (!mounted) return;
@@ -1015,13 +1015,14 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     ChatFriendRequestModel req, {
     required bool isIncoming,
   }) {
+    final user = isIncoming ? req.sender : req.receiver;
     final name = isIncoming
         ? _friendName(req.sender, req.senderId)
         : _friendName(req.receiver, req.receiverId);
-    final avatarUrl = isIncoming
-        ? req.sender?.avatarUrl
-        : req.receiver?.avatarUrl;
+    final username = user?.username?.trim() ?? '';
+    final avatarUrl = user?.avatarUrl;
     final note = req.note ?? '';
+    final at = req.createdAt == null ? '' : _relativeTime(req.createdAt!);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1040,35 +1041,65 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        name,
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (username.isNotEmpty)
+                            Text(
+                              '@$username',
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: (isIncoming ? c.primary : c.textSecondary)
-                            .withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text(
-                        isIncoming ? 'Incoming' : 'Sent',
-                        style: TextStyle(
-                          color: isIncoming ? c.primary : c.textSecondary,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: (isIncoming ? c.primary : c.textSecondary)
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            isIncoming ? 'Incoming' : 'Sent',
+                            style: TextStyle(
+                              color: isIncoming ? c.primary : c.textSecondary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (at.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            at,
+                            style: TextStyle(
+                              color: c.textSecondary.withOpacity(0.6),
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -1315,9 +1346,11 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                 controller: _usernameCtrl,
                 autofocus: true,
                 textInputAction: TextInputAction.next,
+                maxLength: 64,
                 decoration: InputDecoration(
                   labelText: 'Username',
                   hintText: 'e.g. alice_merchant',
+                  counterText: '',
                   prefixIcon: Icon(
                     Icons.alternate_email_rounded,
                     color: c.textSecondary,
@@ -1347,6 +1380,7 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                 controller: _noteCtrl,
                 minLines: 2,
                 maxLines: 3,
+                maxLength: 512,
                 decoration: InputDecoration(
                   labelText: 'Note (optional)',
                   hintText: "Hi! I'd like to connect with you.",
