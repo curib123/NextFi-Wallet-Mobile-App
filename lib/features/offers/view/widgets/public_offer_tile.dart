@@ -15,12 +15,15 @@ class PublicOfferTile extends StatefulWidget {
     required this.offer,
     required this.marketPrice,
     required this.onTap,
+    this.priceLoading = false,
   });
 
   final AppColor c;
   final OfferModel offer;
   final String? marketPrice;
   final VoidCallback onTap;
+  /// True while live prices are still being fetched; shows shimmer instead of "No price".
+  final bool priceLoading;
 
   @override
   State<PublicOfferTile> createState() => _PublicOfferTileState();
@@ -277,6 +280,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                         typeColor: typeColor,
                         hasLivePrice: hasLivePrice,
                         marketPrice: widget.marketPrice,
+                        priceLoading: widget.priceLoading,
                         isLight: isLight,
                       ),
 
@@ -406,6 +410,7 @@ class _PriceAssetRow extends StatelessWidget {
     required this.typeColor,
     required this.hasLivePrice,
     required this.marketPrice,
+    required this.priceLoading,
     required this.isLight,
   });
 
@@ -414,10 +419,19 @@ class _PriceAssetRow extends StatelessWidget {
   final Color typeColor;
   final bool hasLivePrice;
   final String? marketPrice;
+  final bool priceLoading;
   final bool isLight;
+
+  String? get _marginLabel {
+    final m = offer.marginPercent;
+    if (m == null || m == 0) return null;
+    final sign = m > 0 ? '+' : '';
+    return '$sign${m.toStringAsFixed(1)}%';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final marginLabel = _marginLabel;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -425,15 +439,42 @@ class _PriceAssetRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${offer.asset} / ${offer.fiatCurrency}',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                  height: 1.1,
-                ),
+              Row(
+                children: [
+                  Text(
+                    '${offer.asset} / ${offer.fiatCurrency.toUpperCase()}',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                      height: 1.1,
+                    ),
+                  ),
+                  if (marginLabel != null) ...[
+                    const SizedBox(width: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(isLight ? 0.12 : 0.10),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                            color:
+                                typeColor.withOpacity(isLight ? 0.28 : 0.18)),
+                      ),
+                      child: Text(
+                        marginLabel,
+                        style: TextStyle(
+                          color: typeColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 5),
               Row(
@@ -466,26 +507,27 @@ class _PriceAssetRow extends StatelessWidget {
           ),
         ),
 
-        // Live price chip
+        // Price chip — shows effective offer price, shimmer while loading, "No price" as fallback
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: hasLivePrice
+              ? const EdgeInsets.symmetric(horizontal: 14, vertical: 9)
+              : (priceLoading
+                  ? const EdgeInsets.symmetric(horizontal: 10, vertical: 10)
+                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 9)),
           decoration: BoxDecoration(
             gradient: hasLivePrice
                 ? LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                typeColor.withOpacity(isLight ? 0.14 : 0.14),
-                typeColor.withOpacity(isLight ? 0.07 : 0.06),
-              ],
-            )
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      typeColor.withOpacity(isLight ? 0.14 : 0.14),
+                      typeColor.withOpacity(isLight ? 0.07 : 0.06),
+                    ],
+                  )
                 : LinearGradient(
-              colors: [
-                c.background,
-                c.background,
-              ],
-            ),
+                    colors: [c.background, c.background],
+                  ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: hasLivePrice
@@ -493,37 +535,49 @@ class _PriceAssetRow extends StatelessWidget {
                   : c.border.withOpacity(isLight ? 0.18 : 0.12),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (hasLivePrice) ...[
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: typeColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: typeColor.withOpacity(isLight ? 0.45 : 0.5),
-                        blurRadius: 5,
-                      )
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 7),
-              ],
-              Text(
-                hasLivePrice ? marketPrice! : 'No price',
-                style: TextStyle(
-                  color: hasLivePrice ? typeColor : c.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
+          child: hasLivePrice
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: typeColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: typeColor
+                                .withOpacity(isLight ? 0.45 : 0.5),
+                            blurRadius: 5,
+                          )
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      marketPrice!,
+                      style: TextStyle(
+                        color: typeColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                )
+              : (priceLoading
+                  ? _ShimmerBox(
+                      c: c, width: 72, height: 14, radius: 4, isLight: isLight)
+                  : Text(
+                      'No price',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        letterSpacing: -0.2,
+                      ),
+                    )),
         ),
       ],
     );
@@ -872,7 +926,7 @@ class _LogoAvatar extends StatelessWidget {
   );
 }
 
-class _ShimmerBox extends StatelessWidget {
+class _ShimmerBox extends StatefulWidget {
   const _ShimmerBox({
     required this.c,
     required this.width,
@@ -887,15 +941,49 @@ class _ShimmerBox extends StatelessWidget {
   final bool isLight;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: width,
-    height: height,
-    decoration: BoxDecoration(
-      // Light mode needs a more visible shimmer placeholder
-      color: c.border.withOpacity(isLight ? 0.18 : 0.10),
-      borderRadius: BorderRadius.circular(radius),
-    ),
-  );
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) {
+        final lo = widget.isLight ? 0.10 : 0.06;
+        final hi = widget.isLight ? 0.23 : 0.14;
+        final op = lo + (hi - lo) * _anim.value;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: widget.c.border.withOpacity(op),
+            borderRadius: BorderRadius.circular(widget.radius),
+          ),
+        );
+      },
+    );
+  }
 }
 
 // ─── Merchant Info ───────────────────────────────────────────────────────────
