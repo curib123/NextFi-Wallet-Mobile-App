@@ -54,9 +54,7 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen>
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() { _loading = true; _error = null; });
     try {
-      final trades = await _tradesCore.list(
-        query: const TradesListQuery(role: 'seller', limit: 100),
-      );
+      final trades = await _tradesCore.list();
       if (!mounted) return;
       setState(() {
         _trades = trades;

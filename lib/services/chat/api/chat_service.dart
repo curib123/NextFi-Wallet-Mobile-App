@@ -261,7 +261,7 @@ class ChatService {
         senderId: '',
         receiverId: req.receiverId ?? req.receiverUsername ?? '',
         status: ChatFriendRequestStatus.pending,
-      ); 
+      );
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);

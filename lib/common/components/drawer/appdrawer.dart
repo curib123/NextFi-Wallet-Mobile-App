@@ -14,6 +14,7 @@ import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
 import 'package:next_fi/features/merchant_flow/view/merchant_onboarding_flow_screen.dart';
 import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
 import 'package:next_fi/features/offers/view/market_offers_screen.dart';
+import 'package:next_fi/features/trades/view/trade_history_screen.dart';
 import 'package:next_fi/features/offers/view/manage_offers_screen.dart';
 import 'package:next_fi/features/verification_flow/view/payment_method_setup_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
@@ -260,6 +261,11 @@ class _AppDrawerState extends State<AppDrawer>
     _push(const ChatHubScreen());
   }
 
+  void _handleTradeHistoryTap() {
+    if (_cachedUser == null) { _redirectToLogin(); return; }
+    _push(const TradeHistoryScreen());
+  }
+
   void _push(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -334,6 +340,12 @@ class _AppDrawerState extends State<AppDrawer>
                           ? _UnreadBadge(count: _unreadChatCount, colors: c)
                           : null,
                       onTap: _handleMessengerTap, requiresAuth: user == null,
+                    )),
+                    _staggered(2, _NavTile(
+                      icon: LucideIcons.history, label: 'My Trades',
+                      description: 'Your trade history', colors: c,
+                      accentColor: const Color(0xFF8B5CF6),
+                      onTap: _handleTradeHistoryTap, requiresAuth: user == null,
                     )),
 
                     const SizedBox(height: 2),

@@ -22,11 +22,11 @@ class TradeOrderScreen extends StatefulWidget {
   const TradeOrderScreen({
     super.key,
     required this.trade,
-    required this.offer,
+    this.offer,
   });
 
   final TradeModel trade;
-  final OfferModel offer;
+  final OfferModel? offer;
 
   @override
   State<TradeOrderScreen> createState() => _TradeOrderScreenState();
@@ -420,7 +420,16 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final offer = widget.offer;
-    final isBuy = offer.type == OfferType.sell; // user is buyer if offer type is sell
+    // Determine if user is buyer (isBuy = true means user is buying crypto)
+    // If offer is available, check offer.type, otherwise infer from trade data
+    final bool isBuy;
+    if (offer != null) {
+      isBuy = offer.type == OfferType.sell;
+    } else {
+      // Fallback: determine from trade - check if user is the buyer based on trade data
+      // If cryptoReceiverAddress matches user's wallet, user is the buyer
+      isBuy = true; // Default to buyer view when coming from history without offer
+    }
 
     return PopScope(
       canPop: !_trade.status.isActive,
@@ -814,7 +823,7 @@ class _TradeDetailsCard extends StatelessWidget {
   });
   final AppColor c;
   final TradeModel trade;
-  final OfferModel offer;
+  final OfferModel? offer;
   final bool isBuy;
 
   @override

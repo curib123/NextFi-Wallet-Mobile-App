@@ -28,9 +28,9 @@ class TradesCoreService {
     TradesListQuery query = const TradesListQuery(),
   }) => _api.listPaged(query: query);
 
-  Future<List<TradeModel>> list({
+  Future<List<TradeModel>> list([
     TradesListQuery query = const TradesListQuery(),
-  }) async {
+  ]) async {
     final page = await _api.listPaged(query: query);
     return page.items;
   }
