@@ -180,7 +180,7 @@ class MerchantInfoSection extends StatelessWidget {
                       border: Border.all(color: c.border),
                     ),
                   )
-                else if (averageRating != null)
+                else
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
                     decoration: BoxDecoration(
@@ -196,7 +196,7 @@ class MerchantInfoSection extends StatelessWidget {
                             const Icon(Icons.star_rounded, size: 13, color: _amber),
                             const SizedBox(width: 4),
                             Text(
-                              averageRating!.toStringAsFixed(1),
+                              (averageRating ?? 5.0).toStringAsFixed(1),
                               style: const TextStyle(
                                 color: _amber,
                                 fontSize: 14,
@@ -206,17 +206,15 @@ class MerchantInfoSection extends StatelessWidget {
                             ),
                           ],
                         ),
-                        if (reviewCount != null && reviewCount! > 0) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            '$reviewCount reviews',
-                            style: TextStyle(
-                              color: c.textSecondary,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${reviewCount ?? 0} reviews',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
@@ -435,46 +433,42 @@ class ReviewsSection extends StatelessWidget {
                 const Spacer(),
 
                 // Average score
-                if (averageRating != null) ...[
-                  Text(
-                    averageRating!.toStringAsFixed(1),
-                    style: const TextStyle(
-                      color: _amber,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                    ),
+                Text(
+                  (averageRating ?? 5.0).toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: _amber,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
                   ),
-                  Text(
-                    ' / 5',
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
+                ),
+                Text(
+                  ' / 5',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
+                ),
 
                 // Count badge
-                if (totalCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: c.background,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: Text(
-                      '$totalCount',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                      ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: c.background,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: c.border),
+                  ),
+                  child: Text(
+                    '$totalCount',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
