@@ -5,9 +5,6 @@ import 'package:next_fi/services/reviews/models/reviews_models.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MERCHANT INFO SECTION
-// Used inside offer detail modals / trade screens.
-// Layout: header bar (icon + title + tier + availability) →
-//         rule → name + rating block → bio → payment methods
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MerchantInfoSection extends StatelessWidget {
@@ -36,9 +33,10 @@ class MerchantInfoSection extends StatelessWidget {
   final int? reviewCount;
   final bool loadingReviews;
 
+  static const _amber = Color(0xFFD97706);
+
   @override
   Widget build(BuildContext context) {
-    final isLight    = Theme.of(context).brightness == Brightness.light;
     final tierColor  = getTierColor(profile.tier);
     final tierLabel  = getTierLabel(profile.tier);
     final availColor = getAvailabilityColor(profile.availability);
@@ -49,14 +47,7 @@ class MerchantInfoSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(isLight ? 0.16 : 0.10)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isLight ? 0.04 : 0.14),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,10 +59,12 @@ class MerchantInfoSection extends StatelessWidget {
               children: [
                 // Icon badge
                 Container(
-                  width: 28, height: 28,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.08),
+                    color: c.background,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: c.border),
                   ),
                   child: Icon(Icons.storefront_outlined, size: 14, color: c.primary),
                 ),
@@ -87,19 +80,20 @@ class MerchantInfoSection extends StatelessWidget {
                 ),
                 const Spacer(),
 
-                // Tier badge
+                // Tier badge — solid fill
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: tierColor.withOpacity(isLight ? 0.08 : 0.12),
+                    color: tierColor,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: tierColor.withOpacity(0.16)),
                   ),
                   child: Text(
                     tierLabel,
-                    style: TextStyle(
-                      color: tierColor, fontSize: 9.5,
-                      fontWeight: FontWeight.w800, letterSpacing: 0.3,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ),
@@ -111,13 +105,19 @@ class MerchantInfoSection extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 7, height: 7,
+                      width: 7,
+                      height: 7,
                       decoration: BoxDecoration(color: availColor, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 5),
-                    Text(availLabel,
-                        style: TextStyle(color: availColor,
-                            fontSize: 11.5, fontWeight: FontWeight.w600)),
+                    Text(
+                      availLabel,
+                      style: TextStyle(
+                        color: availColor,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -125,7 +125,7 @@ class MerchantInfoSection extends StatelessWidget {
           ),
 
           const SizedBox(height: 14),
-          _Rule(c: c, isLight: isLight),
+          _SolidRule(c: c),
           const SizedBox(height: 14),
 
           // ── Name + rating block
@@ -150,14 +150,20 @@ class MerchantInfoSection extends StatelessWidget {
                       ),
                       if (profile.country != null && profile.country!.isNotEmpty) ...[
                         const SizedBox(height: 5),
-                        Row(children: [
-                          Icon(Icons.place_outlined, size: 12,
-                              color: c.textSecondary.withOpacity(0.55)),
-                          const SizedBox(width: 3),
-                          Text(profile.country!,
-                              style: TextStyle(color: c.textSecondary,
-                                  fontSize: 12, fontWeight: FontWeight.w500)),
-                        ]),
+                        Row(
+                          children: [
+                            Icon(Icons.place_outlined, size: 12, color: c.textSecondary),
+                            const SizedBox(width: 3),
+                            Text(
+                              profile.country!,
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ],
                   ),
@@ -166,33 +172,33 @@ class MerchantInfoSection extends StatelessWidget {
                 // Rating block
                 if (loadingReviews)
                   Container(
-                    width: 64, height: 36,
+                    width: 64,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: c.border.withOpacity(isLight ? 0.09 : 0.06),
+                      color: c.background,
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.border),
                     ),
                   )
                 else if (averageRating != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFD97706).withOpacity(isLight ? 0.08 : 0.12),
+                      color: c.background,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: const Color(0xFFD97706).withOpacity(0.16)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Column(
                       children: [
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.star_rounded, size: 13,
-                                color: Color(0xFFD97706)),
+                            const Icon(Icons.star_rounded, size: 13, color: _amber),
                             const SizedBox(width: 4),
                             Text(
                               averageRating!.toStringAsFixed(1),
                               style: const TextStyle(
-                                color: Color(0xFFD97706),
+                                color: _amber,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.3,
@@ -205,7 +211,7 @@ class MerchantInfoSection extends StatelessWidget {
                           Text(
                             '$reviewCount reviews',
                             style: TextStyle(
-                              color: const Color(0xFFD97706).withOpacity(0.7),
+                              color: c.textSecondary,
                               fontSize: 9.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -242,22 +248,23 @@ class MerchantInfoSection extends StatelessWidget {
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(children: [
-                Icon(Icons.payment_rounded, size: 12,
-                    color: c.textSecondary.withOpacity(0.5)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    paymentMethodIds.join(' · '),
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
+              child: Row(
+                children: [
+                  Icon(Icons.payment_rounded, size: 12, color: c.textSecondary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      paymentMethodIds.join(' · '),
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
           ],
 
@@ -283,13 +290,17 @@ class MerchantInfoSkeleton extends StatefulWidget {
 class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1000))
-    ..repeat(reverse: true);
+    vsync: this,
+    duration: const Duration(milliseconds: 1000),
+  )..repeat(reverse: true);
   late final Animation<double> _a =
   CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,13 +310,16 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
     return AnimatedBuilder(
       animation: _a,
       builder: (_, __) {
-        final op = (isLight ? 0.08 : 0.05) + _a.value * (isLight ? 0.10 : 0.07);
+        final skeletonColor = isLight
+            ? Color.lerp(const Color(0xFFE5E7EB), const Color(0xFFD1D5DB), _a.value)!
+            : Color.lerp(const Color(0xFF2A2A2A), const Color(0xFF3A3A3A), _a.value)!;
 
         Widget box({required double w, required double h, required double r}) =>
             Container(
-              width: w, height: h,
+              width: w,
+              height: h,
               decoration: BoxDecoration(
-                color: c.border.withOpacity(op),
+                color: skeletonColor,
                 borderRadius: BorderRadius.circular(r),
               ),
             );
@@ -315,39 +329,43 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.border.withOpacity(op * 0.8)),
+            border: Border.all(color: c.border),
           ),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header bar
-              Row(children: [
-                box(w: 28, h: 28, r: 8),
-                const SizedBox(width: 8),
-                box(w: 70, h: 13, r: 4),
-                const Spacer(),
-                box(w: 52, h: 22, r: 6),
-                const SizedBox(width: 10),
-                box(w: 64, h: 16, r: 5),
-              ]),
+              Row(
+                children: [
+                  box(w: 28, h: 28, r: 8),
+                  const SizedBox(width: 8),
+                  box(w: 70, h: 13, r: 4),
+                  const Spacer(),
+                  box(w: 52, h: 22, r: 6),
+                  const SizedBox(width: 10),
+                  box(w: 64, h: 16, r: 5),
+                ],
+              ),
               const SizedBox(height: 14),
-              Container(height: 1, color: c.border.withOpacity(op * 0.6)),
+              Container(height: 1, color: c.border),
               const SizedBox(height: 14),
               // Name + rating row
-              Row(children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      box(w: 150, h: 16, r: 4),
-                      const SizedBox(height: 7),
-                      box(w: 80, h: 11, r: 3),
-                    ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        box(w: 150, h: 16, r: 4),
+                        const SizedBox(height: 7),
+                        box(w: 80, h: 11, r: 3),
+                      ],
+                    ),
                   ),
-                ),
-                box(w: 72, h: 40, r: 10),
-              ]),
+                  box(w: 72, h: 40, r: 10),
+                ],
+              ),
             ],
           ),
         );
@@ -372,9 +390,10 @@ class ReviewsSection extends StatelessWidget {
   final List<ReviewModel> reviews;
   final double? averageRating;
 
+  static const _amber = Color(0xFFD97706);
+
   @override
   Widget build(BuildContext context) {
-    final isLight    = Theme.of(context).brightness == Brightness.light;
     final recent     = reviews.take(3).toList();
     final totalCount = reviews.length;
 
@@ -383,14 +402,7 @@ class ReviewsSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(isLight ? 0.16 : 0.10)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isLight ? 0.04 : 0.14),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,12 +413,14 @@ class ReviewsSection extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 28, height: 28,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD97706).withOpacity(0.10),
+                    color: c.background,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: c.border),
                   ),
-                  child: const Icon(Icons.star_rounded, size: 14, color: Color(0xFFD97706)),
+                  child: const Icon(Icons.star_rounded, size: 14, color: _amber),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -425,15 +439,20 @@ class ReviewsSection extends StatelessWidget {
                   Text(
                     averageRating!.toStringAsFixed(1),
                     style: const TextStyle(
-                      color: Color(0xFFD97706),
+                      color: _amber,
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.3,
                     ),
                   ),
-                  Text(' / 5',
-                      style: TextStyle(color: c.textSecondary,
-                          fontSize: 11, fontWeight: FontWeight.w500)),
+                  Text(
+                    ' / 5',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
 
                 // Count badge
@@ -444,11 +463,16 @@ class ReviewsSection extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: c.background,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: c.border.withOpacity(0.18)),
+                      border: Border.all(color: c.border),
                     ),
-                    child: Text('$totalCount',
-                        style: TextStyle(color: c.textSecondary,
-                            fontSize: 10.5, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      '$totalCount',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -460,19 +484,21 @@ class ReviewsSection extends StatelessWidget {
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: Text('No reviews yet',
-                    style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                child: Text(
+                  'No reviews yet',
+                  style: TextStyle(color: c.textSecondary, fontSize: 13),
+                ),
               ),
             ),
           ] else ...[
             const SizedBox(height: 14),
-            _Rule(c: c, isLight: isLight),
+            _SolidRule(c: c),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
                 children: recent.asMap().entries.map((e) => Padding(
                   padding: EdgeInsets.only(bottom: e.key < recent.length - 1 ? 10 : 0),
-                  child: ReviewItem(c: c, review: e.value, isLight: isLight),
+                  child: ReviewItem(c: c, review: e.value),
                 )).toList(),
               ),
             ),
@@ -499,9 +525,10 @@ class ReviewItem extends StatelessWidget {
   final ReviewModel review;
   final bool? isLight;
 
+  static const _amber = Color(0xFFD97706);
+
   @override
   Widget build(BuildContext context) {
-    final light = isLight ?? Theme.of(context).brightness == Brightness.light;
     final hasComment = review.comment != null && review.comment!.isNotEmpty;
 
     return Container(
@@ -509,7 +536,7 @@ class ReviewItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.background,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: c.border.withOpacity(light ? 0.13 : 0.09)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,9 +552,7 @@ class ReviewItem extends StatelessWidget {
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
                     size: 13,
-                    color: i < review.rating
-                        ? const Color(0xFFD97706)
-                        : c.textSecondary.withOpacity(0.3),
+                    color: i < review.rating ? _amber : c.border,
                   ),
                 )),
               ),
@@ -536,7 +561,7 @@ class ReviewItem extends StatelessWidget {
                 Text(
                   _timeAgo(review.createdAt!),
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.5),
+                    color: c.textSecondary,
                     fontSize: 10.5,
                     fontWeight: FontWeight.w500,
                   ),
@@ -575,22 +600,10 @@ class ReviewItem extends StatelessWidget {
 // SHARED ATOMS
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _Rule extends StatelessWidget {
-  const _Rule({required this.c, required this.isLight});
+class _SolidRule extends StatelessWidget {
+  const _SolidRule({required this.c});
   final AppColor c;
-  final bool isLight;
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: 1,
-    margin: const EdgeInsets.symmetric(horizontal: 0),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(colors: [
-        c.border.withOpacity(0),
-        c.border.withOpacity(isLight ? 0.13 : 0.09),
-        c.border.withOpacity(isLight ? 0.13 : 0.09),
-        c.border.withOpacity(0),
-      ]),
-    ),
-  );
+  Widget build(BuildContext context) => Container(height: 1, color: c.border);
 }

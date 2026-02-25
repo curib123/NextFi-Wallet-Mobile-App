@@ -22,7 +22,7 @@ class TradeScreen extends StatefulWidget {
   const TradeScreen({super.key, required this.offer, this.marketPrice});
 
   final OfferModel offer;
-  final double? marketPrice; // Raw market price passed from offer list
+  final double? marketPrice;
 
   @override
   State<TradeScreen> createState() => _TradeScreenState();
@@ -52,42 +52,39 @@ class _TradeScreenState extends State<TradeScreen> {
   WalletAddress? _selectedWallet;
   UserPaymentAccountModel? _selectedUserAccount;
 
-  // Input mode: true = entering fiat, false = entering crypto
   bool _enterFiatMode = true;
   double _computedCrypto = 0;
   double _computedFiat = 0;
 
   OfferModel get offer => widget.offer;
 
-  // User is buyer if offer type is SELL (merchant sells → user buys)
   bool get _userIsBuyer => offer.type == OfferType.sell;
 
-  // Calculate effective price from market price and margin
-  // Formula: finalPrice = marketPrice * (1 + marginPercent/100)
-  // Then: crypto = fiatAmount / finalPrice
+  String? get _sellerWalletAddress {
+    final raw = offer.seller;
+    if (raw == null) return null;
+    final addr = (raw['walletAddress'] ?? raw['stellarAddress'] ?? '')
+        .toString()
+        .trim();
+    return addr.isEmpty ? null : addr;
+  }
+
   double get _effectivePrice {
-    // Use raw market price passed from offer list (already a double, no parsing needed)
     double? price = (widget.marketPrice != null && widget.marketPrice! > 0)
         ? widget.marketPrice
         : null;
-
-    // Fallback to offer.marketPrice stored on the offer model
     if (price == null && offer.marketPrice != null && offer.marketPrice! > 0) {
       price = offer.marketPrice;
     }
-
     if (price != null && price > 0) {
       if (offer.marginPercent != null) {
         return price * (1 + offer.marginPercent! / 100);
       }
       return price;
     }
-
-    // No market price available — conversion not possible
     return 0.0;
   }
 
-  // Check if we can calculate the conversion
   bool get _canCalculate => _effectivePrice > 0;
 
   @override
@@ -139,7 +136,6 @@ class _TradeScreenState extends State<TradeScreen> {
       _loadError = null;
     });
     try {
-      // Load all required data in parallel
       final results = await Future.wait([
         _offerPaymentCore.getOfferPaymentMethodsWithId(offer.id),
         _walletCore.list(),
@@ -155,23 +151,21 @@ class _TradeScreenState extends State<TradeScreen> {
         _userAccounts = results[2] as List<UserPaymentAccountModel>;
         _merchantAccounts = results[3] as List<MerchantPaymentAccountModel>;
 
-        // Select default wallet
         if (_wallets.isNotEmpty) {
           _selectedWallet = _wallets.firstWhere(
-            (w) => w.isActive,
+                (w) => w.isActive,
             orElse: () => _wallets.first,
           );
         }
-
-        // Select first payment method if available
         if (_offerPaymentMethods.isNotEmpty) {
           _selectedOfferMethod = _offerPaymentMethods.first;
         }
-
+        if (!_userIsBuyer && _userAccounts.isNotEmpty) {
+          _selectedUserAccount = _userAccounts.first;
+        }
         _loading = false;
       });
 
-      // Refresh merchant accounts for selected payment method
       _refreshMerchantAccountsForMethod();
     } catch (e) {
       if (!mounted) return;
@@ -186,7 +180,6 @@ class _TradeScreenState extends State<TradeScreen> {
     try {
       final sellerId = offer.sellerId ?? '';
       if (sellerId.isEmpty) return [];
-
       final resp = await _merchantAccountCore.listPaged(
         query: MerchantPaymentAccountListQuery(
           activeOnly: true,
@@ -205,13 +198,10 @@ class _TradeScreenState extends State<TradeScreen> {
       setState(() => _selectedMerchantAccount = null);
       return;
     }
-
-    // Use paymentMethodId (the PaymentMethod FK), not id (the junction record PK)
     final methodId = _selectedOfferMethod!.paymentMethodId;
     final filtered = _merchantAccounts
         .where((a) => a.paymentMethodId == methodId && a.isActive)
         .toList();
-
     setState(() {
       _selectedMerchantAccount = filtered.isNotEmpty ? filtered.first : null;
     });
@@ -223,12 +213,8 @@ class _TradeScreenState extends State<TradeScreen> {
     if (parsed == null || parsed <= 0) return 'Invalid amount';
     final min = offer.minAmount;
     final max = offer.maxAmount;
-    if (min != null && parsed < min) {
-      return 'Minimum is ${offer.fiatCurrency} $min';
-    }
-    if (max != null && parsed > max) {
-      return 'Maximum is ${offer.fiatCurrency} $max';
-    }
+    if (min != null && parsed < min) return 'Minimum is ${offer.fiatCurrency} $min';
+    if (max != null && parsed > max) return 'Maximum is ${offer.fiatCurrency} $max';
     return null;
   }
 
@@ -236,7 +222,6 @@ class _TradeScreenState extends State<TradeScreen> {
     if (v == null || v.trim().isEmpty) return 'Enter an amount';
     final parsed = double.tryParse(v.trim());
     if (parsed == null || parsed <= 0) return 'Invalid amount';
-    // Optional: validate against available qty
     if (offer.availableQty != null && parsed > offer.availableQty!) {
       return 'Maximum available is ${offer.availableQty} ${offer.asset}';
     }
@@ -255,7 +240,6 @@ class _TradeScreenState extends State<TradeScreen> {
       return;
     }
 
-    // Get the fiat and crypto amounts
     final fiatAmount = _enterFiatMode
         ? _fiatCtrl.text.trim()
         : _computedFiat.toStringAsFixed(2);
@@ -263,44 +247,36 @@ class _TradeScreenState extends State<TradeScreen> {
         ? _computedCrypto.toStringAsFixed(7)
         : _cryptoCtrl.text.trim();
 
-    // Validate amounts are positive numbers
     final fiatParsed = double.tryParse(fiatAmount);
     final cryptoParsed = double.tryParse(cryptoAmount);
 
     if (fiatParsed == null || fiatParsed <= 0) {
-      showFloatingSnackBar(
-        context,
-        message: 'Please enter a valid fiat amount.',
-        type: SnackBarType.error,
-      );
+      showFloatingSnackBar(context, message: 'Please enter a valid fiat amount.', type: SnackBarType.error);
       return;
     }
-
     if (cryptoParsed == null || cryptoParsed <= 0) {
-      showFloatingSnackBar(
-        context,
-        message: 'Could not calculate crypto amount. Please try again.',
-        type: SnackBarType.error,
-      );
+      showFloatingSnackBar(context, message: 'Could not calculate crypto amount. Please try again.', type: SnackBarType.error);
+      return;
+    }
+    if (_selectedOfferMethod == null) {
+      showFloatingSnackBar(context, message: 'Please select a payment method.', type: SnackBarType.error);
+      return;
+    }
+    if (!_userIsBuyer && _selectedUserAccount == null) {
+      showFloatingSnackBar(context, message: 'Please select your receiving payment account.', type: SnackBarType.error);
       return;
     }
 
-    // For BUY offers: need paymentMethodId (from offer's paymentMethods)
-    // For SELL offers: need paymentMethodId + optional buyerPaymentAccountId
-    if (_selectedOfferMethod == null) {
-      showFloatingSnackBar(
-        context,
-        message: 'Please select a payment method.',
-        type: SnackBarType.error,
-      );
+    final cryptoReceiverAddress = _userIsBuyer
+        ? _selectedWallet!.publicAddress
+        : _sellerWalletAddress;
+    if (cryptoReceiverAddress == null || cryptoReceiverAddress.isEmpty) {
+      showFloatingSnackBar(context, message: 'Merchant crypto address is missing for this offer.', type: SnackBarType.error);
       return;
     }
 
     setState(() => _submitting = true);
     try {
-      // Use paymentMethodId (the PaymentMethod FK) to identify which merchant
-      // payment account to use for this trade. The seller's payment account is
-      // obtained from the OfferPaymentMethod linked to the offer.
       final trade = await _tradesCore.create(
         CreateTradeRequest(
           offerId: offer.id,
@@ -308,7 +284,7 @@ class _TradeScreenState extends State<TradeScreen> {
           buyerPaymentAccountId: _userIsBuyer ? null : _selectedUserAccount?.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
-          cryptoReceiverAddress: _selectedWallet!.publicAddress,
+          cryptoReceiverAddress: cryptoReceiverAddress,
         ),
       );
       if (!mounted) return;
@@ -355,211 +331,179 @@ class _TradeScreenState extends State<TradeScreen> {
         ),
       ),
       body: _loading
-          ? _LoadingBody(c: c)
+          ? const _LoadingBody()
           : _loadError != null
           ? _ErrorBody(c: c, error: _loadError!, onRetry: _loadData)
           : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 108),
+          children: [
+            _OfferSummaryCard(c: c, offer: offer, typeColor: typeColor),
+            const SizedBox(height: 10),
+            _PriceInsightsCard(
+              c: c,
+              offer: offer,
+              typeColor: typeColor,
+              effectivePrice: effectivePrice,
+            ),
+            const SizedBox(height: 16),
+
+            // ── Amount input ───────────────────────────────
+            _PanelCard(
+              c: c,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Offer summary ──────────────────────────────────
-                  _OfferSummaryCard(c: c, offer: offer, typeColor: typeColor),
+                  _SectionLabel(
+                    c: c,
+                    label: _enterFiatMode
+                        ? (isBuy ? 'You pay (fiat)' : 'You receive (fiat)')
+                        : (isBuy
+                        ? 'You receive (${offer.asset})'
+                        : 'You send (${offer.asset})'),
+                  ),
                   const SizedBox(height: 10),
-                  _PriceInsightsCard(
-                    c: c,
-                    offer: offer,
-                    typeColor: typeColor,
-                    effectivePrice: effectivePrice,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── Amount input with toggle ───────────────────────────
-                  _PanelCard(
-                    c: c,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SectionLabel(
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _AmountField(
                           c: c,
-                          label: _enterFiatMode
-                              ? (isBuy
-                                    ? 'You pay (fiat)'
-                                    : 'You receive (fiat)')
-                              : (isBuy
-                                    ? 'You receive (${offer.asset})'
-                                    : 'You send (${offer.asset})'),
+                          controller: _enterFiatMode ? _fiatCtrl : _cryptoCtrl,
+                          currency: _enterFiatMode ? offer.fiatCurrency : offer.asset,
+                          validator: _enterFiatMode ? _validateFiat : _validateCrypto,
+                          min: _enterFiatMode ? offer.minAmount : null,
+                          max: _enterFiatMode ? offer.maxAmount : null,
                         ),
-                        const SizedBox(height: 10),
-
-                        // Toggle button
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _AmountField(
-                                c: c,
-                                controller: _enterFiatMode
-                                    ? _fiatCtrl
-                                    : _cryptoCtrl,
-                                currency: _enterFiatMode
-                                    ? offer.fiatCurrency
-                                    : offer.asset,
-                                validator: _enterFiatMode
-                                    ? _validateFiat
-                                    : _validateCrypto,
-                                min: _enterFiatMode ? offer.minAmount : null,
-                                max: _enterFiatMode ? offer.maxAmount : null,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            _ModeToggleButton(c: c, onTap: _toggleInputMode),
-                          ],
-                        ),
-
-                        // Show equivalent
-                        if (_enterFiatMode && _computedCrypto > 0) ...[
-                          const SizedBox(height: 8),
-                          _CryptoEquivalentRow(
-                            c: c,
-                            asset: offer.asset,
-                            amount: _computedCrypto,
-                            typeColor: typeColor,
-                            isBuy: isBuy,
-                          ),
-                        ],
-                        if (!_enterFiatMode && _computedFiat > 0) ...[
-                          const SizedBox(height: 8),
-                          _FiatEquivalentRow(
-                            c: c,
-                            currency: offer.fiatCurrency,
-                            amount: _computedFiat,
-                            typeColor: typeColor,
-                            isBuy: isBuy,
-                          ),
-                        ],
-                        // Show warning if no market price
-                        if (_enterFiatMode && !_canCalculate) ...[
-                          const SizedBox(height: 8),
-                          _InfoChip(
-                            c: c,
-                            message:
-                                'No market price available. Toggle to enter crypto amount directly.',
-                            isWarning: true,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Merchant payment account (where to send fiat)
-                  if (isBuy && _offerPaymentMethods.isNotEmpty) ...[
-                    _PanelCard(
-                      c: c,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionLabel(c: c, label: 'Pay via'),
-                          const SizedBox(height: 10),
-                          _PaymentMethodSelector(
-                            c: c,
-                            methods: _offerPaymentMethods,
-                            selected: _selectedOfferMethod,
-                            onChanged: (m) {
-                              setState(() => _selectedOfferMethod = m);
-                              _refreshMerchantAccountsForMethod();
-                            },
-                          ),
-                          if (_selectedMerchantAccount != null) ...[
-                            const SizedBox(height: 12),
-                            _MerchantAccountCard(
-                              c: c,
-                              account: _selectedMerchantAccount!,
-                            ),
-                          ],
-                        ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Receiving wallet
-                  _PanelCard(
-                    c: c,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SectionLabel(
-                          c: c,
-                          label: isBuy
-                              ? 'Receive ${offer.asset} to'
-                              : 'Your wallet (crypto source)',
-                        ),
-                        const SizedBox(height: 10),
-                        if (_wallets.isEmpty)
-                          _InfoChip(
-                            c: c,
-                            message:
-                                'No wallet found - add one in your wallet settings',
-                            isWarning: true,
-                          )
-                        else
-                          _WalletSelector(
-                            c: c,
-                            wallets: _wallets,
-                            selected: _selectedWallet,
-                            onChanged: (w) =>
-                                setState(() => _selectedWallet = w),
-                          ),
-                      ],
-                    ),
+                      const SizedBox(width: 10),
+                      _ModeToggleButton(c: c, onTap: _toggleInputMode),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // ── User payment account (optional for buyer) ──────
-                  if (_userAccounts.isNotEmpty && !isBuy) ...[
-                    _PanelCard(
+                  if (_enterFiatMode && _computedCrypto > 0) ...[
+                    const SizedBox(height: 8),
+                    _CryptoEquivalentRow(
                       c: c,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionLabel(
-                            c: c,
-                            label: 'Your payment account (for receiving fiat)',
-                          ),
-                          const SizedBox(height: 10),
-                          _UserAccountSelector(
-                            c: c,
-                            accounts: _userAccounts,
-                            selected: _selectedUserAccount,
-                            onChanged: (a) =>
-                                setState(() => _selectedUserAccount = a),
-                          ),
-                        ],
-                      ),
+                      asset: offer.asset,
+                      amount: _computedCrypto,
+                      typeColor: typeColor,
+                      isBuy: isBuy,
                     ),
-                    const SizedBox(height: 16),
                   ],
-
-                  // ── Terms notice ───────────────────────────────────
-                  _PanelCard(
-                    c: c,
-                    child: _TermsNotice(c: c, offer: offer),
-                  ),
+                  if (!_enterFiatMode && _computedFiat > 0) ...[
+                    const SizedBox(height: 8),
+                    _FiatEquivalentRow(
+                      c: c,
+                      currency: offer.fiatCurrency,
+                      amount: _computedFiat,
+                      typeColor: typeColor,
+                      isBuy: isBuy,
+                    ),
+                  ],
+                  if (_enterFiatMode && !_canCalculate) ...[
+                    const SizedBox(height: 8),
+                    _InfoChip(
+                      c: c,
+                      message: 'No market price available. Toggle to enter crypto amount directly.',
+                      isWarning: true,
+                    ),
+                  ],
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+
+            if (isBuy && _offerPaymentMethods.isNotEmpty) ...[
+              _PanelCard(
+                c: c,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel(c: c, label: 'Pay via'),
+                    const SizedBox(height: 10),
+                    _PaymentMethodSelector(
+                      c: c,
+                      methods: _offerPaymentMethods,
+                      selected: _selectedOfferMethod,
+                      onChanged: (m) {
+                        setState(() => _selectedOfferMethod = m);
+                        _refreshMerchantAccountsForMethod();
+                      },
+                    ),
+                    if (_selectedMerchantAccount != null) ...[
+                      const SizedBox(height: 12),
+                      _MerchantAccountCard(c: c, account: _selectedMerchantAccount!),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            _PanelCard(
+              c: c,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionLabel(
+                    c: c,
+                    label: isBuy
+                        ? 'Receive ${offer.asset} to'
+                        : 'Your wallet (crypto source)',
+                  ),
+                  const SizedBox(height: 10),
+                  if (_wallets.isEmpty)
+                    _InfoChip(
+                      c: c,
+                      message: 'No wallet found - add one in your wallet settings',
+                      isWarning: true,
+                    )
+                  else
+                    _WalletSelector(
+                      c: c,
+                      wallets: _wallets,
+                      selected: _selectedWallet,
+                      onChanged: (w) => setState(() => _selectedWallet = w),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (_userAccounts.isNotEmpty && !isBuy) ...[
+              _PanelCard(
+                c: c,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel(c: c, label: 'Your payment account (for receiving fiat)'),
+                    const SizedBox(height: 10),
+                    _UserAccountSelector(
+                      c: c,
+                      accounts: _userAccounts,
+                      selected: _selectedUserAccount,
+                      onChanged: (a) => setState(() => _selectedUserAccount = a),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            _PanelCard(c: c, child: _TermsNotice(c: c, offer: offer)),
+          ],
+        ),
+      ),
       bottomNavigationBar: _loading || _loadError != null
           ? null
           : _SubmitBar(
-              c: c,
-              typeColor: typeColor,
-              isBuy: isBuy,
-              submitting: _submitting,
-              // Disable if cannot calculate (no market price)
-              disabled: _enterFiatMode && !_canCalculate,
-              onTap: _submit,
-            ),
+        c: c,
+        typeColor: typeColor,
+        isBuy: isBuy,
+        submitting: _submitting,
+        disabled: _enterFiatMode && !_canCalculate,
+        onTap: _submit,
+      ),
     );
   }
 }
@@ -567,42 +511,15 @@ class _TradeScreenState extends State<TradeScreen> {
 // ─── Loading ──────────────────────────────────────────────────────────────────
 
 class _LoadingBody extends StatelessWidget {
-  const _LoadingBody({required this.c});
-  final AppColor c;
+  const _LoadingBody();
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.15)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ModernFintechLoader(
-            color: c.primary,
-            size: 30,
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Preparing trade...',
-            style: TextStyle(color: c.textSecondary, fontSize: 13.5),
-          ),
-        ],
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      const PageLoader(label: 'Preparing trade...');
 }
 
 class _ErrorBody extends StatelessWidget {
-  const _ErrorBody({
-    required this.c,
-    required this.error,
-    required this.onRetry,
-  });
+  const _ErrorBody({required this.c, required this.error, required this.onRetry});
   final AppColor c;
   final String error;
   final VoidCallback onRetry;
@@ -639,17 +556,12 @@ class _ErrorBody extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [c.primary, c.primary.withOpacity(0.8)],
-                ),
+                color: c.primary,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Text(
                 'Try again',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -659,7 +571,7 @@ class _ErrorBody extends StatelessWidget {
   );
 }
 
-// ─── Offer Summary ─────────────────────────────────────────────────────────────
+// ─── Panel Card ───────────────────────────────────────────────────────────────
 
 class _PanelCard extends StatelessWidget {
   const _PanelCard({required this.c, required this.child});
@@ -673,18 +585,13 @@ class _PanelCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: c.surface,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: c.border.withOpacity(0.14)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.035),
-          blurRadius: 10,
-          offset: const Offset(0, 5),
-        ),
-      ],
+      border: Border.all(color: c.border),
     ),
     child: child,
   );
 }
+
+// ─── Mode Toggle Button ───────────────────────────────────────────────────────
 
 class _ModeToggleButton extends StatelessWidget {
   const _ModeToggleButton({required this.c, required this.onTap});
@@ -698,16 +605,16 @@ class _ModeToggleButton extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [c.primary.withOpacity(0.16), c.primary.withOpacity(0.08)],
-        ),
+        color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.primary.withOpacity(0.28)),
+        border: Border.all(color: c.border),
       ),
       child: Icon(Icons.swap_horiz_rounded, color: c.primary, size: 24),
     ),
   );
 }
+
+// ─── Price Insights Card ──────────────────────────────────────────────────────
 
 class _PriceInsightsCard extends StatelessWidget {
   const _PriceInsightsCard({
@@ -716,7 +623,6 @@ class _PriceInsightsCard extends StatelessWidget {
     required this.typeColor,
     required this.effectivePrice,
   });
-
   final AppColor c;
   final OfferModel offer;
   final Color typeColor;
@@ -729,9 +635,9 @@ class _PriceInsightsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: typeColor.withOpacity(0.07),
+        color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: typeColor.withOpacity(0.16)),
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
@@ -744,7 +650,7 @@ class _PriceInsightsCard extends StatelessWidget {
                   : 'Not available',
             ),
           ),
-          Container(width: 1, height: 26, color: typeColor.withOpacity(0.22)),
+          Container(width: 1, height: 26, color: c.border),
           Expanded(
             child: _PriceMetric(
               c: c,
@@ -768,7 +674,6 @@ class _PriceMetric extends StatelessWidget {
     required this.value,
     this.alignEnd = false,
   });
-
   final AppColor c;
   final String label;
   final String value;
@@ -776,9 +681,7 @@ class _PriceMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: alignEnd
-        ? CrossAxisAlignment.end
-        : CrossAxisAlignment.start,
+    crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
     children: [
       Text(
         label.toUpperCase(),
@@ -804,12 +707,10 @@ class _PriceMetric extends StatelessWidget {
   );
 }
 
+// ─── Offer Summary Card ───────────────────────────────────────────────────────
+
 class _OfferSummaryCard extends StatelessWidget {
-  const _OfferSummaryCard({
-    required this.c,
-    required this.offer,
-    required this.typeColor,
-  });
+  const _OfferSummaryCard({required this.c, required this.offer, required this.typeColor});
   final AppColor c;
   final OfferModel offer;
   final Color typeColor;
@@ -819,20 +720,9 @@ class _OfferSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [typeColor.withOpacity(0.12), c.surface],
-        ),
+        color: c.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: typeColor.withOpacity(0.22)),
-        boxShadow: [
-          BoxShadow(
-            color: typeColor.withOpacity(0.08),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
@@ -840,8 +730,9 @@ class _OfferSummaryCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: typeColor.withOpacity(0.12),
+              color: c.background,
               borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: c.border),
             ),
             child: Icon(
               offer.type == OfferType.sell
@@ -879,7 +770,7 @@ class _OfferSummaryCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c.background,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: c.border.withOpacity(0.15)),
+                border: Border.all(color: c.border),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -903,7 +794,7 @@ class _OfferSummaryCard extends StatelessWidget {
   }
 }
 
-// ─── Section Label ─────────────────────────────────────────────────────────────
+// ─── Section Label ────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.c, required this.label});
@@ -922,7 +813,7 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
-// ─── Amount field ──────────────────────────────────────────────────────────────
+// ─── Amount Field ─────────────────────────────────────────────────────────────
 
 class _AmountField extends StatelessWidget {
   const _AmountField({
@@ -962,23 +853,17 @@ class _AmountField extends StatelessWidget {
           fontSize: 16,
         ),
         hintText: '0.00',
-        hintStyle: TextStyle(
-          color: c.textSecondary.withOpacity(0.45),
-          fontSize: 19,
-        ),
+        hintStyle: TextStyle(color: c.textSecondary, fontSize: 19),
         filled: true,
-        fillColor: c.background.withOpacity(0.45),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 17,
-        ),
+        fillColor: c.background,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: c.border.withOpacity(0.24)),
+          borderSide: BorderSide(color: c.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: c.border.withOpacity(0.24)),
+          borderSide: BorderSide(color: c.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -1001,7 +886,7 @@ class _AmountField extends StatelessWidget {
   }
 }
 
-// ─── Crypto equivalent ─────────────────────────────────────────────────────────
+// ─── Crypto Equivalent Row ────────────────────────────────────────────────────
 
 class _CryptoEquivalentRow extends StatelessWidget {
   const _CryptoEquivalentRow({
@@ -1021,9 +906,9 @@ class _CryptoEquivalentRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color: typeColor.withOpacity(0.07),
+      color: c.background,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: typeColor.withOpacity(0.15)),
+      border: Border.all(color: c.border),
     ),
     child: Row(
       children: [
@@ -1044,7 +929,7 @@ class _CryptoEquivalentRow extends StatelessWidget {
   );
 }
 
-// ─── Fiat equivalent ─────────────────────────────────────────────────────────
+// ─── Fiat Equivalent Row ──────────────────────────────────────────────────────
 
 class _FiatEquivalentRow extends StatelessWidget {
   const _FiatEquivalentRow({
@@ -1064,9 +949,9 @@ class _FiatEquivalentRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color: typeColor.withOpacity(0.07),
+      color: c.background,
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: typeColor.withOpacity(0.15)),
+      border: Border.all(color: c.border),
     ),
     child: Row(
       children: [
@@ -1087,7 +972,7 @@ class _FiatEquivalentRow extends StatelessWidget {
   );
 }
 
-// ─── Payment method selector ───────────────────────────────────────────────────
+// ─── Payment Method Selector ──────────────────────────────────────────────────
 
 class _PaymentMethodSelector extends StatelessWidget {
   const _PaymentMethodSelector({
@@ -1113,14 +998,10 @@ class _PaymentMethodSelector extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? c.primary.withOpacity(0.08)
-                  : c.background.withOpacity(0.35),
+              color: isSelected ? c.primary : c.background,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: isSelected
-                    ? c.primary.withOpacity(0.4)
-                    : c.border.withOpacity(0.2),
+                color: isSelected ? c.primary : c.border,
                 width: isSelected ? 1.5 : 1,
               ),
             ),
@@ -1136,7 +1017,7 @@ class _PaymentMethodSelector extends StatelessWidget {
                       errorBuilder: (_, __, ___) => Icon(
                         Icons.account_balance_wallet_outlined,
                         size: 20,
-                        color: c.textSecondary,
+                        color: isSelected ? Colors.white : c.textSecondary,
                       ),
                     ),
                   )
@@ -1144,21 +1025,21 @@ class _PaymentMethodSelector extends StatelessWidget {
                   Icon(
                     Icons.account_balance_wallet_outlined,
                     size: 20,
-                    color: c.textSecondary,
+                    color: isSelected ? Colors.white : c.textSecondary,
                   ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     m.paymentMethod.name,
                     style: TextStyle(
-                      color: c.textPrimary,
+                      color: isSelected ? Colors.white : c.textPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 14.2,
                     ),
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle_rounded, color: c.primary, size: 18),
+                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
               ],
             ),
           ),
@@ -1168,7 +1049,7 @@ class _PaymentMethodSelector extends StatelessWidget {
   }
 }
 
-// ─── Merchant account card ─────────────────────────────────────────────────────
+// ─── Merchant Account Card ────────────────────────────────────────────────────
 
 class _MerchantAccountCard extends StatelessWidget {
   const _MerchantAccountCard({required this.c, required this.account});
@@ -1180,9 +1061,9 @@ class _MerchantAccountCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: c.success.withOpacity(0.06),
+        color: c.background,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.success.withOpacity(0.2)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1207,16 +1088,11 @@ class _MerchantAccountCard extends StatelessWidget {
             _AccountRow(c: c, label: 'Account no.', value: account.accountNo!),
           if (account.label != null)
             _AccountRow(c: c, label: 'Label', value: account.label!),
-          if (account.instructions != null &&
-              account.instructions!.isNotEmpty) ...[
+          if (account.instructions != null && account.instructions!.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               account.instructions!,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 12,
-                height: 1.4,
-              ),
+              style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.4),
             ),
           ],
         ],
@@ -1226,11 +1102,7 @@ class _MerchantAccountCard extends StatelessWidget {
 }
 
 class _AccountRow extends StatelessWidget {
-  const _AccountRow({
-    required this.c,
-    required this.label,
-    required this.value,
-  });
+  const _AccountRow({required this.c, required this.label, required this.value});
   final AppColor c;
   final String label;
   final String value;
@@ -1242,20 +1114,13 @@ class _AccountRow extends StatelessWidget {
       children: [
         SizedBox(
           width: 100,
-          child: Text(
-            label,
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-          ),
+          child: Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
         ),
         Expanded(
           child: GestureDetector(
             onTap: () {
               Clipboard.setData(ClipboardData(text: value));
-              showFloatingSnackBar(
-                context,
-                message: 'Copied!',
-                type: SnackBarType.success,
-              );
+              showFloatingSnackBar(context, message: 'Copied!', type: SnackBarType.success);
             },
             child: Row(
               children: [
@@ -1270,11 +1135,7 @@ class _AccountRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(
-                  Icons.copy_rounded,
-                  size: 13,
-                  color: c.textSecondary.withOpacity(0.6),
-                ),
+                Icon(Icons.copy_rounded, size: 13, color: c.textSecondary),
               ],
             ),
           ),
@@ -1284,7 +1145,7 @@ class _AccountRow extends StatelessWidget {
   );
 }
 
-// ─── Wallet selector ──────────────────────────────────────────────────────────
+// ─── Wallet Selector ──────────────────────────────────────────────────────────
 
 class _WalletSelector extends StatelessWidget {
   const _WalletSelector({
@@ -1307,17 +1168,14 @@ class _WalletSelector extends StatelessWidget {
       decoration: InputDecoration(
         filled: true,
         fillColor: c.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+          borderSide: BorderSide(color: c.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+          borderSide: BorderSide(color: c.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1347,7 +1205,7 @@ class _WalletSelector extends StatelessWidget {
   }
 }
 
-// ─── User account selector ─────────────────────────────────────────────────────
+// ─── User Account Selector ────────────────────────────────────────────────────
 
 class _UserAccountSelector extends StatelessWidget {
   const _UserAccountSelector({
@@ -1370,53 +1228,41 @@ class _UserAccountSelector extends StatelessWidget {
       decoration: InputDecoration(
         filled: true,
         fillColor: c.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+          borderSide: BorderSide(color: c.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border.withOpacity(0.2)),
+          borderSide: BorderSide(color: c.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: c.primary, width: 1.5),
         ),
       ),
-      items: accounts
-          .map(
-            (a) => DropdownMenuItem(
-              value: a,
-              child: Text(
-                a.label ??
-                    '${a.accountName}${a.accountNo != null ? ' (${a.accountNo})' : ''}',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          )
-          .toList(),
+      items: accounts.map((a) => DropdownMenuItem(
+        value: a,
+        child: Text(
+          a.label ?? '${a.accountName}${a.accountNo != null ? ' (${a.accountNo})' : ''}',
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      )).toList(),
       onChanged: onChanged,
     );
   }
 }
 
-// ─── Info chip ────────────────────────────────────────────────────────────────
+// ─── Info Chip ────────────────────────────────────────────────────────────────
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.c,
-    required this.message,
-    this.isWarning = false,
-  });
+  const _InfoChip({required this.c, required this.message, this.isWarning = false});
   final AppColor c;
   final String message;
   final bool isWarning;
@@ -1427,25 +1273,20 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: c.background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: isWarning ? c.warning : c.border),
       ),
       child: Row(
         children: [
           Icon(
-            isWarning
-                ? Icons.warning_amber_rounded
-                : Icons.info_outline_rounded,
+            isWarning ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
             size: 15,
             color: color,
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              message,
-              style: TextStyle(color: color, fontSize: 12.5),
-            ),
+            child: Text(message, style: TextStyle(color: color, fontSize: 12.5)),
           ),
         ],
       ),
@@ -1453,7 +1294,7 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-// ─── Terms notice ─────────────────────────────────────────────────────────────
+// ─── Terms Notice ─────────────────────────────────────────────────────────────
 
 class _TermsNotice extends StatelessWidget {
   const _TermsNotice({required this.c, required this.offer});
@@ -1480,20 +1321,10 @@ class _TermsNotice extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _TermRow(
-          c: c,
-          text: 'Crypto is held in escrow until payment is confirmed',
-        ),
+        _TermRow(c: c, text: 'Crypto is held in escrow until payment is confirmed'),
         if (offer.paymentWindowMinutes != null)
-          _TermRow(
-            c: c,
-            text:
-                'You have ${offer.paymentWindowMinutes} minutes to complete payment',
-          ),
-        _TermRow(
-          c: c,
-          text: 'All disputes are handled through our support system',
-        ),
+          _TermRow(c: c, text: 'You have ${offer.paymentWindowMinutes} minutes to complete payment'),
+        _TermRow(c: c, text: 'All disputes are handled through our support system'),
         if (offer.autoReply != null && offer.autoReply!.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
@@ -1525,11 +1356,7 @@ class _TermRow extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.5,
-              height: 1.4,
-            ),
+            style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.4),
           ),
         ),
       ],
@@ -1537,7 +1364,7 @@ class _TermRow extends StatelessWidget {
   );
 }
 
-// ─── Submit bar ───────────────────────────────────────────────────────────────
+// ─── Submit Bar ───────────────────────────────────────────────────────────────
 
 class _SubmitBar extends StatelessWidget {
   const _SubmitBar({
@@ -1561,14 +1388,12 @@ class _SubmitBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
+        16, 12, 16,
         MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
-        color: c.background.withOpacity(0.92),
-        border: Border(top: BorderSide(color: c.border.withOpacity(0.12))),
+        color: c.background,
+        border: Border(top: BorderSide(color: c.border)),
       ),
       child: GestureDetector(
         onTap: _isDisabled ? null : onTap,
@@ -1576,60 +1401,42 @@ class _SubmitBar extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           height: 56,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: _isDisabled
-                  ? [Colors.grey.shade400, Colors.grey.shade500]
-                  : submitting
-                  ? [typeColor.withOpacity(0.5), typeColor.withOpacity(0.4)]
-                  : [typeColor, typeColor.withOpacity(0.82)],
-            ),
+            color: _isDisabled
+                ? c.border
+                : submitting
+                ? typeColor
+                : typeColor,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: _isDisabled || submitting
-                ? []
-                : [
-                    BoxShadow(
-                      color: typeColor.withOpacity(0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
           ),
           child: Center(
             child: submitting
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: ModernFintechLoader(
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                )
+                ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: ModernFintechLoader(color: Colors.white, size: 24),
+            )
                 : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isBuy
-                            ? Icons.arrow_downward_rounded
-                            : Icons.arrow_upward_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        disabled
-                            ? 'Toggle to enter amount'
-                            : (isBuy
-                                  ? 'Start Trade — Buy'
-                                  : 'Start Trade — Sell'),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15.5,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  disabled
+                      ? 'Toggle to enter amount'
+                      : (isBuy ? 'Start Trade — Buy' : 'Start Trade — Sell'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15.5,
+                    letterSpacing: -0.2,
                   ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

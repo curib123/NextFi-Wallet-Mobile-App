@@ -15,7 +15,6 @@ import 'package:provider/provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKET OFFERS SCREEN — P2P Marketplace
-// Design: Stripe-grade fintech — confident type, clean density, live price strip
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MarketOffersScreen extends StatefulWidget {
@@ -38,12 +37,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   OfferType _selectedType = OfferType.buy;
   List<OfferModel> _offers = const [];
 
-  // Page-enter animation
   late final AnimationController _enterCtrl;
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
 
-  // Shared shimmer — one controller drives all tile shimmer boxes (O(1) overhead)
   late final AnimationController _shimmerCtrl;
   late final Animation<double> _shimmerAnim;
 
@@ -156,9 +153,6 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     return (p.isFinite && p > 0) ? p : null;
   }
 
-  /// True only if the offer's fiat matches the active CurrencyVM fiat AND the
-  /// live price hasn't arrived yet.  Once the fiat mismatches we know we will
-  /// never get a live price from these VMs, so stop showing "loading".
   bool _priceLoadingFor(OfferModel offer) {
     final code = offer.asset.trim().toUpperCase();
     final vm = switch (code) { 'XLM' => _xlmPriceVm, 'USDC' => _usdcPriceVm, _ => null };
@@ -167,8 +161,6 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     return vm.priceNow <= 0;
   }
 
-  /// A tile is enabled when it either has a computable price already or we are
-  /// still loading one (fiat-match, price not yet arrived).
   bool _offerEnabled(OfferModel offer) {
     if (_offerEffectivePrice(offer) != null) return true;
     return _priceLoadingFor(offer);
@@ -184,19 +176,13 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header
             _Header(c: c),
-
-            // ── Live price strip
             _PriceStrip(c: c, xlmVm: _xlmPriceVm, usdcVm: _usdcPriceVm),
-
-            // ── Type toggle
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: _TypeToggle(c: c, selected: _selectedType, onChanged: _onTypeChanged),
             ),
 
-            // ── Results label
             if (!_loading && _error == null && _offers.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
@@ -213,15 +199,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Container(
-                        height: 1,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [
-                            c.border.withOpacity(0.18),
-                            c.border.withOpacity(0),
-                          ]),
-                        ),
-                      ),
+                      child: Container(height: 1, color: c.border),
                     ),
                   ],
                 ),
@@ -229,7 +207,6 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
             const SizedBox(height: 10),
 
-            // ── Body
             Expanded(
               child: _loading
                   ? _SkeletonList(c: c)
@@ -239,9 +216,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
                 color: c.primary,
                 onRefresh: _load,
                 child: _offers.isEmpty
-                    ? ListView(
-                  children: [_EmptyState(c: c, type: _selectedType)],
-                )
+                    ? ListView(children: [_EmptyState(c: c, type: _selectedType)])
                     : FadeTransition(
                   opacity: _fadeAnim,
                   child: SlideTransition(
@@ -326,13 +301,14 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
-          // Live indicator dot
           _LiveDot(c: c),
         ],
       ),
     );
   }
 }
+
+// ─── Live Dot ─────────────────────────────────────────────────────────────────
 
 class _LiveDot extends StatefulWidget {
   const _LiveDot({required this.c});
@@ -354,45 +330,41 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, __) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: c.success.withOpacity(0.08 + _ctrl.value * 0.05),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: c.success.withOpacity(0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 6, height: 6,
-              decoration: BoxDecoration(
-                color: c.success,
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(
-                  color: c.success.withOpacity(0.4 + _ctrl.value * 0.3),
-                  blurRadius: 5, spreadRadius: 1,
-                )],
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: c.success,
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 5),
-            Text(
-              'LIVE',
-              style: TextStyle(
-                color: c.success,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            'LIVE',
+            style: TextStyle(
+              color: c.success,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
+
+// ─── Icon Button ──────────────────────────────────────────────────────────────
 
 class _IconBtn extends StatelessWidget {
   const _IconBtn({required this.c, required this.icon, required this.onTap});
@@ -404,11 +376,12 @@ class _IconBtn extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 38, height: 38,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border.withOpacity(0.25)),
+        border: Border.all(color: c.border),
       ),
       child: Icon(icon, size: 17, color: c.textSecondary),
     ),
@@ -437,7 +410,7 @@ class _PriceStrip extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border.withOpacity(0.18)),
+          border: Border.all(color: c.border),
         ),
         child: Row(
           children: [
@@ -447,7 +420,7 @@ class _PriceStrip extends StatelessWidget {
               price: (xlm.isFinite && xlm > 0) ? '${xlmVm.fiatSym}${xlm.toStringAsFixed(4)}' : '—',
               fiat: xlmVm.fiatCode,
             ),
-            Container(width: 1, height: 28, color: c.border.withOpacity(0.18)),
+            Container(width: 1, height: 28, color: c.border),
             _PriceCell(
               c: c,
               token: 'USDC',
@@ -512,8 +485,6 @@ class _TypeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // "BUY" tab = OfferType.sell (user buys from sell offers)
-    // "SELL" tab = OfferType.buy (user sells to buy offers)
     final isBuyTab  = selected == OfferType.sell;
     final isSellTab = selected == OfferType.buy;
 
@@ -523,7 +494,7 @@ class _TypeToggle extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: c.border.withOpacity(0.2)),
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
@@ -577,9 +548,6 @@ class _ToggleOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? activeColor : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          boxShadow: active
-              ? [BoxShadow(color: activeColor.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 3))]
-              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -622,18 +590,19 @@ class _EmptyState extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.18)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         children: [
           Container(
-            width: 52, height: 52,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: c.textSecondary.withOpacity(0.07),
+              color: c.background,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: c.border),
             ),
-            child: Icon(Icons.storefront_outlined,
-                color: c.textSecondary.withOpacity(0.45), size: 24),
+            child: Icon(Icons.storefront_outlined, color: c.textSecondary, size: 24),
           ),
           const SizedBox(height: 16),
           Text(
@@ -676,10 +645,12 @@ class _ErrorState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 52, height: 52,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: c.error.withOpacity(0.08),
+              color: c.background,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: c.border),
             ),
             child: Icon(Icons.cloud_off_rounded, color: c.error, size: 24),
           ),
@@ -743,7 +714,8 @@ class _SkeletonListState extends State<_SkeletonList>
     vsync: this,
     duration: const Duration(milliseconds: 1100),
   )..repeat(reverse: true);
-  late final Animation<double> _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  late final Animation<double> _anim =
+  CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
 
   @override
   void dispose() { _ctrl.dispose(); super.dispose(); }
@@ -751,18 +723,21 @@ class _SkeletonListState extends State<_SkeletonList>
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
-    final isLight = Theme.of(context).brightness == Brightness.light;
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) {
-        final op = (isLight ? 0.08 : 0.04) + _anim.value * (isLight ? 0.12 : 0.08);
+        // Solid border color alternates between two theme-safe tones
+        final isLight = Theme.of(context).brightness == Brightness.light;
+        final skeletonColor = isLight
+            ? Color.lerp(const Color(0xFFE5E7EB), const Color(0xFFD1D5DB), _anim.value)!
+            : Color.lerp(const Color(0xFF2A2A2A), const Color(0xFF3A3A3A), _anim.value)!;
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
           physics: const NeverScrollableScrollPhysics(),
           itemCount: 5,
           itemBuilder: (_, __) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _SkeletonTile(c: c, op: op),
+            child: _SkeletonTile(c: c, skeletonColor: skeletonColor),
           ),
         );
       },
@@ -771,15 +746,16 @@ class _SkeletonListState extends State<_SkeletonList>
 }
 
 class _SkeletonTile extends StatelessWidget {
-  const _SkeletonTile({required this.c, required this.op});
+  const _SkeletonTile({required this.c, required this.skeletonColor});
   final AppColor c;
-  final double op;
+  final Color skeletonColor;
 
   Widget _box({required double w, required double h, required double r}) =>
       Container(
-        width: w, height: h,
+        width: w,
+        height: h,
         decoration: BoxDecoration(
-          color: c.border.withOpacity(op),
+          color: skeletonColor,
           borderRadius: BorderRadius.circular(r),
         ),
       );
@@ -791,12 +767,11 @@ class _SkeletonTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(op * 0.8)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             children: [
               _box(w: 42, h: 42, r: 12),
@@ -815,10 +790,8 @@ class _SkeletonTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Divider
-          Container(height: 1, color: c.border.withOpacity(op * 0.5)),
+          Container(height: 1, color: c.border),
           const SizedBox(height: 14),
-          // Amount + button row
           Row(
             children: [
               Expanded(
@@ -839,7 +812,6 @@ class _SkeletonTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // Tags row
           Row(
             children: [
               _box(w: 48, h: 24, r: 7),

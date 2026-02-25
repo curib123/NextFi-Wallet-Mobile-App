@@ -8,17 +8,6 @@ import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/reviews/reviews_core_service.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC OFFER TILE
-// Design language:
-//  · 3px top accent bar (type color) for instant BUY/SELL recognition
-//  · Merchant row: avatar icon + name/meta inline, status pill right-aligned
-//  · Price row: pair name large, live price chip right-aligned
-//  · Footer: type pill + qty chip left, payment methods + chevron right
-//  · Shared shimmerAnim from parent — single AnimationController for all tiles
-//  · Disabled (no valid price): 50% opacity, tap blocked, price shows "—"
-// ─────────────────────────────────────────────────────────────────────────────
-
 class PublicOfferTile extends StatefulWidget {
   const PublicOfferTile({
     super.key,
@@ -89,7 +78,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     try {
       final methods = await _offerPaymentCore.getPaymentMethodsForOffer(widget.offer.id);
       if (mounted) setState(() {
-        _paymentMethodsMap  = {for (final m in methods) m.id: m};
+        _paymentMethodsMap     = {for (final m in methods) m.id: m};
         _loadingPaymentMethods = false;
       });
     } catch (_) {
@@ -133,7 +122,6 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     }
   }
 
-  // Merchant SELLS → user BUYS
   bool get _isBuy => widget.offer.type == OfferType.sell;
 
   Color get _typeColor =>
@@ -149,17 +137,16 @@ class _PublicOfferTileState extends State<PublicOfferTile>
 
   @override
   Widget build(BuildContext context) {
-    final c          = widget.c;
-    final offer      = widget.offer;
-    final typeColor  = _typeColor;
+    final c         = widget.c;
+    final offer     = widget.offer;
+    final typeColor = _typeColor;
     final statusText = offer.status?.name.toUpperCase() ?? 'UNKNOWN';
-    final isLight    = Theme.of(context).brightness == Brightness.light;
-    final enabled    = widget.enabled;
+    final enabled   = widget.enabled;
 
     return GestureDetector(
-      onTapDown:   enabled ? (_) => _pressCtrl.forward()                       : null,
-      onTapUp:     enabled ? (_) { _pressCtrl.reverse(); widget.onTap(); }      : null,
-      onTapCancel: enabled ? () => _pressCtrl.reverse()                         : null,
+      onTapDown:   enabled ? (_) => _pressCtrl.forward()                  : null,
+      onTapUp:     enabled ? (_) { _pressCtrl.reverse(); widget.onTap(); } : null,
+      onTapCancel: enabled ? () => _pressCtrl.reverse()                   : null,
       child: ScaleTransition(
         scale: _scaleAnim,
         child: Opacity(
@@ -168,16 +155,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: c.border.withOpacity(isLight ? 0.16 : 0.10),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isLight ? 0.055 : 0.18),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              border: Border.all(color: c.border),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
@@ -192,7 +170,6 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Merchant row
                         _MerchantRow(
                           c: c,
                           isBuy: _isBuy,
@@ -204,28 +181,24 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                           averageRating: _averageRating,
                           reviewCount: _reviewCount,
                           loadingReviews: _loadingReviews,
-                          isLight: isLight,
                           shimmerAnim: widget.shimmerAnim,
                         ),
 
                         const SizedBox(height: 13),
-                        _GradientDivider(c: c, isLight: isLight),
+                        _SolidDivider(c: c),
                         const SizedBox(height: 13),
 
-                        // ── Price row
                         _PriceRow(
                           c: c,
                           offer: offer,
                           typeColor: typeColor,
                           marketPrice: widget.marketPrice,
                           priceLoading: widget.priceLoading,
-                          isLight: isLight,
                           shimmerAnim: widget.shimmerAnim,
                         ),
 
                         const SizedBox(height: 12),
 
-                        // ── Footer row
                         _FooterRow(
                           c: c,
                           offer: offer,
@@ -234,7 +207,6 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                           loadingPaymentMethods: _loadingPaymentMethods,
                           paymentMethodsMap: _paymentMethodsMap,
                           paymentNames: _paymentNames,
-                          isLight: isLight,
                           shimmerAnim: widget.shimmerAnim,
                         ),
                       ],
@@ -266,7 +238,6 @@ class _MerchantRow extends StatelessWidget {
     required this.averageRating,
     required this.reviewCount,
     required this.loadingReviews,
-    required this.isLight,
     required this.shimmerAnim,
   });
 
@@ -280,7 +251,6 @@ class _MerchantRow extends StatelessWidget {
   final double? averageRating;
   final int reviewCount;
   final bool loadingReviews;
-  final bool isLight;
   final Animation<double> shimmerAnim;
 
   @override
@@ -290,11 +260,12 @@ class _MerchantRow extends StatelessWidget {
       children: [
         // Direction icon badge
         Container(
-          width: 38, height: 38,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            color: typeColor.withOpacity(isLight ? 0.08 : 0.12),
+            color: c.background,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: typeColor.withOpacity(0.14)),
+            border: Border.all(color: c.border),
           ),
           child: Icon(
             isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
@@ -304,10 +275,9 @@ class _MerchantRow extends StatelessWidget {
         ),
         const SizedBox(width: 11),
 
-        // Merchant info — expands to fill
         Expanded(
           child: loadingMerchant
-              ? _MerchantSkeleton(c: c, isLight: isLight, shimmerAnim: shimmerAnim)
+              ? _MerchantSkeleton(c: c, shimmerAnim: shimmerAnim)
               : merchantProfile != null
               ? _MerchantMeta(
             c: c,
@@ -315,7 +285,6 @@ class _MerchantRow extends StatelessWidget {
             averageRating: averageRating,
             reviewCount: reviewCount,
             loadingReviews: loadingReviews,
-            isLight: isLight,
             shimmerAnim: shimmerAnim,
           )
               : Text('Unknown merchant',
@@ -327,9 +296,9 @@ class _MerchantRow extends StatelessWidget {
         // Status pill
         _Pill(
           label: statusText,
-          textColor: statusColor,
-          bg: statusColor.withOpacity(isLight ? 0.08 : 0.12),
-          border: statusColor.withOpacity(isLight ? 0.18 : 0.24),
+          textColor: Colors.white,
+          bg: statusColor,
+          border: statusColor,
           fontSize: 9.5,
           weight: FontWeight.w800,
         ),
@@ -349,7 +318,6 @@ class _MerchantMeta extends StatelessWidget {
     required this.averageRating,
     required this.reviewCount,
     required this.loadingReviews,
-    required this.isLight,
     required this.shimmerAnim,
   });
 
@@ -358,7 +326,6 @@ class _MerchantMeta extends StatelessWidget {
   final double? averageRating;
   final int reviewCount;
   final bool loadingReviews;
-  final bool isLight;
   final Animation<double> shimmerAnim;
 
   static const _tierLabel = {
@@ -367,19 +334,23 @@ class _MerchantMeta extends StatelessWidget {
     MerchantTier.unknown: 'Basic',
   };
   static const _tierColor = {
-    MerchantTier.vip: Color(0xFFB45309), MerchantTier.premium: Color(0xFF7C3AED),
-    MerchantTier.standard: Color(0xFF2563EB), MerchantTier.basic: Color(0xFF6B7280),
-    MerchantTier.unknown: Color(0xFF6B7280),
+    MerchantTier.vip:      Color(0xFFB45309),
+    MerchantTier.premium:  Color(0xFF7C3AED),
+    MerchantTier.standard: Color(0xFF2563EB),
+    MerchantTier.basic:    Color(0xFF6B7280),
+    MerchantTier.unknown:  Color(0xFF6B7280),
   };
   static const _availColor = {
-    SellerAvailability.available: Color(0xFF16A34A),
+    SellerAvailability.available:   Color(0xFF16A34A),
     SellerAvailability.unavailable: Color(0xFF6B7280),
-    SellerAvailability.onBreak: Color(0xFFD97706),
-    SellerAvailability.unknown: Color(0xFF6B7280),
+    SellerAvailability.onBreak:     Color(0xFFD97706),
+    SellerAvailability.unknown:     Color(0xFF6B7280),
   };
   static const _availLabel = {
-    SellerAvailability.available: 'Online', SellerAvailability.unavailable: 'Offline',
-    SellerAvailability.onBreak: 'On Break', SellerAvailability.unknown: 'Offline',
+    SellerAvailability.available:   'Online',
+    SellerAvailability.unavailable: 'Offline',
+    SellerAvailability.onBreak:     'On Break',
+    SellerAvailability.unknown:     'Offline',
   };
 
   @override
@@ -391,7 +362,7 @@ class _MerchantMeta extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Name + tier badge
+        // Name + tier badge
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -412,14 +383,16 @@ class _MerchantMeta extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
-                color: tierColor.withOpacity(isLight ? 0.08 : 0.12),
+                color: tierColor,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 _tierLabel[profile.tier]!,
-                style: TextStyle(
-                  color: tierColor, fontSize: 9,
-                  fontWeight: FontWeight.w700, letterSpacing: 0.3,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
                 ),
               ),
             ),
@@ -428,35 +401,46 @@ class _MerchantMeta extends StatelessWidget {
 
         const SizedBox(height: 4),
 
-        // ── Location · Rating · Availability
+        // Location · Rating · Availability
         Row(
           children: [
             if (profile.country != null && profile.country!.isNotEmpty) ...[
-              Icon(Icons.place_outlined, size: 11, color: c.textSecondary.withOpacity(0.6)),
+              Icon(Icons.place_outlined, size: 11, color: c.textSecondary),
               const SizedBox(width: 2),
-              Text(profile.country!,
-                  style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
+              Text(
+                profile.country!,
+                style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w500),
+              ),
               _MetaDot(c: c),
             ],
             if (loadingReviews)
-              _SkimBox(c: c, w: 42, h: 10, r: 3, isLight: isLight, anim: shimmerAnim)
+              _SkimBox(c: c, w: 42, h: 10, r: 3, anim: shimmerAnim)
             else if (averageRating != null) ...[
               Icon(Icons.star_rounded, size: 11, color: const Color(0xFFD97706)),
               const SizedBox(width: 2),
-              Text(averageRating!.toStringAsFixed(1),
-                  style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+              Text(
+                averageRating!.toStringAsFixed(1),
+                style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
               if (reviewCount > 0) ...[
                 const SizedBox(width: 1),
-                Text('($reviewCount)',
-                    style: TextStyle(color: c.textSecondary.withOpacity(0.55), fontSize: 10)),
+                Text(
+                  '($reviewCount)',
+                  style: TextStyle(color: c.textSecondary, fontSize: 10),
+                ),
               ],
               _MetaDot(c: c),
             ],
-            Container(width: 6, height: 6,
-                decoration: BoxDecoration(color: availColor, shape: BoxShape.circle)),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: availColor, shape: BoxShape.circle),
+            ),
             const SizedBox(width: 4),
-            Text(availText,
-                style: TextStyle(color: availColor, fontSize: 11, fontWeight: FontWeight.w600)),
+            Text(
+              availText,
+              style: TextStyle(color: availColor, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ],
@@ -465,18 +449,17 @@ class _MerchantMeta extends StatelessWidget {
 }
 
 class _MerchantSkeleton extends StatelessWidget {
-  const _MerchantSkeleton({required this.c, required this.isLight, required this.shimmerAnim});
+  const _MerchantSkeleton({required this.c, required this.shimmerAnim});
   final AppColor c;
-  final bool isLight;
   final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _SkimBox(c: c, w: 110, h: 13, r: 4, isLight: isLight, anim: shimmerAnim),
+      _SkimBox(c: c, w: 110, h: 13, r: 4, anim: shimmerAnim),
       const SizedBox(height: 6),
-      _SkimBox(c: c, w: 72,  h: 10, r: 3, isLight: isLight, anim: shimmerAnim),
+      _SkimBox(c: c, w: 72,  h: 10, r: 3, anim: shimmerAnim),
     ],
   );
 }
@@ -492,7 +475,6 @@ class _PriceRow extends StatelessWidget {
     required this.typeColor,
     required this.marketPrice,
     required this.priceLoading,
-    required this.isLight,
     required this.shimmerAnim,
   });
 
@@ -501,7 +483,6 @@ class _PriceRow extends StatelessWidget {
   final Color typeColor;
   final String? marketPrice;
   final bool priceLoading;
-  final bool isLight;
   final Animation<double> shimmerAnim;
 
   String? get _marginBadge {
@@ -541,12 +522,18 @@ class _PriceRow extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: typeColor.withOpacity(isLight ? 0.08 : 0.12),
+                        color: typeColor,
                         borderRadius: BorderRadius.circular(5),
                       ),
-                      child: Text(margin,
-                          style: TextStyle(color: typeColor, fontSize: 10,
-                              fontWeight: FontWeight.w700, letterSpacing: 0.1)),
+                      child: Text(
+                        margin,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -560,10 +547,11 @@ class _PriceRow extends StatelessWidget {
                   _LimitText(c: c, prefix: 'Min', value: offer.minAmount),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Container(width: 3, height: 3,
-                        decoration: BoxDecoration(
-                            color: c.textSecondary.withOpacity(0.3),
-                            shape: BoxShape.circle)),
+                    child: Container(
+                      width: 3,
+                      height: 3,
+                      decoration: BoxDecoration(color: c.border, shape: BoxShape.circle),
+                    ),
                   ),
                   _LimitText(c: c, prefix: 'Max', value: offer.maxAmount),
                 ],
@@ -579,44 +567,46 @@ class _PriceRow extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            color: hasPrice
-                ? typeColor.withOpacity(isLight ? 0.07 : 0.11)
-                : c.background,
+            color: hasPrice ? typeColor : c.background,
             borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: hasPrice
-                  ? typeColor.withOpacity(isLight ? 0.2 : 0.26)
-                  : c.border.withOpacity(isLight ? 0.15 : 0.10),
-            ),
+            border: Border.all(color: hasPrice ? typeColor : c.border),
           ),
           child: hasPrice
               ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 5, height: 5,
-                  decoration: BoxDecoration(color: typeColor, shape: BoxShape.circle)),
+              Container(
+                width: 5,
+                height: 5,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 6),
               Text(
                 marketPrice!,
-                style: TextStyle(
-                  color: typeColor,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
                   letterSpacing: -0.3,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                  fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
             ],
           )
               : priceLoading
-              ? _SkimBox(c: c, w: 72, h: 13, r: 4, isLight: isLight, anim: shimmerAnim)
-              : Text('—',
-              style: TextStyle(
-                color: c.textSecondary.withOpacity(0.45),
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                letterSpacing: 0.5,
-              )),
+              ? _SkimBox(c: c, w: 72, h: 13, r: 4, anim: shimmerAnim)
+              : Text(
+            '—',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
       ],
     );
@@ -662,7 +652,6 @@ class _FooterRow extends StatelessWidget {
     required this.loadingPaymentMethods,
     required this.paymentMethodsMap,
     required this.paymentNames,
-    required this.isLight,
     required this.shimmerAnim,
   });
 
@@ -673,7 +662,6 @@ class _FooterRow extends StatelessWidget {
   final bool loadingPaymentMethods;
   final Map<String, PaymentMethodModel> paymentMethodsMap;
   final String Function(List<String>) paymentNames;
-  final bool isLight;
   final Animation<double> shimmerAnim;
 
   @override
@@ -685,12 +673,12 @@ class _FooterRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Type pill
+        // Type pill — solid fill
         _Pill(
           label: isBuy ? 'BUY' : 'SELL',
-          textColor: typeColor,
-          bg: typeColor.withOpacity(isLight ? 0.08 : 0.12),
-          border: typeColor.withOpacity(isLight ? 0.18 : 0.24),
+          textColor: Colors.white,
+          bg: typeColor,
+          border: typeColor,
           fontSize: 10.5,
           weight: FontWeight.w800,
         ),
@@ -702,17 +690,21 @@ class _FooterRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.background,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: c.border.withOpacity(isLight ? 0.14 : 0.10)),
+              border: Border.all(color: c.border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.layers_outlined, size: 10.5,
-                    color: c.textSecondary.withOpacity(0.6)),
+                Icon(Icons.layers_outlined, size: 10.5, color: c.textSecondary),
                 const SizedBox(width: 4),
-                Text('${offer.availableQty} avail.',
-                    style: TextStyle(color: c.textSecondary,
-                        fontSize: 11, fontWeight: FontWeight.w500)),
+                Text(
+                  '${offer.availableQty} avail.',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -720,9 +712,8 @@ class _FooterRow extends StatelessWidget {
 
         const Spacer(),
 
-        // Payment methods
         if (loadingPaymentMethods)
-          _SkimBox(c: c, w: 88, h: 11, r: 4, isLight: isLight, anim: shimmerAnim)
+          _SkimBox(c: c, w: 88, h: 11, r: 4, anim: shimmerAnim)
         else if (effectiveIds.isNotEmpty)
           _PaymentRow(
             c: c,
@@ -737,10 +728,12 @@ class _FooterRow extends StatelessWidget {
 
         // Chevron
         Container(
-          width: 28, height: 28,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(
+            color: c.background,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: c.border.withOpacity(isLight ? 0.2 : 0.12)),
+            border: Border.all(color: c.border),
           ),
           child: Icon(Icons.chevron_right_rounded, size: 16, color: c.textSecondary),
         ),
@@ -767,15 +760,15 @@ class _PaymentRow extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.account_balance_wallet_outlined, size: 11,
-              color: c.textSecondary.withOpacity(0.45)),
+          Icon(Icons.account_balance_wallet_outlined, size: 11, color: c.textSecondary),
           const SizedBox(width: 5),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 120),
-            child: Text(fallbackNames,
-                style: TextStyle(color: c.textSecondary,
-                    fontSize: 11.5, fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              fallbackNames,
+              style: TextStyle(color: c.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       );
@@ -789,7 +782,8 @@ class _PaymentRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          width: shown.length * 16.0 + 8, height: 24,
+          width: shown.length * 16.0 + 8,
+          height: 24,
           child: Stack(
             children: shown.asMap().entries.map((e) => Positioned(
               left: e.key * 16.0,
@@ -799,17 +793,19 @@ class _PaymentRow extends StatelessWidget {
         ),
         if (extra > 0) ...[
           const SizedBox(width: 5),
-          Text('+$extra',
-              style: TextStyle(color: c.textSecondary,
-                  fontSize: 11, fontWeight: FontWeight.w600)),
+          Text(
+            '+$extra',
+            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
         ] else if (methods.length == 1) ...[
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 80),
-            child: Text(methods.first.name,
-                style: TextStyle(color: c.textSecondary,
-                    fontSize: 11.5, fontWeight: FontWeight.w500),
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              methods.first.name,
+              style: TextStyle(color: c.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ],
@@ -827,17 +823,21 @@ class _LogoAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final logo = method.logo;
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: c.background,
         borderRadius: BorderRadius.circular(size * 0.35),
-        border: Border.all(color: c.border.withOpacity(0.18)),
+        border: Border.all(color: c.border),
       ),
       child: Padding(
         padding: EdgeInsets.all(size * 0.10),
         child: logo != null && logo.isNotEmpty
-            ? Image.network(logo, fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _fallback())
+            ? Image.network(
+          logo,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => _fallback(),
+        )
             : _fallback(),
       ),
     );
@@ -846,8 +846,11 @@ class _LogoAvatar extends StatelessWidget {
   Widget _fallback() => Center(
     child: Text(
       method.name.isNotEmpty ? method.name[0].toUpperCase() : '?',
-      style: TextStyle(fontSize: size * 0.42,
-          fontWeight: FontWeight.w700, color: c.textSecondary),
+      style: TextStyle(
+        fontSize: size * 0.42,
+        fontWeight: FontWeight.w700,
+        color: c.textSecondary,
+      ),
     ),
   );
 }
@@ -856,32 +859,22 @@ class _LogoAvatar extends StatelessWidget {
 // SHARED ATOMS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Fading gradient rule — fades in from edges, solid in center.
-class _GradientDivider extends StatelessWidget {
-  const _GradientDivider({required this.c, required this.isLight});
+class _SolidDivider extends StatelessWidget {
+  const _SolidDivider({required this.c});
   final AppColor c;
-  final bool isLight;
 
   @override
-  Widget build(BuildContext context) => Container(
-    height: 1,
-    decoration: BoxDecoration(
-      gradient: LinearGradient(colors: [
-        c.border.withOpacity(0),
-        c.border.withOpacity(isLight ? 0.14 : 0.09),
-        c.border.withOpacity(isLight ? 0.14 : 0.09),
-        c.border.withOpacity(0),
-      ]),
-    ),
-  );
+  Widget build(BuildContext context) => Container(height: 1, color: c.border);
 }
 
-/// Reusable pill badge with flat tint bg + border.
 class _Pill extends StatelessWidget {
   const _Pill({
-    required this.label, required this.textColor,
-    required this.bg, required this.border,
-    required this.fontSize, required this.weight,
+    required this.label,
+    required this.textColor,
+    required this.bg,
+    required this.border,
+    required this.fontSize,
+    required this.weight,
   });
   final String label;
   final Color textColor, bg, border;
@@ -896,13 +889,18 @@ class _Pill extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       border: Border.all(color: border),
     ),
-    child: Text(label,
-        style: TextStyle(color: textColor, fontSize: fontSize,
-            fontWeight: weight, letterSpacing: 0.3)),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: textColor,
+        fontSize: fontSize,
+        fontWeight: weight,
+        letterSpacing: 0.3,
+      ),
+    ),
   );
 }
 
-/// Mid-row separator dot in meta lines.
 class _MetaDot extends StatelessWidget {
   const _MetaDot({required this.c});
   final AppColor c;
@@ -910,16 +908,16 @@ class _MetaDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 5),
-    child: Container(width: 2.5, height: 2.5,
-        decoration: BoxDecoration(
-            color: c.textSecondary.withOpacity(0.3), shape: BoxShape.circle)),
+    child: Container(
+      width: 2.5,
+      height: 2.5,
+      decoration: BoxDecoration(color: c.border, shape: BoxShape.circle),
+    ),
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIMMER BOX — StatelessWidget; uses a shared Animation<double> passed from
-// the screen level so only ONE AnimationController drives all shimmer boxes
-// across all visible tiles simultaneously.
+// SHIMMER BOX
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SkimBox extends StatelessWidget {
@@ -928,29 +926,31 @@ class _SkimBox extends StatelessWidget {
     required this.w,
     required this.h,
     required this.r,
-    required this.isLight,
     required this.anim,
   });
 
   final AppColor c;
   final double w, h, r;
-  final bool isLight;
   final Animation<double> anim;
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: anim,
-    builder: (_, __) {
-      final lo = isLight ? 0.08 : 0.05;
-      final hi = isLight ? 0.18 : 0.12;
-      return Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          color: c.border.withOpacity(lo + (hi - lo) * anim.value),
-          borderRadius: BorderRadius.circular(r),
-        ),
-      );
-    },
-  );
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (_, __) {
+        final skeletonColor = isLight
+            ? Color.lerp(const Color(0xFFE5E7EB), const Color(0xFFD1D5DB), anim.value)!
+            : Color.lerp(const Color(0xFF2A2A2A), const Color(0xFF3A3A3A), anim.value)!;
+        return Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            color: skeletonColor,
+            borderRadius: BorderRadius.circular(r),
+          ),
+        );
+      },
+    );
+  }
 }
