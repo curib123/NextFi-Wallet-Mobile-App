@@ -7,6 +7,7 @@ import '../helpers/merchant_profile_exceptions.dart';
 import '../helpers/merchant_profile_helpers.dart';
 import '../models/merchant_profile_dtos.dart';
 import '../models/merchant_profile_models.dart';
+import '../models/merchant_tier_progress_models.dart';
 import 'merchant_profile_endpoints.dart';
 
 typedef TokenProvider = Future<String?> Function();
@@ -42,7 +43,12 @@ class MerchantProfileService {
     if (data is String && data.trim().toLowerCase() == 'null') return null;
     if (data is Map<String, dynamic>) {
       if (data.isEmpty) return null;
-      for (final key in const ['data', 'merchantProfile', 'merchant_profile', 'profile']) {
+      for (final key in const [
+        'data',
+        'merchantProfile',
+        'merchant_profile',
+        'profile',
+      ]) {
         final v = data[key];
         if (v is Map<String, dynamic>) return v;
       }
@@ -69,6 +75,25 @@ class MerchantProfileService {
       if (map != null) return MerchantProfileModel.fromJson(map);
     } on ApiException catch (e) {
       if (e.statusCode == 404) return null;
+      rethrow;
+    }
+    return null;
+  }
+
+  /// GET /merchant-profiles/me/tier-progress
+  /// Returns null if user is not merchant yet or endpoint is unavailable for current state.
+  Future<MerchantTierProgressModel?> getTierProgress() async {
+    try {
+      final res = await _client.get(
+        MerchantProfileHttp.uri(MerchantProfileEndpoints.meTierProgress()),
+        headers: await _headers(),
+      );
+      MerchantProfileHttp.ensureOk(res);
+      final data = MerchantProfileHttp.decodeJson<dynamic>(res);
+      final map = _extractMap(data) ?? _asDataMap(data);
+      if (map != null) return MerchantTierProgressModel.fromJson(map);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 403) return null;
       rethrow;
     }
     return null;
@@ -145,12 +170,13 @@ class MerchantProfileService {
     }
 
     final token = await _tokenOrThrow();
-    final req = http.MultipartRequest(
-      'POST',
-      MerchantProfileHttp.uri(MerchantProfileEndpoints.meBusinessDocs()),
-    )
-      ..headers['Authorization'] = 'Bearer $token'
-      ..headers['Accept'] = 'application/json';
+    final req =
+        http.MultipartRequest(
+            'POST',
+            MerchantProfileHttp.uri(MerchantProfileEndpoints.meBusinessDocs()),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..headers['Accept'] = 'application/json';
 
     if (businessDocument != null) {
       req.files.add(
@@ -187,9 +213,7 @@ class MerchantProfileService {
   Future<MerchantProfileModel?> getPublic(String userId) async {
     try {
       final res = await _client.get(
-        MerchantProfileHttp.uri(
-          MerchantProfileEndpoints.publicProfile(userId),
-        ),
+        MerchantProfileHttp.uri(MerchantProfileEndpoints.publicProfile(userId)),
         headers: await _headers(),
       );
       MerchantProfileHttp.ensureOk(res);
@@ -204,4 +228,17 @@ class MerchantProfileService {
   }
 
   void dispose() => _client.close();
+}
+
+Map<String, dynamic>? _asDataMap(dynamic data) {
+  if (data is! Map) return null;
+  final map = Map<String, dynamic>.from(data);
+  final nested = map['data'];
+  if (nested is Map) return Map<String, dynamic>.from(nested);
+  if (map.containsKey('currentTier') ||
+      map.containsKey('tiers') ||
+      map.containsKey('nextTier')) {
+    return map;
+  }
+  return null;
 }

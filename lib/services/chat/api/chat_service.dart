@@ -638,33 +638,9 @@ class ChatService {
   }
 
   Future<ChatDirectThreadModel> getThreadWithFriend(String friendId) async {
-    final res = await _client.get(
-      ChatHttp.uri(ChatEndpoints.getThreadWithFriend(friendId)),
-      headers: await _headers(),
-    );
-
-    ChatHttp.ensureOk(res);
-    // Social layering: Handle empty or null responses gracefully
-    if (res.body.isEmpty) {
-      return ChatDirectThreadModel(
-        id: '',
-        friendUserId: friendId,
-        isActive: false,
-        unreadCount: 0,
-      );
-    }
-    final data = ChatHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'item', 'thread']);
-    if (map != null && map.isNotEmpty)
-      return ChatDirectThreadModel.fromJson(map);
-
-    // Return fallback thread on empty response (thread may not exist yet)
-    return ChatDirectThreadModel(
-      id: '',
-      friendUserId: friendId,
-      isActive: false,
-      unreadCount: 0,
-    );
+    // Keep backward compatibility while preventing invalid empty-thread
+    // objects from reaching UI. This endpoint currently opens or returns.
+    return openThreadWithFriend(friendId);
   }
 
   Future<ChatDirectMessageModel> getMessage(String messageId) async {

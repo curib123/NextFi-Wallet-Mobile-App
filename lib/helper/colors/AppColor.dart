@@ -20,6 +20,7 @@ class AppColor {
   final Color textPrimary;
   final Color textSecondary;
   final Color border;
+  final Color onPrimary;
 
   // ─── Charts ────────────────────────────────────────────────────
   final Color chartGreen = const Color(0xFF30D158);
@@ -64,6 +65,7 @@ class AppColor {
     required this.textPrimary,
     required this.textSecondary,
     required this.border,
+    required this.onPrimary,
   });
 
   /// ─── Light Mode ───────────────────────────────────────────────
@@ -73,6 +75,7 @@ class AppColor {
     textPrimary: Color(0xFF111827),
     textSecondary: Color(0xFF6B7280),
     border: Color(0xFFE5E7EB),
+    onPrimary: Color(0xFFFFFFFF),
   );
 
   /// ─── Dark Mode ────────────────────────────────────────────────
@@ -82,6 +85,7 @@ class AppColor {
     textPrimary: Color(0xFFF3F4F6),
     textSecondary: Color(0xFF9CA3AF),
     border: Color(0xFF2A2F3A),
+    onPrimary: Color(0xFFFFFFFF),
   );
 
   /// Theme resolver

@@ -1,5 +1,3 @@
-// lib/features/app_drawer/view/app_drawer.dart
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -26,6 +24,7 @@ import 'package:next_fi/services/oath2.0/models/user_model.dart';
 import 'package:next_fi/services/chat/chat_core_service.dart';
 import 'package:next_fi/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
+import 'package:next_fi/services/merchant_profile/models/merchant_tier_progress_models.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
@@ -35,54 +34,49 @@ import 'package:next_fi/services/verification/verification_core_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TTL CACHE ENTRY
-// Wraps any value with a timestamp so we can expire stale data.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CacheEntry<T> {
   _CacheEntry(this.value) : _at = DateTime.now();
-
   final T value;
   final DateTime _at;
-
-  /// Returns true when the entry is still within [ttl].
   bool isFresh(Duration ttl) => DateTime.now().difference(_at) < ttl;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DRAWER CACHE  (static — survives widget rebuilds/closes)
+// DRAWER CACHE
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DrawerCache {
-  // TTLs — adjust to taste.
-  static const _userTtl        = Duration(seconds: 30);
-  static const _profileTtl     = Duration(seconds: 5);
-  static const _merchantTtl    = Duration(seconds: 5);
-  static const _verificationTtl= Duration(seconds: 5);
-  static const _chatTtl        = Duration(seconds: 1);
-  static const _appInfoTtl     = Duration(days: 1); // basically never re-fetch
+  static const _userTtl = Duration(seconds: 30);
+  static const _profileTtl = Duration(seconds: 5);
+  static const _merchantTtl = Duration(seconds: 5);
+  static const _verificationTtl = Duration(seconds: 5);
+  static const _chatTtl = Duration(seconds: 1);
+  static const _appInfoTtl = Duration(days: 1);
 
-  static _CacheEntry<User>?                 user;
-  static _CacheEntry<PackageInfo>?          appInfo;
-  static _CacheEntry<ProfileModel?>?        profile;
+  static _CacheEntry<User>? user;
+  static _CacheEntry<PackageInfo>? appInfo;
+  static _CacheEntry<ProfileModel?>? profile;
   static _CacheEntry<MerchantProfileModel?>? merchantProfile;
-  static _CacheEntry<TrustStatus>?          trustStatus;
-  static _CacheEntry<int>?                  unreadCount;
+  static _CacheEntry<MerchantTierProgressModel?>? tierProgress;
+  static _CacheEntry<TrustStatus>? trustStatus;
+  static _CacheEntry<int>? unreadCount;
 
-  static bool get hasUser            => user        != null && user!.isFresh(_userTtl);
-  static bool get hasAppInfo         => appInfo     != null && appInfo!.isFresh(_appInfoTtl);
-  static bool get hasProfile         => profile     != null && profile!.isFresh(_profileTtl);
+  static bool get hasUser => user != null && user!.isFresh(_userTtl);
+  static bool get hasAppInfo => appInfo != null && appInfo!.isFresh(_appInfoTtl);
+  static bool get hasProfile => profile != null && profile!.isFresh(_profileTtl);
   static bool get hasMerchantProfile => merchantProfile != null && merchantProfile!.isFresh(_merchantTtl);
-  static bool get hasTrustStatus     => trustStatus != null && trustStatus!.isFresh(_verificationTtl);
-  static bool get hasUnreadCount     => unreadCount != null && unreadCount!.isFresh(_chatTtl);
+  static bool get hasTierProgress => tierProgress != null && tierProgress!.isFresh(_merchantTtl);
+  static bool get hasTrustStatus => trustStatus != null && trustStatus!.isFresh(_verificationTtl);
+  static bool get hasUnreadCount => unreadCount != null && unreadCount!.isFresh(_chatTtl);
 
-  /// Wipe everything on logout so the next user starts clean.
   static void invalidateAll() {
     user = merchantProfile = profile = null;
+    tierProgress = null;
     trustStatus = unreadCount = null;
-    // Keep appInfo — it never changes per session.
   }
 
-  /// Only wipe per-profile data (e.g. after profile edit).
   static void invalidateProfile() {
     profile = null;
   }
@@ -100,34 +94,29 @@ class AppDrawer extends StatefulWidget {
   State<AppDrawer> createState() => _AppDrawerState();
 }
 
-class _AppDrawerState extends State<AppDrawer>
-    with SingleTickerProviderStateMixin {
-  // ── services ──────────────────────────────────────────────────────────────
-  final _auth             = AuthService();
-  final _chat             = ChatCoreService.I;
-  final _profile          = ProfileCoreService.I;
-  final _verification     = VerificationCoreService.I;
+class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMixin {
+  final _auth = AuthService();
+  final _chat = ChatCoreService.I;
+  final _profile = ProfileCoreService.I;
+  final _verification = VerificationCoreService.I;
   final _merchantProfileSvc = MerchantProfileCoreService.I;
 
-  // ── live state (fed from _DrawerCache) ────────────────────────────────────
-  bool           _loggingOut   = false;
+  bool _loggingOut = false;
   StreamSubscription<void>? _profileChangeSub;
 
-  // ── entry animation ───────────────────────────────────────────────────────
-  late final AnimationController        _entryCtrl;
-  late final Animation<double>          _fadeAnim;
-  late final Animation<Offset>          _slideAnim;
-  late final List<Animation<double>>    _itemAnims;
+  late final AnimationController _entryCtrl;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
+  late final List<Animation<double>> _itemAnims;
 
-  // ── convenience getters straight from cache ───────────────────────────────
-  User?                 get _user            => _DrawerCache.user?.value;
-  PackageInfo?          get _appInfo         => _DrawerCache.appInfo?.value;
-  ProfileModel?         get _cachedProfile   => _DrawerCache.profile?.value;
+  User? get _user => _DrawerCache.user?.value;
+  PackageInfo? get _appInfo => _DrawerCache.appInfo?.value;
+  ProfileModel? get _cachedProfile => _DrawerCache.profile?.value;
   MerchantProfileModel? get _merchantProfile => _DrawerCache.merchantProfile?.value;
-  TrustStatus           get _trustStatus     => _DrawerCache.trustStatus?.value ?? TrustStatus.unknown;
-  int                   get _unreadChatCount => _DrawerCache.unreadCount?.value ?? 0;
+  MerchantTierProgressModel? get _tierProgress => _DrawerCache.tierProgress?.value;
+  TrustStatus get _trustStatus => _DrawerCache.trustStatus?.value ?? TrustStatus.unknown;
+  int get _unreadChatCount => _DrawerCache.unreadCount?.value ?? 0;
 
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -144,14 +133,13 @@ class _AppDrawerState extends State<AppDrawer>
 
     _itemAnims = List.generate(16, (i) {
       final start = 0.1 + i * 0.06;
-      final end   = (start + 0.35).clamp(0.0, 1.0);
+      final end = (start + 0.35).clamp(0.0, 1.0);
       return CurvedAnimation(
         parent: _entryCtrl,
         curve: Interval(start, end, curve: Curves.easeOutCubic),
       );
     });
 
-    // Listen for profile edits in other screens.
     _profileChangeSub = ProfileCoreService.changes.listen((_) {
       if (!mounted) return;
       _DrawerCache.invalidateProfile();
@@ -168,41 +156,28 @@ class _AppDrawerState extends State<AppDrawer>
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // BOOTSTRAP — render immediately from cache, then refresh stale entries
-  // ─────────────────────────────────────────────────────────────────────────
-
   Future<void> _bootstrap() async {
-    // If we already have data in cache, start animation right away so the
-    // drawer feels instant. Stale fetches run in the background.
     _entryCtrl.forward();
-
     final isAuth = await _auth.isAuthenticated;
 
-    // Fire only the fetches whose cache entry is missing or expired.
     final futures = <Future<void>>[
-      if (!_DrawerCache.hasAppInfo)         _fetchAppInfo(),
-      if (isAuth && !_DrawerCache.hasUser)              _fetchUser(),
-      if (isAuth && !_DrawerCache.hasProfile)           _fetchProfile(),
-      if (isAuth && !_DrawerCache.hasMerchantProfile)   _fetchMerchantProfileData(),
-      if (isAuth && !_DrawerCache.hasTrustStatus)       _fetchVerification(),
-      if (isAuth && !_DrawerCache.hasUnreadCount)       _fetchUnreadCount(),
+      if (!_DrawerCache.hasAppInfo) _fetchAppInfo(),
+      if (isAuth && !_DrawerCache.hasUser) _fetchUser(),
+      if (isAuth && !_DrawerCache.hasProfile) _fetchProfile(),
+      if (isAuth && !_DrawerCache.hasMerchantProfile) _fetchMerchantProfileData(),
+      if (isAuth && !_DrawerCache.hasTierProgress) _fetchTierProgressData(),
+      if (isAuth && !_DrawerCache.hasTrustStatus) _fetchVerification(),
+      if (isAuth && !_DrawerCache.hasUnreadCount) _fetchUnreadCount(),
     ];
 
     if (futures.isNotEmpty) await Future.wait(futures);
-
-    // Trigger a single rebuild after all background fetches finish.
     if (mounted) setState(() {});
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // INDIVIDUAL FETCHERS — each writes into _DrawerCache, then setState.
-  // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> _fetchUser() async {
     try {
       final u = await _auth.currentUser;
-      if (u != null) _DrawerCache.user = _CacheEntry(u);
+      _DrawerCache.user = _CacheEntry(u);
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -237,12 +212,8 @@ class _AppDrawerState extends State<AppDrawer>
 
   Future<void> _fetchUnreadCount() async {
     try {
-      final threads = await _chat.listThreads(
-        const ChatListQuery(page: 1, limit: 50),
-      );
-      final count = threads.items.fold<int>(
-        0, (sum, t) => sum + t.unreadCount,
-      );
+      final threads = await _chat.listThreads(const ChatListQuery(page: 1, limit: 50));
+      final count = threads.items.fold<int>(0, (sum, t) => sum + t.unreadCount);
       _DrawerCache.unreadCount = _CacheEntry(count);
       if (mounted) setState(() {});
     } catch (_) {
@@ -260,16 +231,21 @@ class _AppDrawerState extends State<AppDrawer>
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // ACTIONS
-  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> _fetchTierProgressData() async {
+    try {
+      final t = await _merchantProfileSvc.getTierProgress();
+      _DrawerCache.tierProgress = _CacheEntry(t);
+      if (mounted) setState(() {});
+    } catch (_) {
+      _DrawerCache.tierProgress = _CacheEntry(null);
+    }
+  }
 
   Future<void> _handleLogout() async {
     if (_loggingOut) return;
     HapticFeedback.mediumImpact();
     final confirm = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => const _LogoutConfirmationModal(),
     );
@@ -277,8 +253,6 @@ class _AppDrawerState extends State<AppDrawer>
 
     setState(() => _loggingOut = true);
     await _auth.logout();
-
-    // Wipe ALL cached data on logout.
     _DrawerCache.invalidateAll();
 
     if (!mounted) return;
@@ -308,13 +282,11 @@ class _AppDrawerState extends State<AppDrawer>
   Future<void> _handleMerchantRequestTap() async {
     if (_user == null) { _redirectToLogin(); return; }
     Navigator.pop(context);
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()),
-    );
-    // Force re-fetch merchant status after the flow.
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()));
     _DrawerCache.merchantProfile = null;
+    _DrawerCache.tierProgress = null;
     if (mounted) await _fetchMerchantProfileData();
+    if (mounted) await _fetchTierProgressData();
   }
 
   void _handleMerchantOffersTap() {
@@ -331,6 +303,7 @@ class _AppDrawerState extends State<AppDrawer>
 
   void _handleP2PMarketplaceTap() {
     if (_user == null) { _redirectToLogin(); return; }
+    if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
     _push(const MarketOffersScreen(initialType: OfferType.sell));
   }
 
@@ -353,10 +326,6 @@ class _AppDrawerState extends State<AppDrawer>
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // STAGGER HELPER
-  // ─────────────────────────────────────────────────────────────────────────
-
   Widget _staggered(int index, Widget child) {
     if (index >= _itemAnims.length) return child;
     return AnimatedBuilder(
@@ -371,21 +340,15 @@ class _AppDrawerState extends State<AppDrawer>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final c   = AppColor.of(context);
-    final mq  = MediaQuery.of(context);
+    final c = AppColor.of(context);
+    final mq = MediaQuery.of(context);
     final user = _user;
 
-    final merchantApproved    = _merchantProfile?.isApproved ?? false;
-    final isMerchant          = user != null && merchantApproved;
-    final canRequestMerchant  = user != null && _trustStatus == TrustStatus.ready;
-
-    // Show shimmer only when we have NO cached user data at all.
+    final merchantApproved = _merchantProfile?.isApproved ?? false;
+    final isMerchant = user != null && merchantApproved;
+    final canRequestMerchant = user != null && _trustStatus == TrustStatus.ready;
     final showShimmer = user == null && !_DrawerCache.hasProfile;
 
     return Drawer(
@@ -404,6 +367,7 @@ class _AppDrawerState extends State<AppDrawer>
                 _ProfileHeader(
                   user: user,
                   profile: _cachedProfile,
+                  tierProgress: _tierProgress,
                   trustStatus: _trustStatus,
                   colors: c,
                 )
@@ -419,48 +383,59 @@ class _AppDrawerState extends State<AppDrawer>
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     _staggered(0, _SectionLabel(label: 'P2P MARKET', colors: c)),
                     _staggered(1, _NavTile(
-                      icon: LucideIcons.store, label: 'P2P Marketplace',
-                      description: 'Browse buy and sell offers', colors: c,
-                      accentColor: const Color(0xFF10B981), onTap: _handleP2PMarketplaceTap,
+                      icon: LucideIcons.arrowLeftRight,
+                      label: 'P2P Marketplace',
+                      description: 'Browse buy and sell offers',
+                      colors: c,
+                      accentColor: const Color(0xFF10B981), // emerald
+                      onTap: _handleP2PMarketplaceTap,
                       requiresAuth: user == null,
                     )),
                     _staggered(2, _NavTile(
-                      icon: LucideIcons.messageSquare, label: 'Messenger',
-                      description: 'Friends, threads & secure chat', colors: c,
-                      accentColor: const Color(0xFF6366F1),
+                      icon: LucideIcons.messagesSquare,
+                      label: 'Messenger',
+                      description: 'Friends, threads & secure chat',
+                      colors: c,
+                      accentColor: const Color(0xFF6366F1), // indigo
                       trailing: user != null && _unreadChatCount > 0
                           ? _UnreadBadge(count: _unreadChatCount, colors: c)
                           : null,
-                      onTap: _handleMessengerTap, requiresAuth: user == null,
+                      onTap: _handleMessengerTap,
+                      requiresAuth: user == null,
                     )),
                     _staggered(2, _NavTile(
-                      icon: LucideIcons.history, label: 'My Trades',
-                      description: 'Your trade history', colors: c,
-                      accentColor: const Color(0xFF8B5CF6),
-                      onTap: _handleTradeHistoryTap, requiresAuth: user == null,
+                      icon: LucideIcons.clipboardList,
+                      label: 'My Trades',
+                      description: 'Your trade history',
+                      colors: c,
+                      accentColor: const Color(0xFF8B5CF6), // violet
+                      onTap: _handleTradeHistoryTap,
+                      requiresAuth: user == null,
                     )),
 
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     _staggered(3, _SectionLabel(label: 'ACCOUNT', colors: c)),
                     _staggered(4, _NavTile(
-                      icon: LucideIcons.checkCircle2, label: 'Verification',
-                      description: 'Complete identity steps', colors: c,
-                      accentColor: const Color(0xFF0EA5E9),
+                      icon: LucideIcons.shieldCheck,
+                      label: 'Verification',
+                      description: 'Complete identity steps',
+                      colors: c,
+                      accentColor: const Color(0xFF0EA5E9), // sky blue
                       trailing: user != null
-                          ? _TrustStatusChip(status: _trustStatus, colors: c)
+                          ? _TrustStatusBadge(status: _trustStatus, colors: c)
                           : null,
-                      onTap: _handleVerificationTap, requiresAuth: user == null,
+                      onTap: _handleVerificationTap,
+                      requiresAuth: user == null,
                     )),
                     _staggered(5, _NavTile(
-                      icon: LucideIcons.checkCircle2, label: 'Payment Account',
-                      description: 'User Payment Account', colors: c,
-                      accentColor: const Color(0xFF0EA5E9),
-                      trailing: user != null
-                          ? _TrustStatusChip(status: _trustStatus, colors: c)
-                          : null,
+                      icon: LucideIcons.landmark,
+                      label: 'Payment Account',
+                      description: 'Manage payment methods',
+                      colors: c,
+                      accentColor: const Color(0xFF06B6D4), // cyan
                       onTap: () => _redirectToPaymentAccount(false),
                       requiresAuth: user == null,
                     )),
@@ -468,11 +443,13 @@ class _AppDrawerState extends State<AppDrawer>
                     if (canRequestMerchant) ...[
                       _staggered(6, _SectionLabel(label: 'MERCHANT', colors: c)),
                       _staggered(7, _NavTile(
-                        icon: LucideIcons.store, label: 'Merchant Request',
-                        description: 'Request merchant account access', colors: c,
-                        accentColor: const Color(0xFFF97316),
+                        icon: LucideIcons.briefcase,
+                        label: 'Merchant Request',
+                        description: 'Request merchant account access',
+                        colors: c,
+                        accentColor: const Color(0xFFF97316), // orange
                         trailing: merchantApproved
-                            ? _TrustStatusChip(status: TrustStatus.ready, colors: c)
+                            ? _TrustStatusBadge(status: TrustStatus.ready, colors: c)
                             : null,
                         onTap: _handleMerchantRequestTap,
                       )),
@@ -480,41 +457,52 @@ class _AppDrawerState extends State<AppDrawer>
 
                     if (isMerchant) ...[
                       if (!canRequestMerchant) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         _staggered(8, _SectionLabel(label: 'MERCHANT', colors: c)),
                       ],
                       _staggered(9, _NavTile(
-                        icon: LucideIcons.badgeDollarSign,
+                        icon: LucideIcons.creditCard,
                         label: 'Merchant Payment',
-                        description: 'Merchant Payment Account',
+                        description: 'Merchant payment account',
                         colors: c,
-                        accentColor: const Color(0xFFF97316),
-                        trailing: _TrustStatusChip(status: TrustStatus.ready, colors: c),
+                        accentColor: const Color(0xFFEA580C), // deep orange
+                        trailing: _TrustStatusBadge(status: TrustStatus.ready, colors: c),
                         onTap: () => _redirectToPaymentAccount(isMerchant),
                       )),
                       _staggered(10, _NavTile(
-                        icon: LucideIcons.badgeDollarSign, label: 'Manage Offers',
-                        description: 'Create and edit merchant offers', colors: c,
-                        accentColor: const Color(0xFFF97316), onTap: _handleMerchantOffersTap,
+                        icon: LucideIcons.tag,
+                        label: 'Manage Offers',
+                        description: 'Create and edit merchant offers',
+                        colors: c,
+                        accentColor: const Color(0xFFD97706), // amber
+                        onTap: _handleMerchantOffersTap,
                       )),
                       _staggered(11, _NavTile(
-                        icon: LucideIcons.messageSquare, label: 'Merchant Trades',
-                        description: 'Incoming trades and chat inbox', colors: c,
-                        accentColor: const Color(0xFF8B5CF6), onTap: _handleMerchantTradesTap,
+                        icon: LucideIcons.repeat2,
+                        label: 'Merchant Trades',
+                        description: 'Incoming trades and chat inbox',
+                        colors: c,
+                        accentColor: const Color(0xFFA855F7), // purple
+                        onTap: _handleMerchantTradesTap,
                       )),
                     ],
 
                     const SizedBox(height: 4),
                     _staggered(12, _SectionLabel(label: 'SETTINGS', colors: c)),
                     _staggered(13, _NavTile(
-                      icon: LucideIcons.wallet, label: 'Manage Wallet',
-                      description: 'Keys & backup', colors: c,
-                      accentColor: const Color(0xFF14B8A6),
+                      icon: LucideIcons.keyRound,
+                      label: 'Manage Wallet',
+                      description: 'Keys & backup',
+                      colors: c,
+                      accentColor: const Color(0xFF14B8A6), // teal
                       onTap: () => _push(const WalletScreenSettings()),
                     )),
                     _staggered(14, _NavTile(
-                      icon: LucideIcons.settings, label: 'Preferences',
-                      description: 'App settings', colors: c,
+                      icon: LucideIcons.slidersHorizontal,
+                      label: 'Preferences',
+                      description: 'App settings',
+                      colors: c,
+                      accentColor: const Color(0xFF64748B), // slate
                       onTap: () => _push(const SettingsScreen()),
                     )),
 
@@ -530,7 +518,11 @@ class _AppDrawerState extends State<AppDrawer>
               // ── Logout ──────────────────────────────────────────────────
               if (user != null) ...[
                 _DrawerDivider(colors: c),
-                _LogoutButton(isLoading: _loggingOut, colors: c, onTap: _handleLogout),
+                _LogoutButton(
+                  isLoading: _loggingOut,
+                  colors: c,
+                  onTap: _handleLogout,
+                ),
               ],
 
               SizedBox(height: mq.padding.bottom + 8),
@@ -550,12 +542,14 @@ class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.user,
     required this.profile,
+    required this.tierProgress,
     required this.trustStatus,
     required this.colors,
   });
 
   final User user;
   final ProfileModel? profile;
+  final MerchantTierProgressModel? tierProgress;
   final TrustStatus trustStatus;
   final AppColor colors;
 
@@ -571,126 +565,219 @@ class _ProfileHeader extends StatelessWidget {
   }
   String? get _email => user.email.trim().isEmpty ? null : user.email.trim();
   String? get _country => _s(profile?.country);
-  String  get _line1   => _displayName ?? _email ?? 'Anonymous';
-  String? get _line2   => _handle;
+  String get _line1 => _displayName ?? _email ?? 'Anonymous';
+  String? get _line2 => _handle;
   String? get _line3 {
     final e = _email;
     if (e == null || _line1 == e) return null;
     return e;
   }
 
-  ({Color bg, Color glow, IconData icon, String label}) get _trust =>
-      switch (trustStatus) {
-        TrustStatus.ready => (
-        bg: const Color(0xFF10B981), glow: const Color(0xFF10B981),
-        icon: LucideIcons.badgeCheck, label: 'Verified',
-        ),
-        TrustStatus.reviewing => (
-        bg: const Color(0xFFF59E0B), glow: const Color(0xFFF59E0B),
-        icon: LucideIcons.clock, label: 'In Review',
-        ),
-        TrustStatus.suspended => (
-        bg: const Color(0xFFEF4444), glow: const Color(0xFFEF4444),
-        icon: LucideIcons.shieldOff, label: 'Suspended',
-        ),
-        TrustStatus.basic => (
-        bg: colors.border, glow: Colors.transparent,
-        icon: LucideIcons.shield, label: 'Basic',
-        ),
-        _ => (
-        bg: colors.border, glow: Colors.transparent,
-        icon: LucideIcons.shield, label: 'Unverified',
-        ),
-      };
+  Color _tierColor(MerchantTier tier) => switch (tier) {
+    MerchantTier.bronze => const Color(0xFFB87333),
+    MerchantTier.silver => const Color(0xFF94A3B8),
+    MerchantTier.gold => const Color(0xFFF59E0B),
+    MerchantTier.platinum => const Color(0xFF64748B),
+    MerchantTier.diamond => const Color(0xFF06B6D4),
+  };
+
+  IconData _tierIcon(MerchantTier tier) => switch (tier) {
+    MerchantTier.bronze => Icons.shield_outlined,
+    MerchantTier.silver => Icons.workspace_premium_outlined,
+    MerchantTier.gold => Icons.emoji_events_outlined,
+    MerchantTier.platinum => Icons.military_tech_outlined,
+    MerchantTier.diamond => Icons.diamond_outlined,
+  };
+
+  String _tierLabel(MerchantTier tier) => switch (tier) {
+    MerchantTier.bronze => 'BRONZE',
+    MerchantTier.silver => 'SILVER',
+    MerchantTier.gold => 'GOLD',
+    MerchantTier.platinum => 'PLATINUM',
+    MerchantTier.diamond => 'DIAMOND',
+  };
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final tc  = _trust;
     final ctry = _country;
+    final c = colors;
 
     return Container(
       width: double.infinity,
-      color: colors.surface,
+      color: c.surface,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Top accent line
           Container(
             height: 3,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  colors.primary,
-                  colors.primary.withOpacity(0.4),
-                  colors.primary.withOpacity(0.0),
-                ],
+                colors: [c.primary, c.primary, c.surface],
               ),
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(20, top + 22, 20, 20),
+            padding: EdgeInsets.fromLTRB(20, top + 24, 20, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Avatar row
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _DrawerAvatar(user: user, colors: colors),
+                    _DrawerAvatar(user: user, colors: c),
                     const Spacer(),
-                    _TrustPill(icon: tc.icon, label: tc.label, bg: tc.bg, glow: tc.glow),
+                    // ── REDESIGNED VERIFICATION BADGE ──────────────────
+                    _VerifiedBadge(status: trustStatus, colors: c),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
+
+                // Display name
                 Text(
                   _line1,
                   style: TextStyle(
-                    color: colors.textPrimary, fontSize: 22,
-                    fontWeight: FontWeight.w800, letterSpacing: -0.8, height: 1.1,
+                    color: c.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                    height: 1.1,
                   ),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+
+                // Username handle — use primary color
                 if (_line2 != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    _line2!,
-                    style: TextStyle(
-                      color: colors.primary.withOpacity(0.8), fontSize: 13.5,
-                      fontWeight: FontWeight.w600, letterSpacing: 0.1,
-                    ),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _line2!,
+                        style: TextStyle(
+                          color: c.primary,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ],
+
+                // Email
                 if (_line3 != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     _line3!,
                     style: TextStyle(
-                      color: colors.textSecondary.withOpacity(0.55),
-                      fontSize: 12, fontWeight: FontWeight.w400,
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
                     ),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
+
+                // Country chip
                 if (ctry != null) ...[
                   const SizedBox(height: 10),
-                  _CountryChip(country: ctry, colors: colors),
+                  _CountryChip(country: ctry, colors: c),
+                ],
+
+                // Merchant tier card
+                if (tierProgress != null) ...[
+                  const SizedBox(height: 14),
+                  _MerchantTierCard(
+                    tierProgress: tierProgress!,
+                    tierColor: _tierColor,
+                    tierIcon: _tierIcon,
+                    tierLabel: _tierLabel,
+                    colors: c,
+                  ),
                 ],
               ],
             ),
           ),
-          Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  colors.border.withOpacity(0.0),
-                  colors.border.withOpacity(0.25),
-                  colors.primary.withOpacity(0.35),
-                  colors.border.withOpacity(0.25),
-                  colors.border.withOpacity(0.0),
-                ],
-              ),
+          Container(height: 1, color: c.border),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✦ REDESIGNED VERIFIED BADGE
+// Clean pill with icon + text on primary color background.
+// Text uses white (on primary) for maximum contrast & legibility.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VerifiedBadge extends StatelessWidget {
+  const _VerifiedBadge({required this.status, required this.colors});
+
+  final TrustStatus status;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bgColor, icon, label) = switch (status) {
+      TrustStatus.ready => (
+      colors.primary,         // use theme primary — text on primary
+      LucideIcons.badgeCheck,
+      'Verified',
+      ),
+      TrustStatus.reviewing => (
+      const Color(0xFFF59E0B),
+      LucideIcons.clock,
+      'In Review',
+      ),
+      TrustStatus.suspended => (
+      const Color(0xFFEF4444),
+      LucideIcons.shieldOff,
+      'Suspended',
+      ),
+      TrustStatus.basic => (
+      colors.border,
+      LucideIcons.shield,
+      'Basic',
+      ),
+      _ => (
+      colors.border,
+      LucideIcons.shield,
+      'Unverified',
+      ),
+    };
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 13,
+            color: colors.onPrimary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: colors.onPrimary,
+              letterSpacing: 0.1,
+              height: 1,
             ),
           ),
         ],
@@ -700,35 +787,76 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRUST PILL
+// TRUST STATUS BADGE (used in nav tile trailing)
+// Minimalist dot + text, no fill box — cleaner in list context
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _TrustPill extends StatelessWidget {
-  const _TrustPill({required this.icon, required this.label, required this.bg, required this.glow});
-
-  final IconData icon;
-  final String label;
-  final Color bg;
-  final Color glow;
+class _TrustStatusBadge extends StatelessWidget {
+  const _TrustStatusBadge({required this.status, required this.colors});
+  final TrustStatus status;
+  final AppColor colors;
 
   @override
   Widget build(BuildContext context) {
+    final (dotColor, label, textColor, bgColor, borderColor) = switch (status) {
+      TrustStatus.ready => (
+      const Color(0xFF10B981),
+      'Verified',
+      colors.primary,
+      const Color(0xFFE8F5F0),   // solid light green tint
+      const Color(0xFFB2DFDB),   // solid green border
+      ),
+      TrustStatus.reviewing => (
+      const Color(0xFFF59E0B),
+      'Pending',
+      const Color(0xFFF59E0B),
+      const Color(0xFFFFF8E1),   // solid amber tint
+      const Color(0xFFFFE082),   // solid amber border
+      ),
+      TrustStatus.suspended => (
+      const Color(0xFFEF4444),
+      'Suspended',
+      const Color(0xFFEF4444),
+      const Color(0xFFFFF0F0),   // solid red tint
+      const Color(0xFFFFCDD2),   // solid red border
+      ),
+      _ => (
+      colors.textSecondary,
+      'Basic',
+      colors.textSecondary,
+      colors.border,
+      colors.border,
+      ),
+    };
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: bg.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: bg.withOpacity(0.30), width: 1),
-        boxShadow: glow != Colors.transparent
-            ? [BoxShadow(color: glow.withOpacity(0.18), blurRadius: 10)]
-            : null,
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor, width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: bg),
-          const SizedBox(width: 5),
-          Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: bg, letterSpacing: 0.1)),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+              letterSpacing: 0.1,
+            ),
+          ),
         ],
       ),
     );
@@ -747,22 +875,209 @@ class _CountryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.border.withOpacity(0.06),
+        color: colors.background,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border.withOpacity(0.15)),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.mapPin, size: 10, color: colors.textSecondary.withOpacity(0.6)),
-          const SizedBox(width: 4),
+          Icon(LucideIcons.mapPin, size: 10, color: colors.textSecondary),
+          const SizedBox(width: 5),
           Text(
             country,
             style: TextStyle(
-              fontSize: 11.5, fontWeight: FontWeight.w500,
-              color: colors.textSecondary.withOpacity(0.7), letterSpacing: 0.1,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: colors.textSecondary,
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MERCHANT TIER CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MerchantTierCard extends StatelessWidget {
+  const _MerchantTierCard({
+    required this.tierProgress,
+    required this.tierColor,
+    required this.tierIcon,
+    required this.tierLabel,
+    required this.colors,
+  });
+
+  final MerchantTierProgressModel tierProgress;
+  final Color Function(MerchantTier) tierColor;
+  final IconData Function(MerchantTier) tierIcon;
+  final String Function(MerchantTier) tierLabel;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = tierColor(tierProgress.currentTier);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(tierIcon(tierProgress.currentTier), size: 14, color: tc),
+              const SizedBox(width: 7),
+              Text(
+                'Merchant Tier',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tc,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  tierLabel(tierProgress.currentTier),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _TierSummaryItem(
+                  label: 'Current Tier',
+                  caption: 'Active rank',
+                  tierLabel: tierLabel(tierProgress.currentTier),
+                  tierColor: tierColor(tierProgress.currentTier),
+                  tierIcon: tierIcon(tierProgress.currentTier),
+                  colors: colors,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TierSummaryItem(
+                  label: 'Next Tier',
+                  caption: tierProgress.nextTier == null
+                      ? 'Top tier reached'
+                      : '${tierProgress.nextTier!.progress.overallPercent.toStringAsFixed(0)}% progress',
+                  tierLabel: tierProgress.nextTier == null
+                      ? 'TOP TIER'
+                      : tierLabel(tierProgress.nextTier!.tier),
+                  tierColor: tierProgress.nextTier == null
+                      ? tierColor(MerchantTier.diamond)
+                      : tierColor(tierProgress.nextTier!.tier),
+                  tierIcon: tierProgress.nextTier == null
+                      ? tierIcon(MerchantTier.diamond)
+                      : tierIcon(tierProgress.nextTier!.tier),
+                  colors: colors,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TierSummaryItem extends StatelessWidget {
+  const _TierSummaryItem({
+    required this.label,
+    required this.caption,
+    required this.tierLabel,
+    required this.tierColor,
+    required this.tierIcon,
+    required this.colors,
+  });
+
+  final String label;
+  final String caption;
+  final String tierLabel;
+  final Color tierColor;
+  final IconData tierIcon;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: tierColor,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(tierIcon, size: 13, color: Colors.white),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  tierLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            caption,
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -787,18 +1102,23 @@ class _DrawerAvatar extends StatefulWidget {
 class _DrawerAvatarState extends State<_DrawerAvatar>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
-  late final Animation<double>   _pulseAnim;
+  late final Animation<double> _pulseAnim;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))
-      ..repeat(reverse: true);
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
     _pulseAnim = CurvedAnimation(parent: _pulse, curve: Curves.easeInOut);
   }
 
   @override
-  void dispose() { _pulse.dispose(); super.dispose(); }
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -809,12 +1129,13 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
         AnimatedBuilder(
           animation: _pulseAnim,
           builder: (_, child) => Container(
-            width: 60, height: 60,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: c.primary.withOpacity(0.08 + _pulseAnim.value * 0.12),
+                  color: c.primary,
                   blurRadius: 16 + _pulseAnim.value * 8,
                 ),
               ],
@@ -822,42 +1143,38 @@ class _DrawerAvatarState extends State<_DrawerAvatar>
             child: child,
           ),
           child: Container(
-            width: 60, height: 60,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [c.primary.withOpacity(0.6), c.primary.withOpacity(0.2)],
-              ),
+              color: c.primary,
             ),
             padding: const EdgeInsets.all(2.5),
-            child: ClipOval(child: UserAvatar(user: widget.user, radius: 27, colors: c)),
+            child: ClipOval(
+              child: UserAvatar(user: widget.user, radius: 27, colors: c),
+            ),
           ),
         ),
         Positioned(
-          bottom: 2, right: 2,
-          child: AnimatedBuilder(
-            animation: _pulseAnim,
-            builder: (_, __) => Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: 18, height: 18,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: c.success.withOpacity(0.2 * _pulseAnim.value),
-                  ),
+          bottom: 2,
+          right: 2,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 18, height: 18,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: c.success),
+              ),
+              Container(
+                width: 12, height: 12,
+                decoration: BoxDecoration(
+                  color: c.success,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.surface, width: 2),
+                  boxShadow: [BoxShadow(color: c.success, blurRadius: 6)],
                 ),
-                Container(
-                  width: 12, height: 12,
-                  decoration: BoxDecoration(
-                    color: c.success, shape: BoxShape.circle,
-                    border: Border.all(color: c.surface, width: 2),
-                    boxShadow: [BoxShadow(color: c.success.withOpacity(0.5), blurRadius: 6)],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -891,11 +1208,7 @@ class _LoginPrompt extends StatelessWidget {
             height: 3,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  colors.primary,
-                  colors.primary.withOpacity(0.4),
-                  colors.primary.withOpacity(0.0),
-                ],
+                colors: [colors.primary, colors.primary, colors.primary],
               ),
             ),
           ),
@@ -908,13 +1221,9 @@ class _LoginPrompt extends StatelessWidget {
                   width: 60, height: 60,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: colors.border.withOpacity(0.06),
-                    border: Border.all(color: colors.border.withOpacity(0.18), width: 1.5),
+                    color: colors.border,
                   ),
-                  child: Icon(
-                    LucideIcons.userCircle2,
-                    color: colors.textSecondary.withOpacity(0.35), size: 28,
-                  ),
+                  child: Icon(LucideIcons.userCircle2, color: colors.textSecondary, size: 28),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -924,22 +1233,28 @@ class _LoginPrompt extends StatelessWidget {
                       Text(
                         'Welcome',
                         style: TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.w800,
-                          color: colors.textPrimary, letterSpacing: -0.8, height: 1.1,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
+                          letterSpacing: -0.8,
+                          height: 1.1,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
                         'Sign in to unlock all features',
                         style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                           color: colors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 14),
                       _GradientButton(
-                        label: 'Sign In', icon: Icons.login_rounded,
-                        primaryColor: colors.primary, onTap: onTap,
+                        label: 'Sign In',
+                        icon: Icons.login_rounded,
+                        primaryColor: colors.primary,
+                        onTap: onTap,
                       ),
                     ],
                   ),
@@ -947,20 +1262,7 @@ class _LoginPrompt extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  colors.border.withOpacity(0.0),
-                  colors.border.withOpacity(0.25),
-                  colors.primary.withOpacity(0.35),
-                  colors.border.withOpacity(0.25),
-                  colors.border.withOpacity(0.0),
-                ],
-              ),
-            ),
-          ),
+          Container(height: 1, color: colors.border),
         ],
       ),
     );
@@ -973,8 +1275,10 @@ class _LoginPrompt extends StatelessWidget {
 
 class _GradientButton extends StatelessWidget {
   const _GradientButton({
-    required this.label, required this.icon,
-    required this.primaryColor, required this.onTap,
+    required this.label,
+    required this.icon,
+    required this.primaryColor,
+    required this.onTap,
   });
 
   final String label;
@@ -991,18 +1295,29 @@ class _GradientButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [primaryColor, Color.lerp(primaryColor, Colors.purple, 0.3)!],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [primaryColor, const Color(0xFF7C3AED)],
           ),
           borderRadius: BorderRadius.circular(11),
-          boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(color: primaryColor, blurRadius: 12, offset: const Offset(0, 4)),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14, color: Colors.white),
             const SizedBox(width: 7),
-            Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.1)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.1,
+              ),
+            ),
           ],
         ),
       ),
@@ -1022,25 +1337,24 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 6),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
       child: Row(
         children: [
           Container(
-            width: 3, height: 10,
+            width: 3, height: 11,
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                colors: [colors.primary, colors.primary.withOpacity(0.3)],
-              ),
+              color: colors.primary,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           Text(
             label,
             style: TextStyle(
-              fontSize: 10, fontWeight: FontWeight.w800,
-              color: colors.textSecondary.withOpacity(0.5), letterSpacing: 1.4,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: colors.textSecondary,
+              letterSpacing: 1.5,
             ),
           ),
         ],
@@ -1055,9 +1369,14 @@ class _SectionLabel extends StatelessWidget {
 
 class _NavTile extends StatefulWidget {
   const _NavTile({
-    required this.icon, required this.label, required this.description,
-    required this.colors, required this.onTap,
-    this.accentColor, this.trailing, this.requiresAuth = false,
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.colors,
+    required this.onTap,
+    this.accentColor,
+    this.trailing,
+    this.requiresAuth = false,
   });
 
   final IconData icon;
@@ -1075,27 +1394,50 @@ class _NavTile extends StatefulWidget {
 
 class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin {
   late final AnimationController _pressCtrl;
-  late final Animation<double>   _scaleAnim;
+  late final Animation<double> _scaleAnim;
   bool _isPressed = false;
 
   @override
   void initState() {
     super.initState();
-    _pressCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 120));
+    _pressCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
     _scaleAnim = Tween<double>(begin: 1.0, end: 0.97)
         .animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
   }
 
   @override
-  void dispose() { _pressCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _pressCtrl.dispose();
+    super.dispose();
+  }
 
-  void _onTapDown(_)   { setState(() => _isPressed = true);  _pressCtrl.forward(); }
-  void _onTapUp(_)     { setState(() => _isPressed = false); _pressCtrl.reverse(); }
-  void _onTapCancel()  { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+  void _onTapDown(_) { setState(() => _isPressed = true); _pressCtrl.forward(); }
+  void _onTapUp(_) { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+  void _onTapCancel() { setState(() => _isPressed = false); _pressCtrl.reverse(); }
+
+  /// Returns a solid background tint for an accent — 15% blend onto white (#FFFFFF).
+  /// We pre-mix each well-known accent to its nearest solid equivalent.
+  Color _iconBg(Color accent) {
+    final r = ((accent.red * 0.15) + (255 * 0.85)).round().clamp(0, 255);
+    final g = ((accent.green * 0.15) + (255 * 0.85)).round().clamp(0, 255);
+    final b = ((accent.blue * 0.15) + (255 * 0.85)).round().clamp(0, 255);
+    return Color.fromARGB(255, r, g, b);
+  }
+
+  /// Returns a solid border tint for an accent — 25% blend onto white.
+  Color _iconBorder(Color accent) {
+    final r = ((accent.red * 0.25) + (255 * 0.75)).round().clamp(0, 255);
+    final g = ((accent.green * 0.25) + (255 * 0.75)).round().clamp(0, 255);
+    final b = ((accent.blue * 0.25) + (255 * 0.75)).round().clamp(0, 255);
+    return Color.fromARGB(255, r, g, b);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final c      = widget.colors;
+    final c = widget.colors;
     final accent = widget.accentColor ?? c.primary;
 
     return GestureDetector(
@@ -1108,29 +1450,29 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: _isPressed ? accent.withOpacity(0.05) : Colors.transparent,
+            color: _isPressed ? _iconBg(accent) : widget.colors.background,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: _isPressed ? accent.withOpacity(0.12) : Colors.transparent, width: 1,
+              color: _isPressed ? _iconBorder(accent) : widget.colors.background,
+              width: 1,
             ),
           ),
           child: Row(
             children: [
+              // Icon container
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    colors: [accent.withOpacity(0.18), accent.withOpacity(0.08)],
-                  ),
+                  color: _iconBg(accent),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withOpacity(0.18), width: 1),
+                  border: Border.all(color: _iconBorder(accent), width: 1),
                 ),
                 child: Icon(widget.icon, color: accent, size: 18),
               ),
               const SizedBox(width: 13),
+              // Labels
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1138,14 +1480,20 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
                     Text(
                       widget.label,
                       style: TextStyle(
-                        fontSize: 14.5, fontWeight: FontWeight.w600,
-                        color: c.textPrimary, letterSpacing: -0.3,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: c.textPrimary,
+                        letterSpacing: -0.3,
                       ),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       widget.description,
-                      style: TextStyle(fontSize: 11.5, color: c.textSecondary.withOpacity(0.7), height: 1.3),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: c.textSecondary,
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),
@@ -1156,7 +1504,7 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
               else if (widget.requiresAuth)
                 _AuthBadge(colors: c)
               else
-                Icon(LucideIcons.chevronRight, color: c.textSecondary.withOpacity(0.22), size: 15),
+                Icon(LucideIcons.chevronRight, color: c.textSecondary, size: 15),
             ],
           ),
         ),
@@ -1178,61 +1526,23 @@ class _AuthBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: colors.border.withOpacity(0.07),
+        color: colors.border,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border.withOpacity(0.15)),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lock_outline_rounded, size: 10, color: colors.textSecondary.withOpacity(0.5)),
+          Icon(Icons.lock_outline_rounded, size: 10, color: colors.textSecondary),
           const SizedBox(width: 4),
-          Text('Sign in', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: colors.textSecondary.withOpacity(0.5))),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TRUST STATUS CHIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _TrustStatusChip extends StatelessWidget {
-  const _TrustStatusChip({required this.status, required this.colors});
-  final TrustStatus status;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final (color, label) = switch (status) {
-      TrustStatus.ready     => (const Color(0xFF10B981), 'Verified'),
-      TrustStatus.reviewing => (const Color(0xFFF59E0B), 'Pending'),
-      TrustStatus.suspended => (const Color(0xFFEF4444), 'Suspended'),
-      _                     => (colors.textSecondary.withOpacity(0.4), 'Basic'),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6, height: 6,
-            decoration: BoxDecoration(
-              color: color, shape: BoxShape.circle,
-              boxShadow: status == TrustStatus.ready
-                  ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 5)]
-                  : null,
+          Text(
+            'Sign in',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: colors.textSecondary,
             ),
           ),
-          const SizedBox(width: 5),
-          Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.1)),
         ],
       ),
     );
@@ -1254,13 +1564,17 @@ class _UnreadBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primary, Color.lerp(colors.primary, Colors.purple, 0.3)!],
-        ),
+        color: colors.primary,
         borderRadius: BorderRadius.circular(99),
-        boxShadow: [BoxShadow(color: colors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.onPrimary,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -1275,19 +1589,7 @@ class _DrawerDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 1,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colors.border.withOpacity(0.0),
-            colors.border.withOpacity(0.3),
-            colors.border.withOpacity(0.0),
-          ],
-        ),
-      ),
-    );
+    return Container(height: 1, margin: const EdgeInsets.symmetric(horizontal: 20), color: colors.border);
   }
 }
 
@@ -1305,22 +1607,23 @@ class _AppVersionInfo extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 0, 20, 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         decoration: BoxDecoration(
-          color: colors.border.withOpacity(0.06),
+          color: colors.border,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: colors.border.withOpacity(0.12)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(LucideIcons.package, size: 10, color: colors.textSecondary.withOpacity(0.4)),
+            Icon(LucideIcons.package, size: 10, color: colors.textSecondary),
             const SizedBox(width: 5),
             Text(
               '${info.appName}  v${info.version}',
               style: TextStyle(
-                fontSize: 10.5, fontWeight: FontWeight.w600,
-                color: colors.textSecondary.withOpacity(0.45), letterSpacing: 0.1,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: colors.textSecondary,
+                letterSpacing: 0.1,
               ),
             ),
           ],
@@ -1360,9 +1663,9 @@ class _LogoutButtonState extends State<_LogoutButton> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: _pressed ? c.error.withOpacity(0.07) : Colors.transparent,
+          color: _pressed ? const Color(0xFFFFF0F0) : widget.colors.background,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _pressed ? c.error.withOpacity(0.15) : Colors.transparent),
+          border: Border.all(color: _pressed ? const Color(0xFFFFCDD2) : widget.colors.background),
         ),
         child: Row(
           children: [
@@ -1370,8 +1673,12 @@ class _LogoutButtonState extends State<_LogoutButton> {
               duration: const Duration(milliseconds: 200),
               child: widget.isLoading
                   ? SizedBox(
-                key: const ValueKey('l'), width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(c.error)),
+                key: const ValueKey('l'),
+                width: 18, height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(c.error),
+                ),
               )
                   : Icon(key: const ValueKey('i'), LucideIcons.logOut, color: c.error, size: 18),
             ),
@@ -1381,12 +1688,17 @@ class _LogoutButtonState extends State<_LogoutButton> {
               child: Text(
                 widget.isLoading ? 'Signing out…' : 'Sign Out',
                 key: ValueKey(widget.isLoading),
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: c.error, letterSpacing: -0.2),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: c.error,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
             const Spacer(),
             if (!widget.isLoading)
-              Icon(LucideIcons.chevronRight, color: c.error.withOpacity(0.3), size: 14),
+              Icon(LucideIcons.chevronRight, color: c.error, size: 14),
           ],
         ),
       ),
@@ -1407,20 +1719,22 @@ class _ProfileShimmer extends StatefulWidget {
   State<_ProfileShimmer> createState() => _ProfileShimmerState();
 }
 
-class _ProfileShimmerState extends State<_ProfileShimmer>
-    with SingleTickerProviderStateMixin {
+class _ProfileShimmerState extends State<_ProfileShimmer> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double>   _sweep;
+  late final Animation<double> _sweep;
 
   @override
   void initState() {
     super.initState();
-    _ctrl  = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat();
     _sweep = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1428,18 +1742,16 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
     return AnimatedBuilder(
       animation: _sweep,
       builder: (_, __) {
+        final shimBase = c.border;
+        final shimHighlight = const Color(0xFFE2E8F0); // solid light grey highlight
         Widget shimBox(double w, double h, {double r = 6}) => Container(
           width: w, height: h,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(r),
             gradient: LinearGradient(
               begin: Alignment(-1 + _sweep.value * 2.5, 0),
-              end:   Alignment(-0.5 + _sweep.value * 2.5, 0),
-              colors: [
-                c.border.withOpacity(0.08),
-                c.border.withOpacity(0.17),
-                c.border.withOpacity(0.08),
-              ],
+              end: Alignment(-0.5 + _sweep.value * 2.5, 0),
+              colors: [shimBase, shimHighlight, shimBase],
             ),
           ),
         );
@@ -1452,9 +1764,7 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
               Container(
                 height: 3,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [c.primary.withOpacity(0.4), c.primary.withOpacity(0.1), Colors.transparent],
-                  ),
+                  gradient: LinearGradient(colors: [c.primary, c.primary, c.surface]),
                 ),
               ),
               Padding(
@@ -1462,8 +1772,14 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [shimBox(60, 60, r: 30), const Spacer(), shimBox(72, 26, r: 13)]),
-                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        shimBox(60, 60, r: 30),
+                        const Spacer(),
+                        shimBox(80, 32, r: 10),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     shimBox(130, 20, r: 8),
                     const SizedBox(height: 8),
                     shimBox(90, 14, r: 6),
@@ -1474,14 +1790,7 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
                   ],
                 ),
               ),
-              Container(
-                height: 1,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [c.border.withOpacity(0.0), c.border.withOpacity(0.2), c.border.withOpacity(0.0)],
-                  ),
-                ),
-              ),
+              Container(height: 1, color: c.border),
             ],
           ),
         );
@@ -1505,7 +1814,9 @@ class _LogoutConfirmationModal extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 40, offset: const Offset(0, -10))],
+        boxShadow: [
+          BoxShadow(color: const Color(0x4D000000), blurRadius: 40, offset: const Offset(0, -10)),
+        ],
       ),
       child: SafeArea(
         child: Padding(
@@ -1516,20 +1827,27 @@ class _LogoutConfirmationModal extends StatelessWidget {
               Container(
                 width: 36, height: 4,
                 margin: const EdgeInsets.only(bottom: 28),
-                decoration: BoxDecoration(color: c.border.withOpacity(0.25), borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
               ),
               Container(
                 width: 72, height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: c.error.withOpacity(0.08),
-                  border: Border.all(color: c.error.withOpacity(0.18), width: 1.5),
+                  color: const Color(0xFFFFF0F0),
+                  border: Border.all(color: const Color(0xFFFFCDD2), width: 1.5),
                 ),
                 child: Icon(LucideIcons.logOut, color: c.error, size: 28),
               ),
               const SizedBox(height: 18),
-              Text('Sign Out?',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: c.textPrimary, letterSpacing: -0.6)),
+              Text(
+                'Sign Out?',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: c.textPrimary,
+                  letterSpacing: -0.6,
+                ),
+              ),
               const SizedBox(height: 8),
               Text(
                 "You'll need to sign in again\nto access your account.",
@@ -1542,13 +1860,24 @@ class _LogoutConfirmationModal extends StatelessWidget {
                 child: Container(
                   width: double.infinity, height: 52,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [c.error, Color.lerp(c.error, Colors.red.shade900, 0.4)!]),
+                    gradient: LinearGradient(
+                      colors: [c.error, const Color(0xFFB71C1C)],
+                    ),
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: c.error.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+                    boxShadow: [
+                      BoxShadow(color: c.error, blurRadius: 16, offset: const Offset(0, 6)),
+                    ],
                   ),
                   alignment: Alignment.center,
-                  child: const Text('Yes, Sign Out',
-                      style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.2)),
+                  child: const Text(
+                    'Yes, Sign Out',
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1557,13 +1886,19 @@ class _LogoutConfirmationModal extends StatelessWidget {
                 child: Container(
                   width: double.infinity, height: 52,
                   decoration: BoxDecoration(
-                    color: c.border.withOpacity(0.07),
+                    color: c.border,
                     borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: c.border.withOpacity(0.12)),
                   ),
                   alignment: Alignment.center,
-                  child: Text('Cancel',
-                      style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: c.textPrimary, letterSpacing: -0.2)),
+                  child: Text(
+                    'Cancel', 
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
+                      color: c.textPrimary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                 ),
               ),
             ],

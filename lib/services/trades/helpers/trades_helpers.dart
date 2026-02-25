@@ -23,7 +23,12 @@ class TradesHttp {
     String? msg;
     try {
       final body = jsonDecode(res.body);
-      msg = body['message']?.toString() ?? body['error']?.toString();
+      final message = body['message'];
+      if (message is List && message.isNotEmpty) {
+        msg = message.first.toString();
+      } else {
+        msg = message?.toString() ?? body['error']?.toString();
+      }
     } catch (_) {}
     throw TradeApiException(
       res.statusCode,

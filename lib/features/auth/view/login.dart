@@ -6,6 +6,7 @@ import 'package:next_fi/common/components/modal/login_success_modal.dart';
 import 'package:next_fi/features/auth/view_model/login_vm.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // LOGIN SCREEN
@@ -81,6 +82,8 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (user != null) {
         HapticFeedback.mediumImpact();
+        await _autoSyncWalletsAfterLogin();
+        if (!mounted) return;
 
         // Show success modal
         await showLoginSuccessModal(context, user: user);
@@ -118,6 +121,8 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (user != null) {
         HapticFeedback.mediumImpact();
+        await _autoSyncWalletsAfterLogin();
+        if (!mounted) return;
 
         // Show success modal
         await showLoginSuccessModal(context, user: user);
@@ -156,6 +161,14 @@ class _LoginScreenState extends State<LoginScreen>
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       ),
     );
+  }
+
+  Future<void> _autoSyncWalletsAfterLogin() async {
+    try {
+      await WalletManager.I.syncToBackend();
+    } catch (_) {
+      // Best effort only: login should still complete.
+    }
   }
 
   // ── Build ────────────────────────────────────────────────────────

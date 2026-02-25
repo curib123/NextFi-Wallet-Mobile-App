@@ -6,6 +6,7 @@ import 'package:next_fi/services/secure_storage/token_storage.dart';
 import 'api/merchant_profile_service.dart';
 import 'models/merchant_profile_dtos.dart';
 import 'models/merchant_profile_models.dart';
+import 'models/merchant_tier_progress_models.dart';
 
 class MerchantProfileCoreService {
   MerchantProfileCoreService._();
@@ -31,6 +32,10 @@ class MerchantProfileCoreService {
 
   /// Returns null if the user has not applied to be a merchant yet.
   Future<MerchantProfileModel?> getMe() async => _api.getMe();
+
+  /// Returns merchant tier progress (null when not available for current user).
+  Future<MerchantTierProgressModel?> getTierProgress() async =>
+      _api.getTierProgress();
 
   /// Submit or re-submit a merchant application.
   Future<MerchantProfileModel> request(

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/trades/models/trades_models.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
@@ -207,15 +208,23 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     );
 
     try {
-      await _tradesCore.uploadProof(
+      final uploadedProofUrl = await _tradesCore.uploadProof(
         widget.trade.id,
         file: File(file.path),
         type: 'FIAT',
       );
       final proofMsg = 'Payment proof uploaded: ${file.name}';
+      final payload = uploadedProofUrl == null || uploadedProofUrl.trim().isEmpty
+          ? proofMsg
+          : jsonEncode({
+              'text': proofMsg,
+              'proofUrl': uploadedProofUrl.trim(),
+              'proofUrls': [uploadedProofUrl.trim()],
+              'imageUrl': uploadedProofUrl.trim(),
+            });
       await _tradesCore.sendTradeMessage(
         widget.trade.id,
-        ciphertext: proofMsg,
+        ciphertext: payload,
         algorithm: 'PLAIN',
         senderKeyId: 'plain',
         nonce: 'plain',
@@ -528,6 +537,9 @@ class _MessageBubble extends StatelessWidget {
       if (raw.isEmpty) return '';
       if (raw.startsWith('http://') ||
           raw.startsWith('https://') ||
+          raw.startsWith('uploads/') ||
+          raw.startsWith('upload/') ||
+          raw.startsWith('media/') ||
           raw.startsWith('/') ||
           raw.contains(r':\')) {
         return raw;
@@ -547,9 +559,14 @@ class _MessageBubble extends StatelessWidget {
       for (final key in const [
         'localImagePath',
         'imageUrl',
+        'image_url',
         'image',
+        'mediaUrl',
+        'media_url',
+        'proof',
         'url',
         'proofUrl',
+        'proof_url',
         'fileUrl',
         'file_url',
         'attachmentUrl',
@@ -596,13 +613,29 @@ class _MessageBubble extends StatelessWidget {
     return _extractImageRef(message);
   }
 
+  String _resolveImageRef(String src) {
+    final raw = src.trim();
+    if (raw.isEmpty) return raw;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.contains(r':\')) return raw;
+    if (raw.startsWith('/')) {
+      return '${centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '')}$raw';
+    }
+    if (raw.startsWith('uploads/') ||
+        raw.startsWith('upload/') ||
+        raw.startsWith('media/')) {
+      return '${centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '')}/$raw';
+    }
+    return raw;
+  }
+
   bool get _hasImage => _imageRef.isNotEmpty;
   bool get _isUploadingProof => message['isUploadingProof'] == true;
   bool get _isProofFailed =>
       (message['proofUploadState'] ?? '').toString().toLowerCase() == 'failed';
 
   void _openImageViewer(BuildContext context) {
-    final src = _imageRef;
+    final src = _resolveImageRef(_imageRef);
     final isHttp = src.startsWith('http://') || src.startsWith('https://');
     showDialog<void>(
       context: context,
@@ -653,7 +686,7 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _buildImage(BuildContext context, AppColor colors) {
-    final src = _imageRef;
+    final src = _resolveImageRef(_imageRef);
     final isHttp = src.startsWith('http://') || src.startsWith('https://');
     final image = isHttp
         ? Image.network(

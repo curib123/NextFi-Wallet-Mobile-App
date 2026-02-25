@@ -28,8 +28,8 @@ class OfferDetailsModal extends StatefulWidget {
 
 class _OfferDetailsModalState extends State<OfferDetailsModal>
     with SingleTickerProviderStateMixin {
-  final _merchantCore     = MerchantProfileCoreService.I;
-  final _reviewsCore      = ReviewsCoreService.I;
+  final _merchantCore = MerchantProfileCoreService.I;
+  final _reviewsCore = ReviewsCoreService.I;
   final _offerPaymentCore = OfferPaymentMethodCoreService.I;
 
   MerchantProfileModel? _merchantProfile;
@@ -76,10 +76,12 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   Future<void> _loadPaymentMethods() async {
     try {
-      final methods = await _offerPaymentCore.getPaymentMethodsForOffer(widget.offer.id);
+      final methods = await _offerPaymentCore.getPaymentMethodsForOffer(
+        widget.offer.id,
+      );
       if (mounted) {
         setState(() {
-          _paymentMethodsMap     = {for (var m in methods) m.id: m};
+          _paymentMethodsMap = {for (var m in methods) m.id: m};
           _loadingPaymentMethods = false;
         });
       }
@@ -103,7 +105,11 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     }
     try {
       final profile = await _merchantCore.getPublic(sellerId);
-      if (mounted) setState(() { _merchantProfile = profile; _loadingMerchant = false; });
+      if (mounted)
+        setState(() {
+          _merchantProfile = profile;
+          _loadingMerchant = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loadingMerchant = false);
     }
@@ -116,13 +122,14 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
       return;
     }
     try {
-      final reviews   = await _reviewsCore.getUserReviews(userId: sellerId);
+      final reviews = await _reviewsCore.getUserReviews(userId: sellerId);
       final avgRating = await _reviewsCore.getUserAverageRating(sellerId);
-      if (mounted) setState(() {
-        _reviews       = reviews;
-        _averageRating = avgRating;
-        _loadingReviews = false;
-      });
+      if (mounted)
+        setState(() {
+          _reviews = reviews;
+          _averageRating = avgRating;
+          _loadingReviews = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loadingReviews = false);
     }
@@ -135,50 +142,58 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
   Color _typeColor(AppColor c) => _isBuy ? c.success : c.error;
 
   Color _statusColor(String status) => switch (status.toUpperCase()) {
-    'ACTIVE'    => const Color(0xFF00C48C),
-    'PAUSED'    => const Color(0xFFFAA040),
+    'ACTIVE' => const Color(0xFF00C48C),
+    'PAUSED' => const Color(0xFFFAA040),
     'COMPLETED' => const Color(0xFF5B8DEF),
     'CANCELLED' => const Color(0xFFFF5C72),
-    _           => const Color(0xFF9CA3AF),
+    _ => const Color(0xFF9CA3AF),
   };
 
   static String _tierLabel(MerchantTier t) => const {
-    MerchantTier.basic:    'Basic',
-    MerchantTier.standard: 'Standard',
-    MerchantTier.premium:  'Premium',
-    MerchantTier.vip:      'VIP',
-    MerchantTier.unknown:  'Basic',
+    MerchantTier.bronze: 'Bronze',
+    MerchantTier.silver: 'Silver',
+    MerchantTier.gold: 'Gold',
+    MerchantTier.platinum: 'Platinum',
+    MerchantTier.diamond: 'Diamond',
   }[t]!;
 
   static Color _tierColor(MerchantTier t) => const {
-    MerchantTier.vip:      Color(0xFFFFAA00),
-    MerchantTier.premium:  Color(0xFFA855F7),
-    MerchantTier.standard: Color(0xFF5B8DEF),
-    MerchantTier.basic:    Color(0xFF9CA3AF),
-    MerchantTier.unknown:  Color(0xFF9CA3AF),
+    MerchantTier.diamond: Color(0xFF06B6D4),
+    MerchantTier.platinum: Color(0xFF64748B),
+    MerchantTier.gold: Color(0xFFF59E0B),
+    MerchantTier.silver: Color(0xFF94A3B8),
+    MerchantTier.bronze: Color(0xFFB87333),
+  }[t]!;
+
+  static IconData _tierIcon(MerchantTier t) => const {
+    MerchantTier.bronze: Icons.shield_outlined,
+    MerchantTier.silver: Icons.workspace_premium_outlined,
+    MerchantTier.gold: Icons.emoji_events_outlined,
+    MerchantTier.platinum: Icons.military_tech_outlined,
+    MerchantTier.diamond: Icons.diamond_outlined,
   }[t]!;
 
   static String _availLabel(SellerAvailability a) => const {
-    SellerAvailability.available:   'Online',
+    SellerAvailability.available: 'Online',
     SellerAvailability.unavailable: 'Offline',
-    SellerAvailability.onBreak:     'On Break',
-    SellerAvailability.unknown:     'Offline',
+    SellerAvailability.onBreak: 'On Break',
+    SellerAvailability.unknown: 'Offline',
   }[a]!;
 
   static Color _availColor(SellerAvailability a) => const {
-    SellerAvailability.available:   Color(0xFF00C48C),
+    SellerAvailability.available: Color(0xFF00C48C),
     SellerAvailability.unavailable: Color(0xFF9CA3AF),
-    SellerAvailability.onBreak:     Color(0xFFFAA040),
-    SellerAvailability.unknown:     Color(0xFF9CA3AF),
+    SellerAvailability.onBreak: Color(0xFFFAA040),
+    SellerAvailability.unknown: Color(0xFF9CA3AF),
   }[a]!;
 
   // ─── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final c          = AppColor.of(context);
-    final offer      = widget.offer;
-    final typeColor  = _typeColor(c);
+    final c = AppColor.of(context);
+    final offer = widget.offer;
+    final typeColor = _typeColor(c);
     final statusText = offer.status?.name.toUpperCase() ?? 'UNKNOWN';
     final hasLivePrice = widget.marketPrice != null;
 
@@ -227,10 +242,13 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                               profile: _merchantProfile!,
                               getTierLabel: _tierLabel,
                               getTierColor: _tierColor,
+                              getTierIcon: _tierIcon,
                               getAvailabilityLabel: _availLabel,
                               getAvailabilityColor: _availColor,
                               paymentMethodIds: _effectivePaymentMethodIds
-                                  .map((id) => _paymentMethodsMap[id]?.name ?? id)
+                                  .map(
+                                    (id) => _paymentMethodsMap[id]?.name ?? id,
+                                  )
                                   .toList(),
                               averageRating: _averageRating,
                               reviewCount: _reviews.length,
@@ -244,7 +262,8 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                             c: c,
                             offer: offer,
                             loadingPaymentMethods: _loadingPaymentMethods,
-                            effectivePaymentMethodIds: _effectivePaymentMethodIds,
+                            effectivePaymentMethodIds:
+                                _effectivePaymentMethodIds,
                             paymentMethodsMap: _paymentMethodsMap,
                             getPaymentMethodNames: _getPaymentMethodNames,
                           ),
@@ -254,11 +273,19 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                             _ReviewsLoadingCard(c: c),
                           ] else if (_reviews.isNotEmpty) ...[
                             const SizedBox(height: 14),
-                            _ReviewsCard(c: c, reviews: _reviews, averageRating: _averageRating),
+                            _ReviewsCard(
+                              c: c,
+                              reviews: _reviews,
+                              averageRating: _averageRating,
+                            ),
                           ],
 
                           const SizedBox(height: 20),
-                          _TradeButton(typeColor: typeColor, isBuy: _isBuy, onTap: widget.onTradeNow),
+                          _TradeButton(
+                            typeColor: typeColor,
+                            isBuy: _isBuy,
+                            onTap: widget.onTradeNow,
+                          ),
                         ],
                       ),
                     ),
@@ -326,7 +353,10 @@ class _HeroHeader extends StatelessWidget {
             children: [
               // Type pill — solid fill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: typeColor,
                   borderRadius: BorderRadius.circular(10),
@@ -335,7 +365,9 @@ class _HeroHeader extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                      isBuy
+                          ? Icons.arrow_downward_rounded
+                          : Icons.arrow_upward_rounded,
                       size: 15,
                       color: Colors.white,
                     ),
@@ -355,7 +387,10 @@ class _HeroHeader extends StatelessWidget {
               const SizedBox(width: 8),
               // Status pill — solid fill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor,
                   borderRadius: BorderRadius.circular(10),
@@ -432,7 +467,10 @@ class _HeroHeader extends StatelessWidget {
               ),
               // Market rate badge — solid fill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: c.background,
                   borderRadius: BorderRadius.circular(10),
@@ -476,7 +514,11 @@ class _TradeLimitsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionLabel(c: c, icon: Icons.stacked_bar_chart_rounded, label: 'Trade Limits'),
+          _SectionLabel(
+            c: c,
+            icon: Icons.stacked_bar_chart_rounded,
+            label: 'Trade Limits',
+          ),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -557,10 +599,22 @@ class _DetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionLabel(c: c, icon: Icons.info_outline_rounded, label: 'Details'),
+          _SectionLabel(
+            c: c,
+            icon: Icons.info_outline_rounded,
+            label: 'Details',
+          ),
           const SizedBox(height: 14),
-          _DetailRow(c: c, label: 'Payment window', value: '${offer.paymentWindowMinutes ?? '—'} min'),
-          _DetailRow(c: c, label: 'Visible', value: offer.isVisible ? 'Yes' : 'No'),
+          _DetailRow(
+            c: c,
+            label: 'Payment window',
+            value: '${offer.paymentWindowMinutes ?? '—'} min',
+          ),
+          _DetailRow(
+            c: c,
+            label: 'Visible',
+            value: offer.isVisible ? 'Yes' : 'No',
+          ),
           _DetailRow(
             c: c,
             label: 'Success rate',
@@ -609,7 +663,11 @@ class _DetailsCard extends StatelessWidget {
 // ─── Reviews Card ─────────────────────────────────────────────────────────────
 
 class _ReviewsCard extends StatelessWidget {
-  const _ReviewsCard({required this.c, required this.reviews, this.averageRating});
+  const _ReviewsCard({
+    required this.c,
+    required this.reviews,
+    this.averageRating,
+  });
   final AppColor c;
   final List<ReviewModel> reviews;
   final double? averageRating;
@@ -639,7 +697,10 @@ class _ReviewsCard extends StatelessWidget {
               const Spacer(),
               if (averageRating != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: c.background,
                     borderRadius: BorderRadius.circular(7),
@@ -664,12 +725,14 @@ class _ReviewsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 13),
-          ...shown.asMap().entries.map((e) => Column(
-            children: [
-              _ReviewItem(c: c, review: e.value),
-              if (e.key < shown.length - 1) const SizedBox(height: 8),
-            ],
-          )),
+          ...shown.asMap().entries.map(
+            (e) => Column(
+              children: [
+                _ReviewItem(c: c, review: e.value),
+                if (e.key < shown.length - 1) const SizedBox(height: 8),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -679,7 +742,11 @@ class _ReviewsCard extends StatelessWidget {
 // ─── Trade Button ─────────────────────────────────────────────────────────────
 
 class _TradeButton extends StatefulWidget {
-  const _TradeButton({required this.typeColor, required this.isBuy, required this.onTap});
+  const _TradeButton({
+    required this.typeColor,
+    required this.isBuy,
+    required this.onTap,
+  });
   final Color typeColor;
   final bool isBuy;
   final VoidCallback onTap;
@@ -701,9 +768,10 @@ class _TradeButtonState extends State<_TradeButton>
       duration: const Duration(milliseconds: 100),
       reverseDuration: const Duration(milliseconds: 180),
     );
-    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 0.96,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
   }
 
   @override
@@ -716,7 +784,10 @@ class _TradeButtonState extends State<_TradeButton>
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) => _ctrl.forward(),
-      onTapUp: (_) { _ctrl.reverse(); widget.onTap(); },
+      onTapUp: (_) {
+        _ctrl.reverse();
+        widget.onTap();
+      },
       onTapCancel: () => _ctrl.reverse(),
       child: ScaleTransition(
         scale: _scale,
@@ -732,7 +803,9 @@ class _TradeButtonState extends State<_TradeButton>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  widget.isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                  widget.isBuy
+                      ? Icons.arrow_downward_rounded
+                      : Icons.arrow_upward_rounded,
                   color: Colors.white,
                   size: 20,
                 ),
@@ -784,7 +857,11 @@ class _SectionDivider extends StatelessWidget {
 }
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.c, required this.icon, required this.label});
+  const _SectionLabel({
+    required this.c,
+    required this.icon,
+    required this.label,
+  });
   final AppColor c;
   final IconData icon;
   final String label;
@@ -922,7 +999,7 @@ class _ReviewItem extends StatelessWidget {
   String _timeAgo(DateTime d) {
     final diff = DateTime.now().difference(d);
     if (diff.inDays > 30) return '${d.day}/${d.month}/${d.year}';
-    if (diff.inDays > 0)  return '${diff.inDays}d ago';
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     return 'Just now';
   }
@@ -941,11 +1018,16 @@ class _ReviewItem extends StatelessWidget {
         Row(
           children: [
             Row(
-              children: List.generate(5, (i) => Icon(
-                i < review.rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 14,
-                color: i < review.rating ? _amber : c.border,
-              )),
+              children: List.generate(
+                5,
+                (i) => Icon(
+                  i < review.rating
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
+                  size: 14,
+                  color: i < review.rating ? _amber : c.border,
+                ),
+              ),
             ),
             const Spacer(),
             if (review.createdAt != null)
@@ -1017,11 +1099,8 @@ class _PaymentMethodChip extends StatelessWidget {
     );
   }
 
-  Widget _fallbackIcon(AppColor c) => Icon(
-    Icons.account_balance_wallet_outlined,
-    size: 14,
-    color: c.primary,
-  );
+  Widget _fallbackIcon(AppColor c) =>
+      Icon(Icons.account_balance_wallet_outlined, size: 14, color: c.primary);
 }
 
 // ─── Skeleton helpers ─────────────────────────────────────────────────────────
@@ -1180,33 +1259,36 @@ class _ReviewsLoadingCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          ...List.generate(2, (index) => Padding(
-            padding: EdgeInsets.only(bottom: index == 1 ? 0 : 8),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: c.background,
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: c.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _Skeleton(c: c, height: 12, width: 76),
-                      const Spacer(),
-                      _Skeleton(c: c, height: 10, width: 46),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _Skeleton(c: c, height: 10),
-                  const SizedBox(height: 6),
-                  _Skeleton(c: c, height: 10, width: 210),
-                ],
+          ...List.generate(
+            2,
+            (index) => Padding(
+              padding: EdgeInsets.only(bottom: index == 1 ? 0 : 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.background,
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: c.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _Skeleton(c: c, height: 12, width: 76),
+                        const Spacer(),
+                        _Skeleton(c: c, height: 10, width: 46),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _Skeleton(c: c, height: 10),
+                    const SizedBox(height: 6),
+                    _Skeleton(c: c, height: 10, width: 210),
+                  ],
+                ),
               ),
             ),
-          )),
+          ),
         ],
       ),
     );

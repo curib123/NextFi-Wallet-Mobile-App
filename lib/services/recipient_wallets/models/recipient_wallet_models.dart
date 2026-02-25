@@ -1,10 +1,11 @@
 class RecipientWallet {
   final String id;
   final String userId;
-  final String name;
-  final String publicAddress;
+  final String address;
   final String network;
+  final String? label;
   final String? memo;
+  final String? memoType;
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -12,23 +13,29 @@ class RecipientWallet {
   const RecipientWallet({
     required this.id,
     required this.userId,
-    required this.name,
-    required this.publicAddress,
+    required this.address,
     required this.network,
+    this.label,
     this.memo,
+    this.memoType,
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
   });
 
+  // Backward-compatible aliases for existing UI code.
+  String get name => (label ?? '').trim();
+  String get publicAddress => address;
+
   factory RecipientWallet.fromJson(Map<String, dynamic> json) {
     return RecipientWallet(
       id: json['id'] as String,
       userId: json['userId'] as String,
-      name: json['name'] as String,
-      publicAddress: json['publicAddress'] as String,
+      address: (json['address'] ?? json['publicAddress'] ?? '') as String,
       network: json['network'] as String? ?? 'stellar',
+      label: (json['label'] ?? json['name']) as String?,
       memo: json['memo'] as String?,
+      memoType: json['memoType'] as String?,
       isActive: json['isActive'] as bool? ?? true,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
@@ -38,10 +45,11 @@ class RecipientWallet {
   Map<String, dynamic> toJson() => {
     'id': id,
     'userId': userId,
-    'name': name,
-    'publicAddress': publicAddress,
+    'address': address,
     'network': network,
+    if (label != null) 'label': label,
     if (memo != null) 'memo': memo,
+    if (memoType != null) 'memoType': memoType,
     'isActive': isActive,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
@@ -50,10 +58,11 @@ class RecipientWallet {
   RecipientWallet copyWith({
     String? id,
     String? userId,
-    String? name,
-    String? publicAddress,
+    String? address,
     String? network,
+    String? label,
     String? memo,
+    String? memoType,
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -61,10 +70,11 @@ class RecipientWallet {
     return RecipientWallet(
       id: id ?? this.id,
       userId: userId ?? this.userId,
-      name: name ?? this.name,
-      publicAddress: publicAddress ?? this.publicAddress,
+      address: address ?? this.address,
       network: network ?? this.network,
+      label: label ?? this.label,
       memo: memo ?? this.memo,
+      memoType: memoType ?? this.memoType,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -73,49 +83,49 @@ class RecipientWallet {
 }
 
 class CreateRecipientWalletRequest {
-  final String name;
-  final String publicAddress;
+  final String address;
   final String? network;
+  final String? label;
   final String? memo;
-  final bool? isActive;
+  final String? memoType;
 
   const CreateRecipientWalletRequest({
-    required this.name,
-    required this.publicAddress,
+    required this.address,
     this.network,
+    this.label,
     this.memo,
-    this.isActive,
+    this.memoType,
   });
 
   Map<String, dynamic> toJson() => {
-    'name': name,
-    'publicAddress': publicAddress,
+    'address': address,
     if (network != null) 'network': network,
+    if (label != null) 'label': label,
     if (memo != null) 'memo': memo,
-    if (isActive != null) 'isActive': isActive,
+    if (memoType != null) 'memoType': memoType,
   };
 }
 
 class UpdateRecipientWalletRequest {
-  final String? name;
-  final String? publicAddress;
+  final String? address;
   final String? network;
+  final String? label;
   final String? memo;
-  final bool? isActive;
+  final String? memoType;
 
   const UpdateRecipientWalletRequest({
-    this.name,
-    this.publicAddress,
+    this.address,
     this.network,
+    this.label,
     this.memo,
-    this.isActive,
+    this.memoType,
   });
 
   Map<String, dynamic> toJson() => {
-    if (name != null) 'name': name,
-    if (publicAddress != null) 'publicAddress': publicAddress,
+    if (address != null) 'address': address,
     if (network != null) 'network': network,
+    if (label != null) 'label': label,
     if (memo != null) 'memo': memo,
-    if (isActive != null) 'isActive': isActive,
+    if (memoType != null) 'memoType': memoType,
   };
 }

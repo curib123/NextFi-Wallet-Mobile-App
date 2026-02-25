@@ -5,10 +5,46 @@ class RecipientWalletsApi {
   final ApiClient _api;
   const RecipientWalletsApi(this._api);
 
+  List<RecipientWallet> _parseListFromResponse(dynamic response) {
+    List<dynamic>? rawList;
+
+    if (response is List) {
+      rawList = response;
+    } else if (response is Map) {
+      final map = Map<String, dynamic>.from(response);
+      final items = map['items'];
+      final data = map['data'];
+
+      if (items is List) {
+        rawList = items;
+      } else if (data is List) {
+        rawList = data;
+      } else if (data is Map && data['items'] is List) {
+        rawList = data['items'] as List;
+      }
+    }
+
+    if (rawList == null) return const <RecipientWallet>[];
+
+    return rawList
+        .whereType<Map>()
+        .map(
+          (item) => RecipientWallet.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
   // POST /recipient-wallets
   Future<RecipientWallet> create(CreateRecipientWalletRequest req) async {
-    final response = await _api.post('/recipient-wallets', req.toJson(), auth: true);
-    return RecipientWallet.fromJson(response);
+    final response = await _api.post(
+      '/recipient-wallets',
+      req.toJson(),
+      auth: true,
+    );
+    if (response is Map) {
+      return RecipientWallet.fromJson(Map<String, dynamic>.from(response));
+    }
+    throw Exception('Invalid response shape from POST /recipient-wallets');
   }
 
   // GET /recipient-wallets?q=&network=&activeOnly=true
@@ -16,11 +52,15 @@ class RecipientWalletsApi {
     String? q,
     String? network,
     bool? activeOnly,
+    int? page,
+    int? limit,
   }) async {
     final queryParams = <String, String>{};
     if (q != null && q.isNotEmpty) queryParams['q'] = q;
     if (network != null && network.isNotEmpty) queryParams['network'] = network;
     if (activeOnly != null) queryParams['activeOnly'] = activeOnly.toString();
+    if (page != null) queryParams['page'] = page.toString();
+    if (limit != null) queryParams['limit'] = limit.toString();
 
     final response = await _api.get(
       '/recipient-wallets',
@@ -28,42 +68,58 @@ class RecipientWalletsApi {
       queryParams: queryParams.isNotEmpty ? queryParams : null,
     );
 
-    if (response is List) {
-      return response.map((item) => RecipientWallet.fromJson(item)).toList();
-    }
-    return [];
+    return _parseListFromResponse(response);
   }
 
   // GET /recipient-wallets/:id
   Future<RecipientWallet> getById(String id) async {
     final response = await _api.get('/recipient-wallets/$id', auth: true);
-    return RecipientWallet.fromJson(response);
+    if (response is Map) {
+      return RecipientWallet.fromJson(Map<String, dynamic>.from(response));
+    }
+    throw Exception('Invalid response shape from GET /recipient-wallets/$id');
   }
 
   // PATCH /recipient-wallets/:id
   Future<RecipientWallet> update({
     required String id,
-    String? name,
-    String? publicAddress,
+    String? label,
+    String? address,
     String? network,
     String? memo,
-    bool? isActive,
+    String? memoType,
   }) async {
     final body = <String, dynamic>{};
-    if (name != null) body['name'] = name;
-    if (publicAddress != null) body['publicAddress'] = publicAddress;
+    if (label != null) body['label'] = label;
+    if (address != null) body['address'] = address;
     if (network != null) body['network'] = network;
     if (memo != null) body['memo'] = memo;
-    if (isActive != null) body['isActive'] = isActive;
+    if (memoType != null) body['memoType'] = memoType;
 
-    final response = await _api.patch('/recipient-wallets/$id', body, auth: true);
-    return RecipientWallet.fromJson(response);
+    final response = await _api.patch(
+      '/recipient-wallets/$id',
+      body,
+      auth: true,
+    );
+    if (response is Map) {
+      return RecipientWallet.fromJson(Map<String, dynamic>.from(response));
+    }
+    throw Exception('Invalid response shape from PATCH /recipient-wallets/$id');
   }
 
   // PATCH /recipient-wallets/:id/toggle
   Future<RecipientWallet> toggleActive(String id) async {
-    final response = await _api.patch('/recipient-wallets/$id/toggle', {}, auth: true);
-    return RecipientWallet.fromJson(response);
+    final response = await _api.patch(
+      '/recipient-wallets/$id/toggle',
+      {},
+      auth: true,
+    );
+    if (response is Map) {
+      return RecipientWallet.fromJson(Map<String, dynamic>.from(response));
+    }
+    throw Exception(
+      'Invalid response shape from PATCH /recipient-wallets/$id/toggle',
+    );
   }
 
   // DELETE /recipient-wallets/:id

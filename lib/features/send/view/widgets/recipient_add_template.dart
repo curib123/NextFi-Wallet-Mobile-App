@@ -23,74 +23,86 @@ class RecipientAddTemplate extends StatelessWidget {
     final c = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Explicit solid colors — no runtime opacity mixing
+    final bgColor     = isDark ? const Color(0xFF12151E) : const Color(0xFFF6F7FA);
+    final borderColor = isDark ? const Color(0xFF2A2F3A) : const Color(0xFFDDE0E8);
+    final iconBg      = isDark ? const Color(0xFF1E2436) : const Color(0xFFE8ECFF);
+    final iconColor   = isDark ? const Color(0xFF7B95FF) : const Color(0xFF3A5BFF);
+    final saveBg      = isDark ? const Color(0xFF1E2436) : const Color(0xFFDDE4FF);
+    final saveColor   = isDark ? const Color(0xFF7B95FF) : const Color(0xFF2C46CC);
+    final addressColor = isDark ? const Color(0xFF6B7280) : const Color(0xFF8B93A8);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: isDark ? c.background : c.surface.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
-          width: 1.5,
-        ),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
       child: Row(
         children: [
-          // Icon
+          // ── Icon ──────────────────────────────────────────────────────
           Container(
-            width: 38,
-            height: 38,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: iconBg,
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
+            child: Center(
+              child: Icon(LucideIcons.userPlus, size: 18, color: iconColor),
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 13),
 
-          // Text
+          // ── Text ──────────────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'New address',
+                  'Save to contacts',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    letterSpacing: -0.2,
+                    letterSpacing: -0.3,
+                    height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   _shortenAddress(address),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.6),
+                    color: addressColor,
                     fontFamily: 'monospace',
-                    fontSize: 12,
-                    letterSpacing: 0,
+                    fontSize: 11.5,
+                    letterSpacing: 0.3,
+                    height: 1.3,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
-          // Save CTA
+          // ── Save CTA ──────────────────────────────────────────────────
           GestureDetector(
             onTap: onAdd,
+            behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
+                color: saveBg,
+                borderRadius: BorderRadius.circular(11),
               ),
               child: Text(
                 'Save',
                 style: TextStyle(
-                  color: c.primary,
+                  color: saveColor,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                   letterSpacing: -0.2,

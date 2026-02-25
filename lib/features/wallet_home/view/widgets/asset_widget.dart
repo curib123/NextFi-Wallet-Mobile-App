@@ -259,7 +259,7 @@ class AssetWidget extends StatelessWidget {
               priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
               money: money,
               onTap: () => _openReceive(context, a),
-              formatTokenAmount: formatTokenAmount, 
+              formatTokenAmount: formatTokenAmount,
               formatSignedMoney: _formatSignedMoney,
             ),
           );

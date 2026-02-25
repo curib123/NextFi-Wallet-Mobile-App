@@ -342,12 +342,20 @@ class ChatFriendModel {
   final String friendshipId;
   final String friendUserId;
   final ChatUserLite friend;
+  final String friendStatus;
+  final DateTime? friendLastSeenAt;
+  final bool friendIsOnline;
+  final int newUnreadMessageCount;
   final DateTime? createdAt;
 
   const ChatFriendModel({
     required this.friendshipId,
     required this.friendUserId,
     required this.friend,
+    this.friendStatus = '',
+    this.friendLastSeenAt,
+    this.friendIsOnline = false,
+    this.newUnreadMessageCount = 0,
     this.createdAt,
   });
 
@@ -361,6 +369,15 @@ class ChatFriendModel {
       'friendUserId',
       'friend_user_id',
     ], fallback: friendUser.id);
+    final friendStatus = _readString(json, const [
+      'friendStatus',
+      'friend_status',
+      'status',
+    ]);
+    final friendIsOnline = _readBool(json, const [
+      'friendIsOnline',
+      'friend_is_online',
+    ], fallback: friendStatus.toUpperCase() == 'ONLINE');
 
     return ChatFriendModel(
       friendshipId: _readString(json, const [
@@ -370,6 +387,16 @@ class ChatFriendModel {
       ]),
       friendUserId: friendUserId,
       friend: friendUser,
+      friendStatus: friendStatus,
+      friendLastSeenAt: _readDate(json, const [
+        'friendLastSeenAt',
+        'friend_last_seen_at',
+      ]),
+      friendIsOnline: friendIsOnline,
+      newUnreadMessageCount: _readInt(json, const [
+        'newUnreadMessageCount',
+        'new_unread_message_count',
+      ]),
       createdAt: _readDate(json, const ['createdAt', 'created_at']),
     );
   }

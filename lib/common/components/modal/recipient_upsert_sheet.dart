@@ -7,8 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-// Reusables
-import 'package:next_fi/common/components/Input/modern_input.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 
@@ -16,10 +14,10 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 /// Returns true if something was saved.
 /// You can pass [address] to prefill the address field.
 Future<bool?> showRecipientUpsertSheet(
-    BuildContext context, {
-      RecipientAddressModel? initial,
-      String? address,
-    }) {
+  BuildContext context, {
+  RecipientAddressModel? initial,
+  String? address,
+}) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -53,6 +51,8 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _addrFocus = FocusNode();
 
+  void _onFocusChange() => setState(() {});
+
   static const _palette = <int>[
     0xFF7B16FF, // Stellar purple
     0xFF00D4FF, // Cyan
@@ -79,13 +79,10 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       parent: _animController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
 
     _animController.forward();
 
@@ -93,8 +90,10 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
     if ((_addr.text.isEmpty) &&
         (widget.address != null) &&
         widget.address!.trim().isNotEmpty) {
-      final incoming =
-      widget.address!.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+      final incoming = widget.address!.trim().toUpperCase().replaceAll(
+        RegExp(r'\s+'),
+        '',
+      );
       _addr.text = incoming;
       _addr.selection = TextSelection.collapsed(offset: _addr.text.length);
       _addrTouched = true;
@@ -102,10 +101,14 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
 
     _name.addListener(() => setState(() {}));
     _addr.addListener(() => setState(() {}));
+    _nameFocus.addListener(_onFocusChange);
+    _addrFocus.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
+    _nameFocus.removeListener(_onFocusChange);
+    _addrFocus.removeListener(_onFocusChange);
     _animController.dispose();
     _name.dispose();
     _addr.dispose();
@@ -136,8 +139,13 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
   }
 
   Future<void> _save() async {
-    // Check authentication first
     final prov = context.read<RecipientAddressVM>();
+
+    if (prov.loading) {
+      await prov.ready;
+      if (!mounted) return;
+    }
+
     if (!prov.isAuthenticated) {
       showFloatingSnackBar(
         context,
@@ -160,12 +168,17 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       if (widget.initial == null) {
         await prov.add(name: name, address: address, color: _color);
       } else {
-        await prov.update(
+        final updated = await prov.update(
           widget.initial!.id,
           name: name,
           address: address,
           color: _color,
         );
+        if (updated == null) {
+          throw Exception(
+            'Recipient no longer exists. Please refresh and try again.',
+          );
+        }
       }
       if (!mounted) return;
       HapticFeedback.mediumImpact();
@@ -179,14 +192,23 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       // Show error message
       showFloatingSnackBar(
         context,
-        message: e.toString().contains('Not authenticated')
-            ? 'Session expired. Please login again.'
-            : 'Failed to save: ${e.toString()}',
+        message: _friendlyError(e),
         type: SnackBarType.error,
       );
 
       setState(() => _saving = false);
     }
+  }
+
+  String _friendlyError(Object e) {
+    final raw = e.toString();
+    if (raw.contains('Not authenticated') || raw.contains('401')) {
+      return 'Session expired. Please login again.';
+    }
+    final cleaned = raw.startsWith('Exception: ')
+        ? raw.substring('Exception: '.length)
+        : raw;
+    return 'Failed to save: $cleaned';
   }
 
   Future<void> _close() async {
@@ -254,11 +276,10 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      isEdit ? 'Update contact details' : 'Save for quick transfers',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: c.textSecondary,
-                      ),
+                      isEdit
+                          ? 'Update contact details'
+                          : 'Save for quick transfers',
+                      style: TextStyle(fontSize: 13, color: c.textSecondary),
                     ),
                   ],
                 ),
@@ -284,25 +305,18 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
           ),
 
           // Auth warning banner
-          if (!prov.isAuthenticated)
+          if (!prov.loading && !prov.isAuthenticated)
             Container(
               margin: const EdgeInsets.only(top: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: c.warning.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: c.warning.withOpacity(0.3),
-                  width: 1,
-                ),
+                border: Border.all(color: c.warning.withOpacity(0.3), width: 1),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    LucideIcons.alertCircle,
-                    color: c.warning,
-                    size: 18,
-                  ),
+                  Icon(LucideIcons.alertCircle, color: c.warning, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -331,24 +345,24 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
 
     final (icon, label, bgColor, fgColor) = valid
         ? (
-    LucideIcons.checkCircle2,
-    'Valid Stellar address',
-    c.success.withOpacity(0.12),
-    c.success,
-    )
+            LucideIcons.checkCircle2,
+            'Valid Stellar address',
+            c.success.withOpacity(0.12),
+            c.success,
+          )
         : _isMuxedLike
         ? (
-    LucideIcons.alertCircle,
-    'Muxed (M…) not supported',
-    c.warning.withOpacity(0.12),
-    c.warning,
-    )
+            LucideIcons.alertCircle,
+            'Muxed (M...) not supported',
+            c.warning.withOpacity(0.12),
+            c.warning,
+          )
         : (
-    LucideIcons.xCircle,
-    'Invalid address format',
-    c.error.withOpacity(0.12),
-    c.error,
-    );
+            LucideIcons.xCircle,
+            'Invalid address format',
+            c.error.withOpacity(0.12),
+            c.error,
+          );
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -358,10 +372,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: fgColor.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: fgColor.withOpacity(0.2), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -419,27 +430,24 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                     shape: BoxShape.circle,
                     boxShadow: selected
                         ? [
-                      BoxShadow(
-                        color: Color(colorValue).withOpacity(0.4),
-                        blurRadius: 12,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
+                            BoxShadow(
+                              color: Color(colorValue).withOpacity(0.4),
+                              blurRadius: 12,
+                              spreadRadius: 2,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
                         : null,
                     border: selected
-                        ? Border.all(
-                      color: Colors.white,
-                      width: 3,
-                    )
+                        ? Border.all(color: Colors.white, width: 3)
                         : null,
                   ),
                   child: selected
                       ? const Icon(
-                    LucideIcons.check,
-                    color: Colors.white,
-                    size: 20,
-                  )
+                          LucideIcons.check,
+                          color: Colors.white,
+                          size: 20,
+                        )
                       : null,
                 ),
               ),
@@ -493,12 +501,12 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
             ),
             boxShadow: isFocused
                 ? [
-              BoxShadow(
-                color: c.primary.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ]
+                    BoxShadow(
+                      color: c.primary.withOpacity(0.1),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
                 : null,
           ),
           child: TextFormField(
@@ -548,6 +556,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isEdit = widget.initial != null;
     final prov = context.watch<RecipientAddressVM>();
+    final canSubmit = _canSave && !prov.loading && prov.isAuthenticated;
 
     final addressSuffix = Row(
       mainAxisSize: MainAxisSize.min,
@@ -560,20 +569,12 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
               setState(() => _addrTouched = true);
               HapticFeedback.selectionClick();
             },
-            icon: Icon(
-              LucideIcons.x,
-              size: 18,
-              color: c.textSecondary,
-            ),
+            icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary),
           ),
         IconButton(
           tooltip: 'Paste',
           onPressed: _pasteFromClipboard,
-          icon: Icon(
-            LucideIcons.clipboard,
-            size: 18,
-            color: c.primary,
-          ),
+          icon: Icon(LucideIcons.clipboard, size: 18, color: c.primary),
         ),
       ],
     );
@@ -616,7 +617,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                               controller: _name,
                               focusNode: _nameFocus,
                               label: 'Recipient Name',
-                              hint: 'e.g., Alice — USDC payouts',
+                              hint: 'e.g., Alice - USDC payouts',
                               icon: LucideIcons.user,
                               textCapitalization: TextCapitalization.words,
                               textInputAction: TextInputAction.next,
@@ -631,27 +632,26 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                               controller: _addr,
                               focusNode: _addrFocus,
                               label: 'Stellar Address',
-                              hint: 'G… (56 characters)',
+                              hint: 'G... (56 characters)',
                               icon: LucideIcons.wallet,
                               suffix: addressSuffix,
                               maxLines: 3,
                               textInputAction: TextInputAction.done,
                               inputFormatters: [
                                 TextInputFormatter.withFunction(
-                                      (oldValue, newValue) => newValue.copyWith(
+                                  (oldValue, newValue) => newValue.copyWith(
                                     text: newValue.text.toUpperCase(),
                                   ),
                                 ),
-                                FilteringTextInputFormatter.deny(
-                                    RegExp(r'\s')),
+                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
                               ],
                               validator: (v) =>
-                              (v == null || !_isValidStellarAddress(v))
+                                  (v == null || !_isValidStellarAddress(v))
                                   ? 'Invalid Stellar address'
                                   : null,
                               onTap: () => setState(() => _addrTouched = true),
                               onFieldSubmitted: (_) =>
-                              _canSave && prov.isAuthenticated ? _save() : null,
+                                  canSubmit ? _save() : null,
                             ),
                             _addressStatus(),
                             const SizedBox(height: 24),
@@ -696,13 +696,15 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                           child: CustomButton(
                             text: _saving
                                 ? 'Saving...'
+                                : prov.loading
+                                ? 'Checking session...'
                                 : !prov.isAuthenticated
                                 ? 'Login Required'
                                 : (isEdit ? 'Save Changes' : 'Add Recipient'),
-                            type: (_canSave && prov.isAuthenticated)
+                            type: canSubmit
                                 ? ButtonType.filled
                                 : ButtonType.disabled,
-                            onPressed: (_canSave && prov.isAuthenticated) ? _save : () {},
+                            onPressed: canSubmit ? _save : () {},
                             fullWidth: true,
                             icon: _saving
                                 ? LucideIcons.loader2

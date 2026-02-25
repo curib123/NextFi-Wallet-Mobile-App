@@ -76,7 +76,7 @@ class TradesCoreService {
   }) => _api.openDispute(id, reason: reason, description: description, evidenceUrls: evidenceUrls);
 
   // Payment proof upload
-  Future<void> uploadProof(
+  Future<String?> uploadProof(
     String id, {
     required File file,
     String type = 'FIAT',

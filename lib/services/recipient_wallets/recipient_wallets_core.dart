@@ -7,10 +7,10 @@
 //
 // Usage:
 //   final recipientCore = RecipientWalletsCore();
-//   await recipientCore.addRecipient(name: "Mom", address: "GCFH...");
+//   await recipientCore.addRecipient(label: "Mom", address: "GCFH...");
 //   final recipients = await recipientCore.getAllRecipients();
 //   await recipientCore.searchRecipients(query: "mom");
-//   await recipientCore.updateRecipient(id: "...", name: "Mother");
+//   await recipientCore.updateRecipient(id: "...", label: "Mother");
 //   await recipientCore.toggleRecipient(id: "...");
 //   await recipientCore.deleteRecipient(id: "...");
 
@@ -28,7 +28,7 @@ class RecipientWalletsCore {
   late final RecipientWalletsService svc;
 
   RecipientWalletsCore({TokenStorage? tokenStorage})
-      : _tokenStorage = tokenStorage ?? TokenStorage() {
+    : _tokenStorage = tokenStorage ?? TokenStorage() {
     svc = RecipientWalletsService(
       baseUrl: _baseUrl,
       tokenProvider: () async => await _tokenStorage.accessToken,
@@ -41,19 +41,22 @@ class RecipientWalletsCore {
 
   /// Add a new recipient wallet address (JWT required).
   Future<RecipientWallet> addRecipient({
-    required String name,
+    String? name, // legacy alias
+    String? label,
     required String address,
     String? network,
     String? memo,
-    bool isActive = true,
+    String? memoType,
   }) {
     return svc.recipientWallets.create(
       CreateRecipientWalletRequest(
-        name: name,
-        publicAddress: address,
+        label: (label ?? name)?.trim().isEmpty == true
+            ? null
+            : (label ?? name)?.trim(),
+        address: address,
         network: network ?? 'stellar',
         memo: memo,
-        isActive: isActive,
+        memoType: memoType,
       ),
     );
   }
@@ -90,19 +93,20 @@ class RecipientWalletsCore {
   /// Update recipient details (JWT required).
   Future<RecipientWallet> updateRecipient({
     required String id,
-    String? name,
+    String? name, // legacy alias
+    String? label,
     String? address,
     String? network,
     String? memo,
-    bool? isActive,
+    String? memoType,
   }) {
     return svc.recipientWallets.update(
       id: id,
-      name: name,
-      publicAddress: address,
+      label: label ?? name,
+      address: address,
       network: network,
       memo: memo,
-      isActive: isActive,
+      memoType: memoType,
     );
   }
 
@@ -122,7 +126,10 @@ class RecipientWalletsCore {
   }
 
   /// Get recipients for a specific network.
-  Future<List<RecipientWallet>> getRecipientsByNetwork(String network, {bool activeOnly = false}) {
+  Future<List<RecipientWallet>> getRecipientsByNetwork(
+    String network, {
+    bool activeOnly = false,
+  }) {
     return getAllRecipients(network: network, activeOnly: activeOnly);
   }
 

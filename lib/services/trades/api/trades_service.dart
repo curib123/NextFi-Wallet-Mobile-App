@@ -117,6 +117,71 @@ class TradesService {
     );
   }
 
+  String _extractString(dynamic value) {
+    if (value == null) return '';
+    final text = value.toString().trim();
+    return text;
+  }
+
+  String _extractUploadedFileUrl(dynamic data, {int depth = 0}) {
+    if (data == null || depth > 8) return '';
+    if (data is String) {
+      final raw = data.trim();
+      if (raw.isEmpty) return '';
+      if (raw.startsWith('http://') ||
+          raw.startsWith('https://') ||
+          raw.startsWith('/')) {
+        return raw;
+      }
+      return '';
+    }
+    if (data is List) {
+      for (final item in data) {
+        final found = _extractUploadedFileUrl(item, depth: depth + 1);
+        if (found.isNotEmpty) return found;
+      }
+      return '';
+    }
+    if (data is! Map) return '';
+
+    final map = Map<String, dynamic>.from(data);
+    for (final key in const [
+      'fileUrl',
+      'file_url',
+      'url',
+      'proofUrl',
+      'proof_url',
+      'imageUrl',
+      'image_url',
+      'attachmentUrl',
+      'attachment_url',
+      'location',
+      'path',
+    ]) {
+      final candidate = _extractString(map[key]);
+      final found = _extractUploadedFileUrl(candidate, depth: depth + 1);
+      if (found.isNotEmpty) return found;
+    }
+    for (final key in const [
+      'proofUrls',
+      'proof_urls',
+      'fileUrls',
+      'file_urls',
+      'images',
+      'attachments',
+      'files',
+      'proofs',
+      'data',
+      'item',
+      'result',
+      'payload',
+    ]) {
+      final found = _extractUploadedFileUrl(map[key], depth: depth + 1);
+      if (found.isNotEmpty) return found;
+    }
+    return '';
+  }
+
   // ── User routes ─────────────────────────────────────────────────────────────
 
   Future<TradeModel> create(CreateTradeRequest req) async {
@@ -329,7 +394,7 @@ class TradesService {
 
   // ── Payment proof upload (multipart) ─────────────────────────────────────
 
-  Future<void> uploadPaymentProof(
+  Future<String?> uploadPaymentProof(
     String id, {
     required File file,
     String type = 'FIAT',
@@ -353,6 +418,14 @@ class TradesService {
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);
     TradesHttp.ensureOk(res);
+    dynamic data;
+    try {
+      data = TradesHttp.decodeJson<dynamic>(res);
+    } catch (_) {
+      data = null;
+    }
+    final proofUrl = _extractUploadedFileUrl(data);
+    return proofUrl.isEmpty ? null : proofUrl;
   }
 
   void dispose() => _client.close();

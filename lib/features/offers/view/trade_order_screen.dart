@@ -24,49 +24,56 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 // ─── Status accent colors ─────────────────────────────────────────────────────
 
 Color _statusAccent(TradeStatus s, AppColor colors) => switch (s) {
-  TradeStatus.created       => colors.warning,
-  TradeStatus.cryptoLocked  => colors.primary,
-  TradeStatus.fiatSent      => colors.warning,
+  TradeStatus.created => colors.warning,
+  TradeStatus.cryptoLocked => colors.primary,
+  TradeStatus.fiatSent => colors.warning,
   TradeStatus.fiatConfirmed => colors.success,
-  TradeStatus.completed     => colors.success,
-  TradeStatus.cancelled     => colors.error,
-  TradeStatus.disputed      => colors.error,
-  TradeStatus.expired       => colors.textSecondary,
-  _                         => colors.textSecondary,
+  TradeStatus.completed => colors.success,
+  TradeStatus.cancelled => colors.error,
+  TradeStatus.disputed => colors.error,
+  TradeStatus.expired => colors.textSecondary,
+  _ => colors.textSecondary,
 };
 
 IconData _statusIcon(TradeStatus s) => switch (s) {
-  TradeStatus.created       => Icons.hourglass_empty_rounded,
-  TradeStatus.cryptoLocked  => Icons.lock_clock_rounded,
-  TradeStatus.fiatSent      => Icons.north_east_rounded,
+  TradeStatus.created => Icons.hourglass_empty_rounded,
+  TradeStatus.cryptoLocked => Icons.lock_clock_rounded,
+  TradeStatus.fiatSent => Icons.north_east_rounded,
   TradeStatus.fiatConfirmed => Icons.check_circle_outline_rounded,
-  TradeStatus.completed     => Icons.check_circle_rounded,
-  TradeStatus.cancelled     => Icons.cancel_rounded,
-  TradeStatus.disputed      => Icons.flag_rounded,
-  TradeStatus.expired       => Icons.timer_off_rounded,
-  _                         => Icons.help_outline_rounded,
+  TradeStatus.completed => Icons.check_circle_rounded,
+  TradeStatus.cancelled => Icons.cancel_rounded,
+  TradeStatus.disputed => Icons.flag_rounded,
+  TradeStatus.expired => Icons.timer_off_rounded,
+  _ => Icons.help_outline_rounded,
 };
 
 String _statusLabel(
-    TradeStatus s, {
-      required bool isUserEscrowLocker,
-      required bool isUserFiatPayer,
-      required bool isUserCryptoReceiver,
-    }) {
+  TradeStatus s, {
+  required bool isUserEscrowLocker,
+  required bool isUserFiatPayer,
+  required bool isUserCryptoReceiver,
+}) {
   switch (s) {
     case TradeStatus.created:
-      return isUserEscrowLocker ? 'Action Required - Lock Escrow' : 'Awaiting Escrow Lock';
+      return isUserEscrowLocker
+          ? 'Action Required - Lock Escrow'
+          : 'Awaiting Escrow Lock';
     case TradeStatus.cryptoLocked:
       return isUserFiatPayer ? 'Send Your Payment' : 'Waiting for Payment';
     case TradeStatus.fiatSent:
       return isUserFiatPayer ? 'Payment Sent' : 'Confirm Receipt';
     case TradeStatus.fiatConfirmed:
       return isUserCryptoReceiver ? 'Claim Your Crypto' : 'Payment Confirmed';
-    case TradeStatus.completed:  return 'Trade Completed';
-    case TradeStatus.cancelled:  return 'Trade Cancelled';
-    case TradeStatus.disputed:   return 'Under Dispute';
-    case TradeStatus.expired:    return 'Trade Expired';
-    default:                     return 'Unknown Status';
+    case TradeStatus.completed:
+      return 'Trade Completed';
+    case TradeStatus.cancelled:
+      return 'Trade Cancelled';
+    case TradeStatus.disputed:
+      return 'Under Dispute';
+    case TradeStatus.expired:
+      return 'Trade Expired';
+    default:
+      return 'Unknown Status';
   }
 }
 
@@ -109,19 +116,19 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
   bool get _isUserEscrowLocker {
     if (_trade.offerType == TradeOfferType.sell) return _isUserSeller;
-    if (_trade.offerType == TradeOfferType.buy)  return _isUserBuyer;
+    if (_trade.offerType == TradeOfferType.buy) return _isUserBuyer;
     return _isUserSeller;
   }
 
   bool get _isUserFiatPayer {
     if (_trade.offerType == TradeOfferType.sell) return _isUserBuyer;
-    if (_trade.offerType == TradeOfferType.buy)  return _isUserSeller;
+    if (_trade.offerType == TradeOfferType.buy) return _isUserSeller;
     return _isUserBuyer;
   }
 
   bool get _isUserCryptoReceiver {
     if (_trade.offerType == TradeOfferType.sell) return _isUserBuyer;
-    if (_trade.offerType == TradeOfferType.buy)  return _isUserSeller;
+    if (_trade.offerType == TradeOfferType.buy) return _isUserSeller;
     return _isUserBuyer;
   }
 
@@ -143,9 +150,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
+    _pulseAnim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -178,7 +186,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       if (!mounted) return;
       final wasOffline = !_isOnline;
       setState(() => _isOnline = online);
-      if (online && wasOffline && _trade.status.isActive) _refresh(silent: true);
+      if (online && wasOffline && _trade.status.isActive)
+        _refresh(silent: true);
     });
   }
 
@@ -186,7 +195,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final expires = _trade.expiresAt;
     if (expires == null) {
       final created = _trade.createdAt;
-      final window  = _trade.paymentWindowMinutes;
+      final window = _trade.paymentWindowMinutes;
       if (created != null && window != null) {
         _updateTimeLeft(created.add(Duration(minutes: window)));
       }
@@ -203,7 +212,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         final updated = deadline.difference(DateTime.now());
-        setState(() => _timeLeft = updated.isNegative ? Duration.zero : updated);
+        setState(
+          () => _timeLeft = updated.isNegative ? Duration.zero : updated,
+        );
         if (_timeLeft == Duration.zero) _countdownTimer?.cancel();
       });
     }
@@ -243,7 +254,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Future<void> _lockCrypto() async {
     final ok = await _showConfirm(
       title: 'Lock Crypto in Escrow',
-      body: 'Your ${_trade.asset} will be locked in a Stellar Claimable Balance. '
+      body:
+          'Your ${_trade.asset} will be locked in a Stellar Claimable Balance. '
           'It can only be claimed once payment is confirmed. '
           'If the trade expires the funds return to you automatically.',
       confirmLabel: 'Lock Crypto',
@@ -261,58 +273,79 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
       String recipientAddress = _trade.cryptoReceiverAddress.trim();
       if (recipientAddress.isEmpty && _trade.offerType == TradeOfferType.buy) {
-        recipientAddress = (_trade.offer?['seller']?['walletAddress'] ??
-            _trade.offer?['seller']?['stellarAddress'] ?? '')
-            .toString()
-            .trim();
+        recipientAddress =
+            (_trade.offer?['seller']?['walletAddress'] ??
+                    _trade.offer?['seller']?['stellarAddress'] ??
+                    '')
+                .toString()
+                .trim();
       }
       if (recipientAddress.isEmpty) {
-        throw Exception('Recipient address unavailable. Please contact support.');
+        throw Exception(
+          'Recipient address unavailable. Please contact support.',
+        );
       }
 
-      final expiry = _trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24));
-      final txHash = await stellarSvc.claimableBalanceService.createUnconditionalWithExpiry(
-        keyPair: kp,
-        asset: asset,
-        amount: _trade.cryptoAmount,
-        recipientId: recipientAddress,
-        expiryTime: expiry,
+      final expiry =
+          _trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24));
+      final txHash = await stellarSvc.claimableBalanceService
+          .createUnconditionalWithExpiry(
+            keyPair: kp,
+            asset: asset,
+            amount: _trade.cryptoAmount,
+            recipientId: recipientAddress,
+            expiryTime: expiry,
+          );
+
+      final cbId = await _resolveClaimableBalanceId(
+        stellarSvc: stellarSvc,
+        txHash: txHash,
       );
 
-      String? cbId;
+      if (cbId == null || cbId.isEmpty) {
+        throw Exception(
+          'Could not verify escrow balance from transaction. '
+          'Please wait a few seconds and try again.',
+        );
+      }
+
+      final u = await _tradesCore.lockCrypto(
+        _trade.id,
+        claimableBalanceId: cbId,
+        createTxHash: txHash,
+      );
+      if (mounted) setState(() => _trade = u);
+    }, successMsg: 'Crypto locked in escrow — the other party is notified');
+  }
+
+  Future<String?> _resolveClaimableBalanceId({
+    required StellarWalletServices stellarSvc,
+    required String txHash,
+  }) async {
+    // Horizon may index transaction effects with a short delay.
+    for (var attempt = 0; attempt < 5; attempt++) {
       try {
-        final effectsPage = await stellarSvc.sdk.effects.forTransaction(txHash).execute();
+        final effectsPage = await stellarSvc.sdk.effects
+            .forTransaction(txHash)
+            .limit(200)
+            .execute();
         for (final effect in effectsPage.records) {
           if (effect is ClaimableBalanceCreatedEffectResponse) {
-            cbId = effect.balanceId;
-            break;
+            final id = effect.balanceId.trim();
+            if (id.isNotEmpty) return id;
           }
         }
       } catch (_) {}
-
-      if (cbId == null || cbId.isEmpty) {
-        try {
-          final sent = await stellarSvc.claimableBalanceService
-              .getSentClaimableBalances(accountId: kp.accountId, limit: 3);
-          final dynamic first = sent.firstOrNull;
-          cbId = first?.id?.toString() ?? first?.balanceId?.toString();
-        } catch (_) {}
-      }
-
-      if (cbId == null || cbId.isEmpty) {
-        throw Exception('Could not retrieve Claimable Balance ID. Please refresh and try again.');
-      }
-
-      final u = await _tradesCore.lockCrypto(_trade.id,
-          claimableBalanceId: cbId, createTxHash: txHash);
-      if (mounted) setState(() => _trade = u);
-    }, successMsg: 'Crypto locked in escrow — the other party is notified');
+      await Future.delayed(Duration(milliseconds: 800 + (attempt * 400)));
+    }
+    return null;
   }
 
   Future<void> _markFiatSent() async {
     final ok = await _showConfirm(
       title: 'Confirm Payment Sent',
-      body: 'Have you already sent the ${_trade.fiatCurrency} payment? '
+      body:
+          'Have you already sent the ${_trade.fiatCurrency} payment? '
           'This cannot be undone and notifies the other party.',
       confirmLabel: "Yes, I've Already Paid",
     );
@@ -328,11 +361,13 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   Future<void> _confirmFiat() async {
-    final cryptoRecipientLabel =
-    _trade.offerType == TradeOfferType.sell ? 'buyer' : 'seller';
+    final cryptoRecipientLabel = _trade.offerType == TradeOfferType.sell
+        ? 'buyer'
+        : 'seller';
     final ok = await _showConfirm(
       title: 'Confirm Payment Received',
-      body: 'Have you received the full ${_trade.fiatCurrency.toUpperCase()} payment? '
+      body:
+          'Have you received the full ${_trade.fiatCurrency.toUpperCase()} payment? '
           'Confirming will release the crypto escrow to the $cryptoRecipientLabel.',
       confirmLabel: 'Yes, I Received It',
     );
@@ -345,15 +380,18 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
   Future<void> _claimCrypto() async {
     final cbId = _trade.escrow?.claimableBalanceId;
-    if (cbId == null) {
-      showFloatingSnackBar(context,
-          message: 'Escrow ID not available. Refresh and try again.',
-          type: SnackBarType.error);
+    if (cbId == null || cbId.trim().isEmpty) {
+      showFloatingSnackBar(
+        context,
+        message: 'Escrow ID not available. Refresh and try again.',
+        type: SnackBarType.error,
+      );
       return;
     }
     final ok = await _showConfirm(
       title: 'Claim Your Crypto',
-      body: 'Claim ${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} '
+      body:
+          'Claim ${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} '
           'from the escrow to your wallet.',
       confirmLabel: 'Claim Crypto',
     );
@@ -371,14 +409,18 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
   Future<void> _refundCrypto() async {
     final cbId = _trade.escrow?.claimableBalanceId;
-    if (cbId == null) {
-      showFloatingSnackBar(context,
-          message: 'No escrow to refund.', type: SnackBarType.error);
+    if (cbId == null || cbId.trim().isEmpty) {
+      showFloatingSnackBar(
+        context,
+        message: 'No escrow to refund.',
+        type: SnackBarType.error,
+      );
       return;
     }
     final ok = await _showConfirm(
       title: 'Refund Expired Escrow',
-      body: 'The trade has expired. Reclaim your '
+      body:
+          'The trade has expired. Reclaim your '
           '${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} back to your wallet.',
       confirmLabel: 'Reclaim My Crypto',
     );
@@ -389,7 +431,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       final kp = await seedVM.deriveKeyPair();
       final refundTx = await stellarSvc.claimableBalanceService
           .claimClaimableBalance(keyPair: kp, balanceId: cbId);
-      final u = await _tradesCore.refundCrypto(_trade.id, refundTxHash: refundTx);
+      final u = await _tradesCore.refundCrypto(
+        _trade.id,
+        refundTxHash: refundTx,
+      );
       if (mounted) setState(() => _trade = u);
     }, successMsg: 'Crypto refunded to your wallet');
   }
@@ -397,13 +442,17 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Future<void> _cancelTrade() async {
     final ok = await _showConfirm(
       title: 'Cancel Trade',
-      body: 'Are you sure? Any locked escrow will be released back automatically.',
+      body:
+          'Are you sure? Any locked escrow will be released back automatically.',
       confirmLabel: 'Cancel Trade',
       isDestructive: true,
     );
     if (!ok) return;
     _runAction(() async {
-      final u = await _tradesCore.cancelTrade(_trade.id, reason: 'User cancelled');
+      final u = await _tradesCore.cancelTrade(
+        _trade.id,
+        reason: 'User cancelled',
+      );
       if (mounted) setState(() => _trade = u);
     }, successMsg: 'Trade cancelled');
   }
@@ -426,17 +475,29 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     return File(result.path);
   }
 
-  Future<void> _runAction(Future<void> Function() action,
-      {required String successMsg}) async {
-    setState(() { _actionLoading = true; _actionError = null; });
+  Future<void> _runAction(
+    Future<void> Function() action, {
+    required String successMsg,
+  }) async {
+    setState(() {
+      _actionLoading = true;
+      _actionError = null;
+    });
     try {
       await action();
       if (mounted) {
-        showFloatingSnackBar(context, message: successMsg, type: SnackBarType.success);
+        showFloatingSnackBar(
+          context,
+          message: successMsg,
+          type: SnackBarType.success,
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      final msg = e.toString().replaceAll(RegExp(r'TradeApiException\(\d+\): '), '');
+      final msg = e.toString().replaceAll(
+        RegExp(r'TradeApiException\(\d+\): '),
+        '',
+      );
       setState(() => _actionError = msg);
       showFloatingSnackBar(context, message: msg, type: SnackBarType.error);
     } finally {
@@ -505,7 +566,11 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           backgroundColor: colors.surface,
           child: ListView(
             padding: EdgeInsets.fromLTRB(
-                16, MediaQuery.of(context).padding.top + 72, 16, 140),
+              16,
+              MediaQuery.of(context).padding.top + 72,
+              16,
+              140,
+            ),
             children: [
               if (!_isOnline) ...[
                 _ConnectivityBanner(colors: colors),
@@ -533,7 +598,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 _EscrowSenderCard(
                   trade: _trade,
                   colors: colors,
-                  isCryptoReceiverBuyer: _trade.offerType == TradeOfferType.sell,
+                  isCryptoReceiverBuyer:
+                      _trade.offerType == TradeOfferType.sell,
                   onLock: _lockCrypto,
                   loading: _actionLoading,
                 ),
@@ -569,7 +635,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
               ],
 
               _TradeDetailsCard(
-                  trade: _trade, isBuyingCrypto: _isBuyingCrypto, colors: colors),
+                trade: _trade,
+                isBuyingCrypto: _isBuyingCrypto,
+                colors: colors,
+              ),
               const SizedBox(height: 12),
 
               if (_trade.escrow != null) ...[
@@ -595,9 +664,12 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
               if (s == TradeStatus.completed)
                 _CompletedCard(
-                    trade: _trade, colors: colors, isBuyingCrypto: _isBuyingCrypto),
+                  trade: _trade,
+                  colors: colors,
+                  isBuyingCrypto: _isBuyingCrypto,
+                ),
               if (s == TradeStatus.cancelled) _CancelledCard(colors: colors),
-              if (s == TradeStatus.disputed)  _DisputedCard(colors: colors),
+              if (s == TradeStatus.disputed) _DisputedCard(colors: colors),
             ],
           ),
         ),
@@ -657,7 +729,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 ? '${_trade.id.substring(0, 12)}…${_trade.id.substring(_trade.id.length - 4)}'
                 : _trade.id,
             style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: colors.textSecondary),
+              fontSize: 10,
+              color: colors.textSecondary,
+            ),
           ),
         ],
       ),
@@ -669,7 +743,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
               width: 20,
               height: 20,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: colors.primary),
+                strokeWidth: 2,
+                color: colors.primary,
+              ),
             ),
           )
         else if (_trade.status.isActive)
@@ -702,13 +778,11 @@ class _GlassIconButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.colors,
-    this.size = 18,
     this.accent,
   });
   final IconData icon;
   final VoidCallback onTap;
   final AppColor colors;
-  final double size;
   final Color? accent;
 
   @override
@@ -722,7 +796,7 @@ class _GlassIconButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: colors.border),
       ),
-      child: Icon(icon, color: accent ?? colors.textSecondary, size: size),
+      child: Icon(icon, color: accent ?? colors.textSecondary, size: 18),
     ),
   );
 }
@@ -743,25 +817,34 @@ class _ConnectivityBanner extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: _amber),
     ),
-    child: Row(children: [
-      const Icon(Icons.wifi_off_rounded, color: _amber, size: 16),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('No Connection',
+    child: Row(
+      children: [
+        const Icon(Icons.wifi_off_rounded, color: _amber, size: 16),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'No Connection',
                 style: GoogleFonts.sora(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _amber)),
-            Text('Trade is safe. Updates resume when reconnected.',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _amber,
+                ),
+              ),
+              Text(
+                'Trade is safe. Updates resume when reconnected.',
                 style: GoogleFonts.sora(
-                    fontSize: 11, color: colors.textSecondary)),
-          ],
+                  fontSize: 11,
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ]),
+      ],
+    ),
   );
 }
 
@@ -803,152 +886,187 @@ class _HeroCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Status row
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: colors.border),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Icon(
+                    _statusIcon(trade.status),
+                    color: accent,
+                    size: 20,
+                  ),
                 ),
-                child: Icon(_statusIcon(trade.status), color: accent, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _statusLabel(
-                        trade.status,
-                        isUserEscrowLocker: isUserEscrowLocker,
-                        isUserFiatPayer: isUserFiatPayer,
-                        isUserCryptoReceiver: isUserCryptoReceiver,
-                      ),
-                      style: GoogleFonts.sora(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _statusLabel(
+                          trade.status,
+                          isUserEscrowLocker: isUserEscrowLocker,
+                          isUserFiatPayer: isUserFiatPayer,
+                          isUserCryptoReceiver: isUserCryptoReceiver,
+                        ),
+                        style: GoogleFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: colors.textPrimary),
-                    ),
-                    const SizedBox(height: 3),
-                    GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: trade.id));
-                        showFloatingSnackBar(context,
-                            message: 'Trade ID copied',
-                            type: SnackBarType.success);
-                      },
-                      child: Row(children: [
-                        Text('ID: ',
-                            style: GoogleFonts.sora(
-                                fontSize: 10, color: colors.textSecondary)),
-                        Text(
-                          trade.id.length > 14
-                              ? '${trade.id.substring(0, 10)}…'
-                              : trade.id,
-                          style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10, color: colors.textSecondary),
+                          color: colors.textPrimary,
                         ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.copy_all_rounded,
-                            size: 12, color: colors.textSecondary),
-                      ]),
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 3),
+                      GestureDetector(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: trade.id));
+                          showFloatingSnackBar(
+                            context,
+                            message: 'Trade ID copied',
+                            type: SnackBarType.success,
+                          );
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'ID: ',
+                              style: GoogleFonts.sora(
+                                fontSize: 10,
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                            Text(
+                              trade.id.length > 14
+                                  ? '${trade.id.substring(0, 10)}…'
+                                  : trade.id,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 10,
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.copy_all_rounded,
+                              size: 12,
+                              color: colors.textSecondary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              // BUYING/SELLING pill — solid accent
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  isBuyingCrypto ? 'BUYING' : 'SELLING',
-                  style: GoogleFonts.sora(
+                // BUYING/SELLING pill — solid accent
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isBuyingCrypto ? 'BUYING' : 'SELLING',
+                    style: GoogleFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                      letterSpacing: 0.8),
+                      letterSpacing: 0.8,
+                    ),
+                  ),
                 ),
-              ),
-            ]),
+              ],
+            ),
 
             const SizedBox(height: 20),
             Divider(color: colors.border, height: 1),
             const SizedBox(height: 20),
 
             // Amounts
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isBuyingCrypto ? 'YOU RECEIVE' : 'YOU SEND',
-                      style: GoogleFonts.sora(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isBuyingCrypto ? 'YOU RECEIVE' : 'YOU SEND',
+                        style: GoogleFonts.sora(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: colors.textSecondary,
-                          letterSpacing: 0.8),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          trade.cryptoAmount.toStringAsFixed(4),
-                          style: GoogleFonts.jetBrainsMono(
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            trade.cryptoAmount.toStringAsFixed(4),
+                            style: GoogleFonts.jetBrainsMono(
                               fontSize: 28,
                               fontWeight: FontWeight.w700,
                               color: colors.textPrimary,
-                              letterSpacing: -1),
-                        ),
-                        const SizedBox(width: 6),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            trade.asset,
-                            style: GoogleFonts.jetBrainsMono(
+                              letterSpacing: -1,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              trade.asset,
+                              style: GoogleFonts.jetBrainsMono(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: colors.textSecondary),
+                                color: colors.textSecondary,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      isBuyingCrypto ? 'YOU PAY' : 'YOU RECEIVE',
+                      style: GoogleFonts.sora(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textSecondary,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      trade.fiatAmount.toStringAsFixed(2),
+                      style: GoogleFonts.sora(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      trade.fiatCurrency.toUpperCase(),
+                      style: GoogleFonts.sora(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(
-                  isBuyingCrypto ? 'YOU PAY' : 'YOU RECEIVE',
-                  style: GoogleFonts.sora(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: colors.textSecondary,
-                      letterSpacing: 0.8),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  trade.fiatAmount.toStringAsFixed(2),
-                  style: GoogleFonts.sora(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: colors.textPrimary),
-                ),
-                Text(
-                  trade.fiatCurrency.toUpperCase(),
-                  style: GoogleFonts.sora(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textSecondary),
-                ),
-              ]),
-            ]),
+              ],
+            ),
           ],
         ),
       ),
@@ -985,51 +1103,64 @@ class _CountdownCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: accent),
       ),
-      child: Row(children: [
-        SizedBox(
-          width: 52,
-          height: 52,
-          child: CustomPaint(
-            painter: _RingPainter(progress: progress, color: accent),
-            child: Center(child: Icon(Icons.timer_rounded, color: accent, size: 22)),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Payment Window',
-                  style: GoogleFonts.sora(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: colors.textSecondary,
-                      letterSpacing: 0.6)),
-              const SizedBox(height: 3),
-              Text(
-                urgent
-                    ? 'Act fast — time is running out!'
-                    : 'Complete the trade before the timer ends',
-                style: GoogleFonts.sora(fontSize: 12, color: colors.textSecondary),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: CustomPaint(
+              painter: _RingPainter(progress: progress, color: accent),
+              child: Center(
+                child: Icon(Icons.timer_rounded, color: accent, size: 22),
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: colors.background,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: accent),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Payment Window',
+                  style: GoogleFonts.sora(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: colors.textSecondary,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  urgent
+                      ? 'Act fast — time is running out!'
+                      : 'Complete the trade before the timer ends',
+                  style: GoogleFonts.sora(
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Text(
-            _fmt(timeLeft),
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 16, fontWeight: FontWeight.w700, color: accent),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colors.background,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: accent),
+            ),
+            child: Text(
+              _fmt(timeLeft),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: accent,
+              ),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -1093,116 +1224,147 @@ class _EscrowSenderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: accent),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: colors.border)),
-          ),
-          child: Row(children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: colors.background,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: colors.border),
-              ),
-              child: Icon(Icons.lock_open_rounded, color: accent, size: 17),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: colors.border)),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Your Action Required',
-                      style: GoogleFonts.sora(
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Icon(Icons.lock_open_rounded, color: accent, size: 17),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your Action Required',
+                        style: GoogleFonts.sora(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: colors.textPrimary)),
-                  Text('Lock crypto to start the trade',
-                      style: GoogleFonts.sora(
-                          fontSize: 11, color: colors.textSecondary)),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text('STEP 1',
-                  style: GoogleFonts.sora(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 0.8)),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            _EscrowStep(
-              num: '1',
-              text: 'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} into a Stellar Claimable Balance',
-              colors: colors,
-              accent: accent,
-            ),
-            const SizedBox(height: 10),
-            _EscrowStep(
-              num: '2',
-              text: 'The other party pays ${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()} to your payment account',
-              colors: colors,
-              accent: accent,
-            ),
-            const SizedBox(height: 10),
-            _EscrowStep(
-              num: '3',
-              text: 'Confirm receipt → crypto is released from escrow to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}',
-              colors: colors,
-              accent: accent,
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: loading ? null : onLock,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                height: 52,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: loading ? colors.border : accent,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Center(
-                  child: loading
-                      ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                      : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.lock_rounded,
-                          color: Colors.white, size: 18),
-                      const SizedBox(width: 8),
-                      Text('Lock Crypto in Escrow',
-                          style: GoogleFonts.sora(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Lock crypto to start the trade',
+                        style: GoogleFonts.sora(
+                          fontSize: 11,
+                          color: colors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'STEP 1',
+                    style: GoogleFonts.sora(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _EscrowStep(
+                  num: '1',
+                  text:
+                      'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} into a Stellar Claimable Balance',
+                  colors: colors,
+                  accent: accent,
+                ),
+                const SizedBox(height: 10),
+                _EscrowStep(
+                  num: '2',
+                  text:
+                      'The other party pays ${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()} to your payment account',
+                  colors: colors,
+                  accent: accent,
+                ),
+                const SizedBox(height: 10),
+                _EscrowStep(
+                  num: '3',
+                  text:
+                      'Confirm receipt → crypto is released from escrow to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}',
+                  colors: colors,
+                  accent: accent,
+                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: loading ? null : onLock,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    height: 52,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: loading ? colors.border : accent,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Center(
+                      child: loading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.lock_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Lock Crypto in Escrow',
+                                  style: GoogleFonts.sora(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1227,23 +1389,28 @@ class _EscrowStep extends StatelessWidget {
         width: 22,
         height: 22,
         margin: const EdgeInsets.only(top: 1),
-        decoration: BoxDecoration(
-          color: accent,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
         child: Center(
-          child: Text(num,
-              style: GoogleFonts.sora(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white)),
+          child: Text(
+            num,
+            style: GoogleFonts.sora(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
       const SizedBox(width: 10),
       Expanded(
-        child: Text(text,
-            style: GoogleFonts.sora(
-                fontSize: 13, color: colors.textSecondary, height: 1.4)),
+        child: Text(
+          text,
+          style: GoogleFonts.sora(
+            fontSize: 13,
+            color: colors.textSecondary,
+            height: 1.4,
+          ),
+        ),
       ),
     ],
   );
@@ -1267,39 +1434,52 @@ class _WaitingForEscrowCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _amber),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: colors.background,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: colors.border),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: colors.background,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: colors.border),
+            ),
+            child: const Icon(
+              Icons.hourglass_empty_rounded,
+              color: _amber,
+              size: 18,
+            ),
           ),
-          child: const Icon(Icons.hourglass_empty_rounded, color: _amber, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Waiting for Escrow',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Waiting for Escrow',
                   style: GoogleFonts.sora(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: colors.textPrimary)),
-              const SizedBox(height: 4),
-              Text(
-                'The other party is locking ${trade.cryptoAmount.toStringAsFixed(4)} '
-                    '${trade.asset} into a Stellar escrow. Once locked you\'ll be '
-                    'notified to send payment.',
-                style: GoogleFonts.sora(
-                    fontSize: 12, color: colors.textSecondary, height: 1.5),
-              ),
-            ],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'The other party is locking ${trade.cryptoAmount.toStringAsFixed(4)} '
+                  '${trade.asset} into a Stellar escrow. Once locked you\'ll be '
+                  'notified to send payment.',
+                  style: GoogleFonts.sora(
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -1318,9 +1498,11 @@ class _PaymentInstructionsCard extends StatelessWidget {
     final payeeAccount = trade.offerType == TradeOfferType.sell
         ? trade.sellerPaymentAccount
         : trade.buyerPaymentAccount;
-    final payeeLabel   = trade.offerType == TradeOfferType.sell ? 'merchant' : 'buyer';
-    final accountName  = payeeAccount?['accountName']?.toString();
-    final accountNo    = payeeAccount?['accountNo']?.toString();
+    final payeeLabel = trade.offerType == TradeOfferType.sell
+        ? 'merchant'
+        : 'buyer';
+    final accountName = payeeAccount?['accountName']?.toString();
+    final accountNo = payeeAccount?['accountNo']?.toString();
     final instructions = payeeAccount?['instructions']?.toString();
 
     return Container(
@@ -1329,87 +1511,125 @@ class _PaymentInstructionsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _blue),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: colors.border)),
-          ),
-          child: Row(children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: colors.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: colors.border),
-              ),
-              child: const Icon(Icons.account_balance_rounded,
-                  color: _blue, size: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: colors.border)),
             ),
-            const SizedBox(width: 10),
-            Text('Send Payment To $payeeLabel',
-                style: GoogleFonts.sora(
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_rounded,
+                    color: _blue,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Send Payment To $payeeLabel',
+                  style: GoogleFonts.sora(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: colors.textPrimary)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: _blue,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text('STEP 2',
-                  style: GoogleFonts.sora(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _blue,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'STEP 2',
+                    style: GoogleFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                      letterSpacing: 0.8)),
-            ),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            if (accountName != null)
-              _DataRow(label: 'Account Name', value: accountName,
-                  copyable: true, colors: colors),
-            if (accountNo != null)
-              _DataRow(label: 'Account No.', value: accountNo,
-                  copyable: true, mono: true, colors: colors),
-            if (instructions != null && instructions.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.info_outline_rounded,
-                        color: colors.textSecondary, size: 14),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(instructions,
-                          style: GoogleFonts.sora(
-                              fontSize: 12, color: colors.textSecondary)),
+                      letterSpacing: 0.8,
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-            if (accountName == null && accountNo == null)
-              Text(
-                'Payment details not found. Contact the $payeeLabel via trade chat.',
-                style: GoogleFonts.sora(fontSize: 12, color: colors.textSecondary),
-              ),
-          ]),
-        ),
-      ]),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                if (accountName != null)
+                  _DataRow(
+                    label: 'Account Name',
+                    value: accountName,
+                    copyable: true,
+                    colors: colors,
+                  ),
+                if (accountNo != null)
+                  _DataRow(
+                    label: 'Account No.',
+                    value: accountNo,
+                    copyable: true,
+                    mono: true,
+                    colors: colors,
+                  ),
+                if (instructions != null && instructions.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: colors.textSecondary,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            instructions,
+                            style: GoogleFonts.sora(
+                              fontSize: 12,
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (accountName == null && accountNo == null)
+                  Text(
+                    'Payment details not found. Contact the $payeeLabel via trade chat.',
+                    style: GoogleFonts.sora(
+                      fontSize: 12,
+                      color: colors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1427,7 +1647,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
   final bool isBuyerFiatSender;
 
   static const _green = Color(0xFF1DC99A);
-  static const _red   = Color(0xFFF06060);
+  static const _red = Color(0xFFF06060);
 
   @override
   Widget build(BuildContext context) {
@@ -1443,63 +1663,88 @@ class _FiatSentNoticeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: border),
       ),
-      child: Column(children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: colors.border),
-            ),
-            child: const Icon(Icons.payments_rounded, color: _green, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Payment Has Been Sent',
-                    style: GoogleFonts.sora(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: colors.textPrimary)),
-                const SizedBox(height: 4),
-                Text(
-                  'The ${isBuyerFiatSender ? 'buyer' : 'seller'} has marked payment as sent. '
-                      'Please verify receipt in your payment account and confirm below.',
-                  style: GoogleFonts.sora(
-                      fontSize: 12, color: colors.textSecondary, height: 1.5),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: colors.border),
                 ),
-              ],
-            ),
-          ),
-        ]),
-        if (autoDisputeSoon && dueAt != null) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _red),
-            ),
-            child: Row(children: [
-              const Icon(Icons.warning_amber_rounded, color: _red, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Auto-dispute will trigger if not confirmed within '
-                      '${dueAt.difference(DateTime.now()).inMinutes} min. '
-                      'Check your account and confirm receipt now.',
-                  style: GoogleFonts.sora(fontSize: 11.5, color: _red, height: 1.4),
+                child: const Icon(
+                  Icons.payments_rounded,
+                  color: _green,
+                  size: 18,
                 ),
               ),
-            ]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Payment Has Been Sent',
+                      style: GoogleFonts.sora(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'The ${isBuyerFiatSender ? 'buyer' : 'seller'} has marked payment as sent. '
+                      'Please verify receipt in your payment account and confirm below.',
+                      style: GoogleFonts.sora(
+                        fontSize: 12,
+                        color: colors.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          if (autoDisputeSoon) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _red),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: _red,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Auto-dispute will trigger if not confirmed within '
+                      '${dueAt.difference(DateTime.now()).inMinutes} min. '
+                      'Check your account and confirm receipt now.',
+                      style: GoogleFonts.sora(
+                        fontSize: 11.5,
+                        color: _red,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -1528,60 +1773,85 @@ class _WaitingConfirmationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _amber),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: colors.border),
-            ),
-            child: const Icon(Icons.hourglass_top_rounded, color: _amber, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Waiting for Confirmation',
-                    style: GoogleFonts.sora(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: colors.textPrimary)),
-                const SizedBox(height: 4),
-                Text(
-                  'The ${isSellerVerifier ? 'seller' : 'buyer'} is verifying your payment. Once confirmed, your crypto will be released from escrow.',
-                  style: GoogleFonts.sora(
-                      fontSize: 12, color: colors.textSecondary, height: 1.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: colors.border),
                 ),
-              ],
-            ),
-          ),
-        ]),
-        if (dueAt != null) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colors.border),
-            ),
-            child: Row(children: [
-              Icon(Icons.info_outline_rounded, size: 14, color: colors.textSecondary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'If unconfirmed by the deadline, a dispute is auto-opened and support will resolve it.',
-                  style: GoogleFonts.sora(fontSize: 11.5, color: colors.textSecondary),
+                child: const Icon(
+                  Icons.hourglass_top_rounded,
+                  color: _amber,
+                  size: 18,
                 ),
               ),
-            ]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Waiting for Confirmation',
+                      style: GoogleFonts.sora(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'The ${isSellerVerifier ? 'seller' : 'buyer'} is verifying your payment. Once confirmed, your crypto will be released from escrow.',
+                      style: GoogleFonts.sora(
+                        fontSize: 12,
+                        color: colors.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          if (dueAt != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.border),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: colors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'If unconfirmed by the deadline, a dispute is auto-opened and support will resolve it.',
+                      style: GoogleFonts.sora(
+                        fontSize: 11.5,
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -1606,11 +1876,16 @@ class _TradeDetailsCard extends StatelessWidget {
       title: 'Trade Details',
       colors: colors,
       children: [
-        _DataRow(label: 'Asset',    value: trade.asset, colors: colors),
-        _DataRow(label: 'Currency', value: trade.fiatCurrency.toUpperCase(), colors: colors),
+        _DataRow(label: 'Asset', value: trade.asset, colors: colors),
+        _DataRow(
+          label: 'Currency',
+          value: trade.fiatCurrency.toUpperCase(),
+          colors: colors,
+        ),
         _DataRow(
           label: isBuyingCrypto ? 'You Pay' : 'You Receive',
-          value: '${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()}',
+          value:
+              '${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()}',
           highlight: true,
           colors: colors,
         ),
@@ -1655,18 +1930,18 @@ class _EscrowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = escrow.status;
     final accent = switch (status) {
-      EscrowStatus.cbCreated  => const Color(0xFF1DC99A),
-      EscrowStatus.cbClaimed  => const Color(0xFF4F8EF7),
+      EscrowStatus.cbCreated => const Color(0xFF1DC99A),
+      EscrowStatus.cbClaimed => const Color(0xFF4F8EF7),
       EscrowStatus.cbRefunded => const Color(0xFFF5A623),
-      EscrowStatus.failed     => const Color(0xFFF06060),
-      _                       => const Color(0xFF6B7A99),
+      EscrowStatus.failed => const Color(0xFFF06060),
+      _ => const Color(0xFF6B7A99),
     };
     final statusLabel = switch (status) {
-      EscrowStatus.cbCreated  => 'LOCKED',
-      EscrowStatus.cbClaimed  => 'CLAIMED',
+      EscrowStatus.cbCreated => 'LOCKED',
+      EscrowStatus.cbClaimed => 'CLAIMED',
       EscrowStatus.cbRefunded => 'REFUNDED',
-      EscrowStatus.failed     => 'FAILED',
-      _                       => 'PENDING',
+      EscrowStatus.failed => 'FAILED',
+      _ => 'PENDING',
     };
 
     return _SectionCard(
@@ -1680,18 +1955,22 @@ class _EscrowCard extends StatelessWidget {
           color: accent,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(statusLabel,
-            style: GoogleFonts.sora(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 0.8)),
+        child: Text(
+          statusLabel,
+          style: GoogleFonts.sora(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            letterSpacing: 0.8,
+          ),
+        ),
       ),
       children: [
         if (escrow.claimableBalanceId != null)
           _DataRow(
             label: 'Balance ID',
-            value: '${escrow.claimableBalanceId!.substring(0, 10)}…'
+            value:
+                '${escrow.claimableBalanceId!.substring(0, 10)}…'
                 '${escrow.claimableBalanceId!.substring(escrow.claimableBalanceId!.length - 8)}',
             copyable: true,
             fullCopyValue: escrow.claimableBalanceId,
@@ -1701,7 +1980,8 @@ class _EscrowCard extends StatelessWidget {
         if (escrow.createTxHash != null)
           _DataRow(
             label: 'Lock Tx',
-            value: '${escrow.createTxHash!.substring(0, 10)}…'
+            value:
+                '${escrow.createTxHash!.substring(0, 10)}…'
                 '${escrow.createTxHash!.substring(escrow.createTxHash!.length - 8)}',
             copyable: true,
             fullCopyValue: escrow.createTxHash,
@@ -1711,7 +1991,8 @@ class _EscrowCard extends StatelessWidget {
         if (escrow.claimTxHash != null)
           _DataRow(
             label: 'Claim Tx',
-            value: '${escrow.claimTxHash!.substring(0, 10)}…'
+            value:
+                '${escrow.claimTxHash!.substring(0, 10)}…'
                 '${escrow.claimTxHash!.substring(escrow.claimTxHash!.length - 8)}',
             copyable: true,
             fullCopyValue: escrow.claimTxHash,
@@ -1743,37 +2024,113 @@ class _TimelineCard extends StatelessWidget {
     if (trade.offerType == TradeOfferType.sell) {
       if (isUserBuyer) {
         return [
-          (TradeStatus.created,       'Trade Created',        'Waiting for seller to lock crypto in escrow'),
-          (TradeStatus.cryptoLocked,  'Escrow Funded',        'Send your fiat payment to the seller'),
-          (TradeStatus.fiatSent,      'Payment Sent',         'Seller is verifying your payment'),
-          (TradeStatus.fiatConfirmed, 'Payment Confirmed',    'Claim your crypto to your wallet'),
-          (TradeStatus.completed,     'Trade Complete',       'Crypto delivered to your wallet'),
+          (
+            TradeStatus.created,
+            'Trade Created',
+            'Waiting for seller to lock crypto in escrow',
+          ),
+          (
+            TradeStatus.cryptoLocked,
+            'Escrow Funded',
+            'Send your fiat payment to the seller',
+          ),
+          (
+            TradeStatus.fiatSent,
+            'Payment Sent',
+            'Seller is verifying your payment',
+          ),
+          (
+            TradeStatus.fiatConfirmed,
+            'Payment Confirmed',
+            'Claim your crypto to your wallet',
+          ),
+          (
+            TradeStatus.completed,
+            'Trade Complete',
+            'Crypto delivered to your wallet',
+          ),
         ];
       } else {
         return [
-          (TradeStatus.created,       'Trade Created',        'Lock your crypto to fund the escrow'),
-          (TradeStatus.cryptoLocked,  'Escrow Funded',        'Waiting for buyer to send payment'),
-          (TradeStatus.fiatSent,      'Payment Received',     'Confirm you received the payment'),
-          (TradeStatus.fiatConfirmed, 'Payment Confirmed',    'Buyer will claim crypto from escrow'),
-          (TradeStatus.completed,     'Trade Complete',       'Crypto released to buyer'),
+          (
+            TradeStatus.created,
+            'Trade Created',
+            'Lock your crypto to fund the escrow',
+          ),
+          (
+            TradeStatus.cryptoLocked,
+            'Escrow Funded',
+            'Waiting for buyer to send payment',
+          ),
+          (
+            TradeStatus.fiatSent,
+            'Payment Received',
+            'Confirm you received the payment',
+          ),
+          (
+            TradeStatus.fiatConfirmed,
+            'Payment Confirmed',
+            'Buyer will claim crypto from escrow',
+          ),
+          (TradeStatus.completed, 'Trade Complete', 'Crypto released to buyer'),
         ];
       }
     } else {
       if (isUserBuyer) {
         return [
-          (TradeStatus.created,       'Trade Created',        'Lock your crypto to fund the escrow'),
-          (TradeStatus.cryptoLocked,  'Escrow Funded',        'Waiting for seller to send fiat payment'),
-          (TradeStatus.fiatSent,      'Payment Sent',         'Confirm you received the fiat payment'),
-          (TradeStatus.fiatConfirmed, 'Payment Confirmed',    'Seller will claim crypto from escrow'),
-          (TradeStatus.completed,     'Trade Complete',       'Crypto released to seller'),
+          (
+            TradeStatus.created,
+            'Trade Created',
+            'Lock your crypto to fund the escrow',
+          ),
+          (
+            TradeStatus.cryptoLocked,
+            'Escrow Funded',
+            'Waiting for seller to send fiat payment',
+          ),
+          (
+            TradeStatus.fiatSent,
+            'Payment Sent',
+            'Confirm you received the fiat payment',
+          ),
+          (
+            TradeStatus.fiatConfirmed,
+            'Payment Confirmed',
+            'Seller will claim crypto from escrow',
+          ),
+          (
+            TradeStatus.completed,
+            'Trade Complete',
+            'Crypto released to seller',
+          ),
         ];
       } else {
         return [
-          (TradeStatus.created,       'Trade Created',        'Waiting for buyer to lock crypto in escrow'),
-          (TradeStatus.cryptoLocked,  'Escrow Funded',        'Send your fiat payment to the buyer'),
-          (TradeStatus.fiatSent,      'Payment Sent',         'Buyer is verifying your payment'),
-          (TradeStatus.fiatConfirmed, 'Payment Confirmed',    'Claim your crypto to your wallet'),
-          (TradeStatus.completed,     'Trade Complete',       'Crypto delivered to your wallet'),
+          (
+            TradeStatus.created,
+            'Trade Created',
+            'Waiting for buyer to lock crypto in escrow',
+          ),
+          (
+            TradeStatus.cryptoLocked,
+            'Escrow Funded',
+            'Send your fiat payment to the buyer',
+          ),
+          (
+            TradeStatus.fiatSent,
+            'Payment Sent',
+            'Buyer is verifying your payment',
+          ),
+          (
+            TradeStatus.fiatConfirmed,
+            'Payment Confirmed',
+            'Claim your crypto to your wallet',
+          ),
+          (
+            TradeStatus.completed,
+            'Trade Complete',
+            'Crypto delivered to your wallet',
+          ),
         ];
       }
     }
@@ -1789,12 +2146,15 @@ class _TimelineCard extends StatelessWidget {
       TradeStatus.fiatConfirmed,
       TradeStatus.completed,
     ];
-    final currentIdx = order.contains(trade.status) ? order.indexOf(trade.status) : -1;
-    final isTerminal  = trade.status == TradeStatus.cancelled ||
+    final currentIdx = order.contains(trade.status)
+        ? order.indexOf(trade.status)
+        : -1;
+    final isTerminal =
+        trade.status == TradeStatus.cancelled ||
         trade.status == TradeStatus.disputed ||
         trade.status == TradeStatus.expired;
 
-    const doneColor   = Color(0xFF1DC99A);
+    const doneColor = Color(0xFF1DC99A);
     const activeColor = Color(0xFF4F8EF7);
 
     return _SectionCard(
@@ -1804,12 +2164,12 @@ class _TimelineCard extends StatelessWidget {
       colors: colors,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
       children: List.generate(steps.length, (i) {
-        final step    = steps[i];
+        final step = steps[i];
         final stepIdx = order.indexOf(step.$1);
         final isCompleted = trade.status == TradeStatus.completed;
-        final isDone      = isCompleted || currentIdx > stepIdx;
-        final isCurrent   = stepIdx == currentIdx && trade.status.isActive;
-        final isLast      = i == steps.length - 1;
+        final isDone = isCompleted || currentIdx > stepIdx;
+        final isCurrent = stepIdx == currentIdx && trade.status.isActive;
+        final isLast = i == steps.length - 1;
 
         final dotColor = isTerminal && stepIdx > 0
             ? colors.border
@@ -1822,46 +2182,60 @@ class _TimelineCard extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(children: [
-              isCurrent
-                  ? AnimatedBuilder(
-                animation: pulseAnim,
-                builder: (_, __) => Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: colors.background,
-                    border: Border.all(color: activeColor, width: 2),
+            Column(
+              children: [
+                isCurrent
+                    ? AnimatedBuilder(
+                        animation: pulseAnim,
+                        builder: (_, __) => Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: colors.background,
+                            border: Border.all(color: activeColor, width: 2),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.circle,
+                              color: activeColor,
+                              size: 8,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colors.background,
+                          border: Border.all(
+                            color: dotColor,
+                            width: isDone ? 2 : 1.5,
+                          ),
+                        ),
+                        child: isDone
+                            ? const Icon(
+                                Icons.check_rounded,
+                                color: doneColor,
+                                size: 14,
+                              )
+                            : Icon(
+                                Icons.circle_outlined,
+                                color: dotColor,
+                                size: 10,
+                              ),
+                      ),
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 36,
+                    margin: const EdgeInsets.symmetric(vertical: 3),
+                    color: isDone ? doneColor : colors.border,
                   ),
-                  child: const Center(
-                    child: Icon(Icons.circle, color: activeColor, size: 8),
-                  ),
-                ),
-              )
-                  : Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: colors.background,
-                  border: Border.all(
-                      color: dotColor, width: isDone ? 2 : 1.5),
-                ),
-                child: isDone
-                    ? const Icon(Icons.check_rounded,
-                    color: doneColor, size: 14)
-                    : Icon(Icons.circle_outlined,
-                    color: dotColor, size: 10),
-              ),
-              if (!isLast)
-                Container(
-                  width: 2,
-                  height: 36,
-                  margin: const EdgeInsets.symmetric(vertical: 3),
-                  color: isDone ? doneColor : colors.border,
-                ),
-            ]),
+              ],
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Padding(
@@ -1873,16 +2247,22 @@ class _TimelineCard extends StatelessWidget {
                       step.$2,
                       style: GoogleFonts.sora(
                         fontSize: 13.5,
-                        fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                        fontWeight: isCurrent
+                            ? FontWeight.w700
+                            : FontWeight.w600,
                         color: isDone || isCurrent
                             ? colors.textPrimary
                             : colors.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(step.$3,
-                        style: GoogleFonts.sora(
-                            fontSize: 11.5, color: colors.textSecondary)),
+                    Text(
+                      step.$3,
+                      style: GoogleFonts.sora(
+                        fontSize: 11.5,
+                        color: colors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1922,36 +2302,45 @@ class _SectionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.border),
       ),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
-          child: Row(children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: colors.background,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: colors.border),
-              ),
-              child: Icon(icon, color: iconColor, size: 15),
-            ),
-            const SizedBox(width: 10),
-            Text(title,
-                style: GoogleFonts.sora(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 15),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: GoogleFonts.sora(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: colors.textSecondary)),
-            const Spacer(),
-            if (trailing != null) trailing!,
-          ]),
-        ),
-        Divider(color: colors.border, height: 1),
-        Padding(
-          padding: padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Column(children: children),
-        ),
-      ]),
+                    color: colors.textSecondary,
+                  ),
+                ),
+                const Spacer(),
+                if (trailing != null) trailing!,
+              ],
+            ),
+          ),
+          Divider(color: colors.border, height: 1),
+          Padding(
+            padding:
+                padding ??
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Column(children: children),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1985,7 +2374,9 @@ class _DataRowState extends State<_DataRow> {
 
   void _copy() {
     if (!widget.copyable) return;
-    Clipboard.setData(ClipboardData(text: widget.fullCopyValue ?? widget.value));
+    Clipboard.setData(
+      ClipboardData(text: widget.fullCopyValue ?? widget.value),
+    );
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
@@ -1997,57 +2388,71 @@ class _DataRowState extends State<_DataRow> {
     const doneColor = Color(0xFF1DC99A);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(children: [
-        SizedBox(
-          width: 110,
-          child: Text(widget.label,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              widget.label,
               style: GoogleFonts.sora(
-                  fontSize: 12, color: widget.colors.textSecondary)),
-        ),
-        Expanded(
-          child: GestureDetector(
-            onTap: _copy,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Text(
-                    widget.value,
-                    textAlign: TextAlign.right,
-                    style: widget.mono
-                        ? GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        color: widget.colors.textPrimary,
-                        fontWeight: FontWeight.w500)
-                        : GoogleFonts.sora(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: widget.colors.textPrimary),
-                  ),
-                ),
-                if (widget.copyable) ...[
-                  const SizedBox(width: 8),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _copied ? doneColor : widget.colors.background,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                          color: _copied ? doneColor : widget.colors.border),
-                    ),
-                    child: Icon(
-                      _copied ? Icons.check_rounded : Icons.copy_rounded,
-                      size: 11,
-                      color: _copied ? Colors.white : widget.colors.textSecondary,
-                    ),
-                  ),
-                ],
-              ],
+                fontSize: 12,
+                color: widget.colors.textSecondary,
+              ),
             ),
           ),
-        ),
-      ]),
+          Expanded(
+            child: GestureDetector(
+              onTap: _copy,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: Text(
+                      widget.value,
+                      textAlign: TextAlign.right,
+                      style: widget.mono
+                          ? GoogleFonts.jetBrainsMono(
+                              fontSize: 12,
+                              color: widget.colors.textPrimary,
+                              fontWeight: FontWeight.w500,
+                            )
+                          : GoogleFonts.sora(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: widget.colors.textPrimary,
+                            ),
+                    ),
+                  ),
+                  if (widget.copyable) ...[
+                    const SizedBox(width: 8),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _copied ? doneColor : widget.colors.background,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _copied ? doneColor : widget.colors.border,
+                        ),
+                      ),
+                      child: Icon(
+                        _copied ? Icons.check_rounded : Icons.copy_rounded,
+                        size: 11,
+                        color: _copied
+                            ? Colors.white
+                            : widget.colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2067,16 +2472,21 @@ class _SafetyNote extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: colors.border),
     ),
-    child: Row(children: [
-      Icon(Icons.shield_outlined, size: 15, color: colors.textSecondary),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(
-          'Trade stays active if you leave. Return from Trade History.',
-          style: GoogleFonts.sora(fontSize: 11.5, color: colors.textSecondary),
+    child: Row(
+      children: [
+        Icon(Icons.shield_outlined, size: 15, color: colors.textSecondary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Trade stays active if you leave. Return from Trade History.',
+            style: GoogleFonts.sora(
+              fontSize: 11.5,
+              color: colors.textSecondary,
+            ),
+          ),
         ),
-      ),
-    ]),
+      ],
+    ),
   );
 }
 
@@ -2095,14 +2505,18 @@ class _ErrorBanner extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: colors.error),
     ),
-    child: Row(children: [
-      Icon(Icons.error_outline_rounded, color: colors.error, size: 16),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(message,
-            style: GoogleFonts.sora(fontSize: 12, color: colors.error)),
-      ),
-    ]),
+    child: Row(
+      children: [
+        Icon(Icons.error_outline_rounded, color: colors.error, size: 16),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            message,
+            style: GoogleFonts.sora(fontSize: 12, color: colors.error),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -2132,25 +2546,33 @@ class _CompletedCardState extends State<_CompletedCard> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ReviewSheet(
-          tradeId: widget.trade.id, colors: AppColor.of(context)),
+      builder: (_) =>
+          _ReviewSheet(tradeId: widget.trade.id, colors: AppColor.of(context)),
     );
     if (result == null) return;
     try {
-      await ReviewsCoreService.I.create(CreateReviewRequest(
-        tradeId: widget.trade.id,
-        rating: result.rating,
-        comment: result.comment.isNotEmpty ? result.comment : null,
-      ));
+      await ReviewsCoreService.I.create(
+        CreateReviewRequest(
+          tradeId: widget.trade.id,
+          rating: result.rating,
+          comment: result.comment.isNotEmpty ? result.comment : null,
+        ),
+      );
       if (mounted) setState(() => _reviewSubmitted = true);
       if (mounted) {
-        showFloatingSnackBar(context,
-            message: 'Review submitted!', type: SnackBarType.success);
+        showFloatingSnackBar(
+          context,
+          message: 'Review submitted!',
+          type: SnackBarType.success,
+        );
       }
     } catch (e) {
       if (mounted) {
-        showFloatingSnackBar(context,
-            message: 'Failed: $e', type: SnackBarType.error);
+        showFloatingSnackBar(
+          context,
+          message: 'Failed: $e',
+          type: SnackBarType.error,
+        );
       }
     }
   }
@@ -2165,66 +2587,81 @@ class _CompletedCardState extends State<_CompletedCard> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _green),
       ),
-      child: Column(children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _green,
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: _green),
+            child: const Icon(
+              Icons.check_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
           ),
-          child: const Icon(Icons.check_rounded, color: Colors.white, size: 32),
-        ),
-        const SizedBox(height: 16),
-        Text('Trade Completed!',
+          const SizedBox(height: 16),
+          Text(
+            'Trade Completed!',
             style: GoogleFonts.sora(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: colors.textPrimary)),
-        const SizedBox(height: 8),
-        Text(
-          widget.isBuyingCrypto
-              ? '${widget.trade.cryptoAmount.toStringAsFixed(6)} ${widget.trade.asset} released to your wallet'
-              : '${widget.trade.fiatAmount.toStringAsFixed(2)} ${widget.trade.fiatCurrency.toUpperCase()} received',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
-        ),
-        const SizedBox(height: 20),
-        _reviewSubmitted
-            ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.star_rounded, color: _green, size: 18),
-          const SizedBox(width: 8),
-          Text('Review submitted — thank you!',
-              style: GoogleFonts.sora(
-                  fontSize: 13,
-                  color: _green,
-                  fontWeight: FontWeight.w600)),
-        ])
-            : GestureDetector(
-          onTap: _openReviewSheet,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _green),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.star_rounded, color: _green, size: 18),
-                const SizedBox(width: 8),
-                Text('Rate This Trade',
-                    style: GoogleFonts.sora(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _green)),
-              ],
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: colors.textPrimary,
             ),
           ),
-        ),
-      ]),
+          const SizedBox(height: 8),
+          Text(
+            widget.isBuyingCrypto
+                ? '${widget.trade.cryptoAmount.toStringAsFixed(6)} ${widget.trade.asset} released to your wallet'
+                : '${widget.trade.fiatAmount.toStringAsFixed(2)} ${widget.trade.fiatCurrency.toUpperCase()} received',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          _reviewSubmitted
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.star_rounded, color: _green, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Review submitted — thank you!',
+                      style: GoogleFonts.sora(
+                        fontSize: 13,
+                        color: _green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                )
+              : GestureDetector(
+                  onTap: _openReviewSheet,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      color: colors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _green),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.star_rounded, color: _green, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Rate This Trade',
+                          style: GoogleFonts.sora(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _green,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ],
+      ),
     );
   }
 }
@@ -2243,28 +2680,34 @@ class _CancelledCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       border: Border.all(color: colors.error),
     ),
-    child: Column(children: [
-      Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: colors.error,
+    child: Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: colors.error,
+          ),
+          child: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
         ),
-        child: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
-      ),
-      const SizedBox(height: 14),
-      Text('Trade Cancelled',
+        const SizedBox(height: 14),
+        Text(
+          'Trade Cancelled',
           style: GoogleFonts.sora(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: colors.textPrimary)),
-      const SizedBox(height: 6),
-      Text('All locked funds have been released back.',
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: colors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'All locked funds have been released back.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.sora(
-              fontSize: 13, color: colors.textSecondary)),
-    ]),
+          style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+        ),
+      ],
+    ),
   );
 }
 
@@ -2282,29 +2725,34 @@ class _DisputedCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       border: Border.all(color: colors.error),
     ),
-    child: Column(children: [
-      Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: colors.error,
+    child: Column(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: colors.error,
+          ),
+          child: const Icon(Icons.flag_rounded, color: Colors.white, size: 28),
         ),
-        child: const Icon(Icons.flag_rounded, color: Colors.white, size: 28),
-      ),
-      const SizedBox(height: 14),
-      Text('Under Dispute',
+        const SizedBox(height: 14),
+        Text(
+          'Under Dispute',
           style: GoogleFonts.sora(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: colors.textPrimary)),
-      const SizedBox(height: 6),
-      Text(
-        'Our support team is reviewing this trade. We will resolve it within 24 hours.',
-        textAlign: TextAlign.center,
-        style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
-      ),
-    ]),
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: colors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Our support team is reviewing this trade. We will resolve it within 24 hours.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+        ),
+      ],
+    ),
   );
 }
 
@@ -2349,70 +2797,138 @@ class _BottomActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = trade.status;
+    final escrow = trade.escrow;
+    final escrowStatus = escrow?.status;
+    final hasEscrowId =
+        (escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+    final escrowFinalized =
+        escrowStatus == EscrowStatus.cbClaimed ||
+        escrowStatus == EscrowStatus.cbRefunded;
+    final canAttemptLock =
+        !hasEscrowId ||
+        escrowStatus == null ||
+        escrowStatus == EscrowStatus.pending ||
+        escrowStatus == EscrowStatus.failed ||
+        escrowStatus == EscrowStatus.unknown;
 
-    final bool showLock     = isParticipant && s == TradeStatus.created && isUserEscrowLocker;
-    final bool showMarkFiat = isParticipant && s == TradeStatus.cryptoLocked && isUserFiatPayer;
-    final bool showConfirm  = isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
-    final bool showClaim    = isParticipant && s == TradeStatus.fiatConfirmed && isUserCryptoReceiver;
-    final bool showRefund   = s == TradeStatus.expired &&
+    final bool showLock =
+        isParticipant &&
+        s == TradeStatus.created &&
+        isUserEscrowLocker &&
+        canAttemptLock;
+    final bool showMarkFiat =
+        isParticipant && s == TradeStatus.cryptoLocked && isUserFiatPayer;
+    final bool showConfirm =
+        isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
+    final bool showClaim =
+        isParticipant &&
+        s == TradeStatus.fiatConfirmed &&
+        isUserCryptoReceiver &&
+        hasEscrowId &&
+        !escrowFinalized;
+    final bool showRefund =
+        s == TradeStatus.expired &&
         isParticipant &&
         isUserEscrowLocker &&
-        trade.escrow?.claimableBalanceId != null;
-    final bool showCancel   = isParticipant &&
+        hasEscrowId &&
+        !escrowFinalized;
+    final bool showCancel =
+        isParticipant &&
         (s == TradeStatus.created || s == TradeStatus.cryptoLocked);
 
-    final hasPrimary = showLock || showMarkFiat || showConfirm || showClaim || showRefund;
+    final hasPrimary =
+        showLock || showMarkFiat || showConfirm || showClaim || showRefund;
 
-    if (!hasPrimary && !showCancel && !s.isActive) return const SizedBox.shrink();
+    if (!hasPrimary && !showCancel && !s.isActive)
+      return const SizedBox.shrink();
 
     return Container(
       padding: EdgeInsets.fromLTRB(
-          16, 14, 16, MediaQuery.of(context).padding.bottom + 16),
+        16,
+        14,
+        16,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(top: BorderSide(color: colors.border)),
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (showLock)
-          _ActionBtn(label: 'Lock Crypto in Escrow',
-              icon: Icons.lock_rounded, accent: colors.primary,
-              loading: loading, onTap: onLockCrypto),
-        if (showMarkFiat)
-          _ActionBtn(label: "I've Already Paid",
-              icon: Icons.check_circle_outline_rounded, accent: colors.primary,
-              loading: loading, onTap: onMarkFiatSent),
-        if (showConfirm)
-          _ActionBtn(label: 'Confirm Payment Received',
-              icon: Icons.verified_rounded, accent: colors.success,
-              loading: loading, onTap: onConfirmFiat),
-        if (showClaim)
-          _ActionBtn(label: 'Claim Your Crypto',
-              icon: Icons.account_balance_wallet_rounded, accent: colors.success,
-              loading: loading, onTap: onClaimCrypto),
-        if (showRefund)
-          _ActionBtn(label: 'Reclaim Expired Escrow',
-              icon: Icons.replay_rounded, accent: colors.warning,
-              loading: loading, onTap: onRefund),
-        if (hasPrimary) const SizedBox(height: 10),
-        if (showCancel || s.isActive)
-          Row(children: [
-            if (showCancel)
-              Expanded(
-                child: _ActionBtn(label: 'Cancel',
-                    icon: Icons.close_rounded, accent: colors.error,
-                    loading: loading, onTap: onCancel,
-                    outlined: false, compact: true),
-              ),
-            if (showCancel && s.isActive) const SizedBox(width: 10),
-            if (s.isActive)
-              Expanded(
-                child: _ActionBtn(label: 'Messages',
-                    icon: Icons.chat_bubble_outline_rounded, accent: colors.primary,
-                    loading: false, onTap: onMessages,
-                    outlined: false, compact: true),
-              ),
-          ]),
-      ]),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showLock)
+            _ActionBtn(
+              label: 'Lock Crypto in Escrow',
+              icon: Icons.lock_rounded,
+              accent: colors.primary,
+              loading: loading,
+              onTap: onLockCrypto,
+            ),
+          if (showMarkFiat)
+            _ActionBtn(
+              label: "I've Already Paid",
+              icon: Icons.check_circle_outline_rounded,
+              accent: colors.primary,
+              loading: loading,
+              onTap: onMarkFiatSent,
+            ),
+          if (showConfirm)
+            _ActionBtn(
+              label: 'Confirm Payment Received',
+              icon: Icons.verified_rounded,
+              accent: colors.success,
+              loading: loading,
+              onTap: onConfirmFiat,
+            ),
+          if (showClaim)
+            _ActionBtn(
+              label: 'Claim Your Crypto',
+              icon: Icons.account_balance_wallet_rounded,
+              accent: colors.success,
+              loading: loading,
+              onTap: onClaimCrypto,
+            ),
+          if (showRefund)
+            _ActionBtn(
+              label: 'Reclaim Expired Escrow',
+              icon: Icons.replay_rounded,
+              accent: colors.warning,
+              loading: loading,
+              onTap: onRefund,
+            ),
+          if (hasPrimary) const SizedBox(height: 10),
+          if (showCancel || s.isActive)
+            Row(
+              children: [
+                if (showCancel)
+                  Expanded(
+                    child: _ActionBtn(
+                      label: 'Cancel',
+                      icon: Icons.close_rounded,
+                      accent: colors.error,
+                      loading: loading,
+                      onTap: onCancel,
+                      outlined: false,
+                      compact: true,
+                    ),
+                  ),
+                if (showCancel && s.isActive) const SizedBox(width: 10),
+                if (s.isActive)
+                  Expanded(
+                    child: _ActionBtn(
+                      label: 'Messages',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      accent: colors.primary,
+                      loading: false,
+                      onTap: onMessages,
+                      outlined: false,
+                      compact: true,
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }
@@ -2456,24 +2972,33 @@ class _ActionBtn extends StatelessWidget {
         child: Center(
           child: loading
               ? SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: outlined ? accent : Colors.white),
-          )
-              : Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon,
-                size: compact ? 16 : 18,
-                color: outlined ? accent : Colors.white),
-            const SizedBox(width: 8),
-            Text(label,
-                style: GoogleFonts.sora(
-                    fontSize: compact ? 13 : 14.5,
-                    fontWeight: FontWeight.w700,
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
                     color: outlined ? accent : Colors.white,
-                    letterSpacing: -0.2)),
-          ]),
+                  ),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: compact ? 16 : 18,
+                      color: outlined ? accent : Colors.white,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: GoogleFonts.sora(
+                        fontSize: compact ? 13 : 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: outlined ? accent : Colors.white,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -2483,7 +3008,11 @@ class _ActionBtn extends StatelessWidget {
 // ─── Bottom sheet base ────────────────────────────────────────────────────────
 
 class _SheetBase extends StatelessWidget {
-  const _SheetBase({required this.child, required this.colors, this.fullScroll = false});
+  const _SheetBase({
+    required this.child,
+    required this.colors,
+    this.fullScroll = false,
+  });
   final Widget child;
   final AppColor colors;
   final bool fullScroll;
@@ -2498,24 +3027,29 @@ class _SheetBase extends StatelessWidget {
         border: Border.all(color: colors.border),
       ),
       padding: EdgeInsets.fromLTRB(
-        20, 16, 20,
+        20,
+        16,
+        20,
         (fullScroll
-            ? MediaQuery.of(context).viewInsets.bottom
-            : MediaQuery.of(context).padding.bottom) +
+                ? MediaQuery.of(context).viewInsets.bottom
+                : MediaQuery.of(context).padding.bottom) +
             24,
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 36,
-          height: 4,
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(
-            color: colors.border,
-            borderRadius: BorderRadius.circular(2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: colors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        child,
-      ]),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -2541,62 +3075,80 @@ class _ConfirmSheet extends StatelessWidget {
     final actionColor = isDestructive ? colors.error : colors.primary;
     return _SheetBase(
       colors: colors,
-      child: Column(children: [
-        Text(title,
+      child: Column(
+        children: [
+          Text(
+            title,
             textAlign: TextAlign.center,
             style: GoogleFonts.sora(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: colors.textPrimary)),
-        const SizedBox(height: 10),
-        Text(body,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            body,
             textAlign: TextAlign.center,
             style: GoogleFonts.sora(
-                fontSize: 13.5, color: colors.textSecondary, height: 1.5)),
-        const SizedBox(height: 28),
-        Row(children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context, false),
-              child: Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Center(
-                  child: Text('Go Back',
-                      style: GoogleFonts.sora(
+              fontSize: 13.5,
+              color: colors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context, false),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: colors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Go Back',
+                        style: GoogleFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: colors.textSecondary)),
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context, true),
-              child: Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  color: actionColor,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(confirmLabel,
-                      style: GoogleFonts.sora(
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context, true),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: actionColor,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        confirmLabel,
+                        style: GoogleFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white)),
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -2611,63 +3163,80 @@ class _ProofPickSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SheetBase(
       colors: colors,
-      child: Column(children: [
-        Icon(Icons.image_rounded, color: colors.primary, size: 36),
-        const SizedBox(height: 14),
-        Text('Attach Payment Proof?',
+      child: Column(
+        children: [
+          Icon(Icons.image_rounded, color: colors.primary, size: 36),
+          const SizedBox(height: 14),
+          Text(
+            'Attach Payment Proof?',
             style: GoogleFonts.sora(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: colors.textPrimary)),
-        const SizedBox(height: 6),
-        Text('Optionally attach a screenshot of your payment confirmation.',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Optionally attach a screenshot of your payment confirmation.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary)),
-        const SizedBox(height: 24),
-        GestureDetector(
-          onTap: () => Navigator.pop(context, true),
-          child: Container(
-            height: 52,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: colors.primary,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.photo_library_rounded, color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                Text('Choose from Gallery',
+            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: () => Navigator.pop(context, true),
+            child: Container(
+              height: 52,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: colors.primary,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.photo_library_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Choose from Gallery',
                     style: GoogleFonts.sora(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        GestureDetector(
-          onTap: () => Navigator.pop(context, false),
-          child: Container(
-            height: 48,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: colors.border),
-            ),
-            child: Center(
-              child: Text('Skip for Now',
-                  style: GoogleFonts.sora(
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textSecondary)),
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ]),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => Navigator.pop(context, false),
+            child: Container(
+              height: 48,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: colors.border),
+              ),
+              child: Center(
+                child: Text(
+                  'Skip for Now',
+                  style: GoogleFonts.sora(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2694,7 +3263,10 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   final _ctrl = TextEditingController();
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2702,85 +3274,100 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     return _SheetBase(
       colors: colors,
       fullScroll: true,
-      child: Column(children: [
-        Text('Rate Your Experience',
+      child: Column(
+        children: [
+          Text(
+            'Rate Your Experience',
             style: GoogleFonts.sora(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: colors.textPrimary)),
-        const SizedBox(height: 6),
-        Text('How was the trade?',
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary)),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(5, (i) {
-            final star = i + 1;
-            return GestureDetector(
-              onTap: () => setState(() => _rating = star),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(
-                  star <= _rating
-                      ? Icons.star_rounded
-                      : Icons.star_outline_rounded,
-                  color: star <= _rating
-                      ? const Color(0xFFFBBC04)
-                      : colors.textSecondary,
-                  size: star <= _rating ? 40 : 34,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'How was the trade?',
+            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final star = i + 1;
+              return GestureDetector(
+                onTap: () => setState(() => _rating = star),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Icon(
+                    star <= _rating
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: star <= _rating
+                        ? const Color(0xFFFBBC04)
+                        : colors.textSecondary,
+                    size: star <= _rating ? 40 : 34,
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _ctrl,
+            maxLines: 3,
+            style: GoogleFonts.sora(fontSize: 14, color: colors.textPrimary),
+            cursorColor: colors.primary,
+            decoration: InputDecoration(
+              hintText: 'Leave a comment (optional)…',
+              hintStyle: GoogleFonts.sora(
+                fontSize: 13.5,
+                color: colors.textSecondary,
+              ),
+              filled: true,
+              fillColor: colors.background,
+              contentPadding: const EdgeInsets.all(16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: colors.primary, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          GestureDetector(
+            onTap: () => Navigator.pop(
+              context,
+              _ReviewResult(rating: _rating, comment: _ctrl.text.trim()),
+            ),
+            child: Container(
+              height: 52,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: colors.primary,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Center(
+                child: Text(
+                  'Submit Review',
+                  style: GoogleFonts.sora(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
               ),
-            );
-          }),
-        ),
-        const SizedBox(height: 18),
-        TextField(
-          controller: _ctrl,
-          maxLines: 3,
-          style: GoogleFonts.sora(fontSize: 14, color: colors.textPrimary),
-          cursorColor: colors.primary,
-          decoration: InputDecoration(
-            hintText: 'Leave a comment (optional)…',
-            hintStyle: GoogleFonts.sora(fontSize: 13.5, color: colors.textSecondary),
-            filled: true,
-            fillColor: colors.background,
-            contentPadding: const EdgeInsets.all(16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: colors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: colors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: colors.primary, width: 1.5),
             ),
           ),
-        ),
-        const SizedBox(height: 18),
-        GestureDetector(
-          onTap: () => Navigator.pop(context,
-              _ReviewResult(rating: _rating, comment: _ctrl.text.trim())),
-          child: Container(
-            height: 52,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: colors.primary,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Center(
-              child: Text('Submit Review',
-                  style: GoogleFonts.sora(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
-            ),
-          ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }

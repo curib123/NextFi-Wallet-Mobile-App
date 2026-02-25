@@ -40,6 +40,32 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   List<ChatFriendRequestModel> _incoming = const [];
   List<ChatFriendRequestModel> _outgoing = const [];
 
+  List<ChatFriendModel> _sortFriends(List<ChatFriendModel> friends) {
+    final sorted = [...friends];
+    sorted.sort((a, b) {
+      final online = (b.friendIsOnline ? 1 : 0) - (a.friendIsOnline ? 1 : 0);
+      if (online != 0) return online;
+
+      final unread = b.newUnreadMessageCount.compareTo(a.newUnreadMessageCount);
+      if (unread != 0) return unread;
+
+      final an = _friendName(a.friend, 'Friend').toLowerCase();
+      final bn = _friendName(b.friend, 'Friend').toLowerCase();
+      return an.compareTo(bn);
+    });
+    return sorted;
+  }
+
+  bool _looksLikeId(String value) {
+    final v = value.trim();
+    if (v.isEmpty) return false;
+    if (v.length >= 24) return true;
+    return RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    ).hasMatch(v);
+  }
+
   Map<String, ChatFriendModel> get _friendsByUserId {
     final map = <String, ChatFriendModel>{};
     for (final f in _friends) {
@@ -115,7 +141,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       if (!mounted) return;
       setState(() {
         _threads = (data[0] as ChatPaged<ChatDirectThreadModel>).items;
-        _friends = (data[1] as ChatPaged<ChatFriendModel>).items;
+        _friends = _sortFriends((data[1] as ChatPaged<ChatFriendModel>).items);
         _incoming = (data[2] as ChatPaged<ChatFriendRequestModel>).items;
         _outgoing = (data[3] as ChatPaged<ChatFriendRequestModel>).items;
         _loading = false;
@@ -192,7 +218,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   Future<void> _openThreadWithFriend(ChatFriendModel friend) async {
     setState(() => _busy = true);
     try {
-      final thread = await _chat.getThreadWithFriend(friend.friendUserId);
+      final thread = await _chat.openThreadWithFriend(friend.friendUserId);
       if (!mounted) return;
       setState(() => _busy = false);
       await Navigator.of(context).push(
@@ -345,7 +371,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   // ── helpers ───────────────────────────────────────────────────────────────
 
   String _friendName(ChatUserLite? user, String fallback) {
-    if (user == null) return fallback;
+    if (user == null) return _looksLikeId(fallback) ? 'Friend' : fallback;
     final display = user.displayName?.trim() ?? '';
     if (display.isNotEmpty) return display;
     final name = user.name.trim();
@@ -353,7 +379,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     final username = user.username?.trim() ?? '';
     if (username.isNotEmpty) return '@$username';
     final email = user.email.trim();
-    return email.isEmpty ? fallback : email;
+    if (email.isNotEmpty) return email;
+    return _looksLikeId(fallback) ? 'Friend' : fallback;
   }
 
   String _friendSubtitle(ChatUserLite? user, String fallback) {
@@ -363,6 +390,19 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     if (username.isNotEmpty) return '@$username';
     if (email.isNotEmpty) return email;
     return fallback;
+  }
+
+  String _presenceLabel(ChatFriendModel friend) {
+    if (friend.friendIsOnline) return 'Online';
+    final lastSeen = friend.friendLastSeenAt;
+    if (lastSeen != null) {
+      return 'Last seen ${_relativeTime(lastSeen)}';
+    }
+    final status = friend.friendStatus.trim();
+    if (status.isNotEmpty) {
+      return status[0].toUpperCase() + status.substring(1).toLowerCase();
+    }
+    return '';
   }
 
   String _relativeTime(DateTime dt) {
@@ -718,10 +758,32 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                   margin: const EdgeInsets.only(right: 6),
                   child: Column(
                     children: [
-                      ChatUserAvatar(
-                        name: name,
-                        avatarUrl: f.friend.avatarUrl,
-                        size: 50,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ChatUserAvatar(
+                            name: name,
+                            avatarUrl: f.friend.avatarUrl,
+                            size: 50,
+                          ),
+                          if (f.friendIsOnline)
+                            Positioned(
+                              right: 1,
+                              bottom: 1,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: c.background,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 5),
                       Text(
@@ -904,16 +966,41 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       itemBuilder: (_, i) {
         final f = _friends[i];
         final name = _friendName(f.friend, f.friendUserId);
-        final subtitle = _friendSubtitle(f.friend, '');
+        final baseSubtitle = _friendSubtitle(f.friend, '');
+        final presence = _presenceLabel(f);
+        final subtitle = [
+          baseSubtitle,
+          presence,
+        ].where((s) => s.trim().isNotEmpty).join(' · ');
+        final unread = f.newUnreadMessageCount;
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
           child: Row(
             children: [
-              ChatUserAvatar(
-                name: name,
-                avatarUrl: f.friend.avatarUrl,
-                size: 50,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ChatUserAvatar(
+                    name: name,
+                    avatarUrl: f.friend.avatarUrl,
+                    size: 50,
+                  ),
+                  if (f.friendIsOnline)
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.background, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -940,6 +1027,27 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 ),
               ),
               const SizedBox(width: 8),
+              if (unread > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.primary,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    unread > 99 ? '99+' : '$unread',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               GestureDetector(
                 onTap: _busy ? null : () => _openThreadWithFriend(f),
                 child: Container(

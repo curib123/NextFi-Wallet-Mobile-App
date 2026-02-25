@@ -47,21 +47,23 @@ MerchantStatus merchantStatusFromApi(dynamic raw) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum MerchantTier { basic, standard, premium, vip, unknown }
+enum MerchantTier { bronze, silver, gold, platinum, diamond }
 
 MerchantTier merchantTierFromApi(dynamic raw) {
   final value = raw?.toString().trim().toUpperCase();
   switch (value) {
-    case 'BASIC':
-      return MerchantTier.basic;
-    case 'STANDARD':
-      return MerchantTier.standard;
-    case 'PREMIUM':
-      return MerchantTier.premium;
-    case 'VIP':
-      return MerchantTier.vip;
+    case 'BRONZE':
+      return MerchantTier.bronze;
+    case 'SILVER':
+      return MerchantTier.silver;
+    case 'GOLD':
+      return MerchantTier.gold;
+    case 'PLATINUM':
+      return MerchantTier.platinum;
+    case 'DIAMOND':
+      return MerchantTier.diamond;
     default:
-      return MerchantTier.unknown;
+      return MerchantTier.bronze;
   }
 }
 
@@ -234,7 +236,10 @@ class MerchantProfileModel {
         'registrationNumber',
         'registration_number',
       ]),
-      businessAddress: readString(const ['businessAddress', 'business_address']),
+      businessAddress: readString(const [
+        'businessAddress',
+        'business_address',
+      ]),
       authorizedRepName: readString(const [
         'authorizedRepName',
         'authorized_rep_name',
@@ -265,7 +270,10 @@ class MerchantProfileModel {
       availableTo: readDate(const ['availableTo', 'available_to']),
       requestNote: readString(const ['requestNote', 'request_note']),
       decisionNote: readString(const ['decisionNote', 'decision_note']),
-      rejectionReason: readString(const ['rejectionReason', 'rejection_reason']),
+      rejectionReason: readString(const [
+        'rejectionReason',
+        'rejection_reason',
+      ]),
       suspendReason: readString(const ['suspendReason', 'suspend_reason']),
       requestedAt: readDate(const ['requestedAt', 'requested_at']),
       approvedAt: readDate(const ['approvedAt', 'approved_at']),

@@ -147,7 +147,9 @@ class _TradeScreenState extends State<TradeScreen> {
 
       setState(() {
         _offerPaymentMethods = results[0] as List<OfferPaymentMethodResponse>;
-        _wallets = results[1] as List<WalletAddress>;
+        _wallets = (results[1] as List<WalletAddress>)
+            .where((w) => w.publicAddress.trim().isNotEmpty)
+            .toList();
         _userAccounts = results[2] as List<UserPaymentAccountModel>;
         _merchantAccounts = results[3] as List<MerchantPaymentAccountModel>;
 
@@ -559,9 +561,9 @@ class _ErrorBody extends StatelessWidget {
                 color: c.primary,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Text(
+              child: Text(
                 'Try again',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                style: TextStyle(color: c.onPrimary, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -1049,7 +1051,7 @@ class _PaymentMethodSelector extends StatelessWidget {
                       errorBuilder: (_, __, ___) => Icon(
                         Icons.account_balance_wallet_outlined,
                         size: 20,
-                        color: isSelected ? Colors.white : c.textSecondary,
+                        color: isSelected ? c.onPrimary : c.textSecondary,
                       ),
                     ),
                   )
@@ -1057,21 +1059,21 @@ class _PaymentMethodSelector extends StatelessWidget {
                   Icon(
                     Icons.account_balance_wallet_outlined,
                     size: 20,
-                    color: isSelected ? Colors.white : c.textSecondary,
+                    color: isSelected ? c.onPrimary : c.textSecondary,
                   ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     m.paymentMethod.name,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : c.textPrimary,
+                      color: isSelected ? c.onPrimary : c.textPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 14.2,
                     ),
                   ),
                 ),
                 if (isSelected)
-                  const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                  Icon(Icons.check_circle_rounded, color: c.onPrimary, size: 18),
               ],
             ),
           ),
@@ -1219,10 +1221,11 @@ class _WalletSelector extends StatelessWidget {
         final short = addr.length > 20
             ? '${addr.substring(0, 10)}...${addr.substring(addr.length - 6)}'
             : addr;
+        final label = (w.label ?? '').trim();
         return DropdownMenuItem(
           value: w,
           child: Text(
-            w.label != null ? '${w.label} ($short)' : short,
+            label.isNotEmpty ? '$label ($short)' : short,
             style: TextStyle(
               color: c.textPrimary,
               fontSize: 13.5,
@@ -1274,18 +1277,27 @@ class _UserAccountSelector extends StatelessWidget {
           borderSide: BorderSide(color: c.primary, width: 1.5),
         ),
       ),
-      items: accounts.map((a) => DropdownMenuItem(
-        value: a,
-        child: Text(
-          a.label ?? '${a.accountName}${a.accountNo != null ? ' (${a.accountNo})' : ''}',
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
+      items: accounts.map((a) {
+        final label = (a.label ?? '').trim();
+        final accountName = a.accountName.trim();
+        final accountNo = (a.accountNo ?? '').trim();
+        final fallbackName = accountName.isNotEmpty ? accountName : 'Saved account';
+        final display = label.isNotEmpty
+            ? label
+            : '$fallbackName${accountNo.isNotEmpty ? ' ($accountNo)' : ''}';
+        return DropdownMenuItem(
+          value: a,
+          child: Text(
+            display,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      )).toList(),
+        );
+      }).toList(),
       onChanged: onChanged,
     );
   }
@@ -1442,17 +1454,17 @@ class _SubmitBar extends StatelessWidget {
           ),
           child: Center(
             child: submitting
-                ? const SizedBox(
+                ? SizedBox(
               width: 24,
               height: 24,
-              child: ModernFintechLoader(color: Colors.white, size: 24),
+              child: ModernFintechLoader(color: c.onPrimary, size: 24),
             )
                 : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                  color: Colors.white,
+                  color: c.onPrimary,
                   size: 20,
                 ),
                 const SizedBox(width: 10),
@@ -1460,8 +1472,8 @@ class _SubmitBar extends StatelessWidget {
                   disabled
                       ? 'Toggle to enter amount'
                       : (isBuy ? 'Start Trade — Buy' : 'Start Trade — Sell'),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: c.onPrimary,
                     fontWeight: FontWeight.w800,
                     fontSize: 15.5,
                     letterSpacing: -0.2,
