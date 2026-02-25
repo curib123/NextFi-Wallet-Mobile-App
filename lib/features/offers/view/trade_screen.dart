@@ -320,6 +320,8 @@ class _TradeScreenState extends State<TradeScreen> {
         backgroundColor: c.background,
         elevation: 0,
         scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         centerTitle: false,
         titleSpacing: 16,
         title: Text(

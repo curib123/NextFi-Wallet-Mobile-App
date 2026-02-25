@@ -727,31 +727,36 @@ class _VerifiedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (bgColor, icon, label) = switch (status) {
+    final (bgColor, icon, label, isGlowing) = switch (status) {
       TrustStatus.ready => (
       colors.primary,         // use theme primary — text on primary
       LucideIcons.badgeCheck,
       'Verified',
+      true,
       ),
       TrustStatus.reviewing => (
       const Color(0xFFF59E0B),
       LucideIcons.clock,
       'In Review',
+      false,
       ),
       TrustStatus.suspended => (
       const Color(0xFFEF4444),
       LucideIcons.shieldOff,
       'Suspended',
+      false,
       ),
       TrustStatus.basic => (
       colors.border,
       LucideIcons.shield,
       'Basic',
+      false,
       ),
       _ => (
       colors.border,
       LucideIcons.shield,
       'Unverified',
+      false,
       ),
     };
 
@@ -759,6 +764,15 @@ class _VerifiedBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(10),
+        boxShadow: isGlowing
+            ? [
+          BoxShadow(
+            color: bgColor,
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ]
+            : null,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       child: Row(
@@ -767,15 +781,15 @@ class _VerifiedBadge extends StatelessWidget {
           Icon(
             icon,
             size: 13,
-            color: colors.onPrimary,
+            color: Colors.white,
           ),
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: colors.onPrimary,
+              color: Colors.white,
               letterSpacing: 0.1,
               height: 1,
             ),
@@ -798,63 +812,71 @@ class _TrustStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (dotColor, label, textColor, bgColor, borderColor) = switch (status) {
+    final (dotColor, label, textColor, bgColor, borderColor, icon) =
+    switch (status) {
       TrustStatus.ready => (
-      const Color(0xFF10B981),
+      const Color(0xFF059669), // dot
       'Verified',
-      colors.primary,
-      const Color(0xFFE8F5F0),   // solid light green tint
-      const Color(0xFFB2DFDB),   // solid green border
+      const Color(0xFF065F46), // text
+      const Color(0xFFD1FAE5), // bg
+      const Color(0xFF6EE7B7), // border
+      Icons.verified_rounded,
       ),
       TrustStatus.reviewing => (
-      const Color(0xFFF59E0B),
+      const Color(0xFFD97706), // dot
       'Pending',
-      const Color(0xFFF59E0B),
-      const Color(0xFFFFF8E1),   // solid amber tint
-      const Color(0xFFFFE082),   // solid amber border
+      const Color(0xFF78350F), // text
+      const Color(0xFFFEF3C7), // bg
+      const Color(0xFFFCD34D), // border
+      Icons.hourglass_top_rounded,
       ),
       TrustStatus.suspended => (
-      const Color(0xFFEF4444),
+      const Color(0xFFDC2626), // dot
       'Suspended',
-      const Color(0xFFEF4444),
-      const Color(0xFFFFF0F0),   // solid red tint
-      const Color(0xFFFFCDD2),   // solid red border
+      const Color(0xFF7F1D1D), // text
+      const Color(0xFFFEE2E2), // bg
+      const Color(0xFFFCA5A5), // border
+      Icons.block_rounded,
       ),
       _ => (
-      colors.textSecondary,
+      const Color(0xFF475569), // dot
       'Basic',
-      colors.textSecondary,
-      colors.border,
-      colors.border,
+      const Color(0xFF334155), // text
+      const Color(0xFFF1F5F9), // bg
+      const Color(0xFFCBD5E1), // border
+      Icons.person_rounded,
       ),
     };
 
+    assert(
+    bgColor.alpha == 0xFF &&
+        borderColor.alpha == 0xFF &&
+        textColor.alpha == 0xFF &&
+        dotColor.alpha == 0xFF,
+    'TrustStatusBadge: all colors must be fully opaque (no opacity)',
+    );
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
+          Icon(icon, size: 11, color: dotColor),
+          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: textColor,
-              letterSpacing: 0.1,
+              letterSpacing: 0.3,
+              height: 1,
             ),
           ),
         ],
@@ -1418,27 +1440,10 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
   void _onTapUp(_) { setState(() => _isPressed = false); _pressCtrl.reverse(); }
   void _onTapCancel() { setState(() => _isPressed = false); _pressCtrl.reverse(); }
 
-  /// Returns a solid background tint for an accent — 15% blend onto white (#FFFFFF).
-  /// We pre-mix each well-known accent to its nearest solid equivalent.
-  Color _iconBg(Color accent) {
-    final r = ((accent.red * 0.15) + (255 * 0.85)).round().clamp(0, 255);
-    final g = ((accent.green * 0.15) + (255 * 0.85)).round().clamp(0, 255);
-    final b = ((accent.blue * 0.15) + (255 * 0.85)).round().clamp(0, 255);
-    return Color.fromARGB(255, r, g, b);
-  }
-
-  /// Returns a solid border tint for an accent — 25% blend onto white.
-  Color _iconBorder(Color accent) {
-    final r = ((accent.red * 0.25) + (255 * 0.75)).round().clamp(0, 255);
-    final g = ((accent.green * 0.25) + (255 * 0.75)).round().clamp(0, 255);
-    final b = ((accent.blue * 0.25) + (255 * 0.75)).round().clamp(0, 255);
-    return Color.fromARGB(255, r, g, b);
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = widget.colors;
-    final accent = widget.accentColor ?? c.primary;
+    final accent =  c.primary;
 
     return GestureDetector(
       onTap: () { HapticFeedback.selectionClick(); widget.onTap(); },
@@ -1452,10 +1457,10 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: _isPressed ? _iconBg(accent) : widget.colors.background,
+            color: _isPressed ? accent : widget.colors.background,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: _isPressed ? _iconBorder(accent) : widget.colors.background,
+              color: _isPressed ? accent : widget.colors.background,
               width: 1,
             ),
           ),
@@ -1465,11 +1470,11 @@ class _NavTileState extends State<_NavTile> with SingleTickerProviderStateMixin 
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: _iconBg(accent),
+                  color: accent,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _iconBorder(accent), width: 1),
+                  border: Border.all(color: accent, width: 1),
                 ),
-                child: Icon(widget.icon, color: accent, size: 18),
+                child: Icon(widget.icon, color: c.onPrimary, size: 18),
               ),
               const SizedBox(width: 13),
               // Labels
@@ -1564,16 +1569,17 @@ class _UnreadBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: colors.primary,
+        gradient: LinearGradient(
+          colors: [colors.primary, const Color(0xFF7C3AED)],
+        ),
         borderRadius: BorderRadius.circular(99),
+        boxShadow: [
+          BoxShadow(color: colors.primary, blurRadius: 8, offset: const Offset(0, 2)),
+        ],
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: colors.onPrimary,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-        ),
+        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -1891,7 +1897,7 @@ class _LogoutConfirmationModal extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    'Cancel', 
+                    'Cancel',
                     style: TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w700,
