@@ -3,14 +3,22 @@ import 'chat_models.dart';
 class ChatListQuery {
   final int? page;
   final int? limit;
+  final String? cursor;
   final String? q;
   final ChatFriendRequestStatus? status;
 
-  const ChatListQuery({this.page, this.limit, this.q, this.status});
+  const ChatListQuery({
+    this.page,
+    this.limit,
+    this.cursor,
+    this.q,
+    this.status,
+  });
 
   Map<String, String> toQueryMap() => {
     if (page != null && page! > 0) 'page': page!.toString(),
     if (limit != null && limit! > 0) 'limit': limit!.toString(),
+    if (cursor != null && cursor!.trim().isNotEmpty) 'cursor': cursor!.trim(),
     if (q != null && q!.trim().isNotEmpty) 'q': q!.trim(),
     if (status != null && status != ChatFriendRequestStatus.unknown)
       'status': chatFriendRequestStatusToApi(status!),
@@ -61,10 +69,7 @@ class RespondFriendRequestRequest {
   final String action;
   final String? note;
 
-  const RespondFriendRequestRequest({
-    required this.action,
-    this.note,
-  });
+  const RespondFriendRequestRequest({required this.action, this.note});
 
   Map<String, dynamic> toJson() => {
     'action': action.trim().toUpperCase(),
@@ -109,11 +114,7 @@ class SendEncryptedChatMessageRequest {
 class CreateThreadRequest {
   final String friendId;
 
-  const CreateThreadRequest({
-    required this.friendId,
-  });
+  const CreateThreadRequest({required this.friendId});
 
-  Map<String, dynamic> toJson() => {
-    'friendId': friendId.trim(),
-  };
+  Map<String, dynamic> toJson() => {'friendId': friendId.trim()};
 }

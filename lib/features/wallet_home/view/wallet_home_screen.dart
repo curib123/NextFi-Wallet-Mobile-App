@@ -453,7 +453,11 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ChatThreadScreen(thread: targetThread!),
+          builder: (_) => ChatThreadScreen(
+            thread: targetThread!,
+            username: targetThread.friendUser?.username,
+            avatarUrl: targetThread.friendUser?.avatarUrl,
+          ),
         ),
       );
     } else {
@@ -579,10 +583,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       if (!allowed || !mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) =>
-          SnackBar(content: Text("Buy"))
-        ),
+        MaterialPageRoute(builder: (_) => SnackBar(content: Text("Buy"))),
       );
       return;
     }
@@ -593,10 +594,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       if (!allowed || !mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) =>
-              SnackBar(content: Text("Sell"))
-        ),
+        MaterialPageRoute(builder: (_) => SnackBar(content: Text("Sell"))),
       );
       return;
     }

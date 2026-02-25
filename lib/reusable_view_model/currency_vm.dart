@@ -30,6 +30,8 @@ class CurrencyVM extends ChangeNotifier {
   static const int _maxRetries = 3;
   static const Duration _retryDelay = Duration(milliseconds: 500);
   static const String _userAgent = 'NextFi/2.0';
+  static const double _maxFxSpreadPct = 3.0;
+  static const double _maxSingleSourceJumpPct = 20.0;
 
   // ── HTTP Client ───────────────────────────────────────────────────────────
   late final IOClient _client;
@@ -133,11 +135,11 @@ class CurrencyVM extends ChangeNotifier {
   // Cache status
   bool get hasValidRateCache =>
       _lastRateRefresh != null &&
-          DateTime.now().difference(_lastRateRefresh!) < rateCacheDuration;
+      DateTime.now().difference(_lastRateRefresh!) < rateCacheDuration;
 
   bool get hasValidHistoryCache =>
       _lastHistoryRefresh != null &&
-          DateTime.now().difference(_lastHistoryRefresh!) < historyCacheDuration;
+      DateTime.now().difference(_lastHistoryRefresh!) < historyCacheDuration;
 
   /// Set fiat currency and refresh rates
   Future<void> setFiat(String v) async {
@@ -223,7 +225,9 @@ class CurrencyVM extends ChangeNotifier {
               : 0.0;
 
           final cacheAge = _getCacheAge(cache);
-          debugPrint('CurrencyVM: Loaded cached rates (age: ${cacheAge?.inMinutes ?? "unknown"}m, XLM: $_xlmRate $_fiat, USDC per XLM: $_lastUsdcPerXlm)');
+          debugPrint(
+            'CurrencyVM: Loaded cached rates (age: ${cacheAge?.inMinutes ?? "unknown"}m, XLM: $_xlmRate $_fiat, USDC per XLM: $_lastUsdcPerXlm)',
+          );
         }
       }
     } catch (e) {
@@ -232,7 +236,7 @@ class CurrencyVM extends ChangeNotifier {
 
     // Subscribe to live XLM/USDC price stream
     _pairSub = _stellar.xlmUsdcPriceStream().listen(
-          (p) {
+      (p) {
         if (_disposed) return;
         if (p.usdcPerXlm > 0 && p.usdcPerXlm.isFinite) {
           final oldPrice = _lastUsdcPerXlm;
@@ -245,7 +249,9 @@ class CurrencyVM extends ChangeNotifier {
           _saveLatestPricesToCache();
 
           if ((oldPrice - p.usdcPerXlm).abs() > 0.0001) {
-            debugPrint('CurrencyVM: Stream price updated: ${p.usdcPerXlm} USDC/XLM → ${_xlmRate.toStringAsFixed(4)} $_fiat/XLM');
+            debugPrint(
+              'CurrencyVM: Stream price updated: ${p.usdcPerXlm} USDC/XLM → ${_xlmRate.toStringAsFixed(4)} $_fiat/XLM',
+            );
           }
         }
       },
@@ -316,7 +322,9 @@ class CurrencyVM extends ChangeNotifier {
         // CRITICAL FIX: Save to cache immediately after successful fetch
         await _saveLatestPricesToCache();
 
-        debugPrint('CurrencyVM: Refreshed rates - USDC: $_usdcRate $_fiat, XLM: ${_xlmRate.toStringAsFixed(4)} $_fiat (USDC per XLM: $_lastUsdcPerXlm)');
+        debugPrint(
+          'CurrencyVM: Refreshed rates - USDC: $_usdcRate $_fiat, XLM: ${_xlmRate.toStringAsFixed(4)} $_fiat (USDC per XLM: $_lastUsdcPerXlm)',
+        );
       } else {
         throw Exception('Invalid exchange rate: $fx');
       }
@@ -325,7 +333,10 @@ class CurrencyVM extends ChangeNotifier {
       _consecutiveErrors++;
 
       // Zero out rates — never show a stale cached rate as a real balance
-      _zeroRates('fetch failed');
+      final usedCache = _tryRestoreRatesFromRecentCache();
+      if (!usedCache) {
+        _zeroRates('fetch failed');
+      }
     } finally {
       _setLoading(false);
       if (!_disposed) notifyListeners();
@@ -335,8 +346,10 @@ class CurrencyVM extends ChangeNotifier {
   void _recomputeXlmFiat() {
     if (_disposed) return;
 
-    if (_lastUsdcPerXlm > 0 && _usdcRate > 0 &&
-        _lastUsdcPerXlm.isFinite && _usdcRate.isFinite) {
+    if (_lastUsdcPerXlm > 0 &&
+        _usdcRate > 0 &&
+        _lastUsdcPerXlm.isFinite &&
+        _usdcRate.isFinite) {
       _xlmRate = _lastUsdcPerXlm * _usdcRate;
 
       if (!_xlmCtrl.isClosed && !_disposed) {
@@ -361,7 +374,9 @@ class CurrencyVM extends ChangeNotifier {
         _lastGoodHistoryCache = history;
         _lastHistoryRefresh = DateTime.now();
         await _saveHistoryToCache(history);
-        debugPrint('CurrencyVM: Loaded ${history.length} days from CEX (all-time)');
+        debugPrint(
+          'CurrencyVM: Loaded ${history.length} days from CEX (all-time)',
+        );
         return;
       }
 
@@ -372,7 +387,9 @@ class CurrencyVM extends ChangeNotifier {
         _lastGoodHistoryCache = history;
         _lastHistoryRefresh = DateTime.now();
         await _saveHistoryToCache(history);
-        debugPrint('CurrencyVM: Loaded ${history.length} days from DEX (all-time)');
+        debugPrint(
+          'CurrencyVM: Loaded ${history.length} days from DEX (all-time)',
+        );
         return;
       }
 
@@ -383,7 +400,9 @@ class CurrencyVM extends ChangeNotifier {
         _lastGoodHistoryCache = history;
         _lastHistoryRefresh = DateTime.now();
         await _saveHistoryToCache(history);
-        debugPrint('CurrencyVM: Loaded ${history.length} days from CEX (recent)');
+        debugPrint(
+          'CurrencyVM: Loaded ${history.length} days from CEX (recent)',
+        );
         return;
       }
 
@@ -394,7 +413,9 @@ class CurrencyVM extends ChangeNotifier {
         _lastGoodHistoryCache = history;
         _lastHistoryRefresh = DateTime.now();
         await _saveHistoryToCache(history);
-        debugPrint('CurrencyVM: Loaded ${history.length} days from DEX (recent)');
+        debugPrint(
+          'CurrencyVM: Loaded ${history.length} days from DEX (recent)',
+        );
         return;
       }
 
@@ -416,9 +437,7 @@ class CurrencyVM extends ChangeNotifier {
     if (_disposed || dailyCloses.isEmpty) return;
 
     // Validate data quality
-    final validCloses = dailyCloses
-        .where((c) => c.isFinite && c > 0)
-        .toList();
+    final validCloses = dailyCloses.where((c) => c.isFinite && c > 0).toList();
 
     if (validCloses.isEmpty) {
       debugPrint('CurrencyVM: No valid price data after filtering');
@@ -480,57 +499,116 @@ class CurrencyVM extends ChangeNotifier {
   /// Use cached rates as fallback when fetch fails
   Future<void> _useCachedRatesAsFallback() async {
     if (_lastGoodRatesCache != null) {
-      final cachedFiat = (_lastGoodRatesCache!['fiat'] as String?)?.toLowerCase();
+      final cachedFiat = (_lastGoodRatesCache!['fiat'] as String?)
+          ?.toLowerCase();
+      final cachedUsdcRate =
+          (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
+      final cachedXlmRate =
+          (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
+      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)
+          ?.toDouble();
 
-      // Use cache even if fiat doesn't match - better than nothing
-      final cachedUsdcRate = (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
-      final cachedXlmRate = (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
-      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)?.toDouble();
+      if (cachedFiat != _fiat) {
+        debugPrint(
+          'CurrencyVM: Skip cached rates: fiat mismatch ($cachedFiat vs $_fiat)',
+        );
+        return;
+      }
 
       if (cachedUsdcRate > 0) {
         _usdcRate = cachedUsdcRate;
-        debugPrint('CurrencyVM: ✓ Using cached USDC rate: $_usdcRate $_fiat (from fiat: $cachedFiat)');
-      } else if (_usdcRate == 0) {
-        _usdcRate = 1.0; // Ultimate fallback
-        debugPrint('CurrencyVM: ⚠ Using default USDC rate: 1.0');
+        debugPrint('CurrencyVM: Using cached USDC rate: $_usdcRate $_fiat');
       }
 
       if (cachedXlmRate > 0) {
         _xlmRate = cachedXlmRate;
-
-        // Use cached USDC per XLM if available
         if (cachedUsdcPerXlm != null && cachedUsdcPerXlm > 0) {
           _lastUsdcPerXlm = cachedUsdcPerXlm;
-        } else {
+        } else if (_usdcRate > 0) {
           _lastUsdcPerXlm = _xlmRate / _usdcRate;
         }
-
-        debugPrint('CurrencyVM: ✓ Using cached XLM rate: ${_xlmRate.toStringAsFixed(4)} $_fiat (USDC per XLM: $_lastUsdcPerXlm)');
+        debugPrint(
+          'CurrencyVM: Using cached XLM rate: ${_xlmRate.toStringAsFixed(4)} $_fiat',
+        );
       }
-    } else if (_usdcRate == 0) {
-      // No cache available, use default
-      _usdcRate = 1.0;
-      debugPrint('CurrencyVM: ⚠ No cache available, using default rate');
     }
 
     if (!_disposed) notifyListeners();
   }
 
+  bool _tryRestoreRatesFromRecentCache() {
+    final cache = _lastGoodRatesCache;
+    if (cache == null) return false;
+
+    final cachedFiat = (cache['fiat'] as String?)?.toLowerCase();
+    if (cachedFiat != _fiat) return false;
+
+    final age = _getCacheAge(cache);
+    final maxAge = rateCacheDuration * 3;
+    if (age == null || age > maxAge) {
+      debugPrint(
+        'CurrencyVM: Cached rates too old for fallback (${age?.inMinutes ?? 'unknown'}m)',
+      );
+      return false;
+    }
+
+    final usdc = (cache['usdcRate'] as num?)?.toDouble() ?? 0.0;
+    final xlm = (cache['xlmRate'] as num?)?.toDouble() ?? 0.0;
+    final usdcPerXlm = (cache['lastUsdcPerXlm'] as num?)?.toDouble();
+    if (usdc <= 0 || xlm <= 0 || !usdc.isFinite || !xlm.isFinite) {
+      return false;
+    }
+
+    _usdcRate = usdc;
+    _xlmRate = xlm;
+    _lastUsdcPerXlm =
+        (usdcPerXlm != null && usdcPerXlm > 0 && usdcPerXlm.isFinite)
+        ? usdcPerXlm
+        : (xlm / usdc);
+    _ratesUnavailable = false;
+    debugPrint(
+      'CurrencyVM: Restored recent cached rates (${age.inMinutes}m old)',
+    );
+    return true;
+  }
+
+  bool _isSingleSourceRateReasonable(double value, String tgt) {
+    if (!value.isFinite || value <= 0 || value > 1000000) return false;
+
+    final cache = _lastGoodRatesCache;
+    if (cache == null) return false;
+    final cachedFiat = (cache['fiat'] as String?)?.toUpperCase();
+    if (cachedFiat != tgt.toUpperCase()) return false;
+
+    final cached = (cache['usdcRate'] as num?)?.toDouble();
+    if (cached == null || !cached.isFinite || cached <= 0) return false;
+
+    final diffPct = ((value - cached).abs() / cached) * 100.0;
+    return diffPct <= _maxSingleSourceJumpPct;
+  }
+
   /// Use cached price from stream as fallback
   void _useCachedPriceAsFallback() {
     if (_lastGoodRatesCache != null) {
-      final cachedXlmRate = (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
-      final cachedUsdcRate = (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
-      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)?.toDouble();
+      final cachedXlmRate =
+          (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
+      final cachedUsdcRate =
+          (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
+      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)
+          ?.toDouble();
 
       if (cachedUsdcPerXlm != null && cachedUsdcPerXlm > 0) {
         _lastUsdcPerXlm = cachedUsdcPerXlm;
         _recomputeXlmFiat();
-        debugPrint('CurrencyVM: ✓ Using cached stream price as fallback: $cachedUsdcPerXlm USDC/XLM');
+        debugPrint(
+          'CurrencyVM: ✓ Using cached stream price as fallback: $cachedUsdcPerXlm USDC/XLM',
+        );
       } else if (cachedXlmRate > 0 && cachedUsdcRate > 0) {
         _lastUsdcPerXlm = cachedXlmRate / cachedUsdcRate;
         _recomputeXlmFiat();
-        debugPrint('CurrencyVM: ✓ Computed stream price from cached rates: $_lastUsdcPerXlm USDC/XLM');
+        debugPrint(
+          'CurrencyVM: ✓ Computed stream price from cached rates: $_lastUsdcPerXlm USDC/XLM',
+        );
       }
     }
   }
@@ -539,14 +617,18 @@ class CurrencyVM extends ChangeNotifier {
   Future<void> _useCachedHistoryAsFallback() async {
     if (_lastGoodHistoryCache != null && _lastGoodHistoryCache!.isNotEmpty) {
       _applyDailySeries(_lastGoodHistoryCache!);
-      debugPrint('CurrencyVM: Applied cached history (${_lastGoodHistoryCache!.length} days)');
+      debugPrint(
+        'CurrencyVM: Applied cached history (${_lastGoodHistoryCache!.length} days)',
+      );
     } else {
       // Try to load from storage
       final storedHistory = await _loadHistoryFromCache();
       if (storedHistory != null && storedHistory.isNotEmpty) {
         _lastGoodHistoryCache = storedHistory;
         _applyDailySeries(storedHistory);
-        debugPrint('CurrencyVM: Applied stored history (${storedHistory.length} days)');
+        debugPrint(
+          'CurrencyVM: Applied stored history (${storedHistory.length} days)',
+        );
       } else {
         debugPrint('CurrencyVM: No cached history available');
       }
@@ -591,15 +673,43 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   Future<double?> _fetchFiatRate(String tgt) async {
-    // Try multiple FX sources in parallel for faster response
-    final futures = [
+    // Query all sources in parallel and require cross-source agreement.
+    final results = await Future.wait([
       _fetchFromFrankfurter(tgt),
       _fetchFromExchangeRateHost(tgt),
       _fetchFromErApi(tgt),
-    ];
+    ]);
 
-    // Return first successful result
-    return _firstSuccessful(futures);
+    final values = results
+        .where((v) => v != null && v.isFinite && v > 0)
+        .cast<double>()
+        .toList();
+    if (values.isEmpty) return null;
+
+    values.sort();
+
+    if (values.length >= 2) {
+      final median = values[values.length ~/ 2];
+      final inBand = values.where((v) {
+        final pct = ((v - median).abs() / median) * 100.0;
+        return pct <= _maxFxSpreadPct;
+      }).toList();
+
+      if (inBand.length >= 2) {
+        final sum = inBand.fold<double>(0.0, (a, b) => a + b);
+        return sum / inBand.length;
+      }
+
+      debugPrint('CurrencyVM: FX sources diverged for $tgt: $values');
+      return null;
+    }
+
+    final single = values.first;
+    if (_isSingleSourceRateReasonable(single, tgt)) {
+      return single;
+    }
+    debugPrint('CurrencyVM: Rejected single-source FX rate for $tgt: $single');
+    return null;
   }
 
   Future<double?> _fetchFromFrankfurter(String tgt) async {
@@ -614,14 +724,13 @@ class CurrencyVM extends ChangeNotifier {
     final m = await _json(
       Uri.parse('https://api.exchangerate.host/latest?base=USD&symbols=$tgt'),
     );
+    if (m['success'] == false) return null;
     final v = (m['rates'] as Map?)?[tgt];
     return (v is num && v.isFinite) ? v.toDouble() : null;
   }
 
   Future<double?> _fetchFromErApi(String tgt) async {
-    final m = await _json(
-      Uri.parse('https://open.er-api.com/v6/latest/USD'),
-    );
+    final m = await _json(Uri.parse('https://open.er-api.com/v6/latest/USD'));
     final v = (m['rates'] as Map?)?[tgt];
     return (v is num && v.isFinite) ? v.toDouble() : null;
   }
@@ -644,7 +753,7 @@ class CurrencyVM extends ChangeNotifier {
     while (guard++ < 10 && !_disposed) {
       final url = Uri.parse(
         'https://api.binance.com/api/v3/klines?symbol=XLMUSDT&interval=1d&limit=$limit'
-            '${endMs != null ? '&endTime=$endMs' : ''}',
+        '${endMs != null ? '&endTime=$endMs' : ''}',
       );
 
       final batch = await _jsonList(url);
@@ -681,7 +790,7 @@ class CurrencyVM extends ChangeNotifier {
       final start = end.subtract(const Duration(days: chunkDays));
       final url = Uri.parse(
         'https://api.exchange.coinbase.com/products/XLM-USD/candles'
-            '?granularity=86400&start=${start.toIso8601String()}&end=${end.toIso8601String()}',
+        '?granularity=86400&start=${start.toIso8601String()}&end=${end.toIso8601String()}',
       );
 
       final arr = await _jsonList(url);
@@ -717,7 +826,7 @@ class CurrencyVM extends ChangeNotifier {
       final startAt = endAt - (chunkDays * 86400);
       final url = Uri.parse(
         'https://api.kucoin.com/api/v1/market/candles?type=1day&symbol=XLM-USDT'
-            '&startAt=$startAt&endAt=$endAt',
+        '&startAt=$startAt&endAt=$endAt',
       );
 
       final m = await _json(url);
@@ -826,8 +935,10 @@ class CurrencyVM extends ChangeNotifier {
     // Sort by timestamp
     final sorted = List.from(ohlcList)
       ..sort((a, b) {
-        final tsA = int.tryParse((a as Map)['timestamp']?.toString() ?? '0') ?? 0;
-        final tsB = int.tryParse((b as Map)['timestamp']?.toString() ?? '0') ?? 0;
+        final tsA =
+            int.tryParse((a as Map)['timestamp']?.toString() ?? '0') ?? 0;
+        final tsB =
+            int.tryParse((b as Map)['timestamp']?.toString() ?? '0') ?? 0;
         return tsA.compareTo(tsB);
       });
 
@@ -851,20 +962,22 @@ class CurrencyVM extends ChangeNotifier {
       final end = start.add(const Duration(days: 200));
       final url = Uri.parse(
         'https://horizon.stellar.org/trade_aggregations'
-            '?base_asset_type=native'
-            '&counter_asset_type=credit_alphanum12'
-            '&counter_asset_code=USDC'
-            '&counter_asset_issuer=$issuer'
-            '&resolution=86400000'
-            '&start_time=${start.millisecondsSinceEpoch}'
-            '&end_time=${end.millisecondsSinceEpoch}'
-            '&order=asc'
-            '&limit=200',
+        '?base_asset_type=native'
+        '&counter_asset_type=credit_alphanum12'
+        '&counter_asset_code=USDC'
+        '&counter_asset_issuer=$issuer'
+        '&resolution=86400000'
+        '&start_time=${start.millisecondsSinceEpoch}'
+        '&end_time=${end.millisecondsSinceEpoch}'
+        '&order=asc'
+        '&limit=200',
       );
 
       final m = await _json(url);
-      final records = (m['_embedded']?['records'] as List?) ??
-          (m['records'] as List?) ?? [];
+      final records =
+          (m['_embedded']?['records'] as List?) ??
+          (m['records'] as List?) ??
+          [];
 
       if (records.isEmpty) break;
 
@@ -889,20 +1002,20 @@ class CurrencyVM extends ChangeNotifier {
 
     final url = Uri.parse(
       'https://horizon.stellar.org/trade_aggregations'
-          '?base_asset_type=native'
-          '&counter_asset_type=credit_alphanum12'
-          '&counter_asset_code=USDC'
-          '&counter_asset_issuer=$issuer'
-          '&resolution=86400000'
-          '&start_time=${start.millisecondsSinceEpoch}'
-          '&end_time=${now.millisecondsSinceEpoch}'
-          '&order=asc'
-          '&limit=200',
+      '?base_asset_type=native'
+      '&counter_asset_type=credit_alphanum12'
+      '&counter_asset_code=USDC'
+      '&counter_asset_issuer=$issuer'
+      '&resolution=86400000'
+      '&start_time=${start.millisecondsSinceEpoch}'
+      '&end_time=${now.millisecondsSinceEpoch}'
+      '&order=asc'
+      '&limit=200',
     );
 
     final m = await _json(url);
-    final records = (m['_embedded']?['records'] as List?) ??
-        (m['records'] as List?) ?? [];
+    final records =
+        (m['_embedded']?['records'] as List?) ?? (m['records'] as List?) ?? [];
 
     if (records.isEmpty) return null;
 
@@ -961,10 +1074,7 @@ class CurrencyVM extends ChangeNotifier {
       return decoded is Map<String, dynamic> ? decoded : {'_data': decoded};
     }
 
-    throw HttpException(
-      'HTTP ${resp.statusCode} for ${url.host}',
-      uri: url,
-    );
+    throw HttpException('HTTP ${resp.statusCode} for ${url.host}', uri: url);
   }
 
   Future<List<dynamic>> _jsonList(Uri url) async {
@@ -978,10 +1088,7 @@ class CurrencyVM extends ChangeNotifier {
       return decoded is List ? decoded : [];
     }
 
-    throw HttpException(
-      'HTTP ${resp.statusCode} for ${url.host}',
-      uri: url,
-    );
+    throw HttpException('HTTP ${resp.statusCode} for ${url.host}', uri: url);
   }
 
   double? _toD(dynamic v) {
@@ -1021,7 +1128,9 @@ class CurrencyVM extends ChangeNotifier {
 
     try {
       return await Future.any(
-        futures.map((f) => f.then((v) => v != null ? v : Future<T>.error('null'))),
+        futures.map(
+          (f) => f.then((v) => v != null ? v : Future<T>.error('null')),
+        ),
       );
     } catch (_) {
       return null;
@@ -1030,9 +1139,9 @@ class CurrencyVM extends ChangeNotifier {
 
   /// Retry helper with exponential backoff
   Future<T?> _withRetry<T>(
-      Future<T?> Function() operation, {
-        int maxRetries = 3,
-      }) async {
+    Future<T?> Function() operation, {
+    int maxRetries = 3,
+  }) async {
     for (var attempt = 0; attempt < maxRetries; attempt++) {
       if (_disposed) return null;
 
@@ -1045,7 +1154,9 @@ class CurrencyVM extends ChangeNotifier {
         }
 
         final delay = _retryDelay * (1 << attempt); // Exponential backoff
-        debugPrint('CurrencyVM: Retry $attempt after ${delay.inMilliseconds}ms');
+        debugPrint(
+          'CurrencyVM: Retry $attempt after ${delay.inMilliseconds}ms',
+        );
         await Future.delayed(delay);
       }
     }

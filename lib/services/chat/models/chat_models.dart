@@ -1,6 +1,6 @@
 enum ChatFriendRequestStatus { pending, accepted, rejected, canceled, unknown }
 
-enum ChatMessageKind { text, unknown }
+enum ChatMessageKind { text, binary, system, unknown }
 
 ChatFriendRequestStatus chatFriendRequestStatusFromApi(dynamic raw) {
   final v = raw?.toString().trim().toUpperCase();
@@ -38,6 +38,10 @@ ChatMessageKind chatMessageKindFromApi(dynamic raw) {
   switch (v) {
     case 'TEXT':
       return ChatMessageKind.text;
+    case 'BINARY':
+      return ChatMessageKind.binary;
+    case 'SYSTEM':
+      return ChatMessageKind.system;
     default:
       return ChatMessageKind.unknown;
   }
@@ -47,6 +51,10 @@ String chatMessageKindToApi(ChatMessageKind kind) {
   switch (kind) {
     case ChatMessageKind.text:
       return 'TEXT';
+    case ChatMessageKind.binary:
+      return 'BINARY';
+    case ChatMessageKind.system:
+      return 'SYSTEM';
     case ChatMessageKind.unknown:
       return 'TEXT';
   }

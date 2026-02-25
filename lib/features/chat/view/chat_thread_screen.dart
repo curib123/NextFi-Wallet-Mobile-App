@@ -15,9 +15,16 @@ import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 
 class ChatThreadScreen extends StatefulWidget {
-  const ChatThreadScreen({super.key, required this.thread});
+  const ChatThreadScreen({
+    super.key,
+    required this.thread,
+    this.username,
+    this.avatarUrl,
+  });
 
   final ChatDirectThreadModel thread;
+  final String? username;
+  final String? avatarUrl;
 
   @override
   State<ChatThreadScreen> createState() => _ChatThreadScreenState();
@@ -172,6 +179,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final socket = MiniChatSocketService(
       threadId: widget.thread.id,
       tokenProvider: () async => TokenStorage().accessToken,
+      userIdProvider: () async => _currentUserId,
     );
     _socket = socket;
 
@@ -220,11 +228,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
 
     setState(() => _sending = true);
+    String? pendingClientId;
     try {
       final envelope = ChatEnvelopeCodec.encodeText(
         plainText: text,
         senderKeyId: senderKeyId,
       );
+      pendingClientId = envelope.clientMessageId;
       final optimistic = ChatDirectMessageModel(
         id: envelope.clientMessageId,
         threadId: widget.thread.id,
@@ -239,27 +249,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         metadata: envelope.metadata,
         createdAt: DateTime.now().toUtc(),
       );
-
-      final realtimeSent = _socket?.sendMessage(envelope) ?? false;
-      if (realtimeSent) {
-        if (!mounted) return;
-        setState(() {
-          _messages = _mergeMessages(_messages, [optimistic]);
-          _pendingClientMessageIds.add(envelope.clientMessageId);
-        });
-        _inputCtrl.clear();
-        _scrollToBottom();
-        return;
-      }
+      if (!mounted) return;
+      setState(() {
+        _messages = _mergeMessages(_messages, [optimistic]);
+        _pendingClientMessageIds.add(envelope.clientMessageId);
+      });
+      _inputCtrl.clear();
+      _scrollToBottom();
 
       final saved = await _chat.sendThreadMessage(widget.thread.id, envelope);
       if (!mounted) return;
       setState(() {
         _messages = _mergeMessages(_messages, [saved]);
+        _pendingClientMessageIds.remove(envelope.clientMessageId);
       });
-      _inputCtrl.clear();
       _scrollToBottom();
     } catch (e) {
+      // Keep optimistic bubble visible; clear pending marker only for this send.
+      if (pendingClientId != null && pendingClientId.isNotEmpty) {
+        setState(() => _pendingClientMessageIds.remove(pendingClientId));
+      }
       _showSnack(e.toString());
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -273,10 +282,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final map = <String, ChatDirectMessageModel>{};
 
     String keyFor(ChatDirectMessageModel m) {
-      final id = m.id.trim();
-      if (id.isNotEmpty) return 'id:$id';
       final cid = m.clientMessageId?.trim() ?? '';
       if (cid.isNotEmpty) return 'cid:$cid';
+      final id = m.id.trim();
+      if (id.isNotEmpty) return 'id:$id';
       final ts = m.createdAt?.toUtc().toIso8601String() ?? '';
       return 'tmp:${m.senderId}|${m.ciphertext}|$ts';
     }
@@ -365,22 +374,45 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // ── string helpers ─────────────────────────────────────────────────────────
 
   String get _friendTitle {
+    final passedUsername = (widget.username ?? '').trim();
+    if (passedUsername.isNotEmpty) {
+      return passedUsername.startsWith('@')
+          ? passedUsername
+          : '@$passedUsername';
+    }
     final f = widget.thread.friendUser;
-    if (f == null) return 'Direct Chat';
-    final display = f.displayName?.trim();
-    if (display != null && display.isNotEmpty) return display;
-    final name = f.name.trim();
-    if (name.isNotEmpty) return name;
+    if (f == null) {
+      final fallbackId = widget.thread.friendUserId.trim();
+      if (fallbackId.isNotEmpty) {
+        return '@${fallbackId.length > 12 ? fallbackId.substring(0, 12) : fallbackId}';
+      }
+      return '@friend';
+    }
     final username = f.username?.trim() ?? '';
     if (username.isNotEmpty) return '@$username';
-    return f.email.trim().isNotEmpty ? f.email.trim() : 'Direct Chat';
+    final fallbackId = widget.thread.friendUserId.trim();
+    if (fallbackId.isNotEmpty) {
+      return '@${fallbackId.length > 12 ? fallbackId.substring(0, 12) : fallbackId}';
+    }
+    final email = f.email.trim();
+    if (email.isNotEmpty) return email;
+    final display = f.displayName?.trim() ?? '';
+    if (display.isNotEmpty) return display;
+    final name = f.name.trim();
+    if (name.isNotEmpty) return name;
+    return '@friend';
   }
 
   String get _friendSubtitle {
+    final passedUsername = (widget.username ?? '').trim();
+    if (passedUsername.isNotEmpty) return '';
     final f = widget.thread.friendUser;
     if (f == null) return '';
     final username = f.username?.trim() ?? '';
-    if (username.isNotEmpty) return '@$username';
+    if (username.isNotEmpty) {
+      final email = f.email.trim();
+      return email.isNotEmpty ? email : '';
+    }
     final email = f.email.trim();
     return email.isNotEmpty ? email : '';
   }
@@ -459,7 +491,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         children: [
           ChatUserAvatar(
             name: _friendTitle,
-            avatarUrl: widget.thread.friendUser?.avatarUrl,
+            avatarUrl: (widget.avatarUrl ?? '').trim().isNotEmpty
+                ? widget.avatarUrl
+                : widget.thread.friendUser?.avatarUrl,
             size: 38,
           ),
           const SizedBox(width: 10),
@@ -515,11 +549,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         IconButton(
           tooltip: 'Refresh',
           onPressed: () => _loadMessages(showLoader: false),
-          icon: Icon(
-            Icons.refresh_rounded,
-            color: c.textSecondary,
-            size: 19,
-          ),
+          icon: Icon(Icons.refresh_rounded, color: c.textSecondary, size: 19),
         ),
         const SizedBox(width: 4),
       ],
@@ -617,8 +647,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Widget _buildStatusBanner(AppColor c) {
-    final isConnecting =
-        _socketStatus.connecting || _socketStatus.connected;
+    final isConnecting = _socketStatus.connecting || _socketStatus.connected;
     final color = isConnecting ? c.warning : c.error;
     return Container(
       width: double.infinity,
@@ -630,10 +659,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           SizedBox(
             width: 10,
             height: 10,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              color: color,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
           ),
           const SizedBox(width: 8),
           Text(
@@ -774,8 +800,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           padding: EdgeInsets.only(bottom: nextSame ? 2 : 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment:
-                mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: mine
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             children: [
               // Avatar slot (received only)
               if (!mine) ...[
@@ -874,9 +901,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border(
-          top: BorderSide(color: c.border.withOpacity(0.15)),
-        ),
+        border: Border(top: BorderSide(color: c.border.withOpacity(0.15))),
       ),
       child: SafeArea(
         top: false,
@@ -902,10 +927,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         minLines: 1,
                         maxLines: 5,
                         onSubmitted: (_) => _sendMessage(),
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: c.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
                           hintText: 'Message…',
                           hintStyle: TextStyle(
@@ -914,8 +936,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ),
                           border: InputBorder.none,
                           isDense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 11),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 11,
+                          ),
                         ),
                       ),
                     ),

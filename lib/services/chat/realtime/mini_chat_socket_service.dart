@@ -7,6 +7,7 @@ import '../models/chat_dtos.dart';
 import '../models/chat_models.dart';
 
 typedef MiniChatTokenProvider = Future<String?> Function();
+typedef MiniChatUserIdProvider = Future<String?> Function();
 
 class MiniChatSocketStatus {
   final bool connecting;
@@ -23,10 +24,15 @@ class MiniChatSocketStatus {
 }
 
 class MiniChatSocketService {
-  MiniChatSocketService({required this.threadId, required this.tokenProvider});
+  MiniChatSocketService({
+    required this.threadId,
+    required this.tokenProvider,
+    this.userIdProvider,
+  });
 
   final String threadId;
   final MiniChatTokenProvider tokenProvider;
+  final MiniChatUserIdProvider? userIdProvider;
 
   final _statusCtrl = StreamController<MiniChatSocketStatus>.broadcast();
   final _messagesCtrl = StreamController<ChatDirectMessageModel>.broadcast();
@@ -70,6 +76,7 @@ class MiniChatSocketService {
       );
       return;
     }
+    final userId = (await userIdProvider?.call())?.trim();
 
     final socketUrl = _realtimeSocketUrl();
     final socket = io.io(
@@ -78,7 +85,11 @@ class MiniChatSocketService {
           .setTransports(const ['websocket'])
           .disableAutoConnect()
           .enableReconnection()
-          .setAuth({'token': token})
+          .setAuth({
+            'token': token,
+            if (userId != null && userId.isNotEmpty) 'userId': userId,
+          })
+          .setQuery({if (userId != null && userId.isNotEmpty) 'userId': userId})
           .setExtraHeaders({'Authorization': 'Bearer $token'})
           .build(),
     );
@@ -169,22 +180,26 @@ class MiniChatSocketService {
   void _emitJoinThread() {
     final socket = _socket;
     if (socket == null || !socket.connected) return;
-    socket.emitWithAck('join:thread', {'threadId': threadId}, ack: (dynamic data) {
-      if (_disposed) return;
-      final map = _asStringKeyMap(data);
-      final ok = map != null && map['ok'] == true;
-      if (ok) {
-        _updateStatus(
-          const MiniChatSocketStatus(
-            connecting: false,
-            connected: true,
-            joined: true,
-          ),
-        );
-      } else {
-        _emitError('Could not join chat room.');
-      }
-    });
+    socket.emitWithAck(
+      'join:thread',
+      {'threadId': threadId},
+      ack: (dynamic data) {
+        if (_disposed) return;
+        final map = _asStringKeyMap(data);
+        final ok = map != null && map['ok'] == true;
+        if (ok) {
+          _updateStatus(
+            const MiniChatSocketStatus(
+              connecting: false,
+              connected: true,
+              joined: true,
+            ),
+          );
+        } else {
+          _emitError('Could not join chat room.');
+        }
+      },
+    );
   }
 
   void _emitLeaveThread() {

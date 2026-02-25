@@ -31,19 +31,19 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   final _scrollCtrl = ScrollController();
 
   List<Map<String, dynamic>> _messages = [];
+  List<Map<String, dynamic>> _localMessages = [];
   bool _loading = true;
   bool _sending = false;
   String? _currentUserId;
   Timer? _pollTimer;
+  bool _proofUploading = false;
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
     _loadCurrentUser();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      _loadMessages(silent: true);
-    });
+    _startPolling();
   }
 
   @override
@@ -52,6 +52,59 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     _scrollCtrl.dispose();
     _pollTimer?.cancel();
     super.dispose();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_proofUploading) return;
+      _loadMessages(silent: true);
+    });
+  }
+
+  String _appendLocalImageMessage({
+    required String imagePath,
+    required String message,
+    bool isUploading = false,
+    String uploadState = 'uploaded',
+  }) {
+    final id = 'local-${DateTime.now().microsecondsSinceEpoch}';
+    setState(() {
+      _localMessages = [
+        ..._localMessages,
+        {
+          'id': id,
+          'kind': 'TEXT',
+          'senderId': _currentUserId ?? 'local-me',
+          'message': message,
+          'localImagePath': imagePath,
+          'isUploadingProof': isUploading,
+          'proofUploadState': uploadState,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      ];
+    });
+    _scrollToBottom();
+    return id;
+  }
+
+  void _updateLocalMessage(
+    String id, {
+    String? message,
+    bool? isUploadingProof,
+    String? proofUploadState,
+  }) {
+    setState(() {
+      _localMessages = _localMessages.map((m) {
+        if ((m['id'] ?? '').toString() != id) return m;
+        return {
+          ...m,
+          if (message != null) 'message': message,
+          if (isUploadingProof != null) 'isUploadingProof': isUploadingProof,
+          if (proofUploadState != null) 'proofUploadState': proofUploadState,
+        };
+      }).toList();
+    });
   }
 
   Future<void> _loadCurrentUser() async {
@@ -69,10 +122,12 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         ..sort((a, b) {
           DateTime? parse(dynamic v) =>
               v == null ? null : DateTime.tryParse(v.toString());
-          final ad = parse(a['createdAt'] ?? a['created_at']) ??
+          final ad =
+              parse(a['createdAt'] ?? a['created_at']) ??
               parse(a['updatedAt'] ?? a['updated_at']) ??
               DateTime.fromMillisecondsSinceEpoch(0);
-          final bd = parse(b['createdAt'] ?? b['created_at']) ??
+          final bd =
+              parse(b['createdAt'] ?? b['created_at']) ??
               parse(b['updatedAt'] ?? b['updated_at']) ??
               DateTime.fromMillisecondsSinceEpoch(0);
           return ad.compareTo(bd);
@@ -119,8 +174,11 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       await _loadMessages(silent: true);
     } catch (e) {
       if (mounted) {
-        showFloatingSnackBar(context,
-            message: 'Failed to send: $e', type: SnackBarType.error);
+        showFloatingSnackBar(
+          context,
+          message: 'Failed to send: $e',
+          type: SnackBarType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -134,8 +192,19 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     final ImagePicker picker = ImagePicker();
     final XFile? file = await picker.pickImage(source: source);
     if (!mounted || file == null) return;
-    showFloatingSnackBar(context,
-        message: 'Uploading proof…', type: SnackBarType.success);
+    setState(() => _proofUploading = true);
+    _pollTimer?.cancel();
+    final localProofId = _appendLocalImageMessage(
+      imagePath: file.path,
+      message: 'Uploading payment proof...',
+      isUploading: true,
+      uploadState: 'uploading',
+    );
+    showFloatingSnackBar(
+      context,
+      message: 'Uploading proof…',
+      type: SnackBarType.success,
+    );
 
     try {
       await _tradesCore.uploadProof(
@@ -143,16 +212,46 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         file: File(file.path),
         type: 'FIAT',
       );
+      final proofMsg = 'Payment proof uploaded: ${file.name}';
+      await _tradesCore.sendTradeMessage(
+        widget.trade.id,
+        ciphertext: proofMsg,
+        algorithm: 'PLAIN',
+        senderKeyId: 'plain',
+        nonce: 'plain',
+        kind: 'TEXT',
+      );
       if (mounted) {
-        showFloatingSnackBar(context,
-            message: 'Proof uploaded successfully', type: SnackBarType.success);
+        _updateLocalMessage(
+          localProofId,
+          message: proofMsg,
+          isUploadingProof: false,
+          proofUploadState: 'uploaded',
+        );
+        showFloatingSnackBar(
+          context,
+          message: 'Proof uploaded successfully',
+          type: SnackBarType.success,
+        );
         await _loadMessages(silent: true);
       }
     } catch (e) {
       if (mounted) {
-        showFloatingSnackBar(context,
-            message: 'Upload failed: $e', type: SnackBarType.error);
+        _updateLocalMessage(
+          localProofId,
+          message: 'Payment proof upload failed',
+          isUploadingProof: false,
+          proofUploadState: 'failed',
+        );
+        showFloatingSnackBar(
+          context,
+          message: 'Upload failed: $e',
+          type: SnackBarType.error,
+        );
       }
+    } finally {
+      if (mounted) setState(() => _proofUploading = false);
+      _startPolling();
     }
   }
 
@@ -167,38 +266,55 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+    final allMessages = [..._messages, ..._localMessages]
+      ..sort((a, b) {
+        DateTime? parse(dynamic v) =>
+            v == null ? null : DateTime.tryParse(v.toString());
+        final ad =
+            parse(a['createdAt'] ?? a['created_at']) ??
+            parse(a['updatedAt'] ?? a['updated_at']) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bd =
+            parse(b['createdAt'] ?? b['created_at']) ??
+            parse(b['updatedAt'] ?? b['updated_at']) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return ad.compareTo(bd);
+      });
     return Scaffold(
       backgroundColor: colors.background,
       appBar: _buildAppBar(colors),
-      body: Column(children: [
-        // Messages list
-        Expanded(
-          child: _loading
-              ? Center(
-                  child: CircularProgressIndicator(color: colors.primary))
-              : _messages.isEmpty
-                  ? _EmptyState(colors: colors)
-                  : ListView.builder(
-                      controller: _scrollCtrl,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      itemCount: _messages.length,
-                      itemBuilder: (_, i) => _MessageBubble(
-                        message: _messages[i],
-                        currentUserId: _currentUserId,
-                        colors: colors,
-                      ),
+      body: Column(
+        children: [
+          // Messages list
+          Expanded(
+            child: _loading
+                ? Center(
+                    child: CircularProgressIndicator(color: colors.primary),
+                  )
+                : allMessages.isEmpty
+                ? _EmptyState(colors: colors)
+                : ListView.builder(
+                    controller: _scrollCtrl,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    itemCount: allMessages.length,
+                    itemBuilder: (_, i) => _MessageBubble(
+                      message: allMessages[i],
+                      currentUserId: _currentUserId,
+                      colors: colors,
                     ),
-        ),
+                  ),
+          ),
 
-        // Input bar
-        _InputBar(
-          controller: _msgCtrl,
-          colors: colors,
-          sending: _sending,
-          onSend: _sendMessage,
-          onAttach: _uploadProof,
-        ),
-      ]),
+          // Input bar
+          _InputBar(
+            controller: _msgCtrl,
+            colors: colors,
+            sending: _sending,
+            onSend: _sendMessage,
+            onAttach: _uploadProof,
+          ),
+        ],
+      ),
     );
   }
 
@@ -211,8 +327,11 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
       leading: IconButton(
-        icon: Icon(Icons.arrow_back_ios_new_rounded,
-            color: colors.textPrimary, size: 18),
+        icon: Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: colors.textPrimary,
+          size: 18,
+        ),
         onPressed: () => Navigator.maybePop(context),
       ),
       title: Column(
@@ -263,17 +382,18 @@ class _MessageBubble extends StatelessWidget {
   String get _kind => (message['kind'] ?? '').toString().trim().toUpperCase();
 
   String get _senderId {
-    final direct = (message['senderId'] ??
-            message['sender_id'] ??
-            message['senderUserId'] ??
-            message['sender_user_id'] ??
-            message['userId'] ??
-            message['user_id'] ??
-            message['authorId'] ??
-            message['author_id'] ??
-            '')
-        .toString()
-        .trim();
+    final direct =
+        (message['senderId'] ??
+                message['sender_id'] ??
+                message['senderUserId'] ??
+                message['sender_user_id'] ??
+                message['userId'] ??
+                message['user_id'] ??
+                message['authorId'] ??
+                message['author_id'] ??
+                '')
+            .toString()
+            .trim();
     if (direct.isNotEmpty) return direct;
 
     final sender = message['sender'];
@@ -305,11 +425,18 @@ class _MessageBubble extends StatelessWidget {
     if (value is String) {
       final raw = value.trim();
       if (raw.isEmpty) return '';
-      try {
-        final decoded = jsonDecode(raw);
-        final fromJson = _extractText(decoded);
-        if (fromJson.isNotEmpty) return fromJson;
-      } catch (_) {}
+      final looksLikeJson =
+          (raw.startsWith('{') && raw.endsWith('}')) ||
+          (raw.startsWith('[') && raw.endsWith(']'));
+      if (looksLikeJson) {
+        try {
+          final decoded = jsonDecode(raw);
+          final fromJson = _extractText(decoded);
+          // If payload is JSON but no user-facing text is extractable,
+          // hide the raw JSON envelope instead of showing it in chat bubbles.
+          return fromJson;
+        } catch (_) {}
+      }
       return raw;
     }
     if (value is Map) {
@@ -318,6 +445,9 @@ class _MessageBubble extends StatelessWidget {
         'message',
         'content',
         'body',
+        'ciphertext',
+        'plainText',
+        'plain_text',
         'note',
         'description',
       ]) {
@@ -370,8 +500,10 @@ class _MessageBubble extends StatelessWidget {
     final ciphertext = _extractText(message['ciphertext']);
     if (ciphertext.isEmpty) return '';
 
-    final algorithm =
-        (message['algorithm'] ?? '').toString().trim().toUpperCase();
+    final algorithm = (message['algorithm'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
     if (algorithm.isNotEmpty && algorithm != 'PLAIN') {
       return '[Encrypted message]';
     }
@@ -389,6 +521,180 @@ class _MessageBubble extends StatelessWidget {
     return '$h:$m';
   }
 
+  String _extractImageRef(dynamic value) {
+    if (value == null) return '';
+    if (value is String) {
+      final raw = value.trim();
+      if (raw.isEmpty) return '';
+      if (raw.startsWith('http://') ||
+          raw.startsWith('https://') ||
+          raw.startsWith('/') ||
+          raw.contains(r':\')) {
+        return raw;
+      }
+      final looksLikeJson =
+          (raw.startsWith('{') && raw.endsWith('}')) ||
+          (raw.startsWith('[') && raw.endsWith(']'));
+      if (looksLikeJson) {
+        try {
+          final decoded = jsonDecode(raw);
+          return _extractImageRef(decoded);
+        } catch (_) {}
+      }
+      return '';
+    }
+    if (value is Map) {
+      for (final key in const [
+        'localImagePath',
+        'imageUrl',
+        'image',
+        'url',
+        'proofUrl',
+        'fileUrl',
+        'file_url',
+        'attachmentUrl',
+        'attachment_url',
+        'path',
+      ]) {
+        final found = _extractImageRef(value[key]);
+        if (found.isNotEmpty) return found;
+      }
+      for (final key in const [
+        'proofUrls',
+        'fileUrls',
+        'images',
+        'attachments',
+        'files',
+        'proofs',
+        'data',
+        'payload',
+      ]) {
+        final found = _extractImageRef(value[key]);
+        if (found.isNotEmpty) return found;
+      }
+      return '';
+    }
+    if (value is List) {
+      for (final item in value) {
+        final found = _extractImageRef(item);
+        if (found.isNotEmpty) return found;
+      }
+      return '';
+    }
+    return '';
+  }
+
+  String get _imageRef {
+    final direct = _extractImageRef(
+      message['localImagePath'] ??
+          message['imageUrl'] ??
+          message['proofUrl'] ??
+          message['fileUrl'] ??
+          message['attachmentUrl'],
+    );
+    if (direct.isNotEmpty) return direct;
+    return _extractImageRef(message);
+  }
+
+  bool get _hasImage => _imageRef.isNotEmpty;
+  bool get _isUploadingProof => message['isUploadingProof'] == true;
+  bool get _isProofFailed =>
+      (message['proofUploadState'] ?? '').toString().toLowerCase() == 'failed';
+
+  void _openImageViewer(BuildContext context) {
+    final src = _imageRef;
+    final isHttp = src.startsWith('http://') || src.startsWith('https://');
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.95),
+      builder: (context) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Center(
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4.0,
+                  child: isHttp
+                      ? Image.network(
+                          src,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: Colors.white70,
+                            size: 42,
+                          ),
+                        )
+                      : Image.file(
+                          File(src),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: Colors.white70,
+                            size: 42,
+                          ),
+                        ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage(BuildContext context, AppColor colors) {
+    final src = _imageRef;
+    final isHttp = src.startsWith('http://') || src.startsWith('https://');
+    final image = isHttp
+        ? Image.network(
+            src,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _imageError(colors),
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return _imageLoading(colors);
+            },
+          )
+        : Image.file(
+            File(src),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _imageError(colors),
+          );
+    return GestureDetector(
+      onTap: () => _openImageViewer(context),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(width: 220, height: 180, child: image),
+      ),
+    );
+  }
+
+  Widget _imageLoading(AppColor colors) => Container(
+    color: colors.surface,
+    alignment: Alignment.center,
+    child: const SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    ),
+  );
+
+  Widget _imageError(AppColor colors) => Container(
+    color: colors.surface,
+    alignment: Alignment.center,
+    child: Icon(Icons.broken_image_rounded, color: colors.textSecondary),
+  );
+
   @override
   Widget build(BuildContext context) {
     if (_isSystem) return _SystemMessage(text: _text, colors: colors);
@@ -397,14 +703,13 @@ class _MessageBubble extends StatelessWidget {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isMe
-              ? colors.primary
-              : colors.surface,
+          color: isMe ? colors.primary : colors.surface,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -421,18 +726,55 @@ class _MessageBubble extends StatelessWidget {
           ],
         ),
         child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isMe
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
-            Text(
-              _withBreakHints(_text),
-              style: GoogleFonts.sora(
-                fontSize: 14,
-                color: isMe ? Colors.white : colors.textPrimary,
-                height: 1.4,
+            if (_hasImage) ...[
+              Stack(
+                children: [
+                  _buildImage(context, colors),
+                  if (_isUploadingProof)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              softWrap: true,
-            ),
+              if (_isUploadingProof || _isProofFailed) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _isUploadingProof ? 'Uploading...' : 'Upload failed',
+                  style: GoogleFonts.sora(
+                    fontSize: 11,
+                    color: isMe
+                        ? Colors.white.withValues(alpha: 0.85)
+                        : colors.textSecondary,
+                  ),
+                ),
+              ],
+              if (_text.isNotEmpty) const SizedBox(height: 8),
+            ],
+            if (_text.isNotEmpty)
+              Text(
+                _withBreakHints(_text),
+                style: GoogleFonts.sora(
+                  fontSize: 14,
+                  color: isMe ? Colors.white : colors.textPrimary,
+                  height: 1.4,
+                ),
+                softWrap: true,
+              ),
             const SizedBox(height: 4),
             Text(
               _timeStr,
@@ -459,33 +801,32 @@ class _SystemMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(children: [
-          Expanded(child: Divider(color: colors.border, height: 1)),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.7,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: colors.border),
-            ),
-            child: Text(
-              text,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.sora(
-                fontSize: 11,
-                color: colors.textSecondary,
-              ),
-              softWrap: true,
-            ),
+    margin: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      children: [
+        Expanded(child: Divider(color: colors.border, height: 1)),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.7,
           ),
-          Expanded(child: Divider(color: colors.border, height: 1)),
-        ]),
-      );
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colors.border),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.sora(fontSize: 11, color: colors.textSecondary),
+            softWrap: true,
+          ),
+        ),
+        Expanded(child: Divider(color: colors.border, height: 1)),
+      ],
+    ),
+  );
 }
 
 // ─── Empty state ─────────────────────────────────────────────────────────────
@@ -496,29 +837,34 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline_rounded,
-                size: 48, color: colors.textSecondary.withValues(alpha: 0.4)),
-            const SizedBox(height: 12),
-            Text(
-              'No messages yet',
-              style: GoogleFonts.sora(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: colors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Trade activity and chat will appear here',
-              style: GoogleFonts.sora(
-                  fontSize: 13, color: colors.textSecondary.withValues(alpha: 0.7)),
-            ),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.chat_bubble_outline_rounded,
+          size: 48,
+          color: colors.textSecondary.withValues(alpha: 0.4),
         ),
-      );
+        const SizedBox(height: 12),
+        Text(
+          'No messages yet',
+          style: GoogleFonts.sora(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: colors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Trade activity and chat will appear here',
+          style: GoogleFonts.sora(
+            fontSize: 13,
+            color: colors.textSecondary.withValues(alpha: 0.7),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 // ─── Input bar ────────────────────────────────────────────────────────────────
@@ -539,93 +885,99 @@ class _InputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: EdgeInsets.fromLTRB(
-            12, 10, 12, MediaQuery.of(context).padding.bottom + 10),
-        decoration: BoxDecoration(
-          color: colors.background,
-          border: Border(top: BorderSide(color: colors.border)),
+    padding: EdgeInsets.fromLTRB(
+      12,
+      10,
+      12,
+      MediaQuery.of(context).padding.bottom + 10,
+    ),
+    decoration: BoxDecoration(
+      color: colors.background,
+      border: Border(top: BorderSide(color: colors.border)),
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 42,
+          height: 42,
+          child: AppOutlinedButton(
+            onPressed: onAttach,
+            style: OutlinedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              backgroundColor: colors.surface,
+              side: BorderSide(color: colors.border),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
+            ),
+            child: Icon(
+              Icons.attach_file_rounded,
+              color: colors.textSecondary,
+              size: 20,
+            ),
+          ),
         ),
-        child: Row(children: [
-          SizedBox(
-            width: 42,
-            height: 42,
-            child: AppOutlinedButton(
-              onPressed: onAttach,
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                backgroundColor: colors.surface,
-                side: BorderSide(color: colors.border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-              child: Icon(
-                Icons.attach_file_rounded,
-                color: colors.textSecondary,
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+        const SizedBox(width: 8),
 
-          // Text field
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-              decoration: BoxDecoration(
-                color: colors.surface,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: colors.border),
-              ),
-              child: TextField(
-                controller: controller,
-                style: GoogleFonts.sora(
-                    fontSize: 14, color: colors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Type a message…',
-                  hintStyle: GoogleFonts.sora(
-                      fontSize: 14, color: colors.textSecondary),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 12),
+        // Text field
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: colors.border),
+            ),
+            child: TextField(
+              controller: controller,
+              style: GoogleFonts.sora(fontSize: 14, color: colors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Type a message…',
+                hintStyle: GoogleFonts.sora(
+                  fontSize: 14,
+                  color: colors.textSecondary,
                 ),
-                maxLines: 4,
-                minLines: 1,
-                textInputAction: TextInputAction.newline,
-                onSubmitted: (_) => onSend(),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
+              maxLines: 4,
+              minLines: 1,
+              textInputAction: TextInputAction.newline,
+              onSubmitted: (_) => onSend(),
             ),
           ),
-          const SizedBox(width: 8),
+        ),
+        const SizedBox(width: 8),
 
-          SizedBox(
-            width: 42,
-            height: 42,
-            child: AppFilledButton(
-              onPressed: sending ? null : onSend,
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.zero,
-                backgroundColor: colors.primary,
-                disabledBackgroundColor: colors.primary.withValues(alpha: 0.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
+        SizedBox(
+          width: 42,
+          height: 42,
+          child: AppFilledButton(
+            onPressed: sending ? null : onSend,
+            style: FilledButton.styleFrom(
+              padding: EdgeInsets.zero,
+              backgroundColor: colors.primary,
+              disabledBackgroundColor: colors.primary.withValues(alpha: 0.5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(13),
               ),
-              child: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
+            child: sending
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
           ),
-        ]),
-      );
+        ),
+      ],
+    ),
+  );
 }
 
 // ─── Proof source picker sheet ────────────────────────────────────────────────
@@ -643,70 +995,76 @@ class _ProofSourceSheet extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
       ),
       padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 36,
-          height: 4,
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(
-            color: colors.border,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        Text(
-          'Upload Payment Proof',
-          style: GoogleFonts.sora(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: colors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Select a screenshot or photo as evidence of payment.',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.sora(
-              fontSize: 13, color: colors.textSecondary),
-        ),
-        const SizedBox(height: 24),
-        _SourceOption(
-          icon: Icons.photo_library_rounded,
-          label: 'Choose from Gallery',
-          colors: colors,
-          onTap: () => Navigator.pop(context, ImageSource.gallery),
-        ),
-        const SizedBox(height: 10),
-        _SourceOption(
-          icon: Icons.camera_alt_rounded,
-          label: 'Take a Photo',
-          colors: colors,
-          onTap: () => Navigator.pop(context, ImageSource.camera),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 48,
-          width: double.infinity,
-          child: AppOutlinedButton(
-            onPressed: () => Navigator.pop(context, null),
-            style: OutlinedButton.styleFrom(
-              backgroundColor: colors.background,
-              side: BorderSide(color: colors.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.sora(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: colors.textSecondary,
-              ),
+        20,
+        16,
+        20,
+        MediaQuery.of(context).padding.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: colors.border,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-        ),
-      ]),
+          Text(
+            'Upload Payment Proof',
+            style: GoogleFonts.sora(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Select a screenshot or photo as evidence of payment.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          _SourceOption(
+            icon: Icons.photo_library_rounded,
+            label: 'Choose from Gallery',
+            colors: colors,
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          const SizedBox(height: 10),
+          _SourceOption(
+            icon: Icons.camera_alt_rounded,
+            label: 'Take a Photo',
+            colors: colors,
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 48,
+            width: double.infinity,
+            child: AppOutlinedButton(
+              onPressed: () => Navigator.pop(context, null),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: colors.background,
+                side: BorderSide(color: colors.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.sora(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -725,27 +1083,24 @@ class _SourceOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        height: 52,
-        width: double.infinity,
-        child: AppFilledButton.icon(
-          onPressed: onTap,
-          style: FilledButton.styleFrom(
-            backgroundColor: colors.primary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            elevation: 0,
-          ),
-          icon: Icon(icon, color: Colors.white, size: 18),
-          label: Text(
-            label,
-            style: GoogleFonts.sora(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
+    height: 52,
+    width: double.infinity,
+    child: AppFilledButton.icon(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: colors.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        elevation: 0,
+      ),
+      icon: Icon(icon, color: Colors.white, size: 18),
+      label: Text(
+        label,
+        style: GoogleFonts.sora(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
         ),
-      );
+      ),
+    ),
+  );
 }
-

@@ -25,7 +25,7 @@ class TradeScreen extends StatefulWidget {
   final double? marketPrice;
 
   @override
-  State<TradeScreen> createState() => _TradeScreenState();
+  State<TradeScreen> createState() => _TradeScreenState(); 
 }
 
 class _TradeScreenState extends State<TradeScreen> {
@@ -284,9 +284,9 @@ class _TradeScreenState extends State<TradeScreen> {
           buyerPaymentAccountId: _userIsBuyer ? null : _selectedUserAccount?.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
-          cryptoReceiverAddress: cryptoReceiverAddress,
+          cryptoReceiverAddress: cryptoReceiverAddress, 
         ),
-      );
+      ); 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(

@@ -195,21 +195,36 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
+    if (res.body.isEmpty) {
+      return ChatEncryptionKeyModel(
+        userId: '',
+        keyId: req.keyId,
+        algorithm: req.algorithm,
+        publicKey: req.publicKey,
+        signaturePublicKey: req.signaturePublicKey,
+        isActive: req.isActive,
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'key']);
-    if (map != null) return ChatEncryptionKeyModel.fromJson(map);
-
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for POST /chat/keys/me',
-      body: res.body,
+    if (map != null && map.isNotEmpty) {
+      return ChatEncryptionKeyModel.fromJson(map);
+    }
+    return ChatEncryptionKeyModel(
+      userId: '',
+      keyId: req.keyId,
+      algorithm: req.algorithm,
+      publicKey: req.publicKey,
+      signaturePublicKey: req.signaturePublicKey,
+      isActive: req.isActive,
     );
   }
 
   Future<bool> deactivateMyKey(String keyId) async {
-    final res = await _client.patch(
+    final res = await _client.post(
       ChatHttp.uri(ChatEndpoints.deactivateMyKey(keyId)),
       headers: await _headers(),
+      body: jsonEncode(const <String, dynamic>{}),
     );
     ChatHttp.ensureOk(res);
     final data = ChatHttp.decodeJson<dynamic>(res);
@@ -265,7 +280,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null && map.isNotEmpty) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
     // Return placeholder on empty response
     return ChatFriendRequestModel(
@@ -334,7 +350,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null && map.isNotEmpty) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
     return ChatFriendRequestModel(
       id: requestId,
@@ -369,7 +386,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null && map.isNotEmpty) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
     final status = req.action == 'ACCEPTED'
         ? ChatFriendRequestStatus.accepted
@@ -400,7 +418,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null && map.isNotEmpty) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
     return ChatFriendRequestModel(
       id: requestId,
@@ -449,7 +468,7 @@ class ChatService {
   Future<ChatDirectThreadModel> openThreadWithFriend(
     String friendUserId,
   ) async {
-    final res = await _client.post(
+    final res = await _client.get(
       ChatHttp.uri(ChatEndpoints.openThreadWithFriend(friendUserId)),
       headers: await _headers(),
     );
@@ -461,7 +480,7 @@ class ChatService {
 
     throw ChatApiException(
       res.statusCode,
-      'Unexpected response for POST /chat/threads/with/$friendUserId/open',
+      'Unexpected response for GET /direct-messages/threads/with/$friendUserId',
       body: res.body,
     );
   }
@@ -518,20 +537,46 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
+    if (res.body.isEmpty) {
+      return ChatDirectMessageModel(
+        id: req.clientMessageId,
+        threadId: threadId,
+        senderId: '',
+        clientMessageId: req.clientMessageId,
+        kind: req.kind,
+        algorithm: req.algorithm,
+        senderKeyId: req.senderKeyId,
+        nonce: req.nonce,
+        ciphertext: req.ciphertext,
+        signature: req.signature,
+        metadata: req.metadata,
+        createdAt: DateTime.now().toUtc(),
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'message']);
-    if (map != null) return ChatDirectMessageModel.fromJson(map);
+    if (map != null && map.isNotEmpty) {
+      return ChatDirectMessageModel.fromJson(map);
+    }
 
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for POST /chat/threads/$threadId/messages',
-      body: res.body,
+    // Fallback for APIs returning success envelopes without message payload.
+    return ChatDirectMessageModel(
+      id: req.clientMessageId,
+      threadId: threadId,
+      senderId: '',
+      clientMessageId: req.clientMessageId,
+      kind: req.kind,
+      algorithm: req.algorithm,
+      senderKeyId: req.senderKeyId,
+      nonce: req.nonce,
+      ciphertext: req.ciphertext,
+      signature: req.signature,
+      metadata: req.metadata,
+      createdAt: DateTime.now().toUtc(),
     );
   }
 
-  Future<ChatDirectThreadModel> createThread(
-    CreateThreadRequest req,
-  ) async {
+  Future<ChatDirectThreadModel> createThread(CreateThreadRequest req) async {
     final res = await _client.post(
       ChatHttp.uri(ChatEndpoints.createThread()),
       headers: await _headers(),
@@ -550,7 +595,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'thread']);
-    if (map != null && map.isNotEmpty) return ChatDirectThreadModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectThreadModel.fromJson(map);
 
     // Return fallback thread on empty response
     return ChatDirectThreadModel(
@@ -579,7 +625,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'thread']);
-    if (map != null && map.isNotEmpty) return ChatDirectThreadModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectThreadModel.fromJson(map);
 
     // Return fallback thread on empty response
     return ChatDirectThreadModel(
@@ -608,7 +655,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'thread']);
-    if (map != null && map.isNotEmpty) return ChatDirectThreadModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectThreadModel.fromJson(map);
 
     // Return fallback thread on empty response (thread may not exist yet)
     return ChatDirectThreadModel(
@@ -641,7 +689,8 @@ class ChatService {
     }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'message']);
-    if (map != null && map.isNotEmpty) return ChatDirectMessageModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectMessageModel.fromJson(map);
 
     // Return fallback message on empty response
     return ChatDirectMessageModel(

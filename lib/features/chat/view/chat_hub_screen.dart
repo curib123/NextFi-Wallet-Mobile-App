@@ -40,6 +40,23 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   List<ChatFriendRequestModel> _incoming = const [];
   List<ChatFriendRequestModel> _outgoing = const [];
 
+  Map<String, ChatFriendModel> get _friendsByUserId {
+    final map = <String, ChatFriendModel>{};
+    for (final f in _friends) {
+      final id = f.friendUserId.trim();
+      if (id.isNotEmpty) map[id] = f;
+    }
+    return map;
+  }
+
+  List<ChatDirectThreadModel> get _friendThreads {
+    final byUser = _friendsByUserId;
+    return _threads.where((t) {
+      final id = t.friendUserId.trim();
+      return id.isNotEmpty && byUser.containsKey(id);
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -161,14 +178,12 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       );
       await _load(showLoader: false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Friend request sent.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('$e')));
+      ).showSnackBar(const SnackBar(content: Text('Friend request sent.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -177,21 +192,23 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   Future<void> _openThreadWithFriend(ChatFriendModel friend) async {
     setState(() => _busy = true);
     try {
-      final thread = await _chat.createThread(
-        CreateThreadRequest(friendId: friend.friendUserId),
-      );
+      final thread = await _chat.getThreadWithFriend(friend.friendUserId);
       if (!mounted) return;
       setState(() => _busy = false);
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ChatThreadScreen(thread: thread)),
+        MaterialPageRoute(
+          builder: (_) => ChatThreadScreen(
+            thread: thread,
+            username: friend.friend.username,
+            avatarUrl: friend.friend.avatarUrl,
+          ),
+        ),
       );
       if (mounted) await _load(showLoader: false);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -205,9 +222,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       await _load(showLoader: false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -372,7 +387,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     final pendingCount = _incoming
         .where((r) => r.status == ChatFriendRequestStatus.pending)
         .length;
-    final unreadCount = _threads.fold<int>(
+    final unreadCount = _friendThreads.fold<int>(
       0,
       (sum, t) => sum + t.unreadCount,
     );
@@ -437,11 +452,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
         else ...[
           IconButton(
             onPressed: () => _load(showLoader: true),
-            icon: Icon(
-              Icons.refresh_rounded,
-              color: c.textSecondary,
-              size: 20,
-            ),
+            icon: Icon(Icons.refresh_rounded, color: c.textSecondary, size: 20),
             tooltip: 'Refresh',
           ),
           Padding(
@@ -639,7 +650,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_friends.isNotEmpty) _buildFriendsStrip(c),
-        if (_threads.isEmpty)
+        if (_friendThreads.isEmpty)
           Expanded(
             child: _buildEmpty(
               c,
@@ -665,8 +676,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.only(bottom: 24),
-              itemCount: _threads.length,
-              itemBuilder: (_, i) => _buildThreadTile(c, _threads[i]),
+              itemCount: _friendThreads.length,
+              itemBuilder: (_, i) => _buildThreadTile(c, _friendThreads[i]),
             ),
           ),
         ],
@@ -736,7 +747,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   }
 
   Widget _buildThreadTile(AppColor c, ChatDirectThreadModel t) {
-    final title = _friendName(t.friendUser, 'Direct Chat');
+    final resolvedFriend = _friendsByUserId[t.friendUserId.trim()]?.friend;
+    final title = _friendName(resolvedFriend ?? t.friendUser, t.friendUserId);
     final preview = t.lastMessage == null
         ? 'No messages yet'
         : ChatEnvelopeCodec.decodeText(t.lastMessage!.ciphertext);
@@ -746,7 +758,13 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     return InkWell(
       onTap: () async {
         await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ChatThreadScreen(thread: t)),
+          MaterialPageRoute(
+            builder: (_) => ChatThreadScreen(
+              thread: t,
+              username: resolvedFriend?.username ?? t.friendUser?.username,
+              avatarUrl: resolvedFriend?.avatarUrl ?? t.friendUser?.avatarUrl,
+            ),
+          ),
         );
         if (mounted) _load(showLoader: false);
       },
@@ -761,7 +779,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               children: [
                 ChatUserAvatar(
                   name: title,
-                  avatarUrl: t.friendUser?.avatarUrl,
+                  avatarUrl:
+                      resolvedFriend?.avatarUrl ?? t.friendUser?.avatarUrl,
                   size: 52,
                 ),
                 if (unread > 0)
@@ -808,9 +827,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                         Text(
                           at,
                           style: TextStyle(
-                            color: unread > 0
-                                ? c.primary
-                                : c.textSecondary,
+                            color: unread > 0 ? c.primary : c.textSecondary,
                             fontSize: 11.5,
                             fontWeight: unread > 0
                                 ? FontWeight.w600
@@ -1121,14 +1138,14 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           onPressed: _busy
                               ? null
                               : () => _applyRequest(
-                                    req,
-                                    () => _chat.respondFriendRequest(
-                                      req.id,
-                                      RespondFriendRequestRequest(
-                                        action: 'ACCEPTED',
-                                      ),
+                                  req,
+                                  () => _chat.respondFriendRequest(
+                                    req.id,
+                                    RespondFriendRequestRequest(
+                                      action: 'ACCEPTED',
                                     ),
                                   ),
+                                ),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size.fromHeight(38),
                             backgroundColor: c.primary,
@@ -1150,20 +1167,18 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           onPressed: _busy
                               ? null
                               : () => _applyRequest(
-                                    req,
-                                    () => _chat.respondFriendRequest(
-                                      req.id,
-                                      RespondFriendRequestRequest(
-                                        action: 'REJECTED',
-                                      ),
+                                  req,
+                                  () => _chat.respondFriendRequest(
+                                    req.id,
+                                    RespondFriendRequestRequest(
+                                      action: 'REJECTED',
                                     ),
                                   ),
+                                ),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(38),
                             foregroundColor: c.error,
-                            side: BorderSide(
-                              color: c.error.withOpacity(0.3),
-                            ),
+                            side: BorderSide(color: c.error.withOpacity(0.3)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(11),
                             ),
@@ -1180,9 +1195,9 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                       onPressed: _busy
                           ? null
                           : () => _applyRequest(
-                                req,
-                                () => _chat.cancelFriendRequest(req.id),
-                              ),
+                              req,
+                              () => _chat.cancelFriendRequest(req.id),
+                            ),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(38),
                         foregroundColor: c.textSecondary,
@@ -1202,12 +1217,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     );
   }
 
-  Widget _buildEmpty(
-    AppColor c,
-    String title,
-    String subtitle,
-    IconData icon,
-  ) {
+  Widget _buildEmpty(AppColor c, String title, String subtitle, IconData icon) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 36),
@@ -1429,9 +1439,9 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                         final username = _usernameCtrl.text.trim();
                         if (username.isEmpty) return;
                         final note = _noteCtrl.text.trim();
-                        Navigator.of(context).pop(
-                          (username, note.isEmpty ? null : note),
-                        );
+                        Navigator.of(
+                          context,
+                        ).pop((username, note.isEmpty ? null : note));
                       },
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
