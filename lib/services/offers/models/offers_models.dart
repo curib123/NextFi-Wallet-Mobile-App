@@ -30,6 +30,7 @@ class OfferModel {
   final String asset;
   final String fiatCurrency;
   final double? marginPercent;
+  final double? successRate;
   final double? marketPrice; // Price in fiat per unit of crypto (e.g., PHP 1.00 per XLM)
   final double? minAmount;
   final double? maxAmount;
@@ -52,6 +53,7 @@ class OfferModel {
     required this.asset,
     required this.fiatCurrency,
     this.marginPercent,
+    this.successRate,
     this.marketPrice,
     this.minAmount,
     this.maxAmount,
@@ -167,6 +169,7 @@ class OfferModel {
       asset: readString(const ['asset']),
       fiatCurrency: readString(const ['fiatCurrency', 'fiat_currency']),
       marginPercent: readDouble(const ['marginPercent', 'margin_percent']),
+      successRate: readDouble(const ['successRate', 'success_rate']),
       marketPrice: readDouble(const ['marketPrice', 'market_price', 'price']),
       minAmount: readDouble(const ['minAmount', 'min_amount']),
       maxAmount: readDouble(const ['maxAmount', 'max_amount']),

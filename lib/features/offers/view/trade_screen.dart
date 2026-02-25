@@ -764,29 +764,61 @@ class _OfferSummaryCard extends StatelessWidget {
               ],
             ),
           ),
-          if (offer.paymentWindowMinutes != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-              decoration: BoxDecoration(
-                color: c.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: c.border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.timer_outlined, size: 13, color: c.textSecondary),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${offer.paymentWindowMinutes}m',
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
+          if (offer.paymentWindowMinutes != null || offer.successRate != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (offer.paymentWindowMinutes != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.timer_outlined, size: 13, color: c.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${offer.paymentWindowMinutes}m',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (offer.successRate != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified_rounded, size: 13, color: c.success),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${offer.successRate!.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
         ],
       ),

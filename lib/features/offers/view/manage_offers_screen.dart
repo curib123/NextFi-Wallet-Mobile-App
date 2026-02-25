@@ -1612,6 +1612,14 @@ class _OfferTile extends StatelessWidget {
                 _Metric(c: c, label: 'MAX',    value: _fmt(offer.maxAmount)),
                 _MetricSep(c: c),
                 _Metric(c: c, label: 'MARGIN', value: '${_fmt(offer.marginPercent)}%'),
+                _MetricSep(c: c),
+                _Metric(
+                  c: c,
+                  label: 'SUCCESS',
+                  value: offer.successRate != null
+                      ? '${offer.successRate!.toStringAsFixed(1)}%'
+                      : '–',
+                ),
               ],
             ),
           ),

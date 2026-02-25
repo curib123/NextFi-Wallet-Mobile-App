@@ -561,6 +561,13 @@ class _DetailsCard extends StatelessWidget {
           const SizedBox(height: 14),
           _DetailRow(c: c, label: 'Payment window', value: '${offer.paymentWindowMinutes ?? '—'} min'),
           _DetailRow(c: c, label: 'Visible', value: offer.isVisible ? 'Yes' : 'No'),
+          _DetailRow(
+            c: c,
+            label: 'Success rate',
+            value: offer.successRate != null
+                ? '${offer.successRate!.toStringAsFixed(1)}%'
+                : '—',
+          ),
           if (loadingPaymentMethods)
             _LoadingDetailMethodsRow(c: c)
           else if (effectivePaymentMethodIds.isEmpty)

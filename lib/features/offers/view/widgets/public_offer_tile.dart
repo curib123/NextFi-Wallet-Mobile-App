@@ -669,6 +669,8 @@ class _FooterRow extends StatelessWidget {
     final effectiveIds = paymentMethodsMap.isNotEmpty
         ? paymentMethodsMap.keys.toList()
         : offer.paymentMethodIds;
+    final rate = offer.successRate;
+    final successRateLabel = rate == null ? null : '${rate.toStringAsFixed(1)}%';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -682,6 +684,32 @@ class _FooterRow extends StatelessWidget {
           fontSize: 10.5,
           weight: FontWeight.w800,
         ),
+        if (successRateLabel != null) ...[
+          const SizedBox(width: 7),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+            decoration: BoxDecoration(
+              color: c.background,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.verified_rounded, size: 10.5, color: c.success),
+                const SizedBox(width: 4),
+                Text(
+                  '$successRateLabel success',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
 
         if (offer.availableQty != null) ...[
           const SizedBox(width: 7),
