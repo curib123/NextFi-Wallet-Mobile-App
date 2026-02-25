@@ -27,7 +27,7 @@ class MarketOffersScreen extends StatefulWidget {
 }
 
 class _MarketOffersScreenState extends State<MarketOffersScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _offersCore = OffersCoreService.I;
   late final PriceChartVM _xlmPriceVm;
   late final PriceChartVM _usdcPriceVm;
@@ -42,6 +42,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   late final AnimationController _enterCtrl;
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
+
+  // Shared shimmer — one controller drives all tile shimmer boxes (O(1) overhead)
+  late final AnimationController _shimmerCtrl;
+  late final Animation<double> _shimmerAnim;
 
   @override
   void initState() {
@@ -59,6 +63,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic));
 
+    _shimmerCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+      ..repeat(reverse: true);
+    _shimmerAnim = CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut);
+
     _load();
   }
 
@@ -69,6 +77,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     _xlmPriceVm.dispose();
     _usdcPriceVm.dispose();
     _enterCtrl.dispose();
+    _shimmerCtrl.dispose();
     super.dispose();
   }
 
@@ -147,7 +156,23 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     return (p.isFinite && p > 0) ? p : null;
   }
 
-  bool get _priceLoading => _xlmPriceVm.priceNow <= 0 && _usdcPriceVm.priceNow <= 0;
+  /// True only if the offer's fiat matches the active CurrencyVM fiat AND the
+  /// live price hasn't arrived yet.  Once the fiat mismatches we know we will
+  /// never get a live price from these VMs, so stop showing "loading".
+  bool _priceLoadingFor(OfferModel offer) {
+    final code = offer.asset.trim().toUpperCase();
+    final vm = switch (code) { 'XLM' => _xlmPriceVm, 'USDC' => _usdcPriceVm, _ => null };
+    if (vm == null) return false;
+    if (vm.fiatCode != offer.fiatCurrency.trim().toUpperCase()) return false;
+    return vm.priceNow <= 0;
+  }
+
+  /// A tile is enabled when it either has a computable price already or we are
+  /// still loading one (fiat-match, price not yet arrived).
+  bool _offerEnabled(OfferModel offer) {
+    if (_offerEffectivePrice(offer) != null) return true;
+    return _priceLoadingFor(offer);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -232,7 +257,9 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
                             c: c,
                             offer: offer,
                             marketPrice: _offerEffectivePrice(offer),
-                            priceLoading: _priceLoading,
+                            priceLoading: _priceLoadingFor(offer),
+                            enabled: _offerEnabled(offer),
+                            shimmerAnim: _shimmerAnim,
                             onTap: () => _openOfferDetails(offer),
                           ),
                         );

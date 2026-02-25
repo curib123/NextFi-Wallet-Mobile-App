@@ -177,7 +177,9 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   Future<void> _openThreadWithFriend(ChatFriendModel friend) async {
     setState(() => _busy = true);
     try {
-      final thread = await _chat.openThreadWithFriend(friend.friendUserId);
+      final thread = await _chat.createThread(
+        CreateThreadRequest(friendId: friend.friendUserId),
+      );
       if (!mounted) return;
       setState(() => _busy = false);
       await Navigator.of(context).push(

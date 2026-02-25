@@ -15,8 +15,8 @@ import 'package:next_fi/services/reviews/reviews_core_service.dart';
 //  · Merchant row: avatar icon + name/meta inline, status pill right-aligned
 //  · Price row: pair name large, live price chip right-aligned
 //  · Footer: type pill + qty chip left, payment methods + chevron right
-//  · No glows, no color-tinted shadows, no radial gradients
-//  · BUY → #16A34A   SELL → #DC2626
+//  · Shared shimmerAnim from parent — single AnimationController for all tiles
+//  · Disabled (no valid price): 50% opacity, tap blocked, price shows "—"
 // ─────────────────────────────────────────────────────────────────────────────
 
 class PublicOfferTile extends StatefulWidget {
@@ -26,14 +26,18 @@ class PublicOfferTile extends StatefulWidget {
     required this.offer,
     required this.marketPrice,
     required this.onTap,
+    required this.shimmerAnim,
     this.priceLoading = false,
+    this.enabled = true,
   });
 
   final AppColor c;
   final OfferModel offer;
   final String? marketPrice;
   final VoidCallback onTap;
+  final Animation<double> shimmerAnim;
   final bool priceLoading;
+  final bool enabled;
 
   @override
   State<PublicOfferTile> createState() => _PublicOfferTileState();
@@ -150,87 +154,94 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     final typeColor  = _typeColor;
     final statusText = offer.status?.name.toUpperCase() ?? 'UNKNOWN';
     final isLight    = Theme.of(context).brightness == Brightness.light;
+    final enabled    = widget.enabled;
 
     return GestureDetector(
-      onTapDown:   (_) => _pressCtrl.forward(),
-      onTapUp:     (_) { _pressCtrl.reverse(); widget.onTap(); },
-      onTapCancel: () => _pressCtrl.reverse(),
+      onTapDown:   enabled ? (_) => _pressCtrl.forward()                       : null,
+      onTapUp:     enabled ? (_) { _pressCtrl.reverse(); widget.onTap(); }      : null,
+      onTapCancel: enabled ? () => _pressCtrl.reverse()                         : null,
       child: ScaleTransition(
         scale: _scaleAnim,
-        child: Container(
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: c.border.withOpacity(isLight ? 0.16 : 0.10),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isLight ? 0.055 : 0.18),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
+        child: Opacity(
+          opacity: enabled ? 1.0 : 0.48,
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: c.border.withOpacity(isLight ? 0.16 : 0.10),
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── 3px top accent bar
-                Container(height: 3, color: typeColor),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Merchant row
-                      _MerchantRow(
-                        c: c,
-                        isBuy: _isBuy,
-                        typeColor: typeColor,
-                        statusText: statusText,
-                        statusColor: _statusColor(statusText),
-                        merchantProfile: _merchantProfile,
-                        loadingMerchant: _loadingMerchant,
-                        averageRating: _averageRating,
-                        reviewCount: _reviewCount,
-                        loadingReviews: _loadingReviews,
-                        isLight: isLight,
-                      ),
-
-                      const SizedBox(height: 13),
-                      _GradientDivider(c: c, isLight: isLight),
-                      const SizedBox(height: 13),
-
-                      // ── Price row
-                      _PriceRow(
-                        c: c,
-                        offer: offer,
-                        typeColor: typeColor,
-                        marketPrice: widget.marketPrice,
-                        priceLoading: widget.priceLoading,
-                        isLight: isLight,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // ── Footer row
-                      _FooterRow(
-                        c: c,
-                        offer: offer,
-                        typeColor: typeColor,
-                        isBuy: _isBuy,
-                        loadingPaymentMethods: _loadingPaymentMethods,
-                        paymentMethodsMap: _paymentMethodsMap,
-                        paymentNames: _paymentNames,
-                        isLight: isLight,
-                      ),
-                    ],
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isLight ? 0.055 : 0.18),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
                 ),
               ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── 3px top accent bar
+                  Container(height: 3, color: typeColor),
+
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Merchant row
+                        _MerchantRow(
+                          c: c,
+                          isBuy: _isBuy,
+                          typeColor: typeColor,
+                          statusText: statusText,
+                          statusColor: _statusColor(statusText),
+                          merchantProfile: _merchantProfile,
+                          loadingMerchant: _loadingMerchant,
+                          averageRating: _averageRating,
+                          reviewCount: _reviewCount,
+                          loadingReviews: _loadingReviews,
+                          isLight: isLight,
+                          shimmerAnim: widget.shimmerAnim,
+                        ),
+
+                        const SizedBox(height: 13),
+                        _GradientDivider(c: c, isLight: isLight),
+                        const SizedBox(height: 13),
+
+                        // ── Price row
+                        _PriceRow(
+                          c: c,
+                          offer: offer,
+                          typeColor: typeColor,
+                          marketPrice: widget.marketPrice,
+                          priceLoading: widget.priceLoading,
+                          isLight: isLight,
+                          shimmerAnim: widget.shimmerAnim,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // ── Footer row
+                        _FooterRow(
+                          c: c,
+                          offer: offer,
+                          typeColor: typeColor,
+                          isBuy: _isBuy,
+                          loadingPaymentMethods: _loadingPaymentMethods,
+                          paymentMethodsMap: _paymentMethodsMap,
+                          paymentNames: _paymentNames,
+                          isLight: isLight,
+                          shimmerAnim: widget.shimmerAnim,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -256,6 +267,7 @@ class _MerchantRow extends StatelessWidget {
     required this.reviewCount,
     required this.loadingReviews,
     required this.isLight,
+    required this.shimmerAnim,
   });
 
   final AppColor c;
@@ -269,6 +281,7 @@ class _MerchantRow extends StatelessWidget {
   final int reviewCount;
   final bool loadingReviews;
   final bool isLight;
+  final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +307,7 @@ class _MerchantRow extends StatelessWidget {
         // Merchant info — expands to fill
         Expanded(
           child: loadingMerchant
-              ? _MerchantSkeleton(c: c, isLight: isLight)
+              ? _MerchantSkeleton(c: c, isLight: isLight, shimmerAnim: shimmerAnim)
               : merchantProfile != null
               ? _MerchantMeta(
             c: c,
@@ -303,6 +316,7 @@ class _MerchantRow extends StatelessWidget {
             reviewCount: reviewCount,
             loadingReviews: loadingReviews,
             isLight: isLight,
+            shimmerAnim: shimmerAnim,
           )
               : Text('Unknown merchant',
               style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
@@ -336,6 +350,7 @@ class _MerchantMeta extends StatelessWidget {
     required this.reviewCount,
     required this.loadingReviews,
     required this.isLight,
+    required this.shimmerAnim,
   });
 
   final AppColor c;
@@ -344,6 +359,7 @@ class _MerchantMeta extends StatelessWidget {
   final int reviewCount;
   final bool loadingReviews;
   final bool isLight;
+  final Animation<double> shimmerAnim;
 
   static const _tierLabel = {
     MerchantTier.basic: 'Basic', MerchantTier.standard: 'Standard',
@@ -423,7 +439,7 @@ class _MerchantMeta extends StatelessWidget {
               _MetaDot(c: c),
             ],
             if (loadingReviews)
-              _SkimBox(c: c, w: 42, h: 10, r: 3, isLight: isLight)
+              _SkimBox(c: c, w: 42, h: 10, r: 3, isLight: isLight, anim: shimmerAnim)
             else if (averageRating != null) ...[
               Icon(Icons.star_rounded, size: 11, color: const Color(0xFFD97706)),
               const SizedBox(width: 2),
@@ -449,17 +465,18 @@ class _MerchantMeta extends StatelessWidget {
 }
 
 class _MerchantSkeleton extends StatelessWidget {
-  const _MerchantSkeleton({required this.c, required this.isLight});
+  const _MerchantSkeleton({required this.c, required this.isLight, required this.shimmerAnim});
   final AppColor c;
   final bool isLight;
+  final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _SkimBox(c: c, w: 110, h: 13, r: 4, isLight: isLight),
+      _SkimBox(c: c, w: 110, h: 13, r: 4, isLight: isLight, anim: shimmerAnim),
       const SizedBox(height: 6),
-      _SkimBox(c: c, w: 72,  h: 10, r: 3, isLight: isLight),
+      _SkimBox(c: c, w: 72,  h: 10, r: 3, isLight: isLight, anim: shimmerAnim),
     ],
   );
 }
@@ -476,6 +493,7 @@ class _PriceRow extends StatelessWidget {
     required this.marketPrice,
     required this.priceLoading,
     required this.isLight,
+    required this.shimmerAnim,
   });
 
   final AppColor c;
@@ -484,6 +502,7 @@ class _PriceRow extends StatelessWidget {
   final String? marketPrice;
   final bool priceLoading;
   final bool isLight;
+  final Animation<double> shimmerAnim;
 
   String? get _marginBadge {
     final m = offer.marginPercent;
@@ -590,10 +609,14 @@ class _PriceRow extends StatelessWidget {
             ],
           )
               : priceLoading
-              ? _SkimBox(c: c, w: 72, h: 13, r: 4, isLight: isLight)
-              : Text('No price',
-              style: TextStyle(color: c.textSecondary,
-                  fontWeight: FontWeight.w600, fontSize: 13)),
+              ? _SkimBox(c: c, w: 72, h: 13, r: 4, isLight: isLight, anim: shimmerAnim)
+              : Text('—',
+              style: TextStyle(
+                color: c.textSecondary.withOpacity(0.45),
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                letterSpacing: 0.5,
+              )),
         ),
       ],
     );
@@ -640,6 +663,7 @@ class _FooterRow extends StatelessWidget {
     required this.paymentMethodsMap,
     required this.paymentNames,
     required this.isLight,
+    required this.shimmerAnim,
   });
 
   final AppColor c;
@@ -650,6 +674,7 @@ class _FooterRow extends StatelessWidget {
   final Map<String, PaymentMethodModel> paymentMethodsMap;
   final String Function(List<String>) paymentNames;
   final bool isLight;
+  final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) {
@@ -697,7 +722,7 @@ class _FooterRow extends StatelessWidget {
 
         // Payment methods
         if (loadingPaymentMethods)
-          _SkimBox(c: c, w: 88, h: 11, r: 4, isLight: isLight)
+          _SkimBox(c: c, w: 88, h: 11, r: 4, isLight: isLight, anim: shimmerAnim)
         else if (effectiveIds.isNotEmpty)
           _PaymentRow(
             c: c,
@@ -892,44 +917,38 @@ class _MetaDot extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIMMER (individual animated box — each has its own AnimationController
-// so shimmer phases are staggered naturally across tiles)
+// SHIMMER BOX — StatelessWidget; uses a shared Animation<double> passed from
+// the screen level so only ONE AnimationController drives all shimmer boxes
+// across all visible tiles simultaneously.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SkimBox extends StatefulWidget {
+class _SkimBox extends StatelessWidget {
   const _SkimBox({
-    required this.c, required this.w, required this.h,
-    required this.r, required this.isLight,
+    required this.c,
+    required this.w,
+    required this.h,
+    required this.r,
+    required this.isLight,
+    required this.anim,
   });
+
   final AppColor c;
   final double w, h, r;
   final bool isLight;
-
-  @override
-  State<_SkimBox> createState() => _SkimBoxState();
-}
-
-class _SkimBoxState extends State<_SkimBox> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 950))
-    ..repeat(reverse: true);
-  late final Animation<double> _a =
-  CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  final Animation<double> anim;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _a,
+    animation: anim,
     builder: (_, __) {
-      final lo = widget.isLight ? 0.08 : 0.05;
-      final hi = widget.isLight ? 0.18 : 0.12;
+      final lo = isLight ? 0.08 : 0.05;
+      final hi = isLight ? 0.18 : 0.12;
       return Container(
-        width: widget.w, height: widget.h,
+        width: w,
+        height: h,
         decoration: BoxDecoration(
-          color: widget.c.border.withOpacity(lo + (hi - lo) * _a.value),
-          borderRadius: BorderRadius.circular(widget.r),
+          color: c.border.withOpacity(lo + (hi - lo) * anim.value),
+          borderRadius: BorderRadius.circular(r),
         ),
       );
     },
