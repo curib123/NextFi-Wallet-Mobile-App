@@ -29,6 +29,7 @@ class OfferModel {
   final OfferStatus? status;
   final String asset;
   final String fiatCurrency;
+  final String? receiverStellarAddress;
   final double? marginPercent;
   final double? successRate;
   final double? marketPrice; // Price in fiat per unit of crypto (e.g., PHP 1.00 per XLM)
@@ -52,6 +53,7 @@ class OfferModel {
     this.status,
     required this.asset,
     required this.fiatCurrency,
+    this.receiverStellarAddress,
     this.marginPercent,
     this.successRate,
     this.marketPrice,
@@ -164,10 +166,17 @@ class OfferModel {
 
     return OfferModel(
       id: readString(const ['id']),
-      type: _readOfferType(json['type']),
+      type: _readOfferType(json['type'] ?? json['offerType'] ?? json['offer_type']),
       status: _readOfferStatus(json['status']),
       asset: readString(const ['asset']),
       fiatCurrency: readString(const ['fiatCurrency', 'fiat_currency']),
+      receiverStellarAddress: (() {
+        final text = readString(const [
+          'receiverStellarAddress',
+          'receiver_stellar_address',
+        ]);
+        return text.isEmpty ? null : text;
+      })(),
       marginPercent: readDouble(const ['marginPercent', 'margin_percent']),
       successRate: readDouble(const ['successRate', 'success_rate']),
       marketPrice: readDouble(const ['marketPrice', 'market_price', 'price']),

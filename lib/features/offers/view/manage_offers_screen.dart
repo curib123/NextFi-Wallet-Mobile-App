@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -13,6 +16,7 @@ import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/services/wallet/models/wallet_models.dart';
 import 'package:next_fi/services/wallet/wallet_core_service.dart';
 import 'package:provider/provider.dart';
@@ -37,6 +41,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
 
   bool _loading = true;
   bool _submitting = false;
+  bool _syncingAvailableQty = false;
+  Timer? _availableQtyTimer;
+  double? _liveAvailableQty;
   List<OfferModel> _offers = const [];
   List<PaymentMethodModel> _paymentMethods = const [];
   List<WalletAddress> _wallets = const [];
@@ -78,10 +85,14 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
         .animate(CurvedAnimation(parent: _pageEnterCtrl, curve: Curves.easeOutCubic));
     _load();
+    _availableQtyTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _syncAvailableQty(silent: true);
+    });
   }
 
   @override
   void dispose() {
+    _availableQtyTimer?.cancel();
     _marginCtrl.dispose();
     _minCtrl.dispose();
     _maxCtrl.dispose();
@@ -115,6 +126,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         _offers                  = offers;
         _loading                 = false;
       });
+      _syncAvailableQty(silent: true);
       _pageEnterCtrl.forward(from: 0);
       _heroCtrl.forward(from: 0);
     } catch (e) {
@@ -134,7 +146,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     final minAmt  = double.tryParse(_minCtrl.text.trim());
     final maxAmt  = double.tryParse(_maxCtrl.text.trim());
     final totalQ  = double.tryParse(_totalQtyCtrl.text.trim());
-    final availQ  = double.tryParse(_availableQtyCtrl.text.trim());
+    final availQInput = double.tryParse(_availableQtyCtrl.text.trim());
     final window  = int.tryParse(_paymentWindowCtrl.text.trim());
     final addr    = _selectedReceiverWallet?.publicAddress.trim() ?? '';
 
@@ -142,14 +154,19 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     if (margin == null || minAmt == null || maxAmt == null) { _snack('Enter valid numbers for margin, min and max.', error: true); return; }
     if (maxAmt < minAmt)                  { _snack('Max must be ≥ min amount.',             error: true); return; }
     if (_totalQtyCtrl.text.trim().isNotEmpty && totalQ == null) { _snack('Enter a valid total quantity.',  error: true); return; }
-    if (_availableQtyCtrl.text.trim().isNotEmpty && availQ == null) { _snack('Enter a valid available quantity.', error: true); return; }
-    if (totalQ != null && availQ != null && availQ > totalQ) { _snack('Available qty cannot exceed total qty.', error: true); return; }
+    if (_availableQtyCtrl.text.trim().isNotEmpty && availQInput == null) { _snack('Enter a valid available quantity.', error: true); return; }
+    if (totalQ != null && availQInput != null && availQInput > totalQ) { _snack('Available qty cannot exceed total qty.', error: true); return; }
     if (_paymentWindowCtrl.text.trim().isNotEmpty && window == null) { _snack('Enter a valid payment window (minutes).', error: true); return; }
     if (addr.isNotEmpty && !RegExp(r'^G[A-Z2-7]{55}$').hasMatch(addr)) { _snack('Invalid Stellar address format.', error: true); return; }
 
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
+      final liveAvail = await _syncAvailableQtyForSubmit(asset);
+      final effectiveAvailableQty = totalQ == null
+          ? liveAvail
+          : math.min(totalQ, liveAvail);
+
       await _offersCore.create(CreateOfferRequest(
         type: _type,
         asset: asset,
@@ -159,7 +176,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         minAmount: minAmt,
         maxAmount: maxAmt,
         totalQty: totalQ,
-        availableQty: availQ,
+        availableQty: effectiveAvailableQty,
         paymentWindowMinutes: window,
         autoReply: _autoReplyCtrl.text.trim().isEmpty ? null : _autoReplyCtrl.text.trim(),
         isVisible: _isVisible,
@@ -187,8 +204,11 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   Future<void> _pauseOrResume(OfferModel offer) async {
     HapticFeedback.selectionClick();
     try {
-      if (offer.status == OfferStatus.active)       await _offersCore.pause(offer.id);
-      else if (offer.status == OfferStatus.paused)  await _offersCore.resume(offer.id);
+      if (offer.status == OfferStatus.active) {
+        await _offersCore.pause(offer.id);
+      } else if (offer.status == OfferStatus.paused) {
+        await _offersCore.resume(offer.id);
+      }
       if (!mounted) return;
       await _load();
     } catch (e) {
@@ -227,6 +247,103 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     type: error ? SnackBarType.error : SnackBarType.success,
     position: SnackBarPosition.top,
   );
+
+  WalletAddress? _activeWallet() {
+    for (final w in _wallets) {
+      if (w.isActive && w.publicAddress.trim().isNotEmpty) return w;
+    }
+    for (final w in _wallets) {
+      if (w.publicAddress.trim().isNotEmpty) return w;
+    }
+    return null;
+  }
+
+  String _formatQty(double value) {
+    final fixed = value.toStringAsFixed(7);
+    return fixed
+        .replaceFirst(RegExp(r'\.?0+$'), '');
+  }
+
+  Future<double> _fetchLiveAvailableQty(String assetUpper) async {
+    final wallet = _activeWallet();
+    final accountId = wallet?.publicAddress.trim() ?? '';
+    if (accountId.isEmpty) return 0.0;
+
+    final stellar = context.read<StellarWalletServices>();
+    if (assetUpper == 'XLM') {
+      return await stellar.getXlmBalance(accountId);
+    }
+    if (assetUpper == 'USDC') {
+      return await stellar.getUsdcBalance(accountId);
+    }
+
+    final balances = await stellar.getAllBalances(accountId);
+    for (final b in balances) {
+      final code = (b.assetCode ?? '').trim().toUpperCase();
+      if (code != assetUpper) continue;
+      final bal = double.tryParse(b.balance) ?? 0.0;
+      final liabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
+      final available = bal - liabilities;
+      return available > 0 ? available : 0.0;
+    }
+    return 0.0;
+  }
+
+  Future<void> _syncAvailableQty({bool silent = false}) async {
+    if (_loading || _submitting) return;
+    if (_syncingAvailableQty) return;
+    final assets = context.read<AssetVM>().assets;
+    final selected = (_selectedAssetSymbol ??
+            (assets.isNotEmpty ? assets.first.symbol.toUpperCase() : ''))
+        .trim()
+        .toUpperCase();
+    if (selected.isEmpty) return;
+
+    if (silent) {
+      _syncingAvailableQty = true;
+    } else {
+      setState(() => _syncingAvailableQty = true);
+    }
+    try {
+      final qty = await _fetchLiveAvailableQty(selected);
+      if (!mounted) return;
+      setState(() {
+        _liveAvailableQty = qty;
+        _availableQtyCtrl.text = _formatQty(qty);
+      });
+    } catch (e) {
+      if (!silent && mounted) {
+        _snack('Failed to sync live balance for available qty.', error: true);
+      }
+    } finally {
+      if (mounted) {
+        if (silent) {
+          _syncingAvailableQty = false;
+        } else {
+          setState(() => _syncingAvailableQty = false);
+        }
+      }
+    }
+  }
+
+  Future<double> _syncAvailableQtyForSubmit(String assetUpper) async {
+    try {
+      final qty = await _fetchLiveAvailableQty(assetUpper.toUpperCase());
+      if (mounted) {
+        setState(() {
+          _liveAvailableQty = qty;
+          _availableQtyCtrl.text = _formatQty(qty);
+        });
+      }
+      return qty;
+    } catch (_) {
+      final fallback = _liveAvailableQty ?? 0.0;
+      if (mounted) {
+        _availableQtyCtrl.text = _formatQty(fallback);
+      }
+      return fallback;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -320,11 +437,19 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                               selectedMethod: _selectedPaymentMethod,
                               isVisible: _isVisible,
                               submitting: _submitting,
+                              syncingAvailableQty: _syncingAvailableQty,
                               onTypeChanged: (v)   => setState(() => _type = v),
-                              onAssetChanged: (v)  => setState(() => _selectedAssetSymbol = v),
+                              onAssetChanged: (v)  {
+                                setState(() => _selectedAssetSymbol = v);
+                                _syncAvailableQty();
+                              },
                               onMethodChanged: (v) => setState(() => _selectedPaymentMethod = v),
-                              onReceiverWalletChanged: (v) => setState(() => _selectedReceiverWallet = v),
+                              onReceiverWalletChanged: (v) {
+                                setState(() => _selectedReceiverWallet = v);
+                                _syncAvailableQty();
+                              },
                               onVisibleChanged: (v) => setState(() => _isVisible = v),
+                              onSyncAvailableQty: _syncAvailableQty,
                               onSubmit: _createOffer,
                             ),
                           ],
@@ -795,11 +920,13 @@ class _CreateOfferCard extends StatelessWidget {
     required this.selectedMethod,
     required this.isVisible,
     required this.submitting,
+    required this.syncingAvailableQty,
     required this.onTypeChanged,
     required this.onAssetChanged,
     required this.onMethodChanged,
     required this.onReceiverWalletChanged,
     required this.onVisibleChanged,
+    required this.onSyncAvailableQty,
     required this.onSubmit,
   });
 
@@ -821,11 +948,13 @@ class _CreateOfferCard extends StatelessWidget {
   final PaymentMethodModel? selectedMethod;
   final bool isVisible;
   final bool submitting;
+  final bool syncingAvailableQty;
   final ValueChanged<OfferType> onTypeChanged;
   final ValueChanged<String?> onAssetChanged;
   final ValueChanged<PaymentMethodModel?> onMethodChanged;
   final ValueChanged<WalletAddress?> onReceiverWalletChanged;
   final ValueChanged<bool> onVisibleChanged;
+  final Future<void> Function({bool silent}) onSyncAvailableQty;
   final VoidCallback onSubmit;
 
   @override
@@ -905,14 +1034,44 @@ class _CreateOfferCard extends StatelessWidget {
                 _FormGroup(
                   c: c,
                   label: 'Quantity & Payment Window',
-                  sublabel: 'Optional',
+                  sublabel: 'Auto-synced',
                   child: Column(
                     children: [
                       Row(
                         children: [
                           Expanded(child: _Field(c: c, controller: totalQtyCtrl, hint: 'Total qty', icon: Icons.inventory_2_outlined, isNumber: true)),
                           const SizedBox(width: 10),
-                          Expanded(child: _Field(c: c, controller: availableQtyCtrl, hint: 'Available qty', icon: Icons.dataset_outlined, isNumber: true)),
+                          Expanded(child: _Field(c: c, controller: availableQtyCtrl, hint: 'Available qty (live)', icon: Icons.dataset_outlined, isNumber: true, readOnly: true)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            syncingAvailableQty
+                                ? 'Syncing from Stellar wallet...'
+                                : 'Available qty is based on on-chain wallet balance.',
+                            style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: syncingAvailableQty
+                                ? null
+                                : () => onSyncAvailableQty(silent: false),
+                            icon: const Icon(Icons.sync_rounded, size: 14),
+                            label: const Text('Sync'),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -1170,6 +1329,7 @@ class _Field extends StatelessWidget {
     this.icon,
     this.isNumber = false,
     this.maxLines = 1,
+    this.readOnly = false,
   });
   final AppColor c;
   final TextEditingController controller;
@@ -1177,6 +1337,7 @@ class _Field extends StatelessWidget {
   final IconData? icon;
   final bool isNumber;
   final int maxLines;
+  final bool readOnly;
 
   InputDecoration _dec() => InputDecoration(
     hintText: hint,
@@ -1193,6 +1354,7 @@ class _Field extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
+    readOnly: readOnly,
     keyboardType: isNumber ? TextInputType.number : TextInputType.text,
     maxLines: maxLines,
     style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),

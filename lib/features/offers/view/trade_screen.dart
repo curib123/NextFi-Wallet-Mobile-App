@@ -62,8 +62,12 @@ class _TradeScreenState extends State<TradeScreen> {
 
   String? get _sellerWalletAddress {
     final raw = offer.seller;
-    if (raw == null) return null;
-    final addr = (raw['walletAddress'] ?? raw['stellarAddress'] ?? '')
+    final addr = (offer.receiverStellarAddress ??
+            raw?['walletAddress'] ??
+            raw?['stellarAddress'] ??
+            raw?['receiverStellarAddress'] ??
+            raw?['receiver_stellar_address'] ??
+            '')
         .toString()
         .trim();
     return addr.isEmpty ? null : addr;
@@ -269,11 +273,24 @@ class _TradeScreenState extends State<TradeScreen> {
       return;
     }
 
-    final cryptoReceiverAddress = _userIsBuyer
-        ? _selectedWallet!.publicAddress
-        : _sellerWalletAddress;
-    if (cryptoReceiverAddress == null || cryptoReceiverAddress.isEmpty) {
-      showFloatingSnackBar(context, message: 'Merchant crypto address is missing for this offer.', type: SnackBarType.error);
+    final hasBuyType = offer.type == OfferType.buy;
+    final sellerReceiverAddress = _sellerWalletAddress;
+    if (hasBuyType &&
+        (sellerReceiverAddress == null || sellerReceiverAddress.isEmpty)) {
+      showFloatingSnackBar(
+        context,
+        message:
+            'Merchant crypto receiving address is missing for this BUY offer. Ask merchant to update the offer.',
+        type: SnackBarType.error,
+      );
+      return;
+    }
+
+    final cryptoReceiverAddress = hasBuyType
+        ? sellerReceiverAddress!
+        : _selectedWallet!.publicAddress;
+    if (cryptoReceiverAddress.trim().isEmpty) {
+      showFloatingSnackBar(context, message: 'Crypto receiver address is missing.', type: SnackBarType.error);
       return;
     }
 
