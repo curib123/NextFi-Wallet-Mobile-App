@@ -212,6 +212,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _openMessenger() async {
+    final verified = await _ensureVerifiedForMessageAccess();
+    if (!verified || !mounted) return;
+
     final consented = await _ensureChatConsent();
     if (!consented || !mounted) return;
     await Navigator.of(
@@ -222,6 +225,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Future<void> _openFriendChat(ChatFriendModel friend) async {
     if (_busyChat) return;
+    final verified = await _ensureVerifiedForMessageAccess();
+    if (!verified || !mounted) return;
+
     final consented = await _ensureChatConsent();
     if (!consented || !mounted) return;
     setState(() => _busyChat = true);
@@ -262,6 +268,27 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
     } catch (_) {}
     return true;
+  }
+
+  Future<bool> _ensureVerifiedForMessageAccess() async {
+    try {
+      final verification = await _verification.getMe();
+      if (verification.status == TrustStatus.ready) return true;
+    } catch (_) {
+      final localReady =
+          _verificationData?.status == TrustStatus.ready ||
+          (_profileData?.isVerificationIdentityComplete ?? false);
+      if (localReady) return true;
+    }
+
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Verification READY is required for messenger')),
+    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const VerificationFlowScreen()));
+    return false;
   }
 
   String _displayName() {

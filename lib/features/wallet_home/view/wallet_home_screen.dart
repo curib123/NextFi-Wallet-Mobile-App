@@ -421,6 +421,9 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       return;
     }
 
+    final verified = await _ensureVerifiedForTradeAccess();
+    if (!verified || !mounted) return;
+
     final consented = await _ensureChatConsent();
     if (!consented || !mounted) return;
 

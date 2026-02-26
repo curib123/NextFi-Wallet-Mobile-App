@@ -309,11 +309,13 @@ class _AppDrawerState extends State<AppDrawer> with SingleTickerProviderStateMix
 
   void _handleMessengerTap() {
     if (_user == null) { _redirectToLogin(); return; }
+    if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
     _push(const ChatHubScreen());
   }
 
   void _handleTradeHistoryTap() {
     if (_user == null) { _redirectToLogin(); return; }
+    if (!_isVerifiedForTradeAccess) { _push(const VerificationFlowScreen()); return; }
     _push(const TradeHistoryScreen());
   }
 
