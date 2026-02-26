@@ -343,13 +343,34 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         return;
       }
 
-      final threads = await _chat.listThreads(
-        const ChatListQuery(page: 1, limit: 50),
-      );
-      final unread = threads.items.fold<int>(
-        0,
-        (sum, thread) => sum + thread.unreadCount,
-      );
+      const query = ChatListQuery(page: 1, limit: 50);
+      final data = await Future.wait([
+        _chat.listThreads(query),
+        _chat.listFriends(query),
+      ]);
+
+      final threads = (data[0] as ChatPaged<ChatDirectThreadModel>).items;
+      final friends = (data[1] as ChatPaged<ChatFriendModel>).items;
+
+      final threadUnreadByFriend = <String, int>{};
+      for (final thread in threads) {
+        final key = thread.friendUserId.trim();
+        if (key.isEmpty) continue;
+        final current = threadUnreadByFriend[key] ?? 0;
+        threadUnreadByFriend[key] = current + thread.unreadCount;
+      }
+
+      var unread = 0;
+      for (final friend in friends) {
+        final key = friend.friendUserId.trim();
+        final threadUnread = key.isEmpty
+            ? 0
+            : (threadUnreadByFriend.remove(key) ?? 0);
+        final friendUnread = friend.newUnreadMessageCount;
+        unread += threadUnread > friendUnread ? threadUnread : friendUnread;
+      }
+
+      unread += threadUnreadByFriend.values.fold<int>(0, (sum, v) => sum + v);
       if (!mounted) return;
       if (unread != _unreadChatCount) {
         setState(() => _unreadChatCount = unread);
