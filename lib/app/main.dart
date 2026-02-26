@@ -17,7 +17,9 @@ import 'package:provider/single_child_widget.dart';
 // ─────────────────────────── App core ─────────────────────────
 import 'package:next_fi/app/home.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart' hide ThemeBridge;
+import 'package:next_fi/common/services/internet_loss_guard.dart';
 import 'package:next_fi/common/services/network_monitor.dart';
+import 'package:next_fi/common/services/inactivity_guard.dart';
 import 'package:next_fi/common/components/network_status_overlay.dart';
 
 // ─────────────────────────── Services ─────────────────────────
@@ -363,8 +365,12 @@ class _MyAppState extends State<MyApp> {
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),
-          builder: (context, child) => NetworkStatusOverlay(
-            child: child ?? const SizedBox.shrink(),
+          builder: (context, child) => InactivityGuard(
+            child: InternetLossGuard(
+              child: NetworkStatusOverlay(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
           ),
         );
       },

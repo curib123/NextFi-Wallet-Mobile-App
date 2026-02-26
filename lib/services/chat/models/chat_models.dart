@@ -368,15 +368,22 @@ class ChatFriendModel {
     final friendUserId = _readString(json, const [
       'friendUserId',
       'friend_user_id',
+      'userId',
+      'user_id',
     ], fallback: friendUser.id);
     final friendStatus = _readString(json, const [
       'friendStatus',
       'friend_status',
-      'status',
+      'presence',
+      'presenceStatus',
+      'presence_status',
     ]);
     final friendIsOnline = _readBool(json, const [
       'friendIsOnline',
       'friend_is_online',
+      'isOnline',
+      'is_online',
+      'online',
     ], fallback: friendStatus.toUpperCase() == 'ONLINE');
 
     return ChatFriendModel(
@@ -391,6 +398,10 @@ class ChatFriendModel {
       friendLastSeenAt: _readDate(json, const [
         'friendLastSeenAt',
         'friend_last_seen_at',
+        'lastSeenAt',
+        'last_seen_at',
+        'friendLastActiveAt',
+        'friend_last_active_at',
       ]),
       friendIsOnline: friendIsOnline,
       newUnreadMessageCount: _readInt(json, const [
@@ -508,6 +519,10 @@ class ChatDirectThreadModel {
       'friend_user_id',
       'otherUserId',
       'other_user_id',
+      'counterpartyUserId',
+      'counterparty_user_id',
+      'participantUserId',
+      'participant_user_id',
     ], fallback: friendUser?.id ?? '');
 
     return ChatDirectThreadModel(

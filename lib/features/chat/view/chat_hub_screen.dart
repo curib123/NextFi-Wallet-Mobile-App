@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -30,6 +32,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   late final TabController _tabCtrl;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fade;
+  Timer? _searchDebounce;
 
   bool _loading = true;
   bool _busy = false;
@@ -43,7 +46,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   List<ChatFriendModel> _sortFriends(List<ChatFriendModel> friends) {
     final sorted = [...friends];
     sorted.sort((a, b) {
-      final online = (b.friendIsOnline ? 1 : 0) - (a.friendIsOnline ? 1 : 0);
+      final online = (_isFriendOnline(b) ? 1 : 0) - (_isFriendOnline(a) ? 1 : 0);
       if (online != 0) return online;
 
       final unread = b.newUnreadMessageCount.compareTo(a.newUnreadMessageCount);
@@ -76,11 +79,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   }
 
   List<ChatDirectThreadModel> get _friendThreads {
-    final byUser = _friendsByUserId;
-    return _threads.where((t) {
-      final id = t.friendUserId.trim();
-      return id.isNotEmpty && byUser.containsKey(id);
-    }).toList();
+    return _threads;
   }
 
   @override
@@ -100,6 +99,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabCtrl.dispose();
     _fadeCtrl.dispose();
     _searchCtrl.dispose();
@@ -117,7 +117,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     }
     try {
       final q = _searchCtrl.text.trim();
-      final query = ChatListQuery(page: 1, limit: 50, q: q.isEmpty ? null : q);
+      final query = const ChatListQuery(page: 1, limit: 50);
       final data = await Future.wait([
         _chat.listThreads(query),
         _chat.listFriends(query),
@@ -138,12 +138,22 @@ class _ChatHubScreenState extends State<ChatHubScreen>
           ),
         ),
       ]);
+      final allThreads = (data[0] as ChatPaged<ChatDirectThreadModel>).items;
+      final allFriends = (data[1] as ChatPaged<ChatFriendModel>).items;
+      final allIncoming = (data[2] as ChatPaged<ChatFriendRequestModel>).items;
+      final allOutgoing = (data[3] as ChatPaged<ChatFriendRequestModel>).items;
+
+      final threads = _filterThreads(allThreads, q);
+      final friends = _sortFriends(_filterFriends(allFriends, q));
+      final incoming = _filterRequests(allIncoming, q);
+      final outgoing = _filterRequests(allOutgoing, q);
+
       if (!mounted) return;
       setState(() {
-        _threads = (data[0] as ChatPaged<ChatDirectThreadModel>).items;
-        _friends = _sortFriends((data[1] as ChatPaged<ChatFriendModel>).items);
-        _incoming = (data[2] as ChatPaged<ChatFriendRequestModel>).items;
-        _outgoing = (data[3] as ChatPaged<ChatFriendRequestModel>).items;
+        _threads = threads;
+        _friends = friends;
+        _incoming = incoming;
+        _outgoing = outgoing;
         _loading = false;
       });
       _fadeCtrl.forward(from: 0);
@@ -393,7 +403,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   }
 
   String _presenceLabel(ChatFriendModel friend) {
-    if (friend.friendIsOnline) return 'Online';
+    if (_isFriendOnline(friend)) return 'Online';
     final lastSeen = friend.friendLastSeenAt;
     if (lastSeen != null) {
       return 'Last seen ${_relativeTime(lastSeen)}';
@@ -403,6 +413,67 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       return status[0].toUpperCase() + status.substring(1).toLowerCase();
     }
     return '';
+  }
+
+  bool _isFriendOnline(ChatFriendModel friend) {
+    if (!friend.friendIsOnline) return false;
+    final lastSeen = friend.friendLastSeenAt;
+    if (lastSeen == null) return true;
+    final diff = DateTime.now().difference(lastSeen.toLocal());
+    return diff.inMinutes <= 2;
+  }
+
+  bool _containsQuery(String source, String q) =>
+      source.toLowerCase().contains(q.toLowerCase());
+
+  List<ChatFriendModel> _filterFriends(List<ChatFriendModel> friends, String q) {
+    final query = q.trim();
+    if (query.isEmpty) return friends;
+    return friends.where((f) {
+      final name = _friendName(f.friend, f.friendUserId);
+      final subtitle = _friendSubtitle(f.friend, '');
+      return _containsQuery(name, query) || _containsQuery(subtitle, query);
+    }).toList();
+  }
+
+  List<ChatDirectThreadModel> _filterThreads(
+    List<ChatDirectThreadModel> threads,
+    String q,
+  ) {
+    final query = q.trim();
+    if (query.isEmpty) return threads;
+    return threads.where((t) {
+      final resolvedFriend = _friendsByUserId[t.friendUserId.trim()]?.friend;
+      final title = _friendName(resolvedFriend ?? t.friendUser, t.friendUserId);
+      final preview = t.lastMessage == null
+          ? ''
+          : ChatEnvelopeCodec.decodeText(t.lastMessage!.ciphertext);
+      return _containsQuery(title, query) || _containsQuery(preview, query);
+    }).toList();
+  }
+
+  List<ChatFriendRequestModel> _filterRequests(
+    List<ChatFriendRequestModel> requests,
+    String q,
+  ) {
+    final query = q.trim();
+    if (query.isEmpty) return requests;
+    return requests.where((r) {
+      final sender = _friendName(r.sender, r.senderId);
+      final receiver = _friendName(r.receiver, r.receiverId);
+      final note = r.note ?? '';
+      return _containsQuery(sender, query) ||
+          _containsQuery(receiver, query) ||
+          _containsQuery(note, query);
+    }).toList();
+  }
+
+  void _onSearchChanged(String _) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _load(showLoader: false),
+    );
   }
 
   String _relativeTime(DateTime dt) {
@@ -540,6 +611,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
             Expanded(
               child: TextField(
                 controller: _searchCtrl,
+                onChanged: _onSearchChanged,
                 onSubmitted: (_) => _load(showLoader: false),
                 style: TextStyle(color: c.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
@@ -766,7 +838,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                             avatarUrl: f.friend.avatarUrl,
                             size: 50,
                           ),
-                          if (f.friendIsOnline)
+                          if (_isFriendOnline(f))
                             Positioned(
                               right: 1,
                               bottom: 1,
@@ -986,7 +1058,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                     avatarUrl: f.friend.avatarUrl,
                     size: 50,
                   ),
-                  if (f.friendIsOnline)
+                  if (_isFriendOnline(f))
                     Positioned(
                       right: 1,
                       bottom: 1,

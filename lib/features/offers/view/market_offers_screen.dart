@@ -7,10 +7,12 @@ import 'package:next_fi/features/offers/view/trade_screen.dart';
 import 'package:next_fi/features/offers/view/widgets/public_offer_tile.dart';
 import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
+import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
+import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +38,11 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   String? _error;
   OfferType _selectedType = OfferType.buy;
   List<OfferModel> _offers = const [];
+  SeedKeypairVM? _seedVm;
+  StellarWalletServices? _stellarSvc;
+  String? _lastBoundAddress;
+  String? _lastTrustlineCheckedAddress;
+  bool _lastHasUsdcTrustline = false;
 
   late final AnimationController _enterCtrl;
   late final Animation<double> _fadeAnim;
@@ -53,6 +60,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     _priceListener = () { if (mounted) setState(() {}); };
     _xlmPriceVm.addListener(_priceListener);
     _usdcPriceVm.addListener(_priceListener);
+    _seedVm = context.read<SeedKeypairVM>();
+    _stellarSvc = context.read<StellarWalletServices>();
+    _lastBoundAddress = _seedVm?.accountId;
+    _seedVm?.addListener(_onActiveWalletChanged);
     _selectedType = widget.initialType;
 
     _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
@@ -69,6 +80,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
   @override
   void dispose() {
+    _seedVm?.removeListener(_onActiveWalletChanged);
     _xlmPriceVm.removeListener(_priceListener);
     _usdcPriceVm.removeListener(_priceListener);
     _xlmPriceVm.dispose();
@@ -78,14 +90,56 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     super.dispose();
   }
 
+  void _onActiveWalletChanged() {
+    final currentAddress = _seedVm?.accountId;
+    if (currentAddress == _lastBoundAddress) return;
+    _lastBoundAddress = currentAddress;
+    _lastTrustlineCheckedAddress = null;
+    _load();
+  }
+
+  Future<bool> _activeAddressHasUsdcTrustline() async {
+    final seedVm = _seedVm ?? context.read<SeedKeypairVM>();
+    var accountId = seedVm.accountId?.trim();
+
+    if (accountId == null || accountId.isEmpty) {
+      await seedVm.refresh();
+      accountId = seedVm.accountId?.trim();
+    }
+    if (accountId == null || accountId.isEmpty) return false;
+
+    if (_lastTrustlineCheckedAddress == accountId) {
+      return _lastHasUsdcTrustline;
+    }
+
+    final stellar = _stellarSvc;
+    if (stellar == null) return false;
+    try {
+      final hasTrustline = await stellar.accountService.hasUsdcTrustline(accountId);
+      _lastTrustlineCheckedAddress = accountId;
+      _lastHasUsdcTrustline = hasTrustline;
+      return hasTrustline;
+    } catch (_) {
+      _lastTrustlineCheckedAddress = accountId;
+      _lastHasUsdcTrustline = false;
+      return false;
+    }
+  }
+
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
+      final hasUsdcTrustline = await _activeAddressHasUsdcTrustline();
       final offers = await _offersCore.listPublic(
         query: OffersListQuery(type: _selectedType, page: '1', limit: '50'),
       );
+      final filteredOffers = offers.where((offer) {
+        final asset = offer.asset.trim().toUpperCase();
+        if (asset != 'USDC') return true;
+        return hasUsdcTrustline;
+      }).toList();
       if (!mounted) return;
-      setState(() { _offers = offers; _loading = false; });
+      setState(() { _offers = filteredOffers; _loading = false; });
       _enterCtrl.forward(from: 0);
     } catch (e) {
       if (!mounted) return;

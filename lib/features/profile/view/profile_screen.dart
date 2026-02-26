@@ -69,7 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<ChatFriendModel> _sortFriends(List<ChatFriendModel> friends) {
     final sorted = [...friends];
     sorted.sort((a, b) {
-      final online = (b.friendIsOnline ? 1 : 0) - (a.friendIsOnline ? 1 : 0);
+      final online = (_isFriendOnline(b) ? 1 : 0) - (_isFriendOnline(a) ? 1 : 0);
       if (online != 0) return online;
 
       final unread = b.newUnreadMessageCount.compareTo(a.newUnreadMessageCount);
@@ -297,6 +297,14 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (username.isNotEmpty) return '@$username';
     if (email.isNotEmpty) return email;
     return fallback;
+  }
+
+  bool _isFriendOnline(ChatFriendModel friend) {
+    if (!friend.friendIsOnline) return false;
+    final lastSeen = friend.friendLastSeenAt;
+    if (lastSeen == null) return true;
+    final diff = DateTime.now().difference(lastSeen.toLocal());
+    return diff.inMinutes <= 2;
   }
 
   String _value(String? raw) {
@@ -1571,7 +1579,7 @@ class _FriendRow extends StatelessWidget {
   final bool isLast;
 
   String _presenceLabel(ChatFriendModel friend) {
-    if (friend.friendIsOnline) return 'Online';
+    if (_isFriendOnline(friend)) return 'Online';
     final lastSeen = friend.friendLastSeenAt;
     if (lastSeen != null) {
       final now = DateTime.now();
@@ -1588,6 +1596,14 @@ class _FriendRow extends StatelessWidget {
       return status[0].toUpperCase() + status.substring(1).toLowerCase();
     }
     return '';
+  }
+
+  bool _isFriendOnline(ChatFriendModel friend) {
+    if (!friend.friendIsOnline) return false;
+    final lastSeen = friend.friendLastSeenAt;
+    if (lastSeen == null) return true;
+    final diff = DateTime.now().difference(lastSeen.toLocal());
+    return diff.inMinutes <= 2;
   }
 
   @override
@@ -1624,7 +1640,7 @@ class _FriendRow extends StatelessWidget {
                         avatarUrl: user.avatarUrl,
                         size: 42,
                       ),
-                      if (friend.friendIsOnline)
+                      if (_isFriendOnline(friend))
                         Positioned(
                           right: 1,
                           bottom: 1,
