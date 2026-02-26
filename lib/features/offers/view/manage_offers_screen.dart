@@ -166,6 +166,13 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       final effectiveAvailableQty = totalQ == null
           ? liveAvail
           : math.min(totalQ, liveAvail);
+      if (_isVisible && effectiveAvailableQty <= 0) {
+        _snack(
+          'Available qty is zero on selected wallet. Fund wallet or set offer hidden.',
+          error: true,
+        );
+        return;
+      }
 
       await _offersCore.create(CreateOfferRequest(
         type: _type,
@@ -265,7 +272,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   }
 
   Future<double> _fetchLiveAvailableQty(String assetUpper) async {
-    final wallet = _activeWallet();
+    final wallet = _selectedReceiverWallet ?? _activeWallet();
     final accountId = wallet?.publicAddress.trim() ?? '';
     if (accountId.isEmpty) return 0.0;
 

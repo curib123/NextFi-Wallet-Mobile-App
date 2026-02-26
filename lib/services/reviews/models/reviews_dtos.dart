@@ -11,6 +11,9 @@ class CreateReviewRequest {
   });
 
   Map<String, dynamic> toJson() {
+    if (rating < 1 || rating > 5) {
+      throw ArgumentError('rating must be between 1 and 5');
+    }
     return {
       'tradeId': tradeId,
       'rating': rating,

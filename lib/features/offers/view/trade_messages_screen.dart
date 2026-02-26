@@ -9,8 +9,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
+import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/trades/models/trades_models.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
 
@@ -27,6 +29,8 @@ class TradeMessagesScreen extends StatefulWidget {
 }
 
 class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
+  static const String _kTradeSenderKeyId = 'trade.chat.sender_key_id.v1';
+
   final _tradesCore = TradesCoreService.I;
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
@@ -36,8 +40,14 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   bool _loading = true;
   bool _sending = false;
   String? _currentUserId;
+  String? _senderKeyId;
   Timer? _pollTimer;
   bool _proofUploading = false;
+
+  bool get _isParticipant =>
+      _currentUserId != null &&
+      (_currentUserId == widget.trade.buyerId ||
+          _currentUserId == widget.trade.sellerId);
 
   @override
   void initState() {
@@ -111,8 +121,27 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   Future<void> _loadCurrentUser() async {
     try {
       final user = await AuthService().currentUser;
-      if (mounted) setState(() => _currentUserId = user.id);
+      final senderKeyId = await _ensureSenderKeyId();
+      if (mounted) {
+        setState(() {
+          _currentUserId = user.id;
+          _senderKeyId = senderKeyId;
+        });
+      }
     } catch (_) {}
+  }
+
+  Future<String> _ensureSenderKeyId() async {
+    try {
+      final existing = await SecurityStorage.read(_kTradeSenderKeyId);
+      final normalized = existing?.trim() ?? '';
+      if (normalized.isNotEmpty) return normalized;
+    } catch (_) {}
+    final generated = ChatEnvelopeCodec.generateSenderKeyId();
+    try {
+      await SecurityStorage.save(_kTradeSenderKeyId, generated);
+    } catch (_) {}
+    return generated;
   }
 
   Future<void> _loadMessages({bool silent = false}) async {
@@ -136,6 +165,9 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       if (!mounted) return;
       setState(() {
         _messages = normalized;
+        _localMessages = _localMessages
+            .where((m) => m['isUploadingProof'] == true)
+            .toList();
         _loading = false;
       });
       _scrollToBottom();
@@ -158,18 +190,32 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   }
 
   Future<void> _sendMessage() async {
+    if (!_isParticipant) {
+      showFloatingSnackBar(
+        context,
+        message: 'Only trade participants can send messages.',
+        type: SnackBarType.error,
+      );
+      return;
+    }
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
+    final senderKeyId = (_senderKeyId ?? '').trim();
+    if (senderKeyId.isEmpty) return;
+    final envelope = ChatEnvelopeCodec.encodeText(
+      plainText: text,
+      senderKeyId: senderKeyId,
+    );
 
     setState(() => _sending = true);
     try {
       await _tradesCore.sendTradeMessage(
         widget.trade.id,
-        ciphertext: text,
-        algorithm: 'PLAIN',
-        senderKeyId: 'plain',
-        nonce: 'plain',
-        kind: 'TEXT',
+        ciphertext: envelope.ciphertext,
+        algorithm: envelope.algorithm,
+        senderKeyId: envelope.senderKeyId,
+        nonce: envelope.nonce,
+        kind: envelope.kind.name.toUpperCase(),
       );
       _msgCtrl.clear();
       await _loadMessages(silent: true);
@@ -187,6 +233,17 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   }
 
   Future<void> _uploadProof() async {
+    if (!_isParticipant) {
+      showFloatingSnackBar(
+        context,
+        message: 'Only trade participants can upload proofs.',
+        type: SnackBarType.error,
+      );
+      return;
+    }
+    final senderKeyId = (_senderKeyId ?? '').trim();
+    if (senderKeyId.isEmpty) return;
+
     final source = await _showProofSourceSheet();
     if (!mounted || source == null) return;
 
@@ -222,13 +279,17 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
               'proofUrls': [uploadedProofUrl.trim()],
               'imageUrl': uploadedProofUrl.trim(),
             });
+      final envelope = ChatEnvelopeCodec.encodeText(
+        plainText: payload,
+        senderKeyId: senderKeyId,
+      );
       await _tradesCore.sendTradeMessage(
         widget.trade.id,
-        ciphertext: payload,
-        algorithm: 'PLAIN',
-        senderKeyId: 'plain',
-        nonce: 'plain',
-        kind: 'TEXT',
+        ciphertext: envelope.ciphertext,
+        algorithm: envelope.algorithm,
+        senderKeyId: envelope.senderKeyId,
+        nonce: envelope.nonce,
+        kind: envelope.kind.name.toUpperCase(),
       );
       if (mounted) {
         _updateLocalMessage(
@@ -319,6 +380,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             controller: _msgCtrl,
             colors: colors,
             sending: _sending,
+            enabled: _isParticipant,
             onSend: _sendMessage,
             onAttach: _uploadProof,
           ),
@@ -513,6 +575,9 @@ class _MessageBubble extends StatelessWidget {
         .toString()
         .trim()
         .toUpperCase();
+    if (algorithm == ChatEnvelopeCodec.messageAlgorithm.toUpperCase()) {
+      return ChatEnvelopeCodec.decodeText(ciphertext);
+    }
     if (algorithm.isNotEmpty && algorithm != 'PLAIN') {
       return '[Encrypted message]';
     }
@@ -907,12 +972,14 @@ class _InputBar extends StatelessWidget {
     required this.controller,
     required this.colors,
     required this.sending,
+    required this.enabled,
     required this.onSend,
     required this.onAttach,
   });
   final TextEditingController controller;
   final AppColor colors;
   final bool sending;
+  final bool enabled;
   final VoidCallback onSend;
   final VoidCallback onAttach;
 
@@ -934,7 +1001,7 @@ class _InputBar extends StatelessWidget {
           width: 42,
           height: 42,
           child: AppOutlinedButton(
-            onPressed: onAttach,
+            onPressed: enabled ? onAttach : null,
             style: OutlinedButton.styleFrom(
               padding: EdgeInsets.zero,
               backgroundColor: colors.surface,
@@ -963,6 +1030,7 @@ class _InputBar extends StatelessWidget {
             ),
             child: TextField(
               controller: controller,
+              enabled: enabled,
               style: GoogleFonts.sora(fontSize: 14, color: colors.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Type a message…',
@@ -987,7 +1055,7 @@ class _InputBar extends StatelessWidget {
           width: 42,
           height: 42,
           child: AppFilledButton(
-            onPressed: sending ? null : onSend,
+            onPressed: (sending || !enabled) ? null : onSend,
             style: FilledButton.styleFrom(
               padding: EdgeInsets.zero,
               backgroundColor: colors.primary,

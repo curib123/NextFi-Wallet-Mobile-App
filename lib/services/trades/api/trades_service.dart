@@ -18,6 +18,7 @@ class TradesService {
 
   final TokenProvider tokenProvider;
   final http.Client _client;
+  final Map<String, (String key, DateTime at)> _idempotencyScopeCache = {};
 
   static const Set<String> _envelopeKeys = {
     'data', 'item', 'items', 'trade', 'trades', 'meta', 'pagination',
@@ -25,7 +26,18 @@ class TradesService {
     'status', 'message', 'error', 'errors',
   };
 
-  Future<Map<String, String>> _headers({bool idempotencyKey = false}) async {
+  String _idempotencyForScope(String scope) {
+    final now = DateTime.now();
+    final cached = _idempotencyScopeCache[scope];
+    if (cached != null && now.difference(cached.$2).inMinutes < 3) {
+      return cached.$1;
+    }
+    final key = const Uuid().v4();
+    _idempotencyScopeCache[scope] = (key, now);
+    return key;
+  }
+
+  Future<Map<String, String>> _headers({String? idempotencyScope}) async {
     final token = await tokenProvider();
     if (token == null || token.isEmpty) {
       throw TradeApiException(401, 'Missing auth token');
@@ -34,8 +46,8 @@ class TradesService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
-    if (idempotencyKey) {
-      h['x-idempotency-key'] = const Uuid().v4();
+    if (idempotencyScope != null && idempotencyScope.trim().isNotEmpty) {
+      h['x-idempotency-key'] = _idempotencyForScope(idempotencyScope.trim());
     }
     return h;
   }
@@ -187,7 +199,10 @@ class TradesService {
   Future<TradeModel> create(CreateTradeRequest req) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.create()),
-      headers: await _headers(),
+      headers: await _headers(
+        idempotencyScope:
+            'create:${req.offerId}:${req.paymentMethodId}:${req.cryptoAmount}:${req.fiatAmount}:${req.cryptoReceiverAddress}',
+      ),
       body: jsonEncode(req.toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -228,7 +243,7 @@ class TradesService {
   Future<TradeModel> markFiatSent(String id) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.markFiatSent(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(idempotencyScope: 'mark-fiat-sent:$id'),
       body: jsonEncode({}),
     );
     TradesHttp.ensureOk(res);
@@ -241,7 +256,9 @@ class TradesService {
   Future<TradeModel> confirmFiat(String id, {String? fiatRefNo}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.confirmFiat(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope: 'confirm-fiat:$id:${fiatRefNo ?? ''}',
+      ),
       body: jsonEncode(ConfirmFiatRequest(fiatRefNo: fiatRefNo).toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -254,7 +271,9 @@ class TradesService {
   Future<TradeModel> cancelTrade(String id, {String? reason}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.cancel(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope: 'cancel:$id:${reason ?? ''}',
+      ),
       body: jsonEncode(CancelTradeRequest(reason: reason).toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -275,7 +294,10 @@ class TradesService {
   }) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.lockCrypto(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope:
+            'lock-crypto:$id:$claimableBalanceId:$createTxHash',
+      ),
       body: jsonEncode(LockCryptoRequest(
         claimableBalanceId: claimableBalanceId,
         createTxHash: createTxHash,
@@ -294,7 +316,9 @@ class TradesService {
   Future<TradeModel> claimCrypto(String id, {required String claimTxHash}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.claimCrypto(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope: 'claim-crypto:$id:$claimTxHash',
+      ),
       body: jsonEncode(ClaimCryptoRequest(claimTxHash: claimTxHash).toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -308,7 +332,9 @@ class TradesService {
   Future<TradeModel> refundCrypto(String id, {required String refundTxHash}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.refundCrypto(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope: 'refund-crypto:$id:$refundTxHash',
+      ),
       body: jsonEncode(RefundCryptoRequest(refundTxHash: refundTxHash).toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -323,7 +349,10 @@ class TradesService {
   Future<TradeModel> markFiatSentWithProof(String id, {String? note, List<String>? proofUrls}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.markFiatSent(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope:
+            'mark-fiat-sent-proof:$id:${note ?? ''}:${proofUrls?.join(',') ?? ''}',
+      ),
       body: jsonEncode(MarkFiatSentRequest(note: note, proofUrls: proofUrls).toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -342,7 +371,10 @@ class TradesService {
   }) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.openDispute(id)),
-      headers: await _headers(idempotencyKey: true),
+      headers: await _headers(
+        idempotencyScope:
+            'open-dispute:$id:$reason:${description ?? ''}:${evidenceUrls?.join(',') ?? ''}',
+      ),
       body: jsonEncode(OpenDisputeRequest(
         tradeId: id,
         reason: reason,
@@ -408,7 +440,8 @@ class TradesService {
     final uri = TradesHttp.uri(TradesEndpoints.proofs(id));
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $token'
-      ..headers['x-idempotency-key'] = const Uuid().v4()
+      ..headers['x-idempotency-key'] =
+          _idempotencyForScope('upload-proof:$id:${file.path}:${file.lengthSync()}')
       ..fields['type'] = type;
     if (note != null && note.isNotEmpty) request.fields['note'] = note;
     if (referenceNo != null && referenceNo.isNotEmpty) {

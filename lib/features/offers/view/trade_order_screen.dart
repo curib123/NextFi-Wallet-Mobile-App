@@ -98,6 +98,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   bool _actionLoading = false;
   String? _actionError;
   bool _isOnline = true;
+  bool _lockPendingVerification = false;
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
 
   Timer? _countdownTimer;
@@ -110,9 +111,18 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   // ── Role helpers ─────────────────────────────────────────────────────────
 
   bool get _isUserBuyer =>
-      _currentUserId != null && _trade.buyerId == _currentUserId;
-  bool get _isUserSeller =>
-      _currentUserId != null && _trade.sellerId == _currentUserId;
+      _currentUserId != null &&
+      _trade.offerType.isUserBuyer(
+        _currentUserId!,
+        _trade.buyerId,
+        _trade.sellerId,
+      );
+  bool get _isUserSeller {
+    if (_currentUserId == null) return false;
+    final isParticipant =
+        _trade.buyerId == _currentUserId || _trade.sellerId == _currentUserId;
+    return isParticipant && !_isUserBuyer;
+  }
 
   bool get _isUserEscrowLocker {
     if (_trade.offerType == TradeOfferType.sell) return _isUserSeller;
@@ -240,6 +250,11 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       setState(() {
         _trade = updated;
         _refreshing = false;
+        final hasEscrowId =
+            (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+        if (hasEscrowId || _trade.status != TradeStatus.created) {
+          _lockPendingVerification = false;
+        }
         if (!_trade.status.isActive) _pollTimer?.cancel();
       });
       _startCountdown();
@@ -252,6 +267,15 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   // ── Actions ───────────────────────────────────────────────────────────────
 
   Future<void> _lockCrypto() async {
+    if (_lockPendingVerification) {
+      showFloatingSnackBar(
+        context,
+        message:
+            'Escrow lock transaction is still being verified. Refresh and wait a few seconds.',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
     final ok = await _showConfirm(
       title: 'Lock Crypto in Escrow',
       body:
@@ -263,13 +287,25 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     if (!ok) return;
 
     _runAction(() async {
+      await _refresh(silent: true);
+      final hasEscrowId =
+          (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+      if (_trade.status != TradeStatus.created || hasEscrowId) {
+        throw Exception(
+          'Escrow may already be funded for this trade. Please refresh.',
+        );
+      }
+
       final stellarSvc = context.read<StellarWalletServices>();
       final seedVM = context.read<SeedKeypairVM>();
       final kp = await seedVM.deriveKeyPair();
 
-      final asset = _trade.asset.toUpperCase() == 'XLM'
-          ? Asset.NATIVE
-          : AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer);
+      final assetCode = _trade.asset.toUpperCase();
+      final asset = switch (assetCode) {
+        'XLM' => Asset.NATIVE,
+        'USDC' => AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer),
+        _ => throw Exception('Unsupported escrow asset: $assetCode'),
+      };
 
       String recipientAddress = _trade.cryptoReceiverAddress.trim();
       if (recipientAddress.isEmpty && _trade.offerType == TradeOfferType.buy) {
@@ -303,9 +339,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       );
 
       if (cbId == null || cbId.isEmpty) {
+        if (mounted) setState(() => _lockPendingVerification = true);
         throw Exception(
-          'Could not verify escrow balance from transaction. '
-          'Please wait a few seconds and try again.',
+          'Lock tx submitted but escrow ID is not indexed yet. '
+          'Please refresh and wait before trying again.',
         );
       }
 
@@ -457,7 +494,34 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     }, successMsg: 'Trade cancelled');
   }
 
+  Future<void> _openDispute() async {
+    final ok = await _showConfirm(
+      title: 'Open Dispute',
+      body:
+          'Open a dispute for this trade? Support will review evidence and resolve.',
+      confirmLabel: 'Open Dispute',
+      isDestructive: true,
+    );
+    if (!ok) return;
+    _runAction(() async {
+      final u = await _tradesCore.openDispute(
+        _trade.id,
+        reason: 'User reported issue',
+        description: 'Opened from trade room.',
+      );
+      if (mounted) setState(() => _trade = u);
+    }, successMsg: 'Dispute opened. Support has been notified.');
+  }
+
   void _navigateToMessages() {
+    if (!(_isUserBuyer || _isUserSeller)) {
+      showFloatingSnackBar(
+        context,
+        message: 'Only trade participants can access this chat.',
+        type: SnackBarType.error,
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => TradeMessagesScreen(trade: _trade)),
     );
@@ -688,7 +752,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           onClaimCrypto: _claimCrypto,
           onCancel: _cancelTrade,
           onRefund: _refundCrypto,
+          onDispute: _openDispute,
           onMessages: _navigateToMessages,
+          lockPendingVerification: _lockPendingVerification,
           colors: colors,
         ),
       ),
@@ -757,15 +823,16 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
               onTap: _refresh,
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: _GlassIconButton(
-            icon: Icons.chat_bubble_outline_rounded,
-            colors: colors,
-            accent: colors.primary,
-            onTap: _navigateToMessages,
+        if (_isUserBuyer || _isUserSeller)
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: _GlassIconButton(
+              icon: Icons.chat_bubble_outline_rounded,
+              colors: colors,
+              accent: colors.primary,
+              onTap: _navigateToMessages,
+            ),
           ),
-        ),
       ],
     );
   }
@@ -2774,7 +2841,9 @@ class _BottomActions extends StatelessWidget {
     required this.onClaimCrypto,
     required this.onCancel,
     required this.onRefund,
+    required this.onDispute,
     required this.onMessages,
+    required this.lockPendingVerification,
     required this.colors,
   });
   final TradeModel trade;
@@ -2791,7 +2860,9 @@ class _BottomActions extends StatelessWidget {
   final VoidCallback onClaimCrypto;
   final VoidCallback onCancel;
   final VoidCallback onRefund;
+  final VoidCallback onDispute;
   final VoidCallback onMessages;
+  final bool lockPendingVerification;
   final AppColor colors;
 
   @override
@@ -2815,6 +2886,7 @@ class _BottomActions extends StatelessWidget {
         isParticipant &&
         s == TradeStatus.created &&
         isUserEscrowLocker &&
+        !lockPendingVerification &&
         canAttemptLock;
     final bool showMarkFiat =
         isParticipant && s == TradeStatus.cryptoLocked && isUserFiatPayer;
@@ -2835,11 +2907,16 @@ class _BottomActions extends StatelessWidget {
     final bool showCancel =
         isParticipant &&
         (s == TradeStatus.created || s == TradeStatus.cryptoLocked);
+    final bool showDispute =
+        isParticipant &&
+        (s == TradeStatus.cryptoLocked ||
+            s == TradeStatus.fiatSent ||
+            s == TradeStatus.fiatConfirmed);
 
     final hasPrimary =
         showLock || showMarkFiat || showConfirm || showClaim || showRefund;
 
-    if (!hasPrimary && !showCancel && !s.isActive)
+    if (!hasPrimary && !showCancel && !showDispute && !s.isActive)
       return const SizedBox.shrink();
 
     return Container(
@@ -2897,7 +2974,7 @@ class _BottomActions extends StatelessWidget {
               onTap: onRefund,
             ),
           if (hasPrimary) const SizedBox(height: 10),
-          if (showCancel || s.isActive)
+          if (showCancel || showDispute || s.isActive)
             Row(
               children: [
                 if (showCancel)
@@ -2912,7 +2989,21 @@ class _BottomActions extends StatelessWidget {
                       compact: true,
                     ),
                   ),
-                if (showCancel && s.isActive) const SizedBox(width: 10),
+                if (showCancel && (showDispute || s.isActive))
+                  const SizedBox(width: 10),
+                if (showDispute)
+                  Expanded(
+                    child: _ActionBtn(
+                      label: 'Dispute',
+                      icon: Icons.flag_rounded,
+                      accent: colors.warning,
+                      loading: loading,
+                      onTap: onDispute,
+                      outlined: false,
+                      compact: true,
+                    ),
+                  ),
+                if (showDispute && s.isActive) const SizedBox(width: 10),
                 if (s.isActive)
                   Expanded(
                     child: _ActionBtn(

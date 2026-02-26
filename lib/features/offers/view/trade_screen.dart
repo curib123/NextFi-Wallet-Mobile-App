@@ -228,6 +228,17 @@ class _TradeScreenState extends State<TradeScreen> {
     if (v == null || v.trim().isEmpty) return 'Enter an amount';
     final parsed = double.tryParse(v.trim());
     if (parsed == null || parsed <= 0) return 'Invalid amount';
+    if (_effectivePrice > 0) {
+      final fiat = parsed * _effectivePrice;
+      final min = offer.minAmount;
+      final max = offer.maxAmount;
+      if (min != null && fiat < min) {
+        return 'Below minimum ${offer.fiatCurrency} ${min.toStringAsFixed(2)}';
+      }
+      if (max != null && fiat > max) {
+        return 'Above maximum ${offer.fiatCurrency} ${max.toStringAsFixed(2)}';
+      }
+    }
     if (offer.availableQty != null && parsed > offer.availableQty!) {
       return 'Maximum available is ${offer.availableQty} ${offer.asset}';
     }
@@ -266,6 +277,15 @@ class _TradeScreenState extends State<TradeScreen> {
     }
     if (_selectedOfferMethod == null) {
       showFloatingSnackBar(context, message: 'Please select a payment method.', type: SnackBarType.error);
+      return;
+    }
+    if (_userIsBuyer && _selectedMerchantAccount == null) {
+      showFloatingSnackBar(
+        context,
+        message:
+            'Seller payment account is unavailable for this method. Choose another method/offer.',
+        type: SnackBarType.error,
+      );
       return;
     }
     if (!_userIsBuyer && _selectedUserAccount == null) {
