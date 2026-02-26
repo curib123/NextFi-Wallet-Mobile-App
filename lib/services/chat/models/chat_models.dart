@@ -218,6 +218,29 @@ class ChatUserLite {
       return fromProfile.isEmpty ? null : fromProfile;
     })();
 
+    final parsedAvatarUrl = (() {
+      final direct = _readString(json, const [
+        'avatarUrl',
+        'avatar_url',
+        'avatar',
+        'profileImage',
+        'profile_image',
+        'photoUrl',
+        'photo_url',
+      ]);
+      if (direct.isNotEmpty) return direct;
+      final fromProfile = readFromProfile(const [
+        'avatarUrl',
+        'avatar_url',
+        'avatar',
+        'profileImage',
+        'profile_image',
+        'photoUrl',
+        'photo_url',
+      ]);
+      return fromProfile.isEmpty ? null : fromProfile;
+    })();
+
     final parsedName = (() {
       final direct = _readString(json, const ['name', 'fullName', 'full_name']);
       if (direct.isNotEmpty) return direct;
@@ -232,14 +255,7 @@ class ChatUserLite {
       id: _readString(json, const ['id', 'userId', 'user_id']),
       email: _readString(json, const ['email']),
       name: parsedName,
-      avatarUrl: (() {
-        final value = _readString(json, const [
-          'avatarUrl',
-          'avatar_url',
-          'avatar',
-        ]);
-        return value.isEmpty ? null : value;
-      })(),
+      avatarUrl: parsedAvatarUrl,
       username: parsedUsername,
       displayName: parsedDisplayName,
     );
@@ -504,6 +520,9 @@ class ChatDirectThreadModel {
       'friend',
       'counterparty',
       'otherUser',
+      'user',
+      'participant',
+      'participantUser',
     ]);
     final lastMessageMap = _readMap(json, const [
       'lastMessage',

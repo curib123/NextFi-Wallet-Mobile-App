@@ -134,14 +134,13 @@ class RecipientAddressVM with ChangeNotifier {
 
   /// Refresh data from API
   Future<void> refresh() async {
-    if (!_isAuthenticated) return;
-
     _loading = true;
     notifyListeners();
 
     try {
       final recipients = await _api.getAllRecipients(activeOnly: false);
       _items = recipients.map(_toLocal).toList();
+      _isAuthenticated = true;
       _lastError = null;
     } catch (e, st) {
       _lastError = e;

@@ -95,11 +95,15 @@ class ScannerVM extends ChangeNotifier with WidgetsBindingObserver {
 
     if (value == null || value.trim().isEmpty) return;
 
+    consumeResult(value.trim());
+  }
+
+  void consumeResult(String rawValue) {
+    if (state.isBusy || rawValue.trim().isEmpty) return;
     _setState(state.copyWith(
       isBusy: true,
-      lastRawValue: value.trim(),
+      lastRawValue: rawValue.trim(),
     ));
-
     pause();
     onResult?.call(state.lastRawValue!);
   }
@@ -154,10 +158,10 @@ class ScannerVM extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState appState) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!_controller.value.isInitialized) return;
 
-    switch (appState) {
+    switch (state) {
       case AppLifecycleState.resumed:
         if (!_controller.value.isRunning &&
             state.status != ScannerStatus.paused) {
@@ -183,4 +187,8 @@ class ScannerVM extends ChangeNotifier with WidgetsBindingObserver {
     _controller.dispose();
     super.dispose();
   }
+}
+
+extension on AppLifecycleState {
+  get status => null;
 }

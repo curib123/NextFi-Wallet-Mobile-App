@@ -1802,7 +1802,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Failed to load',
+              'Failed to load', 
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 18,

@@ -26,12 +26,16 @@ class RecipientWalletsApi {
 
     if (rawList == null) return const <RecipientWallet>[];
 
-    return rawList
-        .whereType<Map>()
-        .map(
-          (item) => RecipientWallet.fromJson(Map<String, dynamic>.from(item)),
-        )
-        .toList();
+    final parsed = <RecipientWallet>[];
+    for (final item in rawList) {
+      if (item is! Map) continue;
+      try {
+        parsed.add(RecipientWallet.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {
+        // Skip malformed rows so one bad item doesn't hide the whole list.
+      }
+    }
+    return parsed;
   }
 
   // POST /recipient-wallets

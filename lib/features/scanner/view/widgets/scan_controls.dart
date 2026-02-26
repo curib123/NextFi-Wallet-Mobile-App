@@ -9,6 +9,7 @@ class ScanControls extends StatelessWidget {
     required this.facing,
     required this.onToggleTorch,
     required this.onSwitchCamera,
+    this.onPickFromGallery,
     this.onClose,
   });
 
@@ -16,6 +17,7 @@ class ScanControls extends StatelessWidget {
   final CameraFacing facing;
   final VoidCallback onToggleTorch;
   final VoidCallback onSwitchCamera;
+  final VoidCallback? onPickFromGallery;
   final VoidCallback? onClose;
 
   @override
@@ -39,6 +41,13 @@ class ScanControls extends StatelessWidget {
               isActive: torchOn,
             ),
             const SizedBox(width: 12),
+            if (onPickFromGallery != null) ...[
+              _buildControl(
+                icon: LucideIcons.image,
+                onTap: onPickFromGallery!,
+              ),
+              const SizedBox(width: 12),
+            ],
             _buildControl(
               icon: LucideIcons.flipHorizontal2,
               onTap: onSwitchCamera,

@@ -34,24 +34,37 @@ class RecipientWallet {
   String get effectiveAddress =>
       publicAddress.trim().isNotEmpty ? publicAddress : (address ?? '');
 
+  static String _asString(dynamic v, {String fallback = ''}) {
+    if (v == null) return fallback;
+    if (v is String) return v;
+    return v.toString();
+  }
+
+  static DateTime _asDateTime(dynamic v) {
+    if (v is DateTime) return v;
+    if (v is String && v.isNotEmpty) return DateTime.parse(v);
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   factory RecipientWallet.fromJson(Map<String, dynamic> json) {
-    final rawName = (json['name'] ?? json['label'] ?? '') as String;
-    final rawPublicAddress =
-        (json['publicAddress'] ?? json['address'] ?? '') as String;
+    final rawName = _asString(json['name'] ?? json['label']);
+    final rawPublicAddress = _asString(json['publicAddress'] ?? json['address']);
     return RecipientWallet(
-      id: json['id'] as String,
-      userId: json['userId'] as String,
+      id: _asString(json['id']),
+      userId: _asString(json['userId']),
       name: rawName,
       publicAddress: rawPublicAddress,
-      address: json['address'] as String?,
-      label: json['label'] as String?,
-      colorTag: (json['colorTag'] ?? json['color']) as String?,
-      network: json['network'] as String? ?? 'stellar',
-      memo: json['memo'] as String?,
-      memoType: json['memoType'] as String?,
+      address: json['address'] == null ? null : _asString(json['address']),
+      label: json['label'] == null ? null : _asString(json['label']),
+      colorTag: (json['colorTag'] ?? json['color']) == null
+          ? null
+          : _asString(json['colorTag'] ?? json['color']),
+      network: _asString(json['network'], fallback: 'stellar'),
+      memo: json['memo'] == null ? null : _asString(json['memo']),
+      memoType: json['memoType'] == null ? null : _asString(json['memoType']),
       isActive: json['isActive'] as bool? ?? true,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      createdAt: _asDateTime(json['createdAt']),
+      updatedAt: _asDateTime(json['updatedAt']),
     );
   }
 

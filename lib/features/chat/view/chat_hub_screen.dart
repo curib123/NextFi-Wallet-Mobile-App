@@ -72,14 +72,79 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   Map<String, ChatFriendModel> get _friendsByUserId {
     final map = <String, ChatFriendModel>{};
     for (final f in _friends) {
-      final id = f.friendUserId.trim();
+      final id = f.friendUserId.trim().toLowerCase();
       if (id.isNotEmpty) map[id] = f;
     }
     return map;
   }
 
+  Map<String, ChatFriendModel> get _friendsByUsername {
+    final map = <String, ChatFriendModel>{};
+    for (final f in _friends) {
+      final username = (f.friend.username ?? '').trim().toLowerCase();
+      if (username.isNotEmpty) map[username] = f;
+    }
+    return map;
+  }
+
+  List<ChatDirectThreadModel> _sortThreads(
+    List<ChatDirectThreadModel> threads,
+  ) {
+    final sorted = [...threads];
+    DateTime stamp(ChatDirectThreadModel t) =>
+        t.lastMessage?.createdAt ??
+        t.updatedAt ??
+        t.createdAt ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    sorted.sort((a, b) => stamp(b).compareTo(stamp(a)));
+    return sorted;
+  }
+
+  ChatFriendModel? _resolvedThreadFriendModel(ChatDirectThreadModel t) {
+    final idKey = t.friendUserId.trim().toLowerCase();
+    if (idKey.isNotEmpty) {
+      final byId = _friendsByUserId[idKey];
+      if (byId != null) return byId;
+    }
+    final threadUsername = (t.friendUser?.username ?? '').trim().toLowerCase();
+    if (threadUsername.isNotEmpty) {
+      final byUsername = _friendsByUsername[threadUsername];
+      if (byUsername != null) return byUsername;
+    }
+    return null;
+  }
+
+  ChatUserLite? _resolvedThreadFriend(ChatDirectThreadModel t) {
+    return _resolvedThreadFriendModel(t)?.friend ?? t.friendUser;
+  }
+
+  String _threadFriendName(ChatDirectThreadModel t) {
+    final id = t.friendUserId.trim();
+    final name = _friendName(_resolvedThreadFriend(t), id);
+    final normalized = name.trim();
+    if (normalized.isNotEmpty) return normalized;
+    if (id.isNotEmpty) return _looksLikeId(id) ? 'Friend' : id;
+    return 'Friend';
+  }
+
+  String? _threadFriendAvatar(ChatDirectThreadModel t) {
+    return _resolvedThreadFriend(t)?.avatarUrl;
+  }
+
+  String _threadFriendUsername(ChatDirectThreadModel t) {
+    final username = _resolvedThreadFriend(t)?.username?.trim() ?? '';
+    if (username.isNotEmpty) return '@$username';
+    return '';
+  }
+
+  bool _isThreadFriendOnline(ChatDirectThreadModel t) {
+    final friend = _resolvedThreadFriendModel(t);
+    if (friend == null) return false;
+    return _isFriendOnline(friend);
+  }
+
   List<ChatDirectThreadModel> get _friendThreads {
-    return _threads;
+    return _sortThreads(_threads);
   }
 
   @override
@@ -143,7 +208,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       final allIncoming = (data[2] as ChatPaged<ChatFriendRequestModel>).items;
       final allOutgoing = (data[3] as ChatPaged<ChatFriendRequestModel>).items;
 
-      final threads = _filterThreads(allThreads, q);
+      final threads = _sortThreads(_filterThreads(allThreads, q));
       final friends = _sortFriends(_filterFriends(allFriends, q));
       final incoming = _filterRequests(allIncoming, q);
       final outgoing = _filterRequests(allOutgoing, q);
@@ -443,11 +508,11 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     final query = q.trim();
     if (query.isEmpty) return threads;
     return threads.where((t) {
-      final resolvedFriend = _friendsByUserId[t.friendUserId.trim()]?.friend;
-      final title = _friendName(resolvedFriend ?? t.friendUser, t.friendUserId);
-      final preview = t.lastMessage == null
+      final title = _threadFriendName(t);
+      final previewRaw = t.lastMessage == null
           ? ''
           : ChatEnvelopeCodec.decodeText(t.lastMessage!.ciphertext);
+      final preview = previewRaw.trim().isEmpty ? 'Message' : previewRaw.trim();
       return _containsQuery(title, query) || _containsQuery(preview, query);
     }).toList();
   }
@@ -881,13 +946,19 @@ class _ChatHubScreenState extends State<ChatHubScreen>
   }
 
   Widget _buildThreadTile(AppColor c, ChatDirectThreadModel t) {
-    final resolvedFriend = _friendsByUserId[t.friendUserId.trim()]?.friend;
-    final title = _friendName(resolvedFriend ?? t.friendUser, t.friendUserId);
-    final preview = t.lastMessage == null
+    final resolvedFriend = _resolvedThreadFriend(t);
+    final title = _threadFriendName(t);
+    final previewRaw = t.lastMessage == null
         ? 'No messages yet'
         : ChatEnvelopeCodec.decodeText(t.lastMessage!.ciphertext);
-    final at = t.updatedAt == null ? '' : _relativeTime(t.updatedAt!);
+    final preview = previewRaw.trim().isEmpty
+        ? (t.lastMessage == null ? 'No messages yet' : 'Message')
+        : previewRaw.trim();
+    final username = _threadFriendUsername(t);
+    final stamp = t.lastMessage?.createdAt ?? t.updatedAt;
+    final at = stamp == null ? '' : _relativeTime(stamp);
     final unread = t.unreadCount;
+    final online = _isThreadFriendOnline(t);
 
     return InkWell(
       onTap: () async {
@@ -896,7 +967,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
             builder: (_) => ChatThreadScreen(
               thread: t,
               username: resolvedFriend?.username ?? t.friendUser?.username,
-              avatarUrl: resolvedFriend?.avatarUrl ?? t.friendUser?.avatarUrl,
+              avatarUrl: _threadFriendAvatar(t),
             ),
           ),
         );
@@ -905,117 +976,129 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       splashColor: c.primary.withOpacity(0.05),
       highlightColor: c.primary.withOpacity(0.03),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                ChatUserAvatar(
-                  name: title,
-                  avatarUrl:
-                      resolvedFriend?.avatarUrl ?? t.friendUser?.avatarUrl,
-                  size: 52,
-                ),
-                if (unread > 0)
-                  Positioned(
-                    bottom: 1,
-                    right: 1,
-                    child: Container(
-                      width: 13,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        color: c.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: c.background, width: 2.5),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: unread > 0
+                  ? c.primary.withOpacity(0.28)
+                  : c.border.withOpacity(0.28),
+            ),
+          ),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ChatUserAvatar(
+                    name: title,
+                    avatarUrl: _threadFriendAvatar(t),
+                    size: 50,
+                  ),
+                  if (online)
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.surface, width: 2),
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 15,
-                            fontWeight: unread > 0
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (at.isNotEmpty)
-                        Text(
-                          at,
-                          style: TextStyle(
-                            color: unread > 0 ? c.primary : c.textSecondary,
-                            fontSize: 11.5,
-                            fontWeight: unread > 0
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          preview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: unread > 0
-                                ? c.textPrimary.withOpacity(0.82)
-                                : c.textSecondary,
-                            fontSize: 13,
-                            fontWeight: unread > 0
-                                ? FontWeight.w500
-                                : FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                      if (unread > 1) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: c.primary,
-                            borderRadius: BorderRadius.circular(99),
-                          ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
                           child: Text(
-                            unread > 99 ? '99+' : '$unread',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 15,
+                              fontWeight: unread > 0
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
                             ),
                           ),
                         ),
+                        if (at.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            at,
+                            style: TextStyle(
+                              color: unread > 0 ? c.primary : c.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: unread > 0
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ],
+                    ),
+                    if (username.isNotEmpty) ...[
+                      const SizedBox(height: 1),
+                      Text(
+                        username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: c.textSecondary, fontSize: 12),
+                      ),
                     ],
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: unread > 0
+                            ? c.textPrimary.withOpacity(0.9)
+                            : c.textSecondary,
+                        fontSize: 13,
+                        fontWeight: unread > 0
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: unread > 0
+                      ? c.primary.withOpacity(0.14)
+                      : c.textSecondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  unread > 0
+                      ? (unread > 99 ? 'Unread 99+' : 'Unread $unread')
+                      : 'Read',
+                  style: TextStyle(
+                    color: unread > 0 ? c.primary : c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1644,3 +1727,4 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
     );
   }
 }
+

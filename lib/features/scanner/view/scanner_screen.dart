@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -19,6 +20,40 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
+  final ImagePicker _imagePicker = ImagePicker();
+
+  Future<void> _pickQrFromGallery(ScannerVM vm) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+      );
+      if (image == null) return;
+
+      final BarcodeCapture? capture = await vm.controller.analyzeImage(
+        image.path,
+      );
+      if (!mounted) return;
+
+      final raw = (capture?.barcodes.isNotEmpty ?? false)
+          ? capture!.barcodes.first.rawValue?.trim()
+          : null;
+
+      if (raw == null || raw.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No QR code found in selected image')),
+        );
+        return;
+      }
+
+      vm.consumeResult(raw);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to read QR image: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
@@ -63,6 +98,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     facing: state.facing,
                     onToggleTorch: vm.toggleTorch,
                     onSwitchCamera: vm.switchCamera,
+                    onPickFromGallery: () => _pickQrFromGallery(vm),
                     onClose: () {
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();

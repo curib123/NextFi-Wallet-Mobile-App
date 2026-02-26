@@ -4,9 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/modal/login_success_modal.dart';
 import 'package:next_fi/features/auth/view_model/login_vm.dart';
+import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
+import 'package:provider/provider.dart';
 
 // ═══════════════════════════════════════════════════════════════════
 // LOGIN SCREEN
@@ -83,6 +85,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (user != null) {
         HapticFeedback.mediumImpact();
         await _autoSyncWalletsAfterLogin();
+        await _refreshRecipientAddressBook();
         if (!mounted) return;
 
         // Show success modal
@@ -122,6 +125,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (user != null) {
         HapticFeedback.mediumImpact();
         await _autoSyncWalletsAfterLogin();
+        await _refreshRecipientAddressBook();
         if (!mounted) return;
 
         // Show success modal
@@ -166,6 +170,16 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _autoSyncWalletsAfterLogin() async {
     try {
       await WalletManager.I.syncToBackend();
+    } catch (_) {
+      // Best effort only: login should still complete.
+    }
+  }
+
+  Future<void> _refreshRecipientAddressBook() async {
+    try {
+      final vm = context.read<RecipientAddressVM>();
+      vm.setAuthState(true);
+      await vm.refresh();
     } catch (_) {
       // Best effort only: login should still complete.
     }

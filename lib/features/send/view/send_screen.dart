@@ -512,6 +512,7 @@ class _SendScreenState extends State<SendScreen> {
       context,
       MaterialPageRoute(builder: (innerCtx) => RecipientListWidget(
         colors: AppColor.of(innerCtx),
+        showAppBar: true,
         onSelect: (r) => Navigator.of(innerCtx).pop(r),
         fromAddress: widget.address,
       )),
@@ -894,6 +895,7 @@ class _SendScreenState extends State<SendScreen> {
         ),
         decoration: InputDecoration(
           hintText: 'Paste G… address or alias*$_federationDomain',
+          hintMaxLines: 1,
           hintStyle: TextStyle(
             color: t.metaColor,
             fontSize: 13.5,
@@ -932,28 +934,37 @@ class _SendScreenState extends State<SendScreen> {
       runSpacing: 6,
       children: _federationSuggestions.map((s) => GestureDetector(
         onTap: () => _applyFederationSuggestion(s),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: t.primaryTint,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: t.primaryTintBorder, width: 1),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width - 80,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.atSign, size: 13, color: c.primary),
-              const SizedBox(width: 6),
-              Text(
-                s,
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: t.primaryTint,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: t.primaryTintBorder, width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(LucideIcons.atSign, size: 13, color: c.primary),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    s,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       )).toList(),
@@ -1365,6 +1376,9 @@ class _RecipientBadge extends StatelessWidget {
                     style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.4, height: 1.2)),
                 const SizedBox(height: 3),
                 Text(_short(address),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
                     style: TextStyle(color: t.monoColor, fontFamily: 'monospace', fontSize: 11.5, letterSpacing: 0.3, height: 1.3)),
               ],
             ),
@@ -1430,6 +1444,9 @@ class _RecipientAddTemplate extends StatelessWidget {
                     style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13.5, letterSpacing: -0.3, height: 1.2)),
                 const SizedBox(height: 3),
                 Text(_short(address),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
                     style: TextStyle(color: t.monoColor, fontFamily: 'monospace', fontSize: 11.5, letterSpacing: 0.3, height: 1.3)),
               ],
             ),

@@ -47,6 +47,7 @@ class RecipientListWidget extends StatelessWidget {
   final double? xlmBalance;
   final double? usdcBalance;
   final VoidCallback? onLoginPressed;
+  final bool showAppBar;
 
   const RecipientListWidget({
     super.key,
@@ -56,6 +57,7 @@ class RecipientListWidget extends StatelessWidget {
     this.xlmBalance,
     this.usdcBalance,
     this.onLoginPressed,
+    this.showAppBar = false,
   });
 
   @override
@@ -66,6 +68,22 @@ class RecipientListWidget extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: colors.surface,
+      appBar: showAppBar
+          ? AppBar(
+              backgroundColor: colors.surface,
+              elevation: 0,
+              centerTitle: true,
+              title: Text(
+                'Recipients',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              iconTheme: IconThemeData(color: colors.textPrimary),
+            )
+          : null,
       body: Consumer<RecipientAddressVM>(
         builder: (context, prov, _) {
           if (!prov.isAuthenticated && !prov.loading) {
@@ -547,85 +565,89 @@ class _RecipientTileState extends State<RecipientTile> {
       onTap: widget.onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
-        padding: EdgeInsets.all(c ? 12 : 14),
         decoration: BoxDecoration(
           color: _pressed
               ? colors.surface.withValues(alpha: isDark ? 0.9 : 0.6)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(_S.r16),
-          border: Border(
-            // Signature left accent stripe
-            left: BorderSide(color: accent, width: 3),
-            top: BorderSide(
-              color: _pressed
-                  ? accent.withValues(alpha: isDark ? 0.3 : 0.22)
-                  : colors.border.withValues(alpha: isDark ? 0.2 : 0.25),
-              width: 1,
-            ),
-            right: BorderSide(
-              color: _pressed
-                  ? accent.withValues(alpha: isDark ? 0.3 : 0.22)
-                  : colors.border.withValues(alpha: isDark ? 0.2 : 0.25),
-              width: 1,
-            ),
-            bottom: BorderSide(
-              color: _pressed
-                  ? accent.withValues(alpha: isDark ? 0.3 : 0.22)
-                  : colors.border.withValues(alpha: isDark ? 0.2 : 0.25),
-              width: 1,
-            ),
+          border: Border.all(
+            color: _pressed
+                ? accent.withValues(alpha: isDark ? 0.3 : 0.22)
+                : colors.border.withValues(alpha: isDark ? 0.2 : 0.25),
+            width: 1,
           ),
         ),
-        child: Row(
-          children: [
-            _TileAvatar(
-              accent: accent,
-              name: widget.recipient.name,
-              compact: c,
-            ),
-            SizedBox(width: c ? _S.s10 : _S.s12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.recipient.name.isEmpty
-                        ? 'Unnamed'
-                        : widget.recipient.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.textPrimary,
-                      fontSize: c ? 14 : 15,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    _short(widget.recipient.address),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.textSecondary,
-                      fontSize: c ? 11 : 12,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(_S.r16),
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                child: Container(width: 3, color: accent),
               ),
-            ),
-            SizedBox(width: c ? _S.s8 : _S.s12),
-            _MoreMenuButton(
-              colors: colors,
-              recipient: widget.recipient,
-              onEdit: widget.onEdit,
-              onDelete: widget.onDelete,
-            ),
-          ],
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  c ? 14 : 17,
+                  c ? 12 : 14,
+                  c ? 12 : 14,
+                  c ? 12 : 14,
+                ),
+                child: Row(
+                  children: [
+                    _TileAvatar(
+                      accent: accent,
+                      name: widget.recipient.name,
+                      compact: c,
+                    ),
+                    SizedBox(width: c ? _S.s10 : _S.s12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.recipient.name.isEmpty
+                                ? 'Unnamed'
+                                : widget.recipient.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: c ? 14 : 15,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _short(widget.recipient.address),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: c ? 11 : 12,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: c ? _S.s8 : _S.s12),
+                    _MoreMenuButton(
+                      colors: colors,
+                      recipient: widget.recipient,
+                      onEdit: widget.onEdit,
+                      onDelete: widget.onDelete,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
