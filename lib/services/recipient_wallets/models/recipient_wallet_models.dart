@@ -1,9 +1,12 @@
 class RecipientWallet {
   final String id;
   final String userId;
-  final String address;
-  final String network;
+  final String name;
+  final String publicAddress;
+  final String? address;
   final String? label;
+  final String? colorTag;
+  final String network;
   final String? memo;
   final String? memoType;
   final bool isActive;
@@ -13,9 +16,12 @@ class RecipientWallet {
   const RecipientWallet({
     required this.id,
     required this.userId,
-    required this.address,
-    required this.network,
+    required this.name,
+    required this.publicAddress,
+    this.address,
     this.label,
+    this.colorTag,
+    required this.network,
     this.memo,
     this.memoType,
     required this.isActive,
@@ -24,16 +30,23 @@ class RecipientWallet {
   });
 
   // Backward-compatible aliases for existing UI code.
-  String get name => (label ?? '').trim();
-  String get publicAddress => address;
+  String get displayName => name.trim().isNotEmpty ? name.trim() : (label ?? '').trim();
+  String get effectiveAddress =>
+      publicAddress.trim().isNotEmpty ? publicAddress : (address ?? '');
 
   factory RecipientWallet.fromJson(Map<String, dynamic> json) {
+    final rawName = (json['name'] ?? json['label'] ?? '') as String;
+    final rawPublicAddress =
+        (json['publicAddress'] ?? json['address'] ?? '') as String;
     return RecipientWallet(
       id: json['id'] as String,
       userId: json['userId'] as String,
-      address: (json['address'] ?? json['publicAddress'] ?? '') as String,
+      name: rawName,
+      publicAddress: rawPublicAddress,
+      address: json['address'] as String?,
+      label: json['label'] as String?,
+      colorTag: (json['colorTag'] ?? json['color']) as String?,
       network: json['network'] as String? ?? 'stellar',
-      label: (json['label'] ?? json['name']) as String?,
       memo: json['memo'] as String?,
       memoType: json['memoType'] as String?,
       isActive: json['isActive'] as bool? ?? true,
@@ -45,9 +58,12 @@ class RecipientWallet {
   Map<String, dynamic> toJson() => {
     'id': id,
     'userId': userId,
-    'address': address,
-    'network': network,
+    'name': name,
+    'publicAddress': publicAddress,
+    if (address != null) 'address': address,
     if (label != null) 'label': label,
+    if (colorTag != null) 'colorTag': colorTag,
+    'network': network,
     if (memo != null) 'memo': memo,
     if (memoType != null) 'memoType': memoType,
     'isActive': isActive,
@@ -58,9 +74,12 @@ class RecipientWallet {
   RecipientWallet copyWith({
     String? id,
     String? userId,
+    String? name,
+    String? publicAddress,
     String? address,
-    String? network,
     String? label,
+    String? colorTag,
+    String? network,
     String? memo,
     String? memoType,
     bool? isActive,
@@ -70,9 +89,12 @@ class RecipientWallet {
     return RecipientWallet(
       id: id ?? this.id,
       userId: userId ?? this.userId,
+      name: name ?? this.name,
+      publicAddress: publicAddress ?? this.publicAddress,
       address: address ?? this.address,
-      network: network ?? this.network,
       label: label ?? this.label,
+      colorTag: colorTag ?? this.colorTag,
+      network: network ?? this.network,
       memo: memo ?? this.memo,
       memoType: memoType ?? this.memoType,
       isActive: isActive ?? this.isActive,
@@ -83,48 +105,60 @@ class RecipientWallet {
 }
 
 class CreateRecipientWalletRequest {
-  final String address;
+  final String name;
+  final String publicAddress;
   final String? network;
-  final String? label;
+  final String? colorTag;
+  final bool? isActive;
   final String? memo;
   final String? memoType;
 
   const CreateRecipientWalletRequest({
-    required this.address,
+    required this.name,
+    required this.publicAddress,
     this.network,
-    this.label,
+    this.colorTag,
+    this.isActive,
     this.memo,
     this.memoType,
   });
 
   Map<String, dynamic> toJson() => {
-    'address': address,
+    'name': name,
+    'publicAddress': publicAddress,
     if (network != null) 'network': network,
-    if (label != null) 'label': label,
+    if (colorTag != null) 'colorTag': colorTag,
+    if (isActive != null) 'isActive': isActive,
     if (memo != null) 'memo': memo,
     if (memoType != null) 'memoType': memoType,
   };
 }
 
 class UpdateRecipientWalletRequest {
-  final String? address;
+  final String? name;
+  final String? publicAddress;
   final String? network;
-  final String? label;
+  final String? colorTag;
+  final bool? isActive;
   final String? memo;
   final String? memoType;
 
   const UpdateRecipientWalletRequest({
-    this.address,
+    this.name,
+    this.publicAddress,
     this.network,
-    this.label,
+    this.colorTag,
+    this.isActive,
     this.memo,
     this.memoType,
   });
 
   Map<String, dynamic> toJson() => {
-    if (address != null) 'address': address,
+    if (name != null) 'name': name,
+    if (publicAddress != null) 'publicAddress': publicAddress,
     if (network != null) 'network': network,
-    if (label != null) 'label': label,
+    if (colorTag != null) 'colorTag': colorTag,
+    if (isActive != null) 'isActive': isActive,
     if (memo != null) 'memo': memo,
     if (memoType != null) 'memoType': memoType,
   };

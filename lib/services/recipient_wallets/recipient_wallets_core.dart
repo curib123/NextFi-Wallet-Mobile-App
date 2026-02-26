@@ -41,20 +41,30 @@ class RecipientWalletsCore {
 
   /// Add a new recipient wallet address (JWT required).
   Future<RecipientWallet> addRecipient({
-    String? name, // legacy alias
+    String? name,
     String? label,
     required String address,
+    String? publicAddress,
     String? network,
+    String? colorTag,
+    String? color, // legacy alias
+    bool? isActive,
     String? memo,
     String? memoType,
   }) {
+    final resolvedName = (name ?? label)?.trim();
+    final resolvedAddress = (publicAddress ?? address).trim();
     return svc.recipientWallets.create(
       CreateRecipientWalletRequest(
-        label: (label ?? name)?.trim().isEmpty == true
-            ? null
-            : (label ?? name)?.trim(),
-        address: address,
+        name: (resolvedName == null || resolvedName.isEmpty)
+            ? resolvedAddress
+            : resolvedName,
+        publicAddress: resolvedAddress,
         network: network ?? 'stellar',
+        colorTag: (colorTag ?? color)?.trim().isEmpty == true
+            ? null
+            : (colorTag ?? color)?.trim(),
+        isActive: isActive,
         memo: memo,
         memoType: memoType,
       ),
@@ -93,18 +103,24 @@ class RecipientWalletsCore {
   /// Update recipient details (JWT required).
   Future<RecipientWallet> updateRecipient({
     required String id,
-    String? name, // legacy alias
+    String? name,
     String? label,
     String? address,
+    String? publicAddress,
     String? network,
+    String? colorTag,
+    String? color, // legacy alias
+    bool? isActive,
     String? memo,
     String? memoType,
   }) {
     return svc.recipientWallets.update(
       id: id,
-      label: label ?? name,
-      address: address,
+      name: name ?? label,
+      publicAddress: publicAddress ?? address,
       network: network,
+      colorTag: colorTag ?? color,
+      isActive: isActive,
       memo: memo,
       memoType: memoType,
     );

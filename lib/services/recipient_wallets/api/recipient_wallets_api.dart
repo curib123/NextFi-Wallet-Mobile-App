@@ -83,16 +83,20 @@ class RecipientWalletsApi {
   // PATCH /recipient-wallets/:id
   Future<RecipientWallet> update({
     required String id,
-    String? label,
-    String? address,
+    String? name,
+    String? publicAddress,
     String? network,
+    String? colorTag,
+    bool? isActive,
     String? memo,
     String? memoType,
   }) async {
     final body = <String, dynamic>{};
-    if (label != null) body['label'] = label;
-    if (address != null) body['address'] = address;
+    if (name != null) body['name'] = name;
+    if (publicAddress != null) body['publicAddress'] = publicAddress;
     if (network != null) body['network'] = network;
+    if (colorTag != null) body['colorTag'] = colorTag;
+    if (isActive != null) body['isActive'] = isActive;
     if (memo != null) body['memo'] = memo;
     if (memoType != null) body['memoType'] = memoType;
 
@@ -125,6 +129,11 @@ class RecipientWalletsApi {
   // DELETE /recipient-wallets/:id
   Future<bool> delete(String id) async {
     final response = await _api.delete('/recipient-wallets/$id', auth: true);
-    return response != null && response['success'] == true;
+    if (response == null) return true;
+    if (response is Map<String, dynamic>) {
+      final success = response['success'];
+      if (success is bool) return success;
+    }
+    return true;
   }
 }

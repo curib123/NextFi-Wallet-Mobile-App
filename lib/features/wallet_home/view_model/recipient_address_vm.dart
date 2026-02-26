@@ -81,17 +81,40 @@ class RecipientAddressVM with ChangeNotifier {
 
   /// Convert API RecipientWallet to local RecipientAddressModel
   RecipientAddressModel _toLocal(RecipientWallet wallet) {
-    final displayName = wallet.name.trim().isEmpty
-        ? wallet.publicAddress
-        : wallet.name.trim();
+    final displayName = wallet.displayName.isEmpty
+        ? wallet.effectiveAddress
+        : wallet.displayName;
     return RecipientAddressModel(
       id: wallet.id,
       name: displayName,
-      address: wallet.publicAddress,
-      color: _extractColorFromMemo(wallet.memo) ?? 0xFF7B16FF,
+      address: wallet.effectiveAddress,
+      color:
+          _parseColorTag(wallet.colorTag) ??
+          _extractColorFromMemo(wallet.memo) ??
+          0xFF7B16FF,
       createdAt: wallet.createdAt,
       updatedAt: wallet.updatedAt,
     );
+  }
+
+  int? _parseColorTag(String? colorTag) {
+    if (colorTag == null) return null;
+    final raw = colorTag.trim();
+    if (raw.isEmpty) return null;
+    if (raw.startsWith('#') && raw.length == 7) {
+      final rgb = raw.substring(1);
+      final parsed = int.tryParse('FF$rgb', radix: 16);
+      return parsed;
+    }
+    if (raw.startsWith('0x')) {
+      return int.tryParse(raw.substring(2), radix: 16);
+    }
+    return int.tryParse(raw);
+  }
+
+  String _toColorTag(int color) {
+    final rgb = color & 0x00FFFFFF;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
   /// Extract color from memo field (format: "color:0xFF7B16FF;memo text")
@@ -107,15 +130,6 @@ class RecipientAddressVM with ChangeNotifier {
     } catch (_) {
       return null;
     }
-  }
-
-  /// Create memo with embedded color (format: "color:0xFF7B16FF;actual memo")
-  String _createMemoWithColor(int color, String? userMemo) {
-    final colorPart = 'color:$color';
-    if (userMemo == null || userMemo.trim().isEmpty) {
-      return colorPart;
-    }
-    return '$colorPart;${userMemo.trim()}';
   }
 
   /// Refresh data from API
@@ -166,7 +180,7 @@ class RecipientAddressVM with ChangeNotifier {
         name: name.trim(),
         address: address.trim(),
         network: 'stellar',
-        memo: _createMemoWithColor(color, null),
+        colorTag: _toColorTag(color),
       );
 
       final local = _toLocal(wallet);
@@ -212,16 +226,11 @@ class RecipientAddressVM with ChangeNotifier {
       if (current == null) return null;
 
       // Prepare memo with color
-      String? newMemo;
-      if (color != null) {
-        newMemo = _createMemoWithColor(color, null);
-      }
-
       final wallet = await _api.updateRecipient(
         id: id,
         name: name?.trim(),
         address: address?.trim(),
-        memo: newMemo,
+        colorTag: color == null ? null : _toColorTag(color),
       );
 
       final local = _toLocal(wallet);
