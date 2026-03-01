@@ -244,11 +244,11 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     final senderKeyId = (_senderKeyId ?? '').trim();
     if (senderKeyId.isEmpty) return;
 
-    final source = await _showProofSourceSheet();
-    if (!mounted || source == null) return;
+    final config = await _showProofSourceSheet();
+    if (!mounted || config == null) return;
 
     final ImagePicker picker = ImagePicker();
-    final XFile? file = await picker.pickImage(source: source);
+    final XFile? file = await picker.pickImage(source: config.source);
     if (!mounted || file == null) return;
     setState(() => _proofUploading = true);
     _pollTimer?.cancel();
@@ -268,13 +268,17 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       final uploadedProofUrl = await _tradesCore.uploadProof(
         widget.trade.id,
         file: File(file.path),
-        type: 'FIAT',
+        type: config.type,
+        referenceNo: config.referenceNo,
+        txHash: config.txHash,
       );
-      final proofMsg = 'Payment proof uploaded: ${file.name}';
-      final payload = uploadedProofUrl == null || uploadedProofUrl.trim().isEmpty
+      final proofMsg = '${config.type} proof uploaded: ${file.name}';
+      final payload =
+          uploadedProofUrl == null || uploadedProofUrl.trim().isEmpty
           ? proofMsg
           : jsonEncode({
               'text': proofMsg,
+              'proofType': config.type,
               'proofUrl': uploadedProofUrl.trim(),
               'proofUrls': [uploadedProofUrl.trim()],
               'imageUrl': uploadedProofUrl.trim(),
@@ -325,8 +329,8 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     }
   }
 
-  Future<ImageSource?> _showProofSourceSheet() async {
-    return showModalBottomSheet<ImageSource>(
+  Future<_ProofPickResult?> _showProofSourceSheet() async {
+    return showModalBottomSheet<_ProofPickResult>(
       context: context,
       backgroundColor: AppColor.of(context).surface,
       builder: (_) => _ProofSourceSheet(colors: AppColor.of(context)),
@@ -1083,12 +1087,64 @@ class _InputBar extends StatelessWidget {
 
 // ─── Proof source picker sheet ────────────────────────────────────────────────
 
-class _ProofSourceSheet extends StatelessWidget {
+class _ProofPickResult {
+  const _ProofPickResult({
+    required this.source,
+    required this.type,
+    this.referenceNo,
+    this.txHash,
+  });
+
+  final ImageSource source;
+  final String type;
+  final String? referenceNo;
+  final String? txHash;
+}
+
+class _ProofSourceSheet extends StatefulWidget {
   const _ProofSourceSheet({required this.colors});
   final AppColor colors;
 
   @override
+  State<_ProofSourceSheet> createState() => _ProofSourceSheetState();
+}
+
+class _ProofSourceSheetState extends State<_ProofSourceSheet> {
+  String _proofType = 'FIAT';
+  final TextEditingController _referenceCtrl = TextEditingController();
+  final TextEditingController _txHashCtrl = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _referenceCtrl.dispose();
+    _txHashCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submitWith(ImageSource source) {
+    final type = _proofType.trim().toUpperCase();
+    final txHash = _txHashCtrl.text.trim();
+    if (type == 'CRYPTO' && txHash.isEmpty) {
+      setState(() => _error = 'Transaction hash is required for CRYPTO proof.');
+      return;
+    }
+    Navigator.pop(
+      context,
+      _ProofPickResult(
+        source: source,
+        type: type,
+        referenceNo: _referenceCtrl.text.trim().isEmpty
+            ? null
+            : _referenceCtrl.text.trim(),
+        txHash: txHash.isEmpty ? null : txHash,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final colors = widget.colors;
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       decoration: BoxDecoration(
@@ -1123,23 +1179,73 @@ class _ProofSourceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Select a screenshot or photo as evidence of payment.',
+            'Select proof type and upload a screenshot/photo.',
             textAlign: TextAlign.center,
             style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _ProofTypeChip(
+                  colors: colors,
+                  label: 'FIAT',
+                  selected: _proofType == 'FIAT',
+                  onTap: () => setState(() => _proofType = 'FIAT'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ProofTypeChip(
+                  colors: colors,
+                  label: 'CRYPTO',
+                  selected: _proofType == 'CRYPTO',
+                  onTap: () => setState(() => _proofType = 'CRYPTO'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _ProofField(
+            colors: colors,
+            controller: _referenceCtrl,
+            hint: 'Reference no. (optional)',
+          ),
+          if (_proofType == 'CRYPTO') ...[
+            const SizedBox(height: 10),
+            _ProofField(
+              colors: colors,
+              controller: _txHashCtrl,
+              hint: 'Transaction hash (required)',
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _error!,
+                style: GoogleFonts.sora(
+                  fontSize: 11.5,
+                  color: colors.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
           _SourceOption(
             icon: Icons.photo_library_rounded,
             label: 'Choose from Gallery',
             colors: colors,
-            onTap: () => Navigator.pop(context, ImageSource.gallery),
+            onTap: () => _submitWith(ImageSource.gallery),
           ),
           const SizedBox(height: 10),
           _SourceOption(
             icon: Icons.camera_alt_rounded,
             label: 'Take a Photo',
             colors: colors,
-            onTap: () => Navigator.pop(context, ImageSource.camera),
+            onTap: () => _submitWith(ImageSource.camera),
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -1165,6 +1271,81 @@ class _ProofSourceSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProofTypeChip extends StatelessWidget {
+  const _ProofTypeChip({
+    required this.colors,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppColor colors;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? colors.primary : colors.background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: selected ? colors.primary : colors.border),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.sora(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? colors.onPrimary : colors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProofField extends StatelessWidget {
+  const _ProofField({
+    required this.colors,
+    required this.controller,
+    required this.hint,
+  });
+
+  final AppColor colors;
+  final TextEditingController controller;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TextField(
+        controller: controller,
+        style: GoogleFonts.sora(fontSize: 13, color: colors.textPrimary),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: GoogleFonts.sora(
+            fontSize: 12.5,
+            color: colors.textSecondary,
+          ),
+          border: InputBorder.none,
+        ),
       ),
     );
   }

@@ -42,9 +42,11 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   bool _loading = true;
   bool _submitting = false;
   bool _syncingAvailableQty = false;
+  bool _checkingUsdcTrustline = false;
   bool _totalQtyTouched = false;
   bool _isApplyingAutoTotalQty = false;
   double? _lastAutoTotalQty;
+  bool? _activeWalletHasUsdcTrustline;
   Timer? _availableQtyTimer;
   double? _liveAvailableQty;
   List<OfferModel> _offers = const [];
@@ -169,7 +171,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     final totalQ = double.tryParse(_totalQtyCtrl.text.trim());
     final availQInput = double.tryParse(_availableQtyCtrl.text.trim());
     final window = int.tryParse(_paymentWindowCtrl.text.trim());
-    final addr = _activeWallet()?.publicAddress.trim() ?? '';
+    final wallet = _activeWallet();
+    final addr = wallet?.publicAddress.trim() ?? '';
 
     if (asset.isEmpty || fiat.isEmpty) {
       _snack('Asset and fiat are required.', error: true);
@@ -199,7 +202,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       _snack('Enter a valid payment window (minutes).', error: true);
       return;
     }
-    if (addr.isEmpty) {
+    if (wallet == null || addr.isEmpty) {
       _snack('Active wallet receiver address is required.', error: true);
       return;
     }
@@ -211,7 +214,36 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
+      if (asset == 'USDC') {
+        final hasTrustline = await _syncUsdcTrustlineStatus(
+          accountId: addr,
+          silent: false,
+        );
+        if (hasTrustline != true) {
+          _snack(
+            'Active wallet has no USDC trustline. Add USDC first before creating a USDC offer.',
+            error: true,
+          );
+          return;
+        }
+      }
+
       final liveAvail = await _syncAvailableQtyForSubmit(asset);
+      if (liveAvail <= 0) {
+        _snack(
+          'Active wallet has no available $asset balance for this offer.',
+          error: true,
+        );
+        return;
+      }
+      if (totalQ != null && totalQ > liveAvail) {
+        _snack(
+          'Total qty cannot exceed active wallet balance (${_formatQty(liveAvail)} $asset). Tap Sync Balance.',
+          error: true,
+        );
+        return;
+      }
+
       final effectiveAvailableQty = totalQ == null
           ? liveAvail
           : math.min(totalQ, liveAvail);
@@ -404,9 +436,20 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     }
     try {
       final qty = await _fetchLiveAvailableQty(selected);
+      bool? hasUsdcTrustline = _activeWalletHasUsdcTrustline;
+      if (selected == 'USDC') {
+        final accountId = _activeWallet()?.publicAddress.trim() ?? '';
+        hasUsdcTrustline = await _syncUsdcTrustlineStatus(
+          accountId: accountId,
+          silent: true,
+        );
+      } else if (_activeWalletHasUsdcTrustline != null) {
+        hasUsdcTrustline = null;
+      }
       if (!mounted) return;
       setState(() {
         _liveAvailableQty = qty;
+        _activeWalletHasUsdcTrustline = hasUsdcTrustline;
         _availableQtyCtrl.text = _formatQty(qty);
       });
       _applyAutoTotalQty(qty, force: forceTotalQty);
@@ -428,9 +471,18 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   Future<double> _syncAvailableQtyForSubmit(String assetUpper) async {
     try {
       final qty = await _fetchLiveAvailableQty(assetUpper.toUpperCase());
+      bool? hasUsdcTrustline = _activeWalletHasUsdcTrustline;
+      if (assetUpper.toUpperCase() == 'USDC') {
+        final accountId = _activeWallet()?.publicAddress.trim() ?? '';
+        hasUsdcTrustline = await _syncUsdcTrustlineStatus(
+          accountId: accountId,
+          silent: true,
+        );
+      }
       if (mounted) {
         setState(() {
           _liveAvailableQty = qty;
+          _activeWalletHasUsdcTrustline = hasUsdcTrustline;
           _availableQtyCtrl.text = _formatQty(qty);
         });
         _applyAutoTotalQty(qty);
@@ -442,6 +494,45 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         _availableQtyCtrl.text = _formatQty(fallback);
       }
       return fallback;
+    }
+  }
+
+  Future<bool?> _syncUsdcTrustlineStatus({
+    required String accountId,
+    bool silent = true,
+  }) async {
+    final trimmed = accountId.trim();
+    if (trimmed.isEmpty) {
+      if (mounted) {
+        setState(() => _activeWalletHasUsdcTrustline = null);
+      }
+      return null;
+    }
+    if (!silent && mounted) {
+      setState(() => _checkingUsdcTrustline = true);
+    }
+    try {
+      final stellar = context.read<StellarWalletServices>();
+      final has = await stellar.hasUsdcTrustline(trimmed);
+      if (mounted) {
+        setState(() => _activeWalletHasUsdcTrustline = has);
+      }
+      return has;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _activeWalletHasUsdcTrustline = null);
+      }
+      if (!silent && mounted) {
+        _snack(
+          'Unable to verify USDC trustline right now. Please try again.',
+          error: true,
+        );
+      }
+      return null;
+    } finally {
+      if (!silent && mounted) {
+        setState(() => _checkingUsdcTrustline = false);
+      }
     }
   }
 
@@ -548,6 +639,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                                     isVisible: _isVisible,
                                     submitting: _submitting,
                                     syncingAvailableQty: _syncingAvailableQty,
+                                    checkingUsdcTrustline:
+                                        _checkingUsdcTrustline,
+                                    hasUsdcTrustline:
+                                        _activeWalletHasUsdcTrustline,
                                     onTypeChanged: (v) =>
                                         setState(() => _type = v),
                                     onAssetChanged: (v) {
@@ -1110,6 +1205,8 @@ class _CreateOfferCard extends StatelessWidget {
     required this.isVisible,
     required this.submitting,
     required this.syncingAvailableQty,
+    required this.checkingUsdcTrustline,
+    required this.hasUsdcTrustline,
     required this.onTypeChanged,
     required this.onAssetChanged,
     required this.onMethodChanged,
@@ -1136,6 +1233,8 @@ class _CreateOfferCard extends StatelessWidget {
   final bool isVisible;
   final bool submitting;
   final bool syncingAvailableQty;
+  final bool checkingUsdcTrustline;
+  final bool? hasUsdcTrustline;
   final ValueChanged<OfferType> onTypeChanged;
   final ValueChanged<String?> onAssetChanged;
   final ValueChanged<PaymentMethodModel?> onMethodChanged;
@@ -1146,6 +1245,11 @@ class _CreateOfferCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selectedAsset = (selectedAssetSymbol ?? '').trim().toUpperCase();
+    final isUsdc = selectedAsset == 'USDC';
+    final showUsdcTrustlineWarning =
+        isUsdc && hasUsdcTrustline == false && !checkingUsdcTrustline;
+
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
@@ -1289,6 +1393,23 @@ class _CreateOfferCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
+                          if (isUsdc) ...[
+                            Text(
+                              checkingUsdcTrustline
+                                  ? 'Checking USDC trustline on active wallet...'
+                                  : hasUsdcTrustline == true
+                                  ? 'USDC trustline detected on active wallet.'
+                                  : 'USDC trustline is required to create a USDC offer.',
+                              style: TextStyle(
+                                color: hasUsdcTrustline == true
+                                    ? c.success
+                                    : c.warning,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
@@ -1311,6 +1432,20 @@ class _CreateOfferCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (showUsdcTrustlineWarning) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Add USDC trustline in wallet first, then sync balance.',
+                            style: TextStyle(
+                              color: c.warning,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       _Field(
                         c: c,

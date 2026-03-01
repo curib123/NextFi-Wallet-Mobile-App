@@ -14,16 +14,30 @@ typedef TokenProvider = Future<String?> Function();
 
 class TradesService {
   TradesService({required this.tokenProvider, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;
   final Map<String, (String key, DateTime at)> _idempotencyScopeCache = {};
 
   static const Set<String> _envelopeKeys = {
-    'data', 'item', 'items', 'trade', 'trades', 'meta', 'pagination',
-    'page', 'limit', 'total', 'totalPages', 'success', 'ok',
-    'status', 'message', 'error', 'errors',
+    'data',
+    'item',
+    'items',
+    'trade',
+    'trades',
+    'meta',
+    'pagination',
+    'page',
+    'limit',
+    'total',
+    'totalPages',
+    'success',
+    'ok',
+    'status',
+    'message',
+    'error',
+    'errors',
   };
 
   String _idempotencyForScope(String scope) {
@@ -209,7 +223,11 @@ class TradesService {
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for POST /trades', body: res.body);
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for POST /trades',
+      body: res.body,
+    );
   }
 
   Future<TradesPagedResponse> listPaged({
@@ -237,7 +255,10 @@ class TradesService {
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for GET /trades/$id');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for GET /trades/$id',
+    );
   }
 
   Future<TradeModel> markFiatSent(String id) async {
@@ -250,7 +271,10 @@ class TradesService {
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for mark-fiat-sent');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for mark-fiat-sent',
+    );
   }
 
   Future<TradeModel> confirmFiat(String id, {String? fiatRefNo}) async {
@@ -265,15 +289,16 @@ class TradesService {
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for confirm-fiat');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for confirm-fiat',
+    );
   }
 
   Future<TradeModel> cancelTrade(String id, {String? reason}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.cancel(id)),
-      headers: await _headers(
-        idempotencyScope: 'cancel:$id:${reason ?? ''}',
-      ),
+      headers: await _headers(idempotencyScope: 'cancel:$id:${reason ?? ''}'),
       body: jsonEncode(CancelTradeRequest(reason: reason).toJson()),
     );
     TradesHttp.ensureOk(res);
@@ -288,32 +313,40 @@ class TradesService {
   /// Lock crypto into escrow (Step B in both SELL and BUY flows)
   /// - SELL offer: merchant locks crypto
   /// - BUY offer: buyer locks crypto
-  Future<TradeModel> lockCrypto(String id, {
+  Future<TradeModel> lockCrypto(
+    String id, {
     required String claimableBalanceId,
     required String createTxHash,
   }) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.lockCrypto(id)),
       headers: await _headers(
-        idempotencyScope:
-            'lock-crypto:$id:$claimableBalanceId:$createTxHash',
+        idempotencyScope: 'lock-crypto:$id:$claimableBalanceId:$createTxHash',
       ),
-      body: jsonEncode(LockCryptoRequest(
-        claimableBalanceId: claimableBalanceId,
-        createTxHash: createTxHash,
-      ).toJson()),
+      body: jsonEncode(
+        LockCryptoRequest(
+          claimableBalanceId: claimableBalanceId,
+          createTxHash: createTxHash,
+        ).toJson(),
+      ),
     );
     TradesHttp.ensureOk(res);
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for lock-crypto');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for lock-crypto',
+    );
   }
 
   /// Claim crypto from escrow (Step E in both flows)
   /// - SELL offer: buyer claims crypto
   /// - BUY offer: merchant claims crypto
-  Future<TradeModel> claimCrypto(String id, {required String claimTxHash}) async {
+  Future<TradeModel> claimCrypto(
+    String id, {
+    required String claimTxHash,
+  }) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.claimCrypto(id)),
       headers: await _headers(
@@ -325,46 +358,67 @@ class TradesService {
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for claim-crypto');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for claim-crypto',
+    );
   }
 
   /// Refund crypto from expired escrow (only original locker can call)
-  Future<TradeModel> refundCrypto(String id, {required String refundTxHash}) async {
+  Future<TradeModel> refundCrypto(
+    String id, {
+    required String refundTxHash,
+  }) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.refundCrypto(id)),
       headers: await _headers(
         idempotencyScope: 'refund-crypto:$id:$refundTxHash',
       ),
-      body: jsonEncode(RefundCryptoRequest(refundTxHash: refundTxHash).toJson()),
+      body: jsonEncode(
+        RefundCryptoRequest(refundTxHash: refundTxHash).toJson(),
+      ),
     );
     TradesHttp.ensureOk(res);
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for refund-crypto');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for refund-crypto',
+    );
   }
 
   // ── Mark Fiat Sent with proof ─────────────────────────────────────────────
 
-  Future<TradeModel> markFiatSentWithProof(String id, {String? note, List<String>? proofUrls}) async {
+  Future<TradeModel> markFiatSentWithProof(
+    String id, {
+    String? note,
+    List<String>? proofUrls,
+  }) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.markFiatSent(id)),
       headers: await _headers(
         idempotencyScope:
             'mark-fiat-sent-proof:$id:${note ?? ''}:${proofUrls?.join(',') ?? ''}',
       ),
-      body: jsonEncode(MarkFiatSentRequest(note: note, proofUrls: proofUrls).toJson()),
+      body: jsonEncode(
+        MarkFiatSentRequest(note: note, proofUrls: proofUrls).toJson(),
+      ),
     );
     TradesHttp.ensureOk(res);
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for mark-fiat-sent');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for mark-fiat-sent',
+    );
   }
 
   // ── Dispute ───────────────────────────────────────────────────────────────
 
-  Future<TradeModel> openDispute(String id, {
+  Future<TradeModel> openDispute(
+    String id, {
     required String reason,
     String? description,
     List<String>? evidenceUrls,
@@ -375,18 +429,23 @@ class TradesService {
         idempotencyScope:
             'open-dispute:$id:$reason:${description ?? ''}:${evidenceUrls?.join(',') ?? ''}',
       ),
-      body: jsonEncode(OpenDisputeRequest(
-        tradeId: id,
-        reason: reason,
-        description: description,
-        evidenceUrls: evidenceUrls,
-      ).toJson()),
+      body: jsonEncode(
+        OpenDisputeRequest(
+          tradeId: id,
+          reason: reason,
+          description: description,
+          evidenceUrls: evidenceUrls,
+        ).toJson(),
+      ),
     );
     TradesHttp.ensureOk(res);
     final data = TradesHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data);
     if (map != null) return TradeModel.fromJson(map);
-    throw TradeApiException(res.statusCode, 'Unexpected response for open-dispute');
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for open-dispute',
+    );
   }
 
   // ── Messages ─────────────────────────────────────────────────────────────
@@ -432,6 +491,7 @@ class TradesService {
     String type = 'FIAT',
     String? note,
     String? referenceNo,
+    String? txHash,
   }) async {
     final token = await tokenProvider();
     if (token == null || token.isEmpty) {
@@ -440,9 +500,21 @@ class TradesService {
     final uri = TradesHttp.uri(TradesEndpoints.proofs(id));
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $token'
-      ..headers['x-idempotency-key'] =
-          _idempotencyForScope('upload-proof:$id:${file.path}:${file.lengthSync()}')
-      ..fields['type'] = type;
+      ..headers['x-idempotency-key'] = _idempotencyForScope(
+        'upload-proof:$id:${file.path}:${file.lengthSync()}',
+      )
+      ..fields['type'] = type.toUpperCase();
+    final normalizedType = type.trim().toUpperCase();
+    if (normalizedType == 'CRYPTO') {
+      final hash = (txHash ?? '').trim();
+      if (hash.isEmpty) {
+        throw TradeApiException(
+          400,
+          'txHash is required when uploading CRYPTO proof',
+        );
+      }
+      request.fields['txHash'] = hash;
+    }
     if (note != null && note.isNotEmpty) request.fields['note'] = note;
     if (referenceNo != null && referenceNo.isNotEmpty) {
       request.fields['referenceNo'] = referenceNo;
@@ -459,6 +531,16 @@ class TradesService {
     }
     final proofUrl = _extractUploadedFileUrl(data);
     return proofUrl.isEmpty ? null : proofUrl;
+  }
+
+  Future<List<Map<String, dynamic>>> getTradeProofs(String id) async {
+    final res = await _client.get(
+      TradesHttp.uri(TradesEndpoints.proofs(id)),
+      headers: await _headers(),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    return _extractList(data);
   }
 
   void dispose() => _client.close();

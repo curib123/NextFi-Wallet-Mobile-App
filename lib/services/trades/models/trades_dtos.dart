@@ -2,7 +2,7 @@ import 'package:next_fi/services/trades/models/trades_models.dart';
 
 class CreateTradeRequest {
   final String offerId;
-  final String paymentMethodId;  // UUID, from offer's paymentMethods
+  final String paymentMethodId; // UUID, from offer's paymentMethods
   final String? buyerPaymentAccountId;
   final String cryptoAmount;
   final String fiatAmount;
@@ -116,9 +116,7 @@ class ClaimCryptoRequest {
 
   const ClaimCryptoRequest({required this.claimTxHash});
 
-  Map<String, dynamic> toJson() => {
-    'claimTxHash': claimTxHash,
-  };
+  Map<String, dynamic> toJson() => {'claimTxHash': claimTxHash};
 }
 
 /// Request to refund crypto from expired escrow
@@ -127,30 +125,32 @@ class RefundCryptoRequest {
 
   const RefundCryptoRequest({required this.refundTxHash});
 
-  Map<String, dynamic> toJson() => {
-    'refundTxHash': refundTxHash,
-  };
+  Map<String, dynamic> toJson() => {'refundTxHash': refundTxHash};
 }
 
 /// Request to upload payment proof
 class UploadPaymentProofRequest {
   final String tradeId;
   final String type; // 'FIAT' or 'CRYPTO'
-  final String? description;
-  final List<String>? fileUrls;
+  final String? note;
+  final String? referenceNo;
+  final String? txHash;
 
   const UploadPaymentProofRequest({
     required this.tradeId,
     required this.type,
-    this.description,
-    this.fileUrls,
+    this.note,
+    this.referenceNo,
+    this.txHash,
   });
 
   Map<String, dynamic> toJson() => {
     'tradeId': tradeId,
     'type': type,
-    if (description != null && description!.isNotEmpty) 'description': description,
-    if (fileUrls != null && fileUrls!.isNotEmpty) 'fileUrls': fileUrls,
+    if (note != null && note!.isNotEmpty) 'note': note,
+    if (referenceNo != null && referenceNo!.isNotEmpty)
+      'referenceNo': referenceNo,
+    if (txHash != null && txHash!.isNotEmpty) 'txHash': txHash,
   };
 }
 
@@ -171,7 +171,9 @@ class OpenDisputeRequest {
   Map<String, dynamic> toJson() => {
     'tradeId': tradeId,
     'reason': reason,
-    if (description != null && description!.isNotEmpty) 'description': description,
-    if (evidenceUrls != null && evidenceUrls!.isNotEmpty) 'evidenceUrls': evidenceUrls,
+    if (description != null && description!.isNotEmpty)
+      'description': description,
+    if (evidenceUrls != null && evidenceUrls!.isNotEmpty)
+      'evidenceUrls': evidenceUrls,
   };
 }

@@ -354,9 +354,9 @@ class _LoginScreenState extends State<LoginScreen>
           BoxShadow(
             color: colors.primary.withValues(alpha: 0.25),
             blurRadius: 16,
-            offset: const Offset(0, 6),
+            offset: const Offset(0, 6), 
           ),
-        ],
+        ], 
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),

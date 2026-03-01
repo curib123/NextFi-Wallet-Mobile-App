@@ -5,8 +5,15 @@ class MerchantPaymentAccountListQuery {
   final bool? activeOnly;
   final int? page;
   final int? limit;
+
   /// Filter by seller/merchant user ID — buyers use this to find where to send fiat.
   final String? sellerId;
+
+  /// Compatibility filter: some APIs use `userId` instead of `sellerId`.
+  final String? userId;
+
+  /// Compatibility filter: some APIs use merchant profile id.
+  final String? merchantProfileId;
 
   const MerchantPaymentAccountListQuery({
     this.q,
@@ -15,6 +22,8 @@ class MerchantPaymentAccountListQuery {
     this.page,
     this.limit,
     this.sellerId,
+    this.userId,
+    this.merchantProfileId,
   });
 
   Map<String, String> toQueryMap() => {
@@ -24,7 +33,11 @@ class MerchantPaymentAccountListQuery {
     if (activeOnly != null) 'activeOnly': activeOnly! ? 'true' : 'false',
     if (page != null && page! > 0) 'page': page!.toString(),
     if (limit != null && limit! > 0) 'limit': limit!.toString(),
-    if (sellerId != null && sellerId!.trim().isNotEmpty) 'sellerId': sellerId!.trim(),
+    if (sellerId != null && sellerId!.trim().isNotEmpty)
+      'sellerId': sellerId!.trim(),
+    if (userId != null && userId!.trim().isNotEmpty) 'userId': userId!.trim(),
+    if (merchantProfileId != null && merchantProfileId!.trim().isNotEmpty)
+      'merchantProfileId': merchantProfileId!.trim(),
   };
 }
 

@@ -32,7 +32,6 @@ import 'package:next_fi/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/services/chat/models/chat_models.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/secure_storage/security_storage.dart';
-import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
@@ -201,7 +200,6 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
 
     final currency = context.watch<CurrencyVM>();
     final assetsVM = context.watch<AssetVM>();
-    final stellar = context.read<StellarWalletServices>();
 
     final currencyFmt = NumberFormat.simpleCurrency(
       name: currency.fiat.toUpperCase(),
@@ -310,9 +308,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                           onItemTap: (token) {
                             vm.onReceivePressed(initialToken: token);
                           },
-                          hasUsdcTrustline: stellar.hasUsdcTrustline(
-                            s.address ?? '',
-                          ),
+                          hasUsdcTrustline: null,
                         ),
                       ),
                       TabKeepAlive(

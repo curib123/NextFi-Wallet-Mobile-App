@@ -165,13 +165,19 @@ class TradeEscrowModel {
         v == null ? null : DateTime.tryParse(v.toString());
     return TradeEscrowModel(
       id: json['id']?.toString() ?? '',
-      claimableBalanceId: json['claimableBalanceId']?.toString() ??
+      claimableBalanceId:
+          json['claimableBalanceId']?.toString() ??
           json['claimable_balance_id']?.toString(),
       status: EscrowStatus.fromString(json['status']?.toString()),
       txHash: json['txHash']?.toString() ?? json['tx_hash']?.toString(),
-      createTxHash: json['createTxHash']?.toString() ?? json['create_tx_hash']?.toString(),
-      claimTxHash: json['claimTxHash']?.toString() ?? json['claim_tx_hash']?.toString(),
-      refundTxHash: json['refundTxHash']?.toString() ?? json['refund_tx_hash']?.toString(),
+      createTxHash:
+          json['createTxHash']?.toString() ??
+          json['create_tx_hash']?.toString(),
+      claimTxHash:
+          json['claimTxHash']?.toString() ?? json['claim_tx_hash']?.toString(),
+      refundTxHash:
+          json['refundTxHash']?.toString() ??
+          json['refund_tx_hash']?.toString(),
       createdAt: readDate(json['createdAt'] ?? json['created_at']),
       updatedAt: readDate(json['updatedAt'] ?? json['updated_at']),
       expiresAt: readDate(json['expiresAt'] ?? json['expires_at']),
@@ -221,9 +227,7 @@ enum TradeOfferType {
 
   /// Whether the current user is the buyer in this trade
   bool isUserBuyer(String currentUserId, String buyerId, String sellerId) {
-    return this == TradeOfferType.sell 
-        ? currentUserId == buyerId  // SELL offer = user buys = user is buyer
-        : currentUserId == sellerId; // BUY offer = user sells = user is seller
+    return currentUserId == buyerId;
   }
 }
 
@@ -352,8 +356,7 @@ class TradeModel {
 
     // Read offer type from the nested offer object or directly from trade
     TradeOfferType readOfferType() {
-      final type = json['offerType']?.toString() ?? 
-                   json['type']?.toString();
+      final type = json['offerType']?.toString() ?? json['type']?.toString();
       if (type != null && type.isNotEmpty) {
         return TradeOfferType.fromString(type);
       }
@@ -374,22 +377,24 @@ class TradeModel {
       fiatCurrency: readStr(const ['fiatCurrency', 'fiat_currency']),
       cryptoAmount: readDouble(const ['cryptoAmount', 'crypto_amount']),
       fiatAmount: readDouble(const ['fiatAmount', 'fiat_amount']),
-      priceSnapshot: readDoubleOrNull(const ['priceSnapshot', 'price_snapshot']),
+      priceSnapshot: readDoubleOrNull(const [
+        'priceSnapshot',
+        'price_snapshot',
+      ]),
       buyerId: readStr(const ['buyerId', 'buyer_id']),
       sellerId: readStr(const ['sellerId', 'seller_id']),
-      cryptoReceiverAddress: readStr(
-        const ['cryptoReceiverAddress', 'crypto_receiver_address'],
-      ),
+      cryptoReceiverAddress: readStr(const [
+        'cryptoReceiverAddress',
+        'crypto_receiver_address',
+      ]),
       cryptoReceiverMemo: (() {
-        final v = readStr(const [
-          'cryptoReceiverMemo',
-          'crypto_receiver_memo',
-        ]);
+        final v = readStr(const ['cryptoReceiverMemo', 'crypto_receiver_memo']);
         return v.isEmpty ? null : v;
       })(),
-      sellerPaymentAccountId: readStr(
-        const ['sellerPaymentAccountId', 'seller_payment_account_id'],
-      ),
+      sellerPaymentAccountId: readStr(const [
+        'sellerPaymentAccountId',
+        'seller_payment_account_id',
+      ]),
       buyerPaymentAccountId: (() {
         final v = readStr(const [
           'buyerPaymentAccountId',
@@ -403,11 +408,18 @@ class TradeModel {
       ]),
       createdAt: readDate(const ['createdAt', 'created_at']),
       updatedAt: readDate(const ['updatedAt', 'updated_at']),
-      expiresAt: readDate(const ['expiresAt', 'expires_at', 'paymentDeadline',
-        'payment_deadline']),
+      expiresAt: readDate(const [
+        'expiresAt',
+        'expires_at',
+        'paymentDeadline',
+        'payment_deadline',
+      ]),
       paymentDueAt: readDate(const ['paymentDueAt', 'payment_due_at']),
       fiatSentAt: readDate(const ['fiatSentAt', 'fiat_sent_at']),
-      fiatConfirmDueAt: readDate(const ['fiatConfirmDueAt', 'fiat_confirm_due_at']),
+      fiatConfirmDueAt: readDate(const [
+        'fiatConfirmDueAt',
+        'fiat_confirm_due_at',
+      ]),
       autoDisputeTrigger: (() {
         final v = readStr(const ['autoDisputeTrigger', 'auto_dispute_trigger']);
         return v.isEmpty ? null : v;
@@ -416,10 +428,8 @@ class TradeModel {
           ? TradeEscrowModel.fromJson(escrowRaw)
           : null,
       offer: offerRaw is Map<String, dynamic> ? offerRaw : null,
-      sellerPaymentAccount:
-          spaRaw is Map<String, dynamic> ? spaRaw : null,
-      buyerPaymentAccount:
-          bpaRaw is Map<String, dynamic> ? bpaRaw : null,
+      sellerPaymentAccount: spaRaw is Map<String, dynamic> ? spaRaw : null,
+      buyerPaymentAccount: bpaRaw is Map<String, dynamic> ? bpaRaw : null,
     );
   }
 

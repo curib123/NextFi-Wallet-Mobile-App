@@ -49,31 +49,45 @@ class TradesCoreService {
   /// Lock crypto into escrow - called by the party who needs to lock:
   /// - SELL offer: merchant locks crypto
   /// - BUY offer: buyer locks crypto
-  Future<TradeModel> lockCrypto(String id, {
+  Future<TradeModel> lockCrypto(
+    String id, {
     required String claimableBalanceId,
     required String createTxHash,
-  }) => _api.lockCrypto(id, claimableBalanceId: claimableBalanceId, createTxHash: createTxHash);
-  
+  }) => _api.lockCrypto(
+    id,
+    claimableBalanceId: claimableBalanceId,
+    createTxHash: createTxHash,
+  );
+
   /// Claim crypto from escrow - called by the party receiving crypto:
   /// - SELL offer: buyer claims crypto
   /// - BUY offer: merchant claims crypto
   Future<TradeModel> claimCrypto(String id, {required String claimTxHash}) =>
       _api.claimCrypto(id, claimTxHash: claimTxHash);
-  
+
   /// Refund crypto from expired escrow - only original locker can call
   Future<TradeModel> refundCrypto(String id, {required String refundTxHash}) =>
       _api.refundCrypto(id, refundTxHash: refundTxHash);
 
   // Mark fiat sent with proof
-  Future<TradeModel> markFiatSentWithProof(String id, {String? note, List<String>? proofUrls}) =>
-      _api.markFiatSentWithProof(id, note: note, proofUrls: proofUrls);
+  Future<TradeModel> markFiatSentWithProof(
+    String id, {
+    String? note,
+    List<String>? proofUrls,
+  }) => _api.markFiatSentWithProof(id, note: note, proofUrls: proofUrls);
 
   // Dispute
-  Future<TradeModel> openDispute(String id, {
+  Future<TradeModel> openDispute(
+    String id, {
     required String reason,
     String? description,
     List<String>? evidenceUrls,
-  }) => _api.openDispute(id, reason: reason, description: description, evidenceUrls: evidenceUrls);
+  }) => _api.openDispute(
+    id,
+    reason: reason,
+    description: description,
+    evidenceUrls: evidenceUrls,
+  );
 
   // Payment proof upload
   Future<String?> uploadProof(
@@ -82,7 +96,18 @@ class TradesCoreService {
     String type = 'FIAT',
     String? note,
     String? referenceNo,
-  }) => _api.uploadPaymentProof(id, file: file, type: type, note: note, referenceNo: referenceNo);
+    String? txHash,
+  }) => _api.uploadPaymentProof(
+    id,
+    file: file,
+    type: type,
+    note: note,
+    referenceNo: referenceNo,
+    txHash: txHash,
+  );
+
+  Future<List<Map<String, dynamic>>> getTradeProofs(String id) =>
+      _api.getTradeProofs(id);
 
   // Trade messages
   Future<List<Map<String, dynamic>>> getTradeMessages(String id) =>
@@ -96,13 +121,13 @@ class TradesCoreService {
     required String nonce,
     String kind = 'TEXT',
   }) => _api.sendTradeMessage(
-        id,
-        ciphertext: ciphertext,
-        algorithm: algorithm,
-        senderKeyId: senderKeyId,
-        nonce: nonce,
-        kind: kind,
-      );
+    id,
+    ciphertext: ciphertext,
+    algorithm: algorithm,
+    senderKeyId: senderKeyId,
+    nonce: nonce,
+    kind: kind,
+  );
 
   void dispose() => _api.dispose();
 }

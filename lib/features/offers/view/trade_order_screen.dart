@@ -99,6 +99,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   String? _actionError;
   bool _isOnline = true;
   bool _lockPendingVerification = false;
+  bool _proofsLoading = false;
+  List<Map<String, dynamic>> _proofs = const [];
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
 
   Timer? _countdownTimer;
@@ -111,18 +113,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   // ── Role helpers ─────────────────────────────────────────────────────────
 
   bool get _isUserBuyer =>
-      _currentUserId != null &&
-      _trade.offerType.isUserBuyer(
-        _currentUserId!,
-        _trade.buyerId,
-        _trade.sellerId,
-      );
-  bool get _isUserSeller {
-    if (_currentUserId == null) return false;
-    final isParticipant =
-        _trade.buyerId == _currentUserId || _trade.sellerId == _currentUserId;
-    return isParticipant && !_isUserBuyer;
-  }
+      _currentUserId != null && _trade.buyerId == _currentUserId;
+  bool get _isUserSeller =>
+      _currentUserId != null && _trade.sellerId == _currentUserId;
 
   bool get _isUserEscrowLocker {
     if (_trade.offerType == TradeOfferType.sell) return _isUserSeller;
@@ -155,6 +148,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     _startCountdown();
     _startPolling();
     _loadCurrentUserId();
+    unawaited(_loadProofs(silent: true));
 
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -258,9 +252,46 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         if (!_trade.status.isActive) _pollTimer?.cancel();
       });
       _startCountdown();
+      await _loadProofs(silent: true);
     } catch (_) {
       if (!mounted) return;
       if (!silent) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _loadProofs({bool silent = false}) async {
+    if (_proofsLoading) return;
+    if (!silent && mounted) {
+      setState(() => _proofsLoading = true);
+    } else {
+      _proofsLoading = true;
+    }
+    try {
+      final proofs = await _tradesCore.getTradeProofs(_trade.id);
+      proofs.sort((a, b) {
+        DateTime? parse(Map<String, dynamic> row) {
+          final raw =
+              row['createdAt'] ??
+              row['created_at'] ??
+              row['updatedAt'] ??
+              row['updated_at'];
+          return raw == null ? null : DateTime.tryParse(raw.toString());
+        }
+
+        final ad = parse(a) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = parse(b) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bd.compareTo(ad);
+      });
+      if (!mounted) return;
+      setState(() {
+        _proofs = List<Map<String, dynamic>>.from(proofs);
+        _proofsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _proofsLoading = false);
+    } finally {
+      _proofsLoading = false;
     }
   }
 
@@ -394,6 +425,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       }
       final u = await _tradesCore.markFiatSent(_trade.id);
       if (mounted) setState(() => _trade = u);
+      await _loadProofs(silent: true);
     }, successMsg: 'Payment marked as sent — waiting for confirmation');
   }
 
@@ -705,6 +737,15 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
               ),
               const SizedBox(height: 12),
 
+              if (_proofsLoading || _proofs.isNotEmpty) ...[
+                _ProofsCard(
+                  proofs: _proofs,
+                  loading: _proofsLoading,
+                  colors: colors,
+                ),
+                const SizedBox(height: 12),
+              ],
+
               if (_trade.escrow != null) ...[
                 _EscrowCard(escrow: _trade.escrow!, colors: colors),
                 const SizedBox(height: 12),
@@ -878,40 +919,40 @@ class _ConnectivityBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final amber = AppColor.of(context).warning;
     return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-    decoration: BoxDecoration(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: amber),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.wifi_off_rounded, color: amber, size: 16),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'No Connection',
-                style: GoogleFonts.sora(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: amber,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: amber),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.wifi_off_rounded, color: amber, size: 16),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No Connection',
+                  style: GoogleFonts.sora(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: amber,
+                  ),
                 ),
-              ),
-              Text(
-                'Trade is safe. Updates resume when reconnected.',
-                style: GoogleFonts.sora(
-                  fontSize: 11,
-                  color: colors.textSecondary,
+                Text(
+                  'Trade is safe. Updates resume when reconnected.',
+                  style: GoogleFonts.sora(
+                    fontSize: 11,
+                    color: colors.textSecondary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 }
@@ -1160,7 +1201,9 @@ class _CountdownCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final urgent = timeLeft.inMinutes < 5;
-    final accent = urgent ? AppColor.of(context).error : AppColor.of(context).warning;
+    final accent = urgent
+        ? AppColor.of(context).error
+        : AppColor.of(context).warning;
     final totalSecs = 30 * 60.0;
     final progress = (timeLeft.inSeconds / totalSecs).clamp(0.0, 1.0);
 
@@ -1512,11 +1555,7 @@ class _WaitingForEscrowCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(11),
               border: Border.all(color: colors.border),
             ),
-            child: Icon(
-              Icons.hourglass_empty_rounded,
-              color: amber,
-              size: 18,
-            ),
+            child: Icon(Icons.hourglass_empty_rounded, color: amber, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1617,7 +1656,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                        color: blue,
+                    color: blue,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -1741,11 +1780,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(color: colors.border),
                 ),
-                child: Icon(
-                  Icons.payments_rounded,
-                  color: green,
-                  size: 18,
-                ),
+                child: Icon(Icons.payments_rounded, color: green, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1786,11 +1821,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: red,
-                    size: 16,
-                  ),
+                  Icon(Icons.warning_amber_rounded, color: red, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1853,7 +1884,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                 ),
                 child: Icon(
                   Icons.hourglass_top_rounded,
-                    color: amber,
+                  color: amber,
                   size: 18,
                 ),
               ),
@@ -1984,6 +2015,161 @@ class _TradeDetailsCard extends StatelessWidget {
 }
 
 // ─── Escrow card ──────────────────────────────────────────────────────────────
+
+class _ProofsCard extends StatelessWidget {
+  const _ProofsCard({
+    required this.proofs,
+    required this.loading,
+    required this.colors,
+  });
+
+  final List<Map<String, dynamic>> proofs;
+  final bool loading;
+  final AppColor colors;
+
+  String _fmtTime(Map<String, dynamic> row) {
+    final raw =
+        row['createdAt'] ??
+        row['created_at'] ??
+        row['updatedAt'] ??
+        row['updated_at'];
+    if (raw == null) return '';
+    final dt = DateTime.tryParse(raw.toString());
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final mm = local.month.toString().padLeft(2, '0');
+    final dd = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$mm/$dd/${local.year} $hh:$min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      icon: Icons.verified_rounded,
+      iconColor: AppColor.of(context).info,
+      title: 'Payment Proofs',
+      colors: colors,
+      children: [
+        if (loading && proofs.isEmpty)
+          Text(
+            'Loading proofs...',
+            style: GoogleFonts.sora(fontSize: 12, color: colors.textSecondary),
+          )
+        else if (proofs.isEmpty)
+          Text(
+            'No proofs uploaded yet.',
+            style: GoogleFonts.sora(fontSize: 12, color: colors.textSecondary),
+          )
+        else
+          ...proofs.map((p) {
+            final type = (p['type'] ?? '').toString().trim().toUpperCase();
+            final note = (p['note'] ?? '').toString().trim();
+            final ref = (p['referenceNo'] ?? p['reference_no'] ?? '')
+                .toString()
+                .trim();
+            final txHash = (p['txHash'] ?? p['tx_hash'] ?? '')
+                .toString()
+                .trim();
+            final fileUrl =
+                (p['fileUrl'] ??
+                        p['file_url'] ??
+                        p['url'] ??
+                        p['proofUrl'] ??
+                        p['proof_url'] ??
+                        '')
+                    .toString()
+                    .trim();
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          type.isEmpty ? 'PROOF' : type,
+                          style: GoogleFonts.sora(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: colors.textPrimary,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          _fmtTime(p),
+                          style: GoogleFonts.sora(
+                            fontSize: 11,
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (note.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        note,
+                        style: GoogleFonts.sora(
+                          fontSize: 12,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    if (ref.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      _DataRow(
+                        label: 'Reference',
+                        value: ref,
+                        copyable: true,
+                        mono: true,
+                        colors: colors,
+                      ),
+                    ],
+                    if (txHash.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      _DataRow(
+                        label: 'Tx Hash',
+                        value: txHash.length > 22
+                            ? '${txHash.substring(0, 14)}...'
+                            : txHash,
+                        fullCopyValue: txHash,
+                        copyable: true,
+                        mono: true,
+                        colors: colors,
+                      ),
+                    ],
+                    if (fileUrl.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      _DataRow(
+                        label: 'Proof URL',
+                        value: fileUrl.length > 26
+                            ? '${fileUrl.substring(0, 22)}...'
+                            : fileUrl,
+                        fullCopyValue: fileUrl,
+                        copyable: true,
+                        mono: true,
+                        colors: colors,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+}
 
 class _EscrowCard extends StatelessWidget {
   const _EscrowCard({required this.escrow, required this.colors});
@@ -2752,7 +2938,11 @@ class _CancelledCard extends StatelessWidget {
             shape: BoxShape.circle,
             color: colors.error,
           ),
-          child: Icon(Icons.close_rounded, color: AppColor.of(context).onPrimary, size: 28),
+          child: Icon(
+            Icons.close_rounded,
+            color: AppColor.of(context).onPrimary,
+            size: 28,
+          ),
         ),
         const SizedBox(height: 14),
         Text(
@@ -2797,7 +2987,11 @@ class _DisputedCard extends StatelessWidget {
             shape: BoxShape.circle,
             color: colors.error,
           ),
-          child: Icon(Icons.flag_rounded, color: AppColor.of(context).onPrimary, size: 28),
+          child: Icon(
+            Icons.flag_rounded,
+            color: AppColor.of(context).onPrimary,
+            size: 28,
+          ),
         ),
         const SizedBox(height: 14),
         Text(
@@ -3080,7 +3274,9 @@ class _ActionBtn extends StatelessWidget {
                       style: GoogleFonts.sora(
                         fontSize: compact ? 13 : 14.5,
                         fontWeight: FontWeight.w700,
-                        color: outlined ? accent : AppColor.of(context).onPrimary,
+                        color: outlined
+                            ? accent
+                            : AppColor.of(context).onPrimary,
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -3458,4 +3654,3 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     );
   }
 }
-

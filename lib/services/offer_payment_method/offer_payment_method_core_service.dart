@@ -9,9 +9,10 @@ import 'models/offer_payment_method_models.dart';
 
 class OfferPaymentMethodCoreService {
   OfferPaymentMethodCoreService._()
-      : _service = OfferPaymentMethodService(tokenProvider: _safeTokenProvider);
+    : _service = OfferPaymentMethodService(tokenProvider: _safeTokenProvider);
 
-  static final OfferPaymentMethodCoreService I = OfferPaymentMethodCoreService._();
+  static final OfferPaymentMethodCoreService I =
+      OfferPaymentMethodCoreService._();
 
   final OfferPaymentMethodService _service;
 
@@ -25,11 +26,13 @@ class OfferPaymentMethodCoreService {
   }
 
   // Get all payment methods for a specific offer
-  Future<List<PaymentMethodModel>> getPaymentMethodsForOffer(String offerId) async {
+  Future<List<PaymentMethodModel>> getPaymentMethodsForOffer(
+    String offerId,
+  ) async {
     try {
       final response = await _service.getPaymentMethodsForOffer(offerId);
       // The response contains OfferPaymentMethodResponse objects with paymentMethod field
-      return response.items.map((item) => item!.paymentMethod).toList();
+      return response.items.map((item) => item.paymentMethod).toList();
     } catch (e) {
       if (kDebugMode) {
         print('Error fetching payment methods for offer: $e');
@@ -39,9 +42,13 @@ class OfferPaymentMethodCoreService {
   }
 
   // Get all offers that accept a specific payment method
-  Future<List<OfferModel?>> getOffersForPaymentMethod(String paymentMethodId) async {
+  Future<List<OfferModel?>> getOffersForPaymentMethod(
+    String paymentMethodId,
+  ) async {
     try {
-      final response = await _service.getOffersForPaymentMethod(paymentMethodId);
+      final response = await _service.getOffersForPaymentMethod(
+        paymentMethodId,
+      );
       return response.items.map((item) => item.offer).toList();
     } catch (e) {
       if (kDebugMode) {
@@ -65,13 +72,17 @@ class OfferPaymentMethodCoreService {
         activeOnly: activeOnly,
         searchQuery: searchQuery,
       );
-      return response.items.map((item) => OfferPaymentMethodModel(
-        id: item.id,
-        offerId: item.offerId,
-        paymentMethodId: item.paymentMethodId,
-        paymentMethod: item.paymentMethod,
-        offer: item.offer,
-      )).toList();
+      return response.items
+          .map(
+            (item) => OfferPaymentMethodModel(
+              id: item.id,
+              offerId: item.offerId,
+              paymentMethodId: item.paymentMethodId,
+              paymentMethod: item.paymentMethod,
+              offer: item.offer,
+            ),
+          )
+          .toList();
     } catch (e) {
       if (kDebugMode) {
         print('Error fetching offer-payment method relationships: $e');
@@ -99,10 +110,11 @@ class OfferPaymentMethodCoreService {
     }
   }
 
-  /// Get full OfferPaymentMethodResponse records for an offer, preserving the
-  /// junction record ID needed by CreateTradeRequest.paymentMethodId.
+  /// Get full OfferPaymentMethodResponse records for an offer.
+  /// Use `paymentMethodId` when creating trades.
   Future<List<OfferPaymentMethodResponse>> getOfferPaymentMethodsWithId(
-      String offerId) async {
+    String offerId,
+  ) async {
     try {
       final response = await _service.getPaymentMethodsForOffer(offerId);
       return response.items.whereType<OfferPaymentMethodResponse>().toList();
