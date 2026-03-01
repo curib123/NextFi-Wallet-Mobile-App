@@ -215,7 +215,8 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
                 (
                   icon: Icons.camera_alt_outlined,
                   title: 'Identity Verification',
-                  subtitle: 'Identity details, phone number, selfie & government ID',
+                  subtitle:
+                      'Identity details, phone number, selfie & government ID',
                 ),
               ],
             ),
@@ -299,9 +300,9 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   }
 
   Future<void> _openPaymentSetup() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const PaymentAccountSetupScreen()));
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaymentAccountSetupScreen()),
+    );
     if (mounted) await _load();
   }
 
@@ -318,6 +319,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     };
 
     if (handler != null) {
+      if (!mounted) return;
       await handler(context);
       if (mounted) await _load();
       return;
@@ -696,11 +698,7 @@ class _StepRow extends StatelessWidget {
                         : null,
                   ),
                   child: isDone
-                      ? Icon(
-                          Icons.check_rounded,
-                          color: c.onPrimary,
-                          size: 16,
-                        )
+                      ? Icon(Icons.check_rounded, color: c.onPrimary, size: 16)
                       : Icon(icon, color: fgColor, size: 16),
                 ),
                 if (!isLast)
@@ -731,7 +729,9 @@ class _StepRow extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: isCurrent ? c.primary.withValues(alpha: 0.04) : c.surface,
+                  color: isCurrent
+                      ? c.primary.withValues(alpha: 0.04)
+                      : c.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isCurrent
@@ -884,7 +884,9 @@ class _CtaButton extends StatelessWidget {
       child: AppElevatedButton(
         onPressed: isActive ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isActive ? c.primary : c.border.withValues(alpha: 0.15),
+          backgroundColor: isActive
+              ? c.primary
+              : c.border.withValues(alpha: 0.15),
           foregroundColor: isActive ? c.onPrimary : c.textSecondary,
           disabledBackgroundColor: c.border.withValues(alpha: 0.12),
           disabledForegroundColor: c.textSecondary.withValues(alpha: 0.5),

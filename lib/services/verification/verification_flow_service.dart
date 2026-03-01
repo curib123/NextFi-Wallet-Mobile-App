@@ -109,7 +109,9 @@ class VerificationFlowService {
       return VerificationStep.completed;
     }
 
-    return VerificationStep.completed;
+    // BASIC after previous submission (e.g., rejection) should route back to
+    // verification step for targeted resubmission.
+    return VerificationStep.selfieVerification;
   }
 
   int _toStepIndex(VerificationStep step) {

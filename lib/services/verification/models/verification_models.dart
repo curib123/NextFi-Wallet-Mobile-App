@@ -92,6 +92,99 @@ enum GovernmentIdType {
   }
 }
 
+class VerificationResubmissionGuide {
+  const VerificationResubmissionGuide({
+    this.reason,
+    this.fields = const [],
+    this.updatedAt,
+  });
+
+  final String? reason;
+  final List<String> fields;
+  final DateTime? updatedAt;
+
+  factory VerificationResubmissionGuide.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      return DateTime.tryParse(value.toString());
+    }
+
+    final rawFields = json['fields'] ?? json['resubmissionFields'];
+    final fields = rawFields is List
+        ? rawFields
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList()
+        : const <String>[];
+
+    final reason = (json['reason'] ?? json['message'] ?? '').toString().trim();
+
+    return VerificationResubmissionGuide(
+      reason: reason.isEmpty ? null : reason,
+      fields: fields,
+      updatedAt: parseDate(json['updatedAt'] ?? json['createdAt']),
+    );
+  }
+}
+
+class VerificationReviewLog {
+  const VerificationReviewLog({
+    this.id,
+    this.action,
+    this.actorType,
+    this.actorId,
+    this.reason,
+    this.resubmissionFields = const [],
+    this.createdAt,
+  });
+
+  final String? id;
+  final String? action;
+  final String? actorType;
+  final String? actorId;
+  final String? reason;
+  final List<String> resubmissionFields;
+  final DateTime? createdAt;
+
+  factory VerificationReviewLog.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      return DateTime.tryParse(value.toString());
+    }
+
+    final rawFields = json['resubmissionFields'] ?? json['fields'];
+    final fields = rawFields is List
+        ? rawFields
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList()
+        : const <String>[];
+
+    final reason = (json['reason'] ?? json['description'] ?? '')
+        .toString()
+        .trim();
+
+    return VerificationReviewLog(
+      id: (json['id'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['id'] ?? '').toString().trim(),
+      action: (json['action'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['action'] ?? '').toString().trim(),
+      actorType:
+          (json['actorType'] ?? json['source'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['actorType'] ?? json['source'] ?? '').toString().trim(),
+      actorId: (json['actorId'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['actorId'] ?? '').toString().trim(),
+      reason: reason.isEmpty ? null : reason,
+      resubmissionFields: fields,
+      createdAt: parseDate(json['createdAt']),
+    );
+  }
+}
+
 class VerificationModel {
   const VerificationModel({
     required this.id,
@@ -144,6 +237,8 @@ class VerificationModel {
     // ── Timestamps ───────────────────────────────────
     this.createdAt,
     this.updatedAt,
+    this.resubmissionGuide,
+    this.reviewLogs = const [],
   });
 
   final String id;
@@ -207,6 +302,8 @@ class VerificationModel {
   // ── Timestamps ───────────────────────────────────────────
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final VerificationResubmissionGuide? resubmissionGuide;
+  final List<VerificationReviewLog> reviewLogs;
 
   // ── Derived helpers ──────────────────────────────────────
 
@@ -258,8 +355,9 @@ class VerificationModel {
       stateOrProvince: json['stateOrProvince'] as String?,
       postalCode: json['postalCode'] as String?,
       issuingCountry: json['issuingCountry'] as String?,
-      governmentIdType:
-          GovernmentIdType.fromString(json['governmentIdType'] as String?),
+      governmentIdType: GovernmentIdType.fromString(
+        json['governmentIdType'] as String?,
+      ),
       governmentIdNumber: json['governmentIdNumber'] as String?,
       governmentIdExpiry: parseDate(json['governmentIdExpiry']),
       selfieUrl: json['selfieUrl'] as String?,
@@ -284,56 +382,94 @@ class VerificationModel {
       submittedIp: json['submittedIp'] as String?,
       createdAt: parseDate(json['createdAt']),
       updatedAt: parseDate(json['updatedAt']),
+      resubmissionGuide: (() {
+        final guideRaw = json['resubmissionGuide'];
+        if (guideRaw is Map<String, dynamic>) {
+          return VerificationResubmissionGuide.fromJson(guideRaw);
+        }
+        return null;
+      })(),
+      reviewLogs: (() {
+        final logsRaw = json['reviewLogs'];
+        if (logsRaw is! List) return const <VerificationReviewLog>[];
+        return logsRaw
+            .whereType<Map<String, dynamic>>()
+            .map(VerificationReviewLog.fromJson)
+            .toList();
+      })(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'userId': userId,
-        'status': status.label,
-        if (phoneNumber != null) 'phoneNumber': phoneNumber,
-        if (fullLegalName != null) 'fullLegalName': fullLegalName,
-        if (dateOfBirth != null) 'dateOfBirth': dateOfBirth!.toIso8601String(),
-        if (nationality != null) 'nationality': nationality,
-        if (countryOfResidence != null) 'countryOfResidence': countryOfResidence,
-        if (addressLine1 != null) 'addressLine1': addressLine1,
-        if (addressLine2 != null) 'addressLine2': addressLine2,
-        if (city != null) 'city': city,
-        if (stateOrProvince != null) 'stateOrProvince': stateOrProvince,
-        if (postalCode != null) 'postalCode': postalCode,
-        if (issuingCountry != null) 'issuingCountry': issuingCountry,
-        if (governmentIdType != null)
-          'governmentIdType': governmentIdType!.apiValue,
-        if (governmentIdNumber != null) 'governmentIdNumber': governmentIdNumber,
-        if (governmentIdExpiry != null)
-          'governmentIdExpiry': governmentIdExpiry!.toIso8601String(),
-        if (selfieUrl != null) 'selfieUrl': selfieUrl,
-        if (governmentIdFrontUrl != null)
-          'governmentIdFrontUrl': governmentIdFrontUrl,
-        if (governmentIdBackUrl != null)
-          'governmentIdBackUrl': governmentIdBackUrl,
-        if (liveCapture != null) 'liveCapture': liveCapture,
-        if (faceMatchScore != null) 'faceMatchScore': faceMatchScore,
-        if (livenessScore != null) 'livenessScore': livenessScore,
-        if (riskScore != null) 'riskScore': riskScore,
-        'manualReviewRequired': manualReviewRequired,
-        if (paymentAccountId != null) 'paymentAccountId': paymentAccountId,
-        if (submittedAt != null) 'submittedAt': submittedAt!.toIso8601String(),
-        if (lastResubmittedAt != null)
-          'lastResubmittedAt': lastResubmittedAt!.toIso8601String(),
-        if (reviewedAt != null) 'reviewedAt': reviewedAt!.toIso8601String(),
-        if (approvedAt != null) 'approvedAt': approvedAt!.toIso8601String(),
-        if (rejectedAt != null) 'rejectedAt': rejectedAt!.toIso8601String(),
-        if (rejectReason != null) 'rejectReason': rejectReason,
-        if (suspendedAt != null) 'suspendedAt': suspendedAt!.toIso8601String(),
-        if (suspendReason != null) 'suspendReason': suspendReason,
-        if (consentAcceptedAt != null)
-          'consentAcceptedAt': consentAcceptedAt!.toIso8601String(),
-        if (consentVersion != null) 'consentVersion': consentVersion,
-        if (submittedIp != null) 'submittedIp': submittedIp,
-        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
-        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
-      };
+    'id': id,
+    'userId': userId,
+    'status': status.label,
+    if (phoneNumber != null) 'phoneNumber': phoneNumber,
+    if (fullLegalName != null) 'fullLegalName': fullLegalName,
+    if (dateOfBirth != null) 'dateOfBirth': dateOfBirth!.toIso8601String(),
+    if (nationality != null) 'nationality': nationality,
+    if (countryOfResidence != null) 'countryOfResidence': countryOfResidence,
+    if (addressLine1 != null) 'addressLine1': addressLine1,
+    if (addressLine2 != null) 'addressLine2': addressLine2,
+    if (city != null) 'city': city,
+    if (stateOrProvince != null) 'stateOrProvince': stateOrProvince,
+    if (postalCode != null) 'postalCode': postalCode,
+    if (issuingCountry != null) 'issuingCountry': issuingCountry,
+    if (governmentIdType != null)
+      'governmentIdType': governmentIdType!.apiValue,
+    if (governmentIdNumber != null) 'governmentIdNumber': governmentIdNumber,
+    if (governmentIdExpiry != null)
+      'governmentIdExpiry': governmentIdExpiry!.toIso8601String(),
+    if (selfieUrl != null) 'selfieUrl': selfieUrl,
+    if (governmentIdFrontUrl != null)
+      'governmentIdFrontUrl': governmentIdFrontUrl,
+    if (governmentIdBackUrl != null) 'governmentIdBackUrl': governmentIdBackUrl,
+    if (liveCapture != null) 'liveCapture': liveCapture,
+    if (faceMatchScore != null) 'faceMatchScore': faceMatchScore,
+    if (livenessScore != null) 'livenessScore': livenessScore,
+    if (riskScore != null) 'riskScore': riskScore,
+    'manualReviewRequired': manualReviewRequired,
+    if (paymentAccountId != null) 'paymentAccountId': paymentAccountId,
+    if (submittedAt != null) 'submittedAt': submittedAt!.toIso8601String(),
+    if (lastResubmittedAt != null)
+      'lastResubmittedAt': lastResubmittedAt!.toIso8601String(),
+    if (reviewedAt != null) 'reviewedAt': reviewedAt!.toIso8601String(),
+    if (approvedAt != null) 'approvedAt': approvedAt!.toIso8601String(),
+    if (rejectedAt != null) 'rejectedAt': rejectedAt!.toIso8601String(),
+    if (rejectReason != null) 'rejectReason': rejectReason,
+    if (suspendedAt != null) 'suspendedAt': suspendedAt!.toIso8601String(),
+    if (suspendReason != null) 'suspendReason': suspendReason,
+    if (consentAcceptedAt != null)
+      'consentAcceptedAt': consentAcceptedAt!.toIso8601String(),
+    if (consentVersion != null) 'consentVersion': consentVersion,
+    if (submittedIp != null) 'submittedIp': submittedIp,
+    if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+    if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+    if (resubmissionGuide != null)
+      'resubmissionGuide': {
+        if (resubmissionGuide!.reason != null)
+          'reason': resubmissionGuide!.reason,
+        'fields': resubmissionGuide!.fields,
+        if (resubmissionGuide!.updatedAt != null)
+          'updatedAt': resubmissionGuide!.updatedAt!.toIso8601String(),
+      },
+    if (reviewLogs.isNotEmpty)
+      'reviewLogs': reviewLogs
+          .map(
+            (log) => {
+              if (log.id != null) 'id': log.id,
+              if (log.action != null) 'action': log.action,
+              if (log.actorType != null) 'actorType': log.actorType,
+              if (log.actorId != null) 'actorId': log.actorId,
+              if (log.reason != null) 'reason': log.reason,
+              if (log.resubmissionFields.isNotEmpty)
+                'resubmissionFields': log.resubmissionFields,
+              if (log.createdAt != null)
+                'createdAt': log.createdAt!.toIso8601String(),
+            },
+          )
+          .toList(),
+  };
 
   VerificationModel copyWith({
     String? id,
@@ -375,6 +511,8 @@ class VerificationModel {
     String? submittedIp,
     DateTime? createdAt,
     DateTime? updatedAt,
+    VerificationResubmissionGuide? resubmissionGuide,
+    List<VerificationReviewLog>? reviewLogs,
   }) {
     return VerificationModel(
       id: id ?? this.id,
@@ -416,6 +554,8 @@ class VerificationModel {
       submittedIp: submittedIp ?? this.submittedIp,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      resubmissionGuide: resubmissionGuide ?? this.resubmissionGuide,
+      reviewLogs: reviewLogs ?? this.reviewLogs,
     );
   }
 }

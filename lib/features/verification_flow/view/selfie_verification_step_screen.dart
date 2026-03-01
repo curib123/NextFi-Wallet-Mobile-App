@@ -58,14 +58,17 @@ class _SelfieVerificationStepScreenState
   bool _picking = false;
   bool _submitting = false;
   bool _loadingPayment = false;
+  bool _loadingVerification = false;
 
   String? _activePaymentAccountId;
   String? _activePaymentLabel;
+  VerificationModel? _currentVerification;
 
   @override
   void initState() {
     super.initState();
     _loadActivePaymentAccount();
+    _loadCurrentVerification();
   }
 
   @override
@@ -114,6 +117,21 @@ class _SelfieVerificationStepScreenState
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingPayment = false);
+    }
+  }
+
+  Future<void> _loadCurrentVerification() async {
+    setState(() => _loadingVerification = true);
+    try {
+      final verification = await VerificationCoreService.I.getMe();
+      if (!mounted) return;
+      setState(() {
+        _currentVerification = verification;
+        _loadingVerification = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingVerification = false);
     }
   }
 
@@ -194,10 +212,9 @@ class _SelfieVerificationStepScreenState
         final c = AppColor.of(ctx);
         return Theme(
           data: Theme.of(ctx).copyWith(
-            colorScheme: Theme.of(ctx).colorScheme.copyWith(
-              primary: c.primary,
-              surface: c.surface,
-            ),
+            colorScheme: Theme.of(
+              ctx,
+            ).colorScheme.copyWith(primary: c.primary, surface: c.surface),
           ),
           child: child!,
         );
@@ -230,50 +247,105 @@ class _SelfieVerificationStepScreenState
     setState(() => _submitting = true);
 
     try {
-      await VerificationCoreService.I.submit(
-        phoneNumber: _phoneCtrl.text.trim(),
-        selfie: _selfie!,
-        governmentIdFront: _idFront!,
-        governmentIdBack: _idBack!,
-        paymentAccountId: _activePaymentAccountId,
-        // Identity
-        fullLegalName: _fullLegalNameCtrl.text.trim().isEmpty
-            ? null
-            : _fullLegalNameCtrl.text.trim(),
-        dateOfBirth: _dateOfBirth,
-        nationality: _nationalityCtrl.text.trim().isEmpty
-            ? null
-            : _nationalityCtrl.text.trim(),
-        countryOfResidence: _selectedCountryOfResidence?.name,
-        // Address
-        addressLine1: _addressLine1Ctrl.text.trim().isEmpty
-            ? null
-            : _addressLine1Ctrl.text.trim(),
-        addressLine2: _addressLine2Ctrl.text.trim().isEmpty
-            ? null
-            : _addressLine2Ctrl.text.trim(),
-        city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-        stateOrProvince: _stateOrProvinceCtrl.text.trim().isEmpty
-            ? null
-            : _stateOrProvinceCtrl.text.trim(),
-        postalCode: _postalCodeCtrl.text.trim().isEmpty
-            ? null
-            : _postalCodeCtrl.text.trim(),
-        issuingCountry: _selectedIssuingCountry?.name,
-        // Government ID
-        governmentIdType: _governmentIdType,
-        governmentIdNumber: _governmentIdNumberCtrl.text.trim().isEmpty
-            ? null
-            : _governmentIdNumberCtrl.text.trim(),
-        governmentIdExpiry: _governmentIdExpiry,
-      );
+      final verification =
+          _currentVerification ?? await VerificationCoreService.I.getMe();
+      if (verification.status == TrustStatus.ready) {
+        throw Exception('Your account is already verified.');
+      }
+      if (verification.status == TrustStatus.suspended) {
+        throw Exception(
+          'Your verification is suspended. Please contact support.',
+        );
+      }
+
+      final hasPreviousSubmission = verification.submittedAt != null;
+
+      if (hasPreviousSubmission) {
+        await VerificationCoreService.I.resubmit(
+          phoneNumber: _phoneCtrl.text.trim(),
+          selfie: _selfie!,
+          governmentIdFront: _idFront!,
+          governmentIdBack: _idBack!,
+          paymentAccountId: _activePaymentAccountId,
+          fullLegalName: _fullLegalNameCtrl.text.trim().isEmpty
+              ? null
+              : _fullLegalNameCtrl.text.trim(),
+          dateOfBirth: _dateOfBirth,
+          nationality: _nationalityCtrl.text.trim().isEmpty
+              ? null
+              : _nationalityCtrl.text.trim(),
+          countryOfResidence: _selectedCountryOfResidence?.name,
+          addressLine1: _addressLine1Ctrl.text.trim().isEmpty
+              ? null
+              : _addressLine1Ctrl.text.trim(),
+          addressLine2: _addressLine2Ctrl.text.trim().isEmpty
+              ? null
+              : _addressLine2Ctrl.text.trim(),
+          city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+          stateOrProvince: _stateOrProvinceCtrl.text.trim().isEmpty
+              ? null
+              : _stateOrProvinceCtrl.text.trim(),
+          postalCode: _postalCodeCtrl.text.trim().isEmpty
+              ? null
+              : _postalCodeCtrl.text.trim(),
+          issuingCountry: _selectedIssuingCountry?.name,
+          governmentIdType: _governmentIdType,
+          governmentIdNumber: _governmentIdNumberCtrl.text.trim().isEmpty
+              ? null
+              : _governmentIdNumberCtrl.text.trim(),
+          governmentIdExpiry: _governmentIdExpiry,
+        );
+      } else {
+        await VerificationCoreService.I.submit(
+          phoneNumber: _phoneCtrl.text.trim(),
+          selfie: _selfie!,
+          governmentIdFront: _idFront!,
+          governmentIdBack: _idBack!,
+          paymentAccountId: _activePaymentAccountId,
+          // Identity
+          fullLegalName: _fullLegalNameCtrl.text.trim().isEmpty
+              ? null
+              : _fullLegalNameCtrl.text.trim(),
+          dateOfBirth: _dateOfBirth,
+          nationality: _nationalityCtrl.text.trim().isEmpty
+              ? null
+              : _nationalityCtrl.text.trim(),
+          countryOfResidence: _selectedCountryOfResidence?.name,
+          // Address
+          addressLine1: _addressLine1Ctrl.text.trim().isEmpty
+              ? null
+              : _addressLine1Ctrl.text.trim(),
+          addressLine2: _addressLine2Ctrl.text.trim().isEmpty
+              ? null
+              : _addressLine2Ctrl.text.trim(),
+          city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+          stateOrProvince: _stateOrProvinceCtrl.text.trim().isEmpty
+              ? null
+              : _stateOrProvinceCtrl.text.trim(),
+          postalCode: _postalCodeCtrl.text.trim().isEmpty
+              ? null
+              : _postalCodeCtrl.text.trim(),
+          issuingCountry: _selectedIssuingCountry?.name,
+          // Government ID
+          governmentIdType: _governmentIdType,
+          governmentIdNumber: _governmentIdNumberCtrl.text.trim().isEmpty
+              ? null
+              : _governmentIdNumberCtrl.text.trim(),
+          governmentIdExpiry: _governmentIdExpiry,
+        );
+      }
+
+      await _loadCurrentVerification();
       if (!mounted) return;
 
       await showVerificationResultModal(
         context,
-        title: 'Verification Submitted',
-        message:
-            'Your documents were submitted successfully. We are now reviewing your verification.',
+        title: hasPreviousSubmission
+            ? 'Verification Re-submitted'
+            : 'Verification Submitted',
+        message: hasPreviousSubmission
+            ? 'Your updated documents were re-submitted successfully. We are reviewing your corrections.'
+            : 'Your documents were submitted successfully. We are now reviewing your verification.',
       );
 
       if (!mounted) return;
@@ -329,6 +401,26 @@ class _SelfieVerificationStepScreenState
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 36),
         children: [
+          if (_loadingVerification)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: LinearProgressIndicator(
+                minHeight: 2,
+                color: c.primary,
+                backgroundColor: c.border,
+              ),
+            ),
+          if (_currentVerification?.resubmissionGuide != null) ...[
+            _ResubmissionGuideCard(
+              c: c,
+              guide: _currentVerification!.resubmissionGuide!,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if ((_currentVerification?.reviewLogs ?? const []).isNotEmpty) ...[
+            _ReviewHistoryCard(c: c, logs: _currentVerification!.reviewLogs),
+            const SizedBox(height: 12),
+          ],
           _HeroCard(c: c),
           const SizedBox(height: 20),
 
@@ -391,10 +483,8 @@ class _SelfieVerificationStepScreenState
                 context: context,
                 isScrollControlled: true,
                 backgroundColor: c.surface,
-                builder: (_) => _CountryPickerSheet(
-                  c: c,
-                  title: 'Country of Residence',
-                ),
+                builder: (_) =>
+                    _CountryPickerSheet(c: c, title: 'Country of Residence'),
               );
               if (picked != null && mounted) {
                 setState(() {
@@ -476,10 +566,8 @@ class _SelfieVerificationStepScreenState
                 context: context,
                 isScrollControlled: true,
                 backgroundColor: c.surface,
-                builder: (_) => _CountryPickerSheet(
-                  c: c,
-                  title: 'Issuing Country',
-                ),
+                builder: (_) =>
+                    _CountryPickerSheet(c: c, title: 'Issuing Country'),
               );
               if (picked != null && mounted) {
                 setState(() => _selectedIssuingCountry = picked);
@@ -546,8 +634,7 @@ class _SelfieVerificationStepScreenState
             icon: Icons.flip_outlined,
             file: _idBack,
             busy: _picking || _submitting,
-            onCamera: () =>
-                _pickForSlot(_ImageSlot.idBack, ImageSource.camera),
+            onCamera: () => _pickForSlot(_ImageSlot.idBack, ImageSource.camera),
             onGallery: () =>
                 _pickForSlot(_ImageSlot.idBack, ImageSource.gallery),
             onClear: () => _clearSlot(_ImageSlot.idBack),
@@ -598,8 +685,7 @@ class _SelfieVerificationStepScreenState
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation(c.onPrimary),
+                            valueColor: AlwaysStoppedAnimation(c.onPrimary),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -799,8 +885,11 @@ class _DatePickerField extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.calendar_today_outlined,
-                color: c.textSecondary, size: 20),
+            Icon(
+              Icons.calendar_today_outlined,
+              color: c.textSecondary,
+              size: 20,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -815,11 +904,17 @@ class _DatePickerField extends StatelessWidget {
               ),
             ),
             if (value != null)
-              Icon(Icons.check_circle_outline_rounded,
-                  color: c.success, size: 18)
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: c.success,
+                size: 18,
+              )
             else
-              Icon(Icons.chevron_right_rounded,
-                  color: c.textSecondary.withValues(alpha: 0.5), size: 20),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: c.textSecondary.withValues(alpha: 0.5),
+                size: 20,
+              ),
           ],
         ),
       ),
@@ -870,8 +965,11 @@ class _GovernmentIdTypeDropdown extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           borderSide: BorderSide(color: c.primary, width: 1.4),
         ),
-        prefixIcon:
-            Icon(Icons.badge_outlined, color: c.textSecondary, size: 20),
+        prefixIcon: Icon(
+          Icons.badge_outlined,
+          color: c.textSecondary,
+          size: 20,
+        ),
       ),
       style: TextStyle(
         color: c.textPrimary,
@@ -881,10 +979,8 @@ class _GovernmentIdTypeDropdown extends StatelessWidget {
       dropdownColor: c.surface,
       items: GovernmentIdType.values
           .map(
-            (t) => DropdownMenuItem(
-              value: t,
-              child: Text(_labels[t] ?? t.name),
-            ),
+            (t) =>
+                DropdownMenuItem(value: t, child: Text(_labels[t] ?? t.name)),
           )
           .toList(),
     );
@@ -978,8 +1074,10 @@ class _UploadCard extends StatelessWidget {
               ),
               if (hasFile)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: c.success.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -1039,8 +1137,11 @@ class _UploadCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.camera_alt_outlined,
-                            size: 14, color: c.textSecondary),
+                        Icon(
+                          Icons.camera_alt_outlined,
+                          size: 14,
+                          color: c.textSecondary,
+                        ),
                         const SizedBox(width: 5),
                         const Flexible(
                           child: Text(
@@ -1063,7 +1164,9 @@ class _UploadCard extends StatelessWidget {
                       onPressed: busy ? null : onGallery,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: c.textPrimary,
-                        side: BorderSide(color: c.border.withValues(alpha: 0.3)),
+                        side: BorderSide(
+                          color: c.border.withValues(alpha: 0.3),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(11),
                         ),
@@ -1072,8 +1175,11 @@ class _UploadCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.photo_library_outlined,
-                              size: 14, color: c.textSecondary),
+                          Icon(
+                            Icons.photo_library_outlined,
+                            size: 14,
+                            color: c.textSecondary,
+                          ),
                           const SizedBox(width: 5),
                           const Flexible(
                             child: Text(
@@ -1152,7 +1258,10 @@ class _CountryPickerField extends StatelessWidget {
               child: selected != null
                   ? Row(
                       children: [
-                        Text(selected!.flag, style: const TextStyle(fontSize: 18)),
+                        Text(
+                          selected!.flag,
+                          style: const TextStyle(fontSize: 18),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1169,17 +1278,21 @@ class _CountryPickerField extends StatelessWidget {
                     )
                   : Text(
                       label,
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 14.5,
-                      ),
+                      style: TextStyle(color: c.textSecondary, fontSize: 14.5),
                     ),
             ),
             if (selected != null)
-              Icon(Icons.check_circle_outline_rounded, color: c.success, size: 18)
+              Icon(
+                Icons.check_circle_outline_rounded,
+                color: c.success,
+                size: 18,
+              )
             else
-              Icon(Icons.chevron_right_rounded,
-                  color: c.textSecondary.withValues(alpha: 0.5), size: 20),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: c.textSecondary.withValues(alpha: 0.5),
+                size: 20,
+              ),
           ],
         ),
       ),
@@ -1242,10 +1355,12 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
       _filtered = q.isEmpty
           ? (_all ?? [])
           : (_all ?? [])
-              .where((c) =>
-                  c.name.toLowerCase().contains(q) ||
-                  c.code.toLowerCase().contains(q))
-              .toList();
+                .where(
+                  (c) =>
+                      c.name.toLowerCase().contains(q) ||
+                      c.code.toLowerCase().contains(q),
+                )
+                .toList();
     });
   }
 
@@ -1298,8 +1413,11 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                         color: c.border.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.close_rounded,
-                          size: 16, color: c.textSecondary),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: c.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -1322,15 +1440,22 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                   ),
                   filled: true,
                   fillColor: c.surface,
-                  prefixIcon:
-                      Icon(Icons.search_rounded, color: c.textSecondary, size: 20),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: c.textSecondary,
+                    size: 20,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
-                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
+                    borderSide: BorderSide(
+                      color: c.border.withValues(alpha: 0.25),
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
-                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
+                    borderSide: BorderSide(
+                      color: c.border.withValues(alpha: 0.25),
+                    ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -1345,9 +1470,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             Divider(height: 1, color: c.border.withValues(alpha: 0.15)),
 
             // ── List ─────────────────────────────────────────
-            Expanded(
-              child: _buildList(c),
-            ),
+            Expanded(child: _buildList(c)),
           ],
         ),
       ),
@@ -1367,9 +1490,10 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               Text(
                 'Could not load countries',
                 style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -1414,15 +1538,17 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: _filtered.length,
-      separatorBuilder: (_, __) =>
-          Divider(height: 1, indent: 56, color: c.border.withValues(alpha: 0.12)),
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        indent: 56,
+        color: c.border.withValues(alpha: 0.12),
+      ),
       itemBuilder: (_, i) {
         final country = _filtered[i];
         return InkWell(
           onTap: () => Navigator.of(context).pop(country),
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
             child: Row(
               children: [
                 Text(country.flag, style: const TextStyle(fontSize: 22)),
@@ -1513,5 +1639,259 @@ class _PaymentAccountHint extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ResubmissionGuideCard extends StatelessWidget {
+  const _ResubmissionGuideCard({required this.c, required this.guide});
+
+  final AppColor c;
+  final VerificationResubmissionGuide guide;
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = (guide.reason ?? '').trim();
+    final fields = guide.fields;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.warning.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: c.warning, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Resubmission Guidance',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              reason,
+              style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+            ),
+          ],
+          if (fields.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: fields
+                  .map(
+                    (f) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: c.surface,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Text(
+                        f,
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewHistoryCard extends StatelessWidget {
+  const _ReviewHistoryCard({required this.c, required this.logs});
+
+  final AppColor c;
+  final List<VerificationReviewLog> logs;
+
+  static const int _maxItems = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleLogs = [...logs]
+      ..sort(
+        (a, b) => (b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+      );
+    final items = visibleLogs.take(_maxItems).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Review History',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (var i = 0; i < items.length; i++) ...[
+            _ReviewHistoryItem(c: c, log: items[i]),
+            if (i != items.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Divider(
+                  height: 1,
+                  color: c.border.withValues(alpha: 0.2),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewHistoryItem extends StatelessWidget {
+  const _ReviewHistoryItem({required this.c, required this.log});
+
+  final AppColor c;
+  final VerificationReviewLog log;
+
+  @override
+  Widget build(BuildContext context) {
+    final action = _formatAction(log.action);
+    final when = _formatDate(log.createdAt);
+    final reason = (log.reason ?? '').trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                action,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (when != null)
+              Text(
+                when,
+                style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+              ),
+          ],
+        ),
+        if (reason.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(reason, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        ],
+        if (log.resubmissionFields.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: log.resubmissionFields
+                .map(
+                  (field) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      field,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _formatAction(String? rawAction) {
+    final text = (rawAction ?? '').trim();
+    if (text.isEmpty) return 'Review update';
+    return text
+        .toLowerCase()
+        .split('_')
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  String? _formatDate(DateTime? value) {
+    if (value == null) return null;
+    final local = value.toLocal();
+    final month = _monthName(local.month);
+    final day = local.day.toString().padLeft(2, '0');
+    final year = local.year.toString();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$month $day, $year • $hour:$minute';
+  }
+
+  String _monthName(int month) {
+    switch (month) {
+      case 1:
+        return 'Jan';
+      case 2:
+        return 'Feb';
+      case 3:
+        return 'Mar';
+      case 4:
+        return 'Apr';
+      case 5:
+        return 'May';
+      case 6:
+        return 'Jun';
+      case 7:
+        return 'Jul';
+      case 8:
+        return 'Aug';
+      case 9:
+        return 'Sep';
+      case 10:
+        return 'Oct';
+      case 11:
+        return 'Nov';
+      default:
+        return 'Dec';
+    }
   }
 }

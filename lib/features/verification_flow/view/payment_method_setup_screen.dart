@@ -27,8 +27,7 @@ class PaymentAccountSetupScreen extends StatefulWidget {
       _PaymentAccountSetupScreenState();
 }
 
-class _PaymentAccountSetupScreenState
-    extends State<PaymentAccountSetupScreen>
+class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     with SingleTickerProviderStateMixin {
   final _merchantCore = MerchantPaymentAccountCoreService.I;
   final _paymentCore = PaymentMethodAndAccountsCoreService.I;
@@ -95,8 +94,7 @@ class _PaymentAccountSetupScreenState
         _methods = methods;
         _accounts = accounts;
         _selectedMethod = methods.isNotEmpty ? methods.first : null;
-        _activeAccountId =
-            accounts.firstWhereOrNull((a) => a.isActive)?.id;
+        _activeAccountId = accounts.firstWhereOrNull((a) => a.isActive)?.id;
         _loading = false;
       });
       _fadeCtrl.forward(from: 0);
@@ -257,10 +255,10 @@ class _PaymentAccountSetupScreenState
       ),
       body: _loading
           ? PageLoader(
-        label: _isMerchant
-            ? 'Loading merchant payment setup...'
-            : 'Loading payment setup...',
-      )
+              label: _isMerchant
+                  ? 'Loading merchant payment setup...'
+                  : 'Loading payment setup...',
+            )
           : _buildBody(c),
     );
   }
@@ -304,29 +302,27 @@ class _PaymentAccountSetupScreenState
             const SizedBox(height: 28),
 
             _SectionLabel(
-              label: _isMerchant
-                  ? 'YOUR MERCHANT ACCOUNTS'
-                  : 'YOUR ACCOUNTS',
+              label: _isMerchant ? 'YOUR MERCHANT ACCOUNTS' : 'YOUR ACCOUNTS',
               c: c,
             ),
             const SizedBox(height: 10),
 
             _accounts.isEmpty
                 ? _EmptyCard(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'No Accounts Yet',
-              body: _isMerchant
-                  ? 'Add your first merchant payment account above.'
-                  : 'Add your first payment account above.',
-              c: c,
-            )
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'No Accounts Yet',
+                    body: _isMerchant
+                        ? 'Add your first merchant payment account above.'
+                        : 'Add your first payment account above.',
+                    c: c,
+                  )
                 : _AccountList(
-              accounts: _accounts,
-              activeId: _activeAccountId,
-              settingActive: _settingActive,
-              onSetActive: _setActiveAccount,
-              c: c,
-            ),
+                    accounts: _accounts,
+                    activeId: _activeAccountId,
+                    settingActive: _settingActive,
+                    onSetActive: _setActiveAccount,
+                    c: c,
+                  ),
           ],
         ),
       ),
@@ -381,8 +377,10 @@ class _AccountItem {
   String get subtitle {
     final methodName = paymentMethod?.name ?? '';
     final parts = [
-      if (label != null && label!.isNotEmpty) label!
-      else if (methodName.isNotEmpty) methodName,
+      if (label != null && label!.isNotEmpty)
+        label!
+      else if (methodName.isNotEmpty)
+        methodName,
       if (accountNo != null && accountNo!.isNotEmpty) accountNo!,
     ];
     return parts.join(' · ');
@@ -415,8 +413,10 @@ class _StepHero extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
-              border:
-              Border.all(color: c.primary.withValues(alpha: 0.2), width: 1.5),
+              border: Border.all(
+                color: c.primary.withValues(alpha: 0.2),
+                width: 1.5,
+              ),
             ),
             child: Icon(
               Icons.account_balance_wallet_outlined,
@@ -430,9 +430,7 @@ class _StepHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isMerchant
-                      ? 'Merchant Payment Account'
-                      : 'Payment Account',
+                  isMerchant ? 'Merchant Payment Account' : 'Payment Account',
                   style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 15,
@@ -445,8 +443,7 @@ class _StepHero extends StatelessWidget {
                   isMerchant
                       ? 'Step 2 of 2 · Add your settlement account'
                       : 'Step 2 of 3 · Link your preferred account',
-                  style:
-                  TextStyle(color: c.textSecondary, fontSize: 12.5),
+                  style: TextStyle(color: c.textSecondary, fontSize: 12.5),
                 ),
               ],
             ),
@@ -577,27 +574,27 @@ class _MethodLogo extends StatelessWidget {
       ),
       child: logo != null && logo.isNotEmpty
           ? Padding(
-        padding: EdgeInsets.all(size * 0.12),
-        child: Image.network(
-          logo,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => _fallback(size),
-          loadingBuilder: (_, child, progress) => progress == null
-              ? child
-              : Center(
-            child: SizedBox(
-              width: size * 0.38,
-              height: size * 0.38,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: c.primary.withValues(alpha: 0.35),
+              padding: EdgeInsets.all(size * 0.12),
+              child: Image.network(
+                logo,
+                width: size,
+                height: size,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _fallback(size),
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : Center(
+                        child: SizedBox(
+                          width: size * 0.38,
+                          height: size * 0.38,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: c.primary.withValues(alpha: 0.35),
+                          ),
+                        ),
+                      ),
               ),
-            ),
-          ),
-        ),
-      )
+            )
           : _fallback(size),
     );
   }
@@ -634,7 +631,10 @@ class _MethodInfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.primary.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: c.primary.withValues(alpha: 0.14), width: 1.2),
+        border: Border.all(
+          color: c.primary.withValues(alpha: 0.14),
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,8 +717,11 @@ class _InfoRow extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 1),
-          child:
-          Icon(icon, size: 13.5, color: c.primary.withValues(alpha: 0.55)),
+          child: Icon(
+            icon,
+            size: 13.5,
+            color: c.primary.withValues(alpha: 0.55),
+          ),
         ),
         const SizedBox(width: 7),
         Expanded(
@@ -798,8 +801,10 @@ class _MethodDropdown extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(13),
-            border:
-            Border.all(color: c.border.withValues(alpha: 0.28), width: 1.2),
+            border: Border.all(
+              color: c.border.withValues(alpha: 0.28),
+              width: 1.2,
+            ),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<PaymentMethodModel>(
@@ -1007,8 +1012,7 @@ class _AccountForm extends StatelessWidget {
                     ),
                     Text(
                       'Only one account can be active at a time',
-                      style: TextStyle(
-                          color: c.textSecondary, fontSize: 12),
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -1107,51 +1111,56 @@ class _AccountTile extends StatelessWidget {
             height: 36,
             child: account.paymentMethod != null
                 ? Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: _MethodLogo(
-                    method: account.paymentMethod!,
-                    size: 36,
-                    c: c,
-                  ),
-                ),
-                if (isActive)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 13,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        color: c.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: c.background, width: 1.5),
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: _MethodLogo(
+                          method: account.paymentMethod!,
+                          size: 36,
+                          c: c,
+                        ),
                       ),
-                      child: Icon(Icons.check,
-                          size: 8, color: c.onPrimary),
+                      if (isActive)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 13,
+                            height: 13,
+                            decoration: BoxDecoration(
+                              color: c.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: c.background,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.check,
+                              size: 8,
+                              color: c.onPrimary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? c.primary.withValues(alpha: 0.1)
+                          : c.border.withValues(alpha: 0.07),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isActive
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: isActive
+                          ? c.primary
+                          : c.textSecondary.withValues(alpha: 0.35),
                     ),
                   ),
-              ],
-            )
-                : Container(
-              decoration: BoxDecoration(
-                color: isActive
-                    ? c.primary.withValues(alpha: 0.1)
-                    : c.border.withValues(alpha: 0.07),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isActive
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                size: 18,
-                color: isActive
-                    ? c.primary
-                    : c.textSecondary.withValues(alpha: 0.35),
-              ),
-            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1182,8 +1191,7 @@ class _AccountTile extends StatelessWidget {
           const SizedBox(width: 8),
           if (isActive)
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
                 color: c.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
@@ -1201,8 +1209,7 @@ class _AccountTile extends StatelessWidget {
             GestureDetector(
               onTap: settingActive ? null : onSetActive,
               child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
                   color: c.border.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(20),
@@ -1267,8 +1274,10 @@ class _FocusFieldState extends State<_FocusField> {
     );
     final idleBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
-      borderSide:
-      BorderSide(color: c.border.withValues(alpha: 0.28), width: 1.2),
+      borderSide: BorderSide(
+        color: c.border.withValues(alpha: 0.28),
+        width: 1.2,
+      ),
     );
 
     return Focus(
@@ -1284,8 +1293,7 @@ class _FocusFieldState extends State<_FocusField> {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          labelText:
-          widget.required ? '${widget.label} *' : widget.label,
+          labelText: widget.required ? '${widget.label} *' : widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
             color: c.textSecondary.withValues(alpha: 0.4),
@@ -1311,8 +1319,10 @@ class _FocusFieldState extends State<_FocusField> {
                   : c.textSecondary.withValues(alpha: 0.5),
             ),
           ),
-          prefixIconConstraints:
-          const BoxConstraints(minWidth: 0, minHeight: 0),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
           filled: true,
           fillColor: active
               ? c.primary.withValues(alpha: 0.03)
@@ -1326,8 +1336,10 @@ class _FocusFieldState extends State<_FocusField> {
           focusedBorder: activeBorder,
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide:
-            BorderSide(color: c.error.withValues(alpha: 0.6), width: 1.2),
+            borderSide: BorderSide(
+              color: c.error.withValues(alpha: 0.6),
+              width: 1.2,
+            ),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -1365,12 +1377,12 @@ class _CreateButton extends StatelessWidget {
         boxShadow: saving
             ? null
             : [
-          BoxShadow(
-            color: c.primary.withValues(alpha: 0.28),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+                BoxShadow(
+                  color: c.primary.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
       ),
       child: AppElevatedButton(
         onPressed: saving ? null : onPressed,
@@ -1389,47 +1401,46 @@ class _CreateButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: saving
               ? Row(
-            key: const ValueKey('saving'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor:
-                  AlwaysStoppedAnimation(c.onPrimary),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Creating…',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          )
+                  key: const ValueKey('saving'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(c.onPrimary),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Creating…',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                )
               : Row(
-            key: const ValueKey('idle'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.add_rounded, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                isMerchant
-                    ? 'Create Merchant Account'
-                    : 'Create Payment Account',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                  key: const ValueKey('idle'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.add_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      isMerchant
+                          ? 'Create Merchant Account'
+                          : 'Create Payment Account',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1447,6 +1458,4 @@ extension _IterableX<T> on Iterable<T> {
     }
     return null;
   }
-
-  T? get firstOrNull => isEmpty ? null : first;
 }
