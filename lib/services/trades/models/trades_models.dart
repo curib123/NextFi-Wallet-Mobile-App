@@ -290,6 +290,12 @@ class TradeModel {
     this.buyerPaymentAccount,
   });
 
+  /// Backend docs name this merchant payment account for SELL flow.
+  String get merchantPaymentAccountId => sellerPaymentAccountId;
+
+  /// Backend docs name this merchant payment account for SELL flow.
+  Map<String, dynamic>? get merchantPaymentAccount => sellerPaymentAccount;
+
   factory TradeModel.fromJson(Map<String, dynamic> json) {
     double readDouble(List<String> keys) {
       for (final k in keys) {
@@ -351,8 +357,16 @@ class TradeModel {
 
     final escrowRaw = json['escrow'] ?? json['tradeEscrow'];
     final offerRaw = json['offer'];
-    final spaRaw = json['sellerPaymentAccount'];
-    final bpaRaw = json['buyerPaymentAccount'];
+    final spaRaw =
+        json['sellerPaymentAccount'] ??
+        json['merchantPaymentAccount'] ??
+        json['seller_payment_account'] ??
+        json['merchant_payment_account'];
+    final bpaRaw =
+        json['buyerPaymentAccount'] ??
+        json['buyerPaymentAcc'] ??
+        json['buyer_payment_account'] ??
+        json['buyer_payment_acc'];
 
     // Read offer type from the nested offer object or directly from trade
     TradeOfferType readOfferType() {
@@ -394,11 +408,15 @@ class TradeModel {
       sellerPaymentAccountId: readStr(const [
         'sellerPaymentAccountId',
         'seller_payment_account_id',
+        'merchantPaymentAccountId',
+        'merchant_payment_account_id',
       ]),
       buyerPaymentAccountId: (() {
         final v = readStr(const [
           'buyerPaymentAccountId',
           'buyer_payment_account_id',
+          'buyerPaymentAcc',
+          'buyer_payment_acc',
         ]);
         return v.isEmpty ? null : v;
       })(),

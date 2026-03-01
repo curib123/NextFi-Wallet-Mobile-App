@@ -4,8 +4,6 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/offers/view/trade_order_screen.dart';
-import 'package:next_fi/services/merchant_payment_account/merchant_payment_account_core_service.dart';
-import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_dtos.dart';
 import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
 import 'package:next_fi/services/offer_payment_method/models/offer_payment_method_dtos.dart';
 import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_service.dart';
@@ -36,7 +34,6 @@ class _TradeScreenState extends State<TradeScreen> {
   final _tradesCore = TradesCoreService.I;
   final _walletCore = WalletCoreService.I;
   final _offerPaymentCore = OfferPaymentMethodCoreService.I;
-  final _merchantAccountCore = MerchantPaymentAccountCoreService.I;
   final _userAccountCore = PaymentMethodAndAccountsCoreService.I;
 
   bool _loading = true;
@@ -44,7 +41,6 @@ class _TradeScreenState extends State<TradeScreen> {
   String? _loadError;
 
   List<OfferPaymentMethodResponse> _offerPaymentMethods = [];
-  List<MerchantPaymentAccountModel> _merchantAccounts = [];
   List<WalletAddress> _wallets = [];
   List<UserPaymentAccountModel> _userAccounts = [];
 
@@ -196,7 +192,6 @@ class _TradeScreenState extends State<TradeScreen> {
         _offerPaymentCore.getOfferPaymentMethodsWithId(offer.id),
         _walletCore.list(),
         _userAccountCore.listMyPaymentAccounts(activeOnly: true),
-        _loadMerchantAccounts(),
       ]);
 
       if (!mounted) return;
@@ -207,7 +202,6 @@ class _TradeScreenState extends State<TradeScreen> {
             .where((w) => w.publicAddress.trim().isNotEmpty)
             .toList();
         _userAccounts = results[2] as List<UserPaymentAccountModel>;
-        _merchantAccounts = results[3] as List<MerchantPaymentAccountModel>;
 
         if (_wallets.isNotEmpty) {
           _selectedWallet = _wallets.firstWhere(
@@ -231,65 +225,6 @@ class _TradeScreenState extends State<TradeScreen> {
     }
   }
 
-  Future<List<MerchantPaymentAccountModel>> _loadMerchantAccounts() async {
-    try {
-      final sellerRaw = offer.seller ?? const <String, dynamic>{};
-      final sellerId = (offer.sellerId ?? '').trim();
-      final sellerUserId =
-          (sellerRaw['userId'] ?? sellerRaw['user_id'] ?? sellerId)
-              .toString()
-              .trim();
-      final merchantProfileId =
-          (sellerRaw['merchantProfileId'] ??
-                  sellerRaw['merchant_profile_id'] ??
-                  sellerRaw['profileId'] ??
-                  sellerRaw['profile_id'] ??
-                  (sellerRaw['profile'] is Map<String, dynamic>
-                      ? (sellerRaw['profile'] as Map<String, dynamic>)['id']
-                      : null) ??
-                  '')
-              .toString()
-              .trim();
-
-      final queryCandidates = <MerchantPaymentAccountListQuery>[
-        if (sellerId.isNotEmpty)
-          MerchantPaymentAccountListQuery(
-            activeOnly: true,
-            limit: 50,
-            sellerId: sellerId,
-          ),
-        if (sellerUserId.isNotEmpty && sellerUserId != sellerId)
-          MerchantPaymentAccountListQuery(
-            activeOnly: true,
-            limit: 50,
-            userId: sellerUserId,
-          ),
-        if (merchantProfileId.isNotEmpty)
-          MerchantPaymentAccountListQuery(
-            activeOnly: true,
-            limit: 50,
-            merchantProfileId: merchantProfileId,
-          ),
-      ];
-
-      if (queryCandidates.isEmpty) return [];
-
-      final merged = <String, MerchantPaymentAccountModel>{};
-      for (final query in queryCandidates) {
-        final resp = await _merchantAccountCore.listPaged(query: query);
-        for (final item in resp.items) {
-          if (item.id.trim().isNotEmpty) {
-            merged[item.id] = item;
-          }
-        }
-        if (merged.isNotEmpty) break;
-      }
-      return merged.values.toList();
-    } catch (e) {
-      return [];
-    }
-  }
-
   void _refreshMerchantAccountsForMethod() {
     if (_selectedOfferMethod == null) {
       setState(() {
@@ -299,15 +234,17 @@ class _TradeScreenState extends State<TradeScreen> {
       return;
     }
     final methodIds = _selectedMethodIds();
-    final filtered = _merchantAccounts.where((a) {
-      final accountMethodId = _normalizeId(a.paymentMethodId);
-      return a.isActive &&
-          accountMethodId.isNotEmpty &&
-          methodIds.contains(accountMethodId);
-    }).toList();
+    final linkedMerchantAccount = _selectedOfferMethod?.merchantPaymentAccount;
     final filteredUser = _filteredUserAccounts;
     setState(() {
-      _selectedMerchantAccount = filtered.isNotEmpty ? filtered.first : null;
+      _selectedMerchantAccount =
+          linkedMerchantAccount != null &&
+              linkedMerchantAccount.isActive &&
+              methodIds.contains(
+                _normalizeId(linkedMerchantAccount.paymentMethodId),
+              )
+          ? linkedMerchantAccount
+          : null;
       if (filteredUser.isEmpty) {
         _selectedUserAccount = null;
       } else if (_selectedUserAccount == null ||
@@ -318,20 +255,16 @@ class _TradeScreenState extends State<TradeScreen> {
       }
     });
 
-    if (_userIsBuyer && filtered.isEmpty) {
+    if (_userIsBuyer && _selectedMerchantAccount == null) {
       assert(() {
         final offered = methodIds.toList()..sort();
-        final merchant =
-            _merchantAccounts
-                .map((a) => _normalizeId(a.paymentMethodId))
-                .where((id) => id.isNotEmpty)
-                .toSet()
-                .toList()
-              ..sort();
+        final linkedId = _selectedOfferMethod?.merchantPaymentAccountId;
+        final linkedMethod =
+            _selectedOfferMethod?.merchantPaymentAccount?.paymentMethodId;
         debugPrint(
-          '[TradeScreen] No seller account matched selected method. '
-          'offerMethodIds=$offered merchantMethodIds=$merchant '
-          'sellerId=${offer.sellerId} seller=${offer.seller}',
+          '[TradeScreen] No linked merchant payment account for selected offer method. '
+          'offerMethodIds=$offered linkedMerchantPaymentAccountId=$linkedId '
+          'linkedMethodId=$linkedMethod offerMethod=${_selectedOfferMethod?.id}',
         );
         return true;
       }());

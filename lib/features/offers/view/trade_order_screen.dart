@@ -1601,11 +1601,11 @@ class _PaymentInstructionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final blue = AppColor.of(context).primary;
     final payeeAccount = trade.offerType == TradeOfferType.sell
-        ? trade.sellerPaymentAccount
+        ? trade.merchantPaymentAccount
         : trade.buyerPaymentAccount;
     final payeeLabel = trade.offerType == TradeOfferType.sell
         ? 'merchant'
-        : 'buyer';
+        : 'user';
     final accountName = payeeAccount?['accountName']?.toString();
     final accountNo = payeeAccount?['accountNo']?.toString();
     final instructions = payeeAccount?['instructions']?.toString();
