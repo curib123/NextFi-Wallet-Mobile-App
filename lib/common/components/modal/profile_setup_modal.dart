@@ -16,7 +16,7 @@ Future<bool?> showProfileSetupModal(
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _ProfileSetupModal(initial: initial),
   );
 }
@@ -135,7 +135,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.35),
+                  color: c.border.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -178,7 +178,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
               ),
 
               const SizedBox(height: 16),
-              Divider(height: 1, color: c.border.withOpacity(0.18)),
+              Divider(height: 1, color: c.border.withValues(alpha: 0.18)),
               const SizedBox(height: 4),
 
               // ── Form ───────────────────────────────────────────────
@@ -238,7 +238,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                                 await showModalBottomSheet<CountryModel>(
                               context: context,
                               isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
+                              backgroundColor: AppColor.of(context).surface,
                               builder: (_) => const _CountryPickerSheet(),
                             );
                             if (picked != null) {
@@ -290,7 +290,7 @@ class _SectionHeader extends StatelessWidget {
       style: TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w700,
-        color: c.textSecondary.withOpacity(0.6),
+        color: c.textSecondary.withValues(alpha: 0.6),
         letterSpacing: 1.0,
       ),
     );
@@ -360,7 +360,7 @@ class _FormFieldState extends State<_FormField> {
         : OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
       borderSide: BorderSide(
-        color: c.border.withOpacity(0.3),
+        color: c.border.withValues(alpha: 0.3),
         width: 1.2,
       ),
     );
@@ -383,7 +383,7 @@ class _FormFieldState extends State<_FormField> {
           labelText: widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.45),
+            color: c.textSecondary.withValues(alpha: 0.45),
             fontSize: 13.5,
           ),
           labelStyle: TextStyle(
@@ -401,7 +401,7 @@ class _FormFieldState extends State<_FormField> {
             child: Icon(
               widget.icon,
               size: 17,
-              color: _focused ? c.primary : c.textSecondary.withOpacity(0.5),
+              color: _focused ? c.primary : c.textSecondary.withValues(alpha: 0.5),
             ),
           ),
           prefixIconConstraints: const BoxConstraints(
@@ -410,8 +410,8 @@ class _FormFieldState extends State<_FormField> {
           ),
           filled: true,
           fillColor: _focused
-              ? c.primary.withOpacity(0.03)
-              : c.border.withOpacity(0.05),
+              ? c.primary.withValues(alpha: 0.03)
+              : c.border.withValues(alpha: 0.05),
           contentPadding: EdgeInsets.symmetric(
             horizontal: 14,
             vertical: widget.multiline ? 14 : 0,
@@ -420,14 +420,14 @@ class _FormFieldState extends State<_FormField> {
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
             borderSide: BorderSide(
-              color: c.border.withOpacity(0.25),
+              color: c.border.withValues(alpha: 0.25),
               width: 1.2,
             ),
           ),
           focusedBorder: border,
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.error.withOpacity(0.6), width: 1.2),
+            borderSide: BorderSide(color: c.error.withValues(alpha: 0.6), width: 1.2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -458,7 +458,7 @@ class _CloseButton extends StatelessWidget {
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: c.border.withOpacity(0.1),
+          color: c.border.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
         child: Icon(Icons.close_rounded, size: 17, color: c.textSecondary),
@@ -483,9 +483,9 @@ class _ErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: c.error.withOpacity(0.07),
+        color: c.error.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.error.withOpacity(0.2)),
+        border: Border.all(color: c.error.withValues(alpha: 0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,9 +528,9 @@ class _CountryPickerField extends StatelessWidget {
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: c.border.withOpacity(0.05),
+          color: c.border.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: c.border.withOpacity(0.25), width: 1.2),
+          border: Border.all(color: c.border.withValues(alpha: 0.25), width: 1.2),
         ),
         child: Row(
           children: [
@@ -538,7 +538,7 @@ class _CountryPickerField extends StatelessWidget {
                 size: 17,
                 color: hasValue
                     ? c.primary
-                    : c.textSecondary.withOpacity(0.5)),
+                    : c.textSecondary.withValues(alpha: 0.5)),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -568,7 +568,7 @@ class _CountryPickerField extends StatelessWidget {
                       'Select your country',
                       style: TextStyle(
                         fontSize: 13.5,
-                        color: c.textSecondary.withOpacity(0.45),
+                        color: c.textSecondary.withValues(alpha: 0.45),
                       ),
                     ),
                 ],
@@ -577,7 +577,7 @@ class _CountryPickerField extends StatelessWidget {
             Icon(
               hasValue ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
               size: 18,
-              color: hasValue ? c.primary : c.textSecondary.withOpacity(0.4),
+              color: hasValue ? c.primary : c.textSecondary.withValues(alpha: 0.4),
             ),
           ],
         ),
@@ -668,7 +668,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: c.border.withOpacity(0.35),
+              color: c.border.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -694,11 +694,11 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               decoration: InputDecoration(
                 hintText: 'Search countries…',
                 hintStyle: TextStyle(
-                    color: c.textSecondary.withOpacity(0.5), fontSize: 14),
+                    color: c.textSecondary.withValues(alpha: 0.5), fontSize: 14),
                 prefixIcon: Icon(Icons.search_rounded,
-                    size: 18, color: c.textSecondary.withOpacity(0.5)),
+                    size: 18, color: c.textSecondary.withValues(alpha: 0.5)),
                 filled: true,
-                fillColor: c.border.withOpacity(0.07),
+                fillColor: c.border.withValues(alpha: 0.07),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -786,7 +786,7 @@ class _SaveButton extends StatelessWidget {
             ? null
             : [
           BoxShadow(
-            color: c.primary.withOpacity(0.28),
+            color: c.primary.withValues(alpha: 0.28),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -796,11 +796,11 @@ class _SaveButton extends StatelessWidget {
         onPressed: saving ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: c.primary.withOpacity(0.55),
-          disabledForegroundColor: Colors.white70,
+          foregroundColor: AppColor.of(context).onPrimary,
+          disabledBackgroundColor: c.primary.withValues(alpha: 0.55),
+          disabledForegroundColor: AppColor.of(context).onPrimary,
           elevation: 0,
-          shadowColor: Colors.transparent,
+          shadowColor: AppColor.of(context).surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -817,7 +817,7 @@ class _SaveButton extends StatelessWidget {
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white70),
+                  valueColor: AlwaysStoppedAnimation(AppColor.of(context).onPrimary),
                 ),
               ),
               const SizedBox(width: 10),

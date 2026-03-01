@@ -2,15 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class LiveCountingBalance extends StatefulWidget {
-  const LiveCountingBalance({
+  LiveCountingBalance({
     super.key,
     required this.targetValue,
     required this.fmt,
     required this.baseColor,
-    this.upColor = const Color(0xFF22C55E),
-    this.downColor = const Color(0xFFEF4444),
+    this.upColor,
+    this.downColor,
     this.hidden = false,
     this.loading = false,
     this.pulse,
@@ -25,8 +26,8 @@ class LiveCountingBalance extends StatefulWidget {
   final double targetValue;
   final NumberFormat fmt;
   final Color baseColor;
-  final Color upColor;
-  final Color downColor;
+  final Color? upColor;
+  final Color? downColor;
   final bool hidden;
   final bool loading;
   final AnimationController? pulse;
@@ -209,11 +210,14 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
+    final upColor = widget.upColor ?? colors.success;
+    final downColor = widget.downColor ?? colors.error;
     final color = widget.forceBaseColor
         ? widget.baseColor
         : (_dir == 0
-        ? widget.baseColor
-        : (_dir > 0 ? widget.upColor : widget.downColor));
+            ? widget.baseColor
+            : (_dir > 0 ? upColor : downColor));
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: double.infinity),
@@ -271,7 +275,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
                     ? BoxDecoration(
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.3 * _glowAnimation.value),
+                      color: color.withValues(alpha: 0.3 * _glowAnimation.value),
                       blurRadius: 16 * _glowAnimation.value,
                       spreadRadius: 2 * _glowAnimation.value,
                     ),
@@ -334,7 +338,7 @@ class _LiveCountingBalanceState extends State<LiveCountingBalance>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(0.5),
+                        color: color.withValues(alpha: 0.5),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),

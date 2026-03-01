@@ -69,7 +69,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<ChatFriendModel> _sortFriends(List<ChatFriendModel> friends) {
     final sorted = [...friends];
     sorted.sort((a, b) {
-      final online = (_isFriendOnline(b) ? 1 : 0) - (_isFriendOnline(a) ? 1 : 0);
+      final online =
+          (_isFriendOnline(b) ? 1 : 0) - (_isFriendOnline(a) ? 1 : 0);
       if (online != 0) return online;
 
       final unread = b.newUnreadMessageCount.compareTo(a.newUnreadMessageCount);
@@ -283,7 +284,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     if (!mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Verification READY is required for messenger')),
+      const SnackBar(
+        content: Text('Verification READY is required for messenger'),
+      ),
     );
     await Navigator.of(
       context,
@@ -388,11 +391,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       backgroundColor: c.background,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: c.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
+        surfaceTintColor: c.surface,
+        shadowColor: c.surface,
         centerTitle: false,
         titleSpacing: 24,
         title: Text(
@@ -613,14 +616,14 @@ class _HeroSection extends StatelessWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: tier != null
-                                  ? _tierColor(tier)
+                                  ? _tierColor(tier, c)
                                   : c.primary,
                             ),
                             child: Container(
                               padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white,
+                                color: c.onPrimary,
                               ),
                               child: UserAvatarLarge(user: user, colors: c),
                             ),
@@ -632,7 +635,7 @@ class _HeroSection extends StatelessWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: c.success,
-                              border: Border.all(color: Colors.white, width: 2),
+                              border: Border.all(color: c.onPrimary, width: 2),
                             ),
                           ),
                         ],
@@ -766,8 +769,8 @@ class _TierBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _tierColor(tier);
     final c = AppColor.of(context);
+    final color = _tierColor(tier, c);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -1238,6 +1241,17 @@ class _MerchantTierCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final currentTier = data.currentTier;
+    final currentColor = _tierColor(currentTier, c);
+    final nextTier = data.nextTier;
+    final nextLabel = nextTier == null ? 'Top Tier' : _tierLabel(nextTier.tier);
+    final nextColor = nextTier == null
+        ? _tierColor(MerchantTier.diamond, c)
+        : _tierColor(nextTier.tier, c);
+    final progress =
+        ((nextTier?.progress.overallPercent ?? 100.0).clamp(0.0, 100.0) as num)
+            .toDouble();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -1283,188 +1297,128 @@ class _MerchantTierCard extends StatelessWidget {
               ),
             ],
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _TierSummaryCard(
-                      title: 'Current Tier',
-                      tier: data.currentTier,
-                      subtitle: 'Active rank',
+                  Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: _solidTint(currentColor),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Icon(
+                          _tierIcon(currentTier),
+                          size: 16,
+                          color: currentColor,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Current: ${_tierLabel(currentTier)}',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 13.6,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.1,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              nextTier == null
+                                  ? 'Highest merchant rank unlocked'
+                                  : 'Target: $nextLabel',
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: nextColor,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${progress.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            color: c.onPrimary,
+                            fontSize: 11.2,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      minHeight: 8,
+                      value: progress / 100,
+                      backgroundColor: c.background,
+                      valueColor: AlwaysStoppedAnimation<Color>(nextColor),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: data.nextTier == null
-                        ? _TopTierCard()
-                        : _TierSummaryCard(
-                            title: 'Next Tier',
-                            tier: data.nextTier!.tier,
-                            subtitle:
-                                '${data.nextTier!.progress.overallPercent.toStringAsFixed(0)}% progress',
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
+                    decoration: BoxDecoration(
+                      color: c.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: nextTier == null
+                        ? Row(
+                            children: [
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 15,
+                                color: nextColor,
+                              ),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  'You already reached the top merchant tier.',
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            'Need +${nextTier.progress.remainingSuccessRate.toStringAsFixed(1)}% success and +${nextTier.progress.remainingAvgRating.toStringAsFixed(2)} rating.',
+                            style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
+                            ),
                           ),
                   ),
                 ],
               ),
             ),
-            if (data.nextTier != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
-                  decoration: BoxDecoration(
-                    color: c.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: c.border),
-                  ),
-                  child: Text(
-                    'Need +${data.nextTier!.progress.remainingSuccessRate.toStringAsFixed(1)}% success and +${data.nextTier!.progress.remainingAvgRating.toStringAsFixed(2)} rating',
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _TierSummaryCard extends StatelessWidget {
-  const _TierSummaryCard({
-    required this.title,
-    required this.tier,
-    required this.subtitle,
-  });
-
-  final String title;
-  final MerchantTier tier;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final color = _tierColor(tier);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
-      decoration: BoxDecoration(
-        color: c.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(_tierIcon(tier), size: 14, color: Colors.white),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _tierLabel(tier),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 13.2,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11.2,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TopTierCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final diamond = _tierColor(MerchantTier.diamond);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
-      decoration: BoxDecoration(
-        color: c.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Next Tier',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.verified_rounded, size: 16, color: diamond),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  'Top Tier',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 13.2,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'DIAMOND achieved',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11.2,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1646,7 +1600,7 @@ class _FriendRow extends StatelessWidget {
     ].where((s) => s.trim().isNotEmpty).join(' · ');
     final unread = friend.newUnreadMessageCount;
     return Material(
-      color: Colors.transparent,
+      color: c.surface,
       child: Column(
         children: [
           InkWell(
@@ -1726,8 +1680,8 @@ class _FriendRow extends StatelessWidget {
                       ),
                       child: Text(
                         unread > 99 ? '99+' : '$unread',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: c.onPrimary,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1771,16 +1725,16 @@ class _FriendRow extends StatelessWidget {
 
 /// Returns a solid light-tint version of [color] suitable for chip/badge backgrounds.
 /// Blends the color toward white at ~10% strength — no opacity involved.
-Color _solidTint(Color color) {
-  return Color.lerp(color, Colors.white, 0.88) ?? color;
+Color _solidTint(Color color, [Color toward = Colors.white]) {
+  return Color.lerp(color, toward, 0.88) ?? color;
 }
 
-Color _tierColor(MerchantTier tier) => switch (tier) {
-  MerchantTier.bronze => const Color(0xFFB87333),
-  MerchantTier.silver => const Color(0xFF94A3B8),
-  MerchantTier.gold => const Color(0xFFF59E0B),
-  MerchantTier.platinum => const Color(0xFF64748B),
-  MerchantTier.diamond => const Color(0xFF06B6D4),
+Color _tierColor(MerchantTier tier, AppColor c) => switch (tier) {
+  MerchantTier.bronze => c.error,
+  MerchantTier.silver => c.accent,
+  MerchantTier.gold => c.warning,
+  MerchantTier.platinum => c.textSecondary,
+  MerchantTier.diamond => c.info,
 };
 
 IconData _tierIcon(MerchantTier tier) => switch (tier) {
@@ -1829,7 +1783,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Failed to load', 
+              'Failed to load',
               style: TextStyle(
                 color: c.textPrimary,
                 fontSize: 18,

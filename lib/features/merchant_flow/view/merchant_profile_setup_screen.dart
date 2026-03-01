@@ -154,7 +154,7 @@ class _MerchantProfileSetupScreenState
     final picked = await showModalBottomSheet<CountryModel>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: c.surface,
       builder: (_) => _CountryPickerSheet(c: c),
     );
     if (picked != null && mounted) {
@@ -291,21 +291,21 @@ class _MerchantProfileSetupScreenState
               onPressed: _saving ? null : _submit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.primary,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: c.primary.withOpacity(0.5),
+                foregroundColor: c.onPrimary,
+                disabledBackgroundColor: c.primary.withValues(alpha: 0.5),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
               child: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white70),
+                            AlwaysStoppedAnimation<Color>(c.onPrimary),
                       ),
                     )
                   : const Text(
@@ -347,9 +347,9 @@ class _CountryPickerField extends StatelessWidget {
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: c.border.withOpacity(0.06),
+          color: c.border.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: c.border.withOpacity(0.28)),
+          border: Border.all(color: c.border.withValues(alpha: 0.28)),
         ),
         child: Row(
           children: [
@@ -382,7 +382,7 @@ class _CountryPickerField extends StatelessWidget {
                   : Text(
                       'Country',
                       style: TextStyle(
-                        color: c.textSecondary.withOpacity(0.6),
+                        color: c.textSecondary.withValues(alpha: 0.6),
                         fontSize: 14,
                       ),
                     ),
@@ -392,7 +392,7 @@ class _CountryPickerField extends StatelessWidget {
                   color: c.success, size: 17)
             else
               Icon(Icons.chevron_right_rounded,
-                  color: c.textSecondary.withOpacity(0.45), size: 18),
+                  color: c.textSecondary.withValues(alpha: 0.45), size: 18),
           ],
         ),
       ),
@@ -479,7 +479,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: c.border.withOpacity(0.35),
+                color: c.border.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -504,7 +504,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: c.border.withOpacity(0.1),
+                        color: c.border.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(Icons.close_rounded,
@@ -524,7 +524,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search country…',
                   hintStyle: TextStyle(
-                    color: c.textSecondary.withOpacity(0.5),
+                    color: c.textSecondary.withValues(alpha: 0.5),
                     fontSize: 14,
                   ),
                   filled: true,
@@ -534,12 +534,12 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
                     borderSide:
-                        BorderSide(color: c.border.withOpacity(0.25)),
+                        BorderSide(color: c.border.withValues(alpha: 0.25)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
                     borderSide:
-                        BorderSide(color: c.border.withOpacity(0.25)),
+                        BorderSide(color: c.border.withValues(alpha: 0.25)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -550,7 +550,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               ),
             ),
             const SizedBox(height: 8),
-            Divider(height: 1, color: c.border.withOpacity(0.15)),
+            Divider(height: 1, color: c.border.withValues(alpha: 0.15)),
             Expanded(child: _buildList(c)),
           ],
         ),
@@ -619,7 +619,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: _filtered.length,
       separatorBuilder: (_, __) =>
-          Divider(height: 1, indent: 56, color: c.border.withOpacity(0.12)),
+          Divider(height: 1, indent: 56, color: c.border.withValues(alpha: 0.12)),
       itemBuilder: (_, i) {
         final country = _filtered[i];
         return InkWell(
@@ -671,9 +671,9 @@ class _Hero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.05),
+        color: c.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.primary.withOpacity(0.12)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
@@ -681,7 +681,7 @@ class _Hero extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.12),
+              color: c.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child:
@@ -726,7 +726,7 @@ class _TypeSelector extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border.withOpacity(0.22)),
+        border: Border.all(color: c.border.withValues(alpha: 0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -795,18 +795,18 @@ class _Field extends StatelessWidget {
         labelText: label,
         hintText: hint,
         filled: true,
-        fillColor: c.border.withOpacity(0.06),
+        fillColor: c.border.withValues(alpha: 0.06),
         contentPadding: EdgeInsets.symmetric(
           horizontal: 14,
           vertical: multiline ? 14 : 0,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.28)),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.28)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.28)),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.28)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
@@ -816,3 +816,4 @@ class _Field extends StatelessWidget {
     );
   }
 }
+

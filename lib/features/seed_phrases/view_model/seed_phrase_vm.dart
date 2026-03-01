@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/seed_phrases/model/seed_phrase_state.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
 
 class SeedPhraseVM extends ChangeNotifier {
   SeedPhraseVM({required StellarWalletServices service}) : _svc = service;
@@ -177,9 +178,12 @@ class SeedPhraseVM extends ChangeNotifier {
     try {
       _set(_state.copyWith(loading: true, error: ''));
 
+      final publicAddress = await _svc.getAccountIdFromMnemonic(phrase);
+
       // Add as a new wallet and make it active (does NOT overwrite existing).
       await SeedStorage.addWallet(
         phrase,
+        publicAddress: publicAddress,
         makeActive: true,
       );
 
@@ -202,6 +206,14 @@ class SeedPhraseVM extends ChangeNotifier {
           error: 'Saved phrase mismatch. Please try again.',
         ));
         return false;
+      }
+
+      try {
+        await WalletManager.I.saveAddressIfMissing(
+          publicAddress: publicAddress,
+        );
+      } catch (_) {
+        // Best effort: wallet_home_screen will retry auto-save later.
       }
 
       _set(_state.copyWith(loading: false));

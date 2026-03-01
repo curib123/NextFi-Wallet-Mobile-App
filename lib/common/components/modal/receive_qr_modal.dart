@@ -18,7 +18,7 @@ Future<void> showReceiveQrModal(
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (sheetContext) {
       final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
 
@@ -30,10 +30,10 @@ Future<void> showReceiveQrModal(
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: c.border.withOpacity(0.5)),
+              border: Border.all(color: c.border.withValues(alpha: 0.5)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.12),
                   blurRadius: 24,
                   offset: const Offset(0, 10),
                 ),
@@ -50,7 +50,7 @@ Future<void> showReceiveQrModal(
                       width: 44,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: c.border.withOpacity(0.95),
+                        color: c.border.withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -79,9 +79,9 @@ Future<void> showReceiveQrModal(
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColor.of(context).onPrimary,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: c.border.withOpacity(0.35)),
+                      border: Border.all(color: c.border.withValues(alpha: 0.35)),
                     ),
                     child: Center(
                       child: QrImageView(
@@ -98,7 +98,7 @@ Future<void> showReceiveQrModal(
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: c.primary.withOpacity(0.06),
+                      color: c.primary.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -132,7 +132,7 @@ Future<void> showReceiveQrModal(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: c.primary,
                             side: BorderSide(
-                              color: c.primary.withOpacity(0.45),
+                              color: c.primary.withValues(alpha: 0.45),
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -149,7 +149,7 @@ Future<void> showReceiveQrModal(
                           onPressed: () => Navigator.of(sheetContext).pop(),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: c.primary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColor.of(context).onPrimary,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),

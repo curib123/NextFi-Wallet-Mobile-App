@@ -82,7 +82,7 @@ class TransactionTile extends StatelessWidget {
             child: Icon(
               isIncoming ? LucideIcons.arrowDownLeft : LucideIcons.arrowUpRight,
               size: 10,
-              color: Colors.white,
+              color: colors.onPrimary,
             ),
           ),
         ),

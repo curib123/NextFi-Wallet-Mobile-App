@@ -1,5 +1,6 @@
 // lib/features/price_chart/view/widgets/segment_button.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class SegmentButton extends StatelessWidget {
   const SegmentButton({super.key, required this.label, required this.selected, required this.onTap});
@@ -17,7 +18,7 @@ class SegmentButton extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? c.primary.withOpacity(0.12) : Colors.transparent,
+          color: selected ? c.primary.withValues(alpha: 0.12) : c.surface,
           borderRadius: BorderRadius.circular(10),
         ),
         alignment: Alignment.center,
@@ -26,7 +27,7 @@ class SegmentButton extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 12,
-            color: selected ? c.primary : c.onSurface.withOpacity(0.7),
+            color: selected ? c.primary : c.onSurface.withValues(alpha: 0.7),
           ),
         ),
       ),

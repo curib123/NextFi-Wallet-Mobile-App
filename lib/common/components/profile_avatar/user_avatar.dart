@@ -43,7 +43,7 @@ class UserAvatar extends StatelessWidget {
           ? BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: borderColor ?? Colors.white,
+          color: borderColor ?? appColors.onPrimary,
           width: borderWidth,
         ),
       )
@@ -58,7 +58,7 @@ class UserAvatar extends StatelessWidget {
             : Text(
           initial,
           style: TextStyle(
-            color: Colors.white,
+            color: appColors.onPrimary,
             fontWeight: fontWeight ?? FontWeight.bold,
             fontSize: fontSize ?? (radius * 0.7),
           ),
@@ -159,15 +159,6 @@ class ChatUserAvatar extends StatelessWidget {
   final String? avatarUrl;
   final double size;
 
-  static const _palette = [
-    Color(0xFF3A5BFF),
-    Color(0xFF34C759),
-    Color(0xFFFF9F0A),
-    Color(0xFFFF453A),
-    Color(0xFF5AC8FA),
-    Color(0xFFAF52DE),
-  ];
-
   String get _initials {
     final t = name.trim();
     if (t.isEmpty) return '?';
@@ -176,18 +167,26 @@ class ChatUserAvatar extends StatelessWidget {
     return t[0].toUpperCase();
   }
 
-  Color get _color {
-    if (name.isEmpty) return _palette[0];
-    return _palette[name.codeUnitAt(0) % _palette.length];
+  Color _color(AppColor colors) {
+    final palette = <Color>[
+      colors.primary,
+      colors.success,
+      colors.warning,
+      colors.error,
+      colors.info,
+      colors.accent,
+    ];
+    if (name.isEmpty) return palette[0];
+    return palette[name.codeUnitAt(0) % palette.length];
   }
 
   Widget _initials_(Color color) => Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           shape: BoxShape.circle,
-          border: Border.all(color: color.withOpacity(0.35), width: 1.5),
+          border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
         ),
         child: Center(
           child: Text(
@@ -203,8 +202,9 @@ class ChatUserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
     final url = avatarUrl?.trim();
-    final color = _color;
+    final color = _color(colors);
     if (url != null && url.isNotEmpty) {
       return ClipOval(
         child: CachedNetworkImage(
@@ -220,3 +220,4 @@ class ChatUserAvatar extends StatelessWidget {
     return _initials_(color);
   }
 }
+

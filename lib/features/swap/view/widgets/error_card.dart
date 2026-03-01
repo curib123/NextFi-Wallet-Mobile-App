@@ -17,10 +17,10 @@ class ErrorCard extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: c.error.withOpacity(0.08),
+        color: c.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: c.error.withOpacity(0.15),
+          color: c.error.withValues(alpha: 0.15),
           width: 1,
         ),
       ),

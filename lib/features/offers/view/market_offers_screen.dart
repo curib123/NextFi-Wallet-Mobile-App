@@ -55,9 +55,11 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   void initState() {
     super.initState();
     final currency = context.read<CurrencyVM>();
-    _xlmPriceVm  = PriceChartVM(currency, initialToken: PriceToken.xlm);
+    _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
     _usdcPriceVm = PriceChartVM(currency, initialToken: PriceToken.usdc);
-    _priceListener = () { if (mounted) setState(() {}); };
+    _priceListener = () {
+      if (mounted) setState(() {});
+    };
     _xlmPriceVm.addListener(_priceListener);
     _usdcPriceVm.addListener(_priceListener);
     _seedVm = context.read<SeedKeypairVM>();
@@ -66,14 +68,21 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     _seedVm?.addListener(_onActiveWalletChanged);
     _selectedType = widget.initialType;
 
-    _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-    _fadeAnim  = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic));
+    _enterCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _fadeAnim = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic));
 
-    _shimmerCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
-      ..repeat(reverse: true);
-    _shimmerAnim = CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut);
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+    _shimmerAnim = CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear);
 
     _load();
   }
@@ -115,7 +124,9 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     final stellar = _stellarSvc;
     if (stellar == null) return false;
     try {
-      final hasTrustline = await stellar.accountService.hasUsdcTrustline(accountId);
+      final hasTrustline = await stellar.accountService.hasUsdcTrustline(
+        accountId,
+      );
       _lastTrustlineCheckedAddress = accountId;
       _lastHasUsdcTrustline = hasTrustline;
       return hasTrustline;
@@ -127,7 +138,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final hasUsdcTrustline = await _activeAddressHasUsdcTrustline();
       final offers = await _offersCore.listPublic(
@@ -139,12 +153,19 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
         return hasUsdcTrustline;
       }).toList();
       if (!mounted) return;
-      setState(() { _offers = filteredOffers; _loading = false; });
+      setState(() {
+        _offers = filteredOffers;
+        _loading = false;
+      });
       _enterCtrl.forward(from: 0);
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = e.toString(); _loading = false; });
-      showFloatingSnackBar(context,
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+      showFloatingSnackBar(
+        context,
         message: 'Failed to load marketplace offers.',
         type: SnackBarType.error,
         position: SnackBarPosition.top,
@@ -163,7 +184,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => OfferDetailsModal(
         offer: offer,
         marketPrice: _offerEffectivePrice(offer),
@@ -182,40 +203,65 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     );
   }
 
+  bool _hasTrustedVmRates() {
+    final currency = context.read<CurrencyVM>();
+    return !currency.loading &&
+        !currency.ratesUnavailable &&
+        !currency.usingFallbackRates;
+  }
+
   String? _offerEffectivePrice(OfferModel offer) {
     final fiatCode = offer.fiatCurrency.trim().toUpperCase();
     final sym = fiatSymbol(fiatCode);
     if (offer.marketPrice != null && offer.marketPrice! > 0) {
       return '${fmtFiat(sym, offer.marketPrice!)} $fiatCode';
     }
+    if (!_hasTrustedVmRates()) return null;
     final code = offer.asset.trim().toUpperCase();
-    final vm = switch (code) { 'XLM' => _xlmPriceVm, 'USDC' => _usdcPriceVm, _ => null };
+    final vm = switch (code) {
+      'XLM' => _xlmPriceVm,
+      'USDC' => _usdcPriceVm,
+      _ => null,
+    };
     if (vm == null || vm.fiatCode != fiatCode) return null;
     final live = vm.priceNow;
     if (!live.isFinite || live <= 0) return null;
     final margin = offer.marginPercent ?? 0.0;
     final isMerchantSell = offer.type == OfferType.sell;
-    final factor = isMerchantSell ? (1.0 + margin / 100.0) : (1.0 - margin / 100.0);
+    final factor = isMerchantSell
+        ? (1.0 + margin / 100.0)
+        : (1.0 - margin / 100.0);
     return '${fmtFiat(vm.fiatSym, live * factor)} $fiatCode';
   }
 
   double? _rawPriceForAsset(String assetCode) {
     final code = assetCode.trim().toUpperCase();
-    final vm = switch (code) { 'XLM' => _xlmPriceVm, 'USDC' => _usdcPriceVm, _ => null };
+    final vm = switch (code) {
+      'XLM' => _xlmPriceVm,
+      'USDC' => _usdcPriceVm,
+      _ => null,
+    };
     if (vm == null) return null;
     final p = vm.priceNow;
     return (p.isFinite && p > 0) ? p : null;
   }
 
   bool _priceLoadingFor(OfferModel offer) {
+    if (!_hasTrustedVmRates()) return false;
     final code = offer.asset.trim().toUpperCase();
-    final vm = switch (code) { 'XLM' => _xlmPriceVm, 'USDC' => _usdcPriceVm, _ => null };
+    final vm = switch (code) {
+      'XLM' => _xlmPriceVm,
+      'USDC' => _usdcPriceVm,
+      _ => null,
+    };
     if (vm == null) return false;
     if (vm.fiatCode != offer.fiatCurrency.trim().toUpperCase()) return false;
     return vm.priceNow <= 0;
   }
 
   bool _offerEnabled(OfferModel offer) {
+    if (offer.marketPrice != null && offer.marketPrice! > 0) return true;
+    if (!_hasTrustedVmRates()) return true;
     if (_offerEffectivePrice(offer) != null) return true;
     return _priceLoadingFor(offer);
   }
@@ -234,7 +280,11 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
             _PriceStrip(c: c, xlmVm: _xlmPriceVm, usdcVm: _usdcPriceVm),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: _TypeToggle(c: c, selected: _selectedType, onChanged: _onTypeChanged),
+              child: _TypeToggle(
+                c: c,
+                selected: _selectedType,
+                onChanged: _onTypeChanged,
+              ),
             ),
 
             if (!_loading && _error == null && _offers.isNotEmpty)
@@ -252,9 +302,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(height: 1, color: c.border),
-                    ),
+                    Expanded(child: Container(height: 1, color: c.border)),
                   ],
                 ),
               ),
@@ -267,36 +315,49 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
                   : _error != null
                   ? _ErrorState(c: c, error: _error!, onRetry: _load)
                   : RefreshIndicator(
-                color: c.primary,
-                onRefresh: _load,
-                child: _offers.isEmpty
-                    ? ListView(children: [_EmptyState(c: c, type: _selectedType)])
-                    : FadeTransition(
-                  opacity: _fadeAnim,
-                  child: SlideTransition(
-                    position: _slideAnim,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-                      itemCount: _offers.length,
-                      itemBuilder: (_, i) {
-                        final offer = _offers[i];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: PublicOfferTile(
-                            c: c,
-                            offer: offer,
-                            marketPrice: _offerEffectivePrice(offer),
-                            priceLoading: _priceLoadingFor(offer),
-                            enabled: _offerEnabled(offer),
-                            shimmerAnim: _shimmerAnim,
-                            onTap: () => _openOfferDetails(offer),
-                          ),
-                        );
-                      },
+                      color: c.primary,
+                      onRefresh: _load,
+                      child: _offers.isEmpty
+                          ? ListView(
+                              children: [
+                                _EmptyState(c: c, type: _selectedType),
+                              ],
+                            )
+                          : FadeTransition(
+                              opacity: _fadeAnim,
+                              child: SlideTransition(
+                                position: _slideAnim,
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    0,
+                                    20,
+                                    32,
+                                  ),
+                                  itemCount: _offers.length,
+                                  itemBuilder: (_, i) {
+                                    final offer = _offers[i];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
+                                      child: PublicOfferTile(
+                                        c: c,
+                                        offer: offer,
+                                        marketPrice: _offerEffectivePrice(
+                                          offer,
+                                        ),
+                                        priceLoading: _priceLoadingFor(offer),
+                                        enabled: _offerEnabled(offer),
+                                        shimmerAnim: _shimmerAnim,
+                                        onTap: () => _openOfferDetails(offer),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
                     ),
-                  ),
-                ),
-              ),
             ),
           ],
         ),
@@ -372,14 +433,18 @@ class _LiveDot extends StatefulWidget {
   State<_LiveDot> createState() => _LiveDotState();
 }
 
-class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1200),
   )..repeat(reverse: true);
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -397,10 +462,7 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: c.success,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: c.success, shape: BoxShape.circle),
           ),
           const SizedBox(width: 5),
           Text(
@@ -447,14 +509,18 @@ class _IconBtn extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PriceStrip extends StatelessWidget {
-  const _PriceStrip({required this.c, required this.xlmVm, required this.usdcVm});
+  const _PriceStrip({
+    required this.c,
+    required this.xlmVm,
+    required this.usdcVm,
+  });
   final AppColor c;
   final PriceChartVM xlmVm;
   final PriceChartVM usdcVm;
 
   @override
   Widget build(BuildContext context) {
-    final xlm  = xlmVm.priceNow;
+    final xlm = xlmVm.priceNow;
     final usdc = usdcVm.priceNow;
 
     return Padding(
@@ -471,14 +537,18 @@ class _PriceStrip extends StatelessWidget {
             _PriceCell(
               c: c,
               token: 'XLM',
-              price: (xlm.isFinite && xlm > 0) ? '${xlmVm.fiatSym}${xlm.toStringAsFixed(4)}' : '—',
+              price: (xlm.isFinite && xlm > 0)
+                  ? '${xlmVm.fiatSym}${xlm.toStringAsFixed(4)}'
+                  : '—',
               fiat: xlmVm.fiatCode,
             ),
             Container(width: 1, height: 28, color: c.border),
             _PriceCell(
               c: c,
               token: 'USDC',
-              price: (usdc.isFinite && usdc > 0) ? '${usdcVm.fiatSym}${usdc.toStringAsFixed(4)}' : '—',
+              price: (usdc.isFinite && usdc > 0)
+                  ? '${usdcVm.fiatSym}${usdc.toStringAsFixed(4)}'
+                  : '—',
               fiat: usdcVm.fiatCode,
             ),
           ],
@@ -489,7 +559,12 @@ class _PriceStrip extends StatelessWidget {
 }
 
 class _PriceCell extends StatelessWidget {
-  const _PriceCell({required this.c, required this.token, required this.price, required this.fiat});
+  const _PriceCell({
+    required this.c,
+    required this.token,
+    required this.price,
+    required this.fiat,
+  });
   final AppColor c;
   final String token;
   final String price;
@@ -532,14 +607,18 @@ class _PriceCell extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TypeToggle extends StatelessWidget {
-  const _TypeToggle({required this.c, required this.selected, required this.onChanged});
+  const _TypeToggle({
+    required this.c,
+    required this.selected,
+    required this.onChanged,
+  });
   final AppColor c;
   final OfferType selected;
   final ValueChanged<OfferType> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final isBuyTab  = selected == OfferType.sell;
+    final isBuyTab = selected == OfferType.sell;
     final isSellTab = selected == OfferType.buy;
 
     return Container(
@@ -600,19 +679,19 @@ class _ToggleOption extends StatelessWidget {
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? activeColor : Colors.transparent,
+          color: active ? activeColor : c.surface,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: active ? Colors.white : c.textSecondary),
+            Icon(icon, size: 14, color: active ? c.onPrimary : c.textSecondary),
             const SizedBox(width: 6),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 180),
               style: TextStyle(
-                color: active ? Colors.white : c.textSecondary,
+                color: active ? c.onPrimary : c.textSecondary,
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
                 letterSpacing: 0.5,
@@ -656,7 +735,11 @@ class _EmptyState extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: c.border),
             ),
-            child: Icon(Icons.storefront_outlined, color: c.textSecondary, size: 24),
+            child: Icon(
+              Icons.storefront_outlined,
+              color: c.textSecondary,
+              size: 24,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -686,7 +769,11 @@ class _EmptyState extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.c, required this.error, required this.onRetry});
+  const _ErrorState({
+    required this.c,
+    required this.error,
+    required this.onRetry,
+  });
   final AppColor c;
   final String error;
   final VoidCallback onRetry;
@@ -722,7 +809,11 @@ class _ErrorState extends StatelessWidget {
           Text(
             error,
             textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.5),
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.5,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 20),
           GestureDetector(
@@ -733,10 +824,10 @@ class _ErrorState extends StatelessWidget {
                 color: c.primary,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text(
+              child: Text(
                 'Try again',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: c.onPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
                   letterSpacing: -0.2,
@@ -767,52 +858,40 @@ class _SkeletonListState extends State<_SkeletonList>
   late final AnimationController _ctrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
-  late final Animation<double> _anim =
-  CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  )..repeat();
+  late final Animation<double> _anim = CurvedAnimation(
+    parent: _ctrl,
+    curve: Curves.linear,
+  );
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) {
-        // Solid border color alternates between two theme-safe tones
-        final isLight = Theme.of(context).brightness == Brightness.light;
-        final skeletonColor = isLight
-            ? Color.lerp(const Color(0xFFE5E7EB), const Color(0xFFD1D5DB), _anim.value)!
-            : Color.lerp(const Color(0xFF2A2A2A), const Color(0xFF3A3A3A), _anim.value)!;
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: 5,
-          itemBuilder: (_, __) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _SkeletonTile(c: c, skeletonColor: skeletonColor),
-          ),
-        );
-      },
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 5,
+      itemBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _SkeletonTile(c: c, shimmerAnim: _anim),
+      ),
     );
   }
 }
 
 class _SkeletonTile extends StatelessWidget {
-  const _SkeletonTile({required this.c, required this.skeletonColor});
+  const _SkeletonTile({required this.c, required this.shimmerAnim});
   final AppColor c;
-  final Color skeletonColor;
+  final Animation<double> shimmerAnim;
 
   Widget _box({required double w, required double h, required double r}) =>
-      Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          color: skeletonColor,
-          borderRadius: BorderRadius.circular(r),
-        ),
-      );
+      _MarketShimmerBox(c: c, w: w, h: h, r: r, anim: shimmerAnim);
 
   @override
   Widget build(BuildContext context) {
@@ -854,11 +933,13 @@ class _SkeletonTile extends StatelessWidget {
                   children: [
                     _box(w: 90, h: 16, r: 4),
                     const SizedBox(height: 6),
-                    Row(children: [
-                      _box(w: 56, h: 10, r: 3),
-                      const SizedBox(width: 8),
-                      _box(w: 56, h: 10, r: 3),
-                    ]),
+                    Row(
+                      children: [
+                        _box(w: 56, h: 10, r: 3),
+                        const SizedBox(width: 8),
+                        _box(w: 56, h: 10, r: 3),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -876,6 +957,76 @@ class _SkeletonTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MarketShimmerBox extends StatelessWidget {
+  const _MarketShimmerBox({
+    required this.c,
+    required this.w,
+    required this.h,
+    required this.r,
+    required this.anim,
+  });
+
+  final AppColor c;
+  final double w;
+  final double h;
+  final double r;
+  final Animation<double> anim;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark
+        ? c.border.withValues(alpha: 0.52)
+        : c.background.withValues(alpha: 0.98);
+    final highlight = isDark
+        ? c.textPrimary.withValues(alpha: 0.20)
+        : c.onPrimary.withValues(alpha: 0.72);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(r),
+      child: SizedBox(
+        width: w,
+        height: h,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: base),
+            AnimatedBuilder(
+              animation: anim,
+              builder: (_, __) {
+                final bandWidth = w * 0.52;
+                final travel = w + (bandWidth * 2);
+                final left = (travel * anim.value) - bandWidth;
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: left,
+                      top: 0,
+                      bottom: 0,
+                      width: bandWidth,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              highlight.withValues(alpha: 0),
+                              highlight,
+                              highlight.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

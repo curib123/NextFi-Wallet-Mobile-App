@@ -52,7 +52,7 @@ Widget incomingPaymentHint(
           );
         },
         child: Material(
-          color: Colors.transparent,
+          color: AppColor.of(context).surface,
           child: InkWell(
             onTap: () => _showTxDetailsSheet(
               context,
@@ -74,10 +74,10 @@ Widget incomingPaymentHint(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: colors.success.withOpacity(.04),
+                color: colors.success.withValues(alpha: .04),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: colors.success.withOpacity(.15),
+                  color: colors.success.withValues(alpha: .15),
                   width: 1,
                 ),
               ),
@@ -122,7 +122,7 @@ Widget incomingPaymentHint(
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: colors.warning.withOpacity(.1),
+                                      color: colors.warning.withValues(alpha: .1),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -144,7 +144,7 @@ Widget incomingPaymentHint(
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
-                                color: colors.textSecondary.withOpacity(0.7),
+                                color: colors.textSecondary.withValues(alpha: 0.7),
                                 letterSpacing: -0.1,
                               ),
                             ),
@@ -155,7 +155,7 @@ Widget incomingPaymentHint(
                       Icon(
                         LucideIcons.chevronRight,
                         size: 16,
-                        color: colors.textSecondary.withOpacity(0.5),
+                        color: colors.textSecondary.withValues(alpha: 0.5),
                       ),
                     ],
                   ),
@@ -169,10 +169,10 @@ Widget incomingPaymentHint(
                         vertical: 7,
                       ),
                       decoration: BoxDecoration(
-                        color: colors.warning.withOpacity(.06),
+                        color: colors.warning.withValues(alpha: .06),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: colors.warning.withOpacity(.2),
+                          color: colors.warning.withValues(alpha: .2),
                           width: 1,
                         ),
                       ),
@@ -256,7 +256,7 @@ void _showTxDetailsSheet(
             width: 36,
             margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
-              color: colors.border.withOpacity(0.3),
+              color: colors.border.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -267,7 +267,7 @@ void _showTxDetailsSheet(
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: colors.success.withOpacity(0.08),
+                  color: colors.success.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -328,10 +328,10 @@ void _showTxDetailsSheet(
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colors.warning.withOpacity(0.06),
+                color: colors.warning.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: colors.warning.withOpacity(0.15),
+                  color: colors.warning.withValues(alpha: 0.15),
                   width: 1,
                 ),
               ),
@@ -377,7 +377,7 @@ void _showTxDetailsSheet(
               icon: const Icon(LucideIcons.check, size: 18),
               style: ElevatedButton.styleFrom(
                 backgroundColor: colors.success,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColor.of(context).onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -412,7 +412,7 @@ void _showTxDetailsSheet(
 Widget _divider(AppColor colors) => Container(
   height: 1,
   margin: const EdgeInsets.symmetric(vertical: 12),
-  color: colors.border.withOpacity(0.1),
+  color: colors.border.withValues(alpha: 0.1),
 );
 
 Widget _flatRow(
@@ -466,7 +466,7 @@ Widget _flatRow(
             },
             icon: Icon(
               LucideIcons.copy,
-              color: colors.textSecondary.withOpacity(0.5),
+              color: colors.textSecondary.withValues(alpha: 0.5),
             ),
           ),
       ],

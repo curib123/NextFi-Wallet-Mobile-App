@@ -99,7 +99,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
         gradient: LinearGradient(
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
           stops: const [0.0, 0.4, 1.0],
-          colors: [c.surface, c.surface.withOpacity(0.98), c.surface.withOpacity(0.94)],
+          colors: [c.surface, c.surface.withValues(alpha: 0.98), c.surface.withValues(alpha: 0.94)],
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -154,9 +154,9 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                     minV: minV,
                     maxV: maxV,
                     rows: rows,
-                    textColor: c.onSurface.withOpacity(0.6),
-                    bg: c.surface.withOpacity(0.65),
-                    border: c.outlineVariant.withOpacity(0.20),
+                    textColor: c.onSurface.withValues(alpha: 0.6),
+                    bg: c.surface.withValues(alpha: 0.65),
+                    border: c.outlineVariant.withValues(alpha: 0.20),
                   )
                       : const <Widget>[];
 
@@ -170,7 +170,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                         painter: LineChartPainter(
                           points: points,
                           color: widget.positive ? c.primary : c.error,
-                          gridColor: c.outlineVariant.withOpacity(0.25),
+                          gridColor: c.outlineVariant.withValues(alpha: 0.25),
                           hoverIndex: hover,
                         ),
                         size: Size.infinite,
@@ -186,7 +186,8 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                             points: points,
                             index: hover,
                             color: widget.positive ? c.primary : c.error,
-                            lineColor: c.outline.withOpacity(0.35),
+                            lineColor: c.outline.withValues(alpha: 0.35),
+                            coreColor: c.onPrimary,
                           ),
                           size: Size.infinite,
                         ),
@@ -199,7 +200,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           width: box.maxWidth,
                           height: box.maxHeight,
                           color: widget.positive ? c.primary : c.error,
-                          background: c.surface.withOpacity(0.98),
+                          background: c.surface.withValues(alpha: 0.98),
                           textColor: c.onSurface,
                           value: series[hover],
                           formatter: widget.formatPrice,
@@ -211,7 +212,11 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                       // Sticky “current” bubble at last point (when not hovering)
                       if (showStickyNow) ...[
                         CustomPaint(
-                          painter: _DotOnlyPainter(point: points.last, color: widget.positive ? c.primary : c.error),
+                          painter: _DotOnlyPainter(
+                            point: points.last,
+                            color: widget.positive ? c.primary : c.error,
+                            coreColor: c.onPrimary,
+                          ),
                           size: Size.infinite,
                         ),
                         _ValueBubble(
@@ -220,7 +225,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           width: box.maxWidth,
                           height: box.maxHeight,
                           color: widget.positive ? c.primary : c.error,
-                          background: c.surface.withOpacity(0.98),
+                          background: c.surface.withValues(alpha: 0.98),
                           textColor: c.onSurface,
                           value: nowValue,
                           formatter: widget.formatPrice,
@@ -362,12 +367,14 @@ class _HoverOverlayPainter extends CustomPainter {
     required this.index,
     required this.color,
     required this.lineColor,
+    required this.coreColor,
   });
 
   final List<Offset> points;
   final int index;
   final Color color;
   final Color lineColor;
+  final Color coreColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -381,7 +388,7 @@ class _HoverOverlayPainter extends CustomPainter {
     canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height), vPaint);
 
     final glow = Paint()
-      ..color = color.withOpacity(0.25)
+      ..color = color.withValues(alpha: 0.25)
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawCircle(p, 8, glow);
@@ -389,7 +396,7 @@ class _HoverOverlayPainter extends CustomPainter {
     final dot = Paint()..color = color..style = PaintingStyle.fill..isAntiAlias = true;
     canvas.drawCircle(p, 4.5, dot);
 
-    final core = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final core = Paint()..color = coreColor..style = PaintingStyle.fill;
     canvas.drawCircle(p, 1.6, core);
   }
 
@@ -403,14 +410,19 @@ class _HoverOverlayPainter extends CustomPainter {
 }
 
 class _DotOnlyPainter extends CustomPainter {
-  _DotOnlyPainter({required this.point, required this.color});
+  _DotOnlyPainter({
+    required this.point,
+    required this.color,
+    required this.coreColor,
+  });
   final Offset point;
   final Color color;
+  final Color coreColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     final glow = Paint()
-      ..color = color.withOpacity(0.20)
+      ..color = color.withValues(alpha: 0.20)
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
     canvas.drawCircle(point, 7, glow);
@@ -418,7 +430,7 @@ class _DotOnlyPainter extends CustomPainter {
     final dot = Paint()..color = color..style = PaintingStyle.fill..isAntiAlias = true;
     canvas.drawCircle(point, 4.0, dot);
 
-    final core = Paint()..color = Colors.white;
+    final core = Paint()..color = coreColor;
     canvas.drawCircle(point, 1.4, core);
   }
 
@@ -477,8 +489,8 @@ class _ValueBubble extends StatelessWidget {
               decoration: BoxDecoration(
                 color: background,
                 borderRadius: BorderRadius.circular(radius),
-                border: Border.all(color: color.withOpacity(0.25)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 6))],
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+                boxShadow: [BoxShadow(color: textColor.withValues(alpha: 0.06), blurRadius: 10, offset: Offset(0, 6))],
               ),
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -495,7 +507,7 @@ class _ValueBubble extends StatelessWidget {
                     Text(
                       subText!,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10.5, color: textColor.withOpacity(0.75), height: 1.0),
+                      style: TextStyle(fontSize: 10.5, color: textColor.withValues(alpha: 0.75), height: 1.0),
                     ),
                   ],
                 ],
@@ -511,8 +523,8 @@ class _ValueBubble extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: background,
                     border: Border(
-                      right: BorderSide(color: color.withOpacity(0.25)),
-                      bottom: BorderSide(color: color.withOpacity(0.25)),
+                      right: BorderSide(color: color.withValues(alpha: 0.25)),
+                      bottom: BorderSide(color: color.withValues(alpha: 0.25)),
                     ),
                   ),
                 ),

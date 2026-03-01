@@ -35,13 +35,13 @@ class ConfirmTile extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: value
-              ? accent.withOpacity(0.08)
+              ? accent.withValues(alpha: 0.08)
               : colors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: value
-                ? accent.withOpacity(0.2)
-                : colors.border.withOpacity(0.15),
+                ? accent.withValues(alpha: 0.2)
+                : colors.border.withValues(alpha: 0.15),
             width: 1,
           ),
         ),
@@ -53,17 +53,17 @@ class ConfirmTile extends StatelessWidget {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: value ? accent : Colors.transparent,
+                color: value ? accent : colors.surface,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: value ? accent : colors.border.withOpacity(0.3),
+                  color: value ? accent : colors.border.withValues(alpha: 0.3),
                   width: 2,
                 ),
               ),
               child: value
-                  ? const Icon(
+                  ? Icon(
                 LucideIcons.check,
-                color: Colors.white,
+                color: colors.onPrimary,
                 size: 16,
               )
                   : null,
@@ -75,7 +75,7 @@ class ConfirmTile extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 color: value
-                    ? accent.withOpacity(0.1)
+                    ? accent.withValues(alpha: 0.1)
                     : colors.background,
                 borderRadius: BorderRadius.circular(10),
               ),

@@ -33,18 +33,18 @@ class _SegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? color.primary : color.primary.withOpacity(0.06);
-    final fg = selected ? Colors.white : color.textSecondary;
+    final bg = selected ? color.primary : color.primary.withValues(alpha: 0.06);
+    final fg = selected ? color.onPrimary : color.textSecondary;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.primary.withOpacity(selected ? 0.0 : 0.15)),
+        border: Border.all(color: color.primary.withValues(alpha: selected ? 0.0 : 0.15)),
       ),
       child: Material(
-        color: Colors.transparent,
+        color: color.surface,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,

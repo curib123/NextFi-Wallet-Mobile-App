@@ -530,7 +530,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Future<File?> _showProofPickSheet() async {
     final pick = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => _ProofPickSheet(colors: AppColor.of(context)),
     );
     if (pick != true) return null;
@@ -577,7 +577,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       isScrollControlled: true,
       builder: (_) => _ConfirmSheet(
         title: title,
@@ -593,7 +593,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Future<bool> _onWillPop() async {
     final leave = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => _ConfirmSheet(
         title: 'Leave Trade Room?',
         body: 'Your trade is active. Return any time from Trade History.',
@@ -874,19 +874,19 @@ class _ConnectivityBanner extends StatelessWidget {
   const _ConnectivityBanner({required this.colors});
   final AppColor colors;
 
-  static const _amber = Color(0xFFF5A623);
-
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final amber = AppColor.of(context).warning;
+    return Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
     decoration: BoxDecoration(
       color: colors.surface,
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: _amber),
+      border: Border.all(color: amber),
     ),
     child: Row(
       children: [
-        const Icon(Icons.wifi_off_rounded, color: _amber, size: 16),
+        Icon(Icons.wifi_off_rounded, color: amber, size: 16),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -897,7 +897,7 @@ class _ConnectivityBanner extends StatelessWidget {
                 style: GoogleFonts.sora(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: _amber,
+                  color: amber,
                 ),
               ),
               Text(
@@ -912,7 +912,8 @@ class _ConnectivityBanner extends StatelessWidget {
         ),
       ],
     ),
-  );
+    );
+  }
 }
 
 // ─── Hero card ────────────────────────────────────────────────────────────────
@@ -1041,7 +1042,7 @@ class _HeroCard extends StatelessWidget {
                     style: GoogleFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: AppColor.of(context).onPrimary,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -1159,7 +1160,7 @@ class _CountdownCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final urgent = timeLeft.inMinutes < 5;
-    final accent = urgent ? const Color(0xFFF06060) : const Color(0xFFF5A623);
+    final accent = urgent ? AppColor.of(context).error : AppColor.of(context).warning;
     final totalSecs = 30 * 60.0;
     final progress = (timeLeft.inSeconds / totalSecs).clamp(0.0, 1.0);
 
@@ -1243,7 +1244,7 @@ class _RingPainter extends CustomPainter {
     final cy = size.height / 2;
     final r = (size.width / 2) - 3;
     final bgPaint = Paint()
-      ..color = color.withAlpha(40)
+      ..color = color.withValues(alpha: ((40) / 255.0))
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
@@ -1349,7 +1350,7 @@ class _EscrowSenderCard extends StatelessWidget {
                     style: GoogleFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: AppColor.of(context).onPrimary,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -1397,20 +1398,20 @@ class _EscrowSenderCard extends StatelessWidget {
                     ),
                     child: Center(
                       child: loading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: AppColor.of(context).onPrimary,
                               ),
                             )
                           : Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.lock_rounded,
-                                  color: Colors.white,
+                                  color: AppColor.of(context).onPrimary,
                                   size: 18,
                                 ),
                                 const SizedBox(width: 8),
@@ -1419,7 +1420,7 @@ class _EscrowSenderCard extends StatelessWidget {
                                   style: GoogleFonts.sora(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white,
+                                    color: AppColor.of(context).onPrimary,
                                   ),
                                 ),
                               ],
@@ -1463,7 +1464,7 @@ class _EscrowStep extends StatelessWidget {
             style: GoogleFonts.sora(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColor.of(context).onPrimary,
             ),
           ),
         ),
@@ -1490,16 +1491,15 @@ class _WaitingForEscrowCard extends StatelessWidget {
   final AppColor colors;
   final TradeModel trade;
 
-  static const _amber = Color(0xFFF5A623);
-
   @override
   Widget build(BuildContext context) {
+    final amber = AppColor.of(context).warning;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _amber),
+        border: Border.all(color: amber),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1512,9 +1512,9 @@ class _WaitingForEscrowCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(11),
               border: Border.all(color: colors.border),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.hourglass_empty_rounded,
-              color: _amber,
+              color: amber,
               size: 18,
             ),
           ),
@@ -1558,10 +1558,9 @@ class _PaymentInstructionsCard extends StatelessWidget {
   final TradeModel trade;
   final AppColor colors;
 
-  static const _blue = Color(0xFF4F8EF7);
-
   @override
   Widget build(BuildContext context) {
+    final blue = AppColor.of(context).primary;
     final payeeAccount = trade.offerType == TradeOfferType.sell
         ? trade.sellerPaymentAccount
         : trade.buyerPaymentAccount;
@@ -1576,7 +1575,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _blue),
+        border: Border.all(color: blue),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1596,9 +1595,9 @@ class _PaymentInstructionsCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: colors.border),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.account_balance_rounded,
-                    color: _blue,
+                    color: blue,
                     size: 16,
                   ),
                 ),
@@ -1618,7 +1617,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: _blue,
+                        color: blue,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -1626,7 +1625,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                     style: GoogleFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: AppColor.of(context).onPrimary,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -1713,15 +1712,14 @@ class _FiatSentNoticeCard extends StatelessWidget {
   final AppColor colors;
   final bool isBuyerFiatSender;
 
-  static const _green = Color(0xFF1DC99A);
-  static const _red = Color(0xFFF06060);
-
   @override
   Widget build(BuildContext context) {
+    final green = AppColor.of(context).success;
+    final red = AppColor.of(context).error;
     final dueAt = trade.fiatConfirmDueAt;
     final bool autoDisputeSoon =
         dueAt != null && dueAt.difference(DateTime.now()).inMinutes < 30;
-    final border = autoDisputeSoon ? _red : _green;
+    final border = autoDisputeSoon ? red : green;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1743,9 +1741,9 @@ class _FiatSentNoticeCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(color: colors.border),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.payments_rounded,
-                  color: _green,
+                  color: green,
                   size: 18,
                 ),
               ),
@@ -1784,13 +1782,13 @@ class _FiatSentNoticeCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.background,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _red),
+                border: Border.all(color: red),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.warning_amber_rounded,
-                    color: _red,
+                    color: red,
                     size: 16,
                   ),
                   const SizedBox(width: 8),
@@ -1801,7 +1799,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
                       'Check your account and confirm receipt now.',
                       style: GoogleFonts.sora(
                         fontSize: 11.5,
-                        color: _red,
+                        color: red,
                         height: 1.4,
                       ),
                     ),
@@ -1828,17 +1826,16 @@ class _WaitingConfirmationCard extends StatelessWidget {
   final AppColor colors;
   final bool isSellerVerifier;
 
-  static const _amber = Color(0xFFF5A623);
-
   @override
   Widget build(BuildContext context) {
+    final amber = AppColor.of(context).warning;
     final dueAt = trade.fiatConfirmDueAt;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _amber),
+        border: Border.all(color: amber),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1854,9 +1851,9 @@ class _WaitingConfirmationCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(color: colors.border),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.hourglass_top_rounded,
-                  color: _amber,
+                    color: amber,
                   size: 18,
                 ),
               ),
@@ -1939,7 +1936,7 @@ class _TradeDetailsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SectionCard(
       icon: Icons.receipt_long_rounded,
-      iconColor: const Color(0xFF4F8EF7),
+      iconColor: AppColor.of(context).primary,
       title: 'Trade Details',
       colors: colors,
       children: [
@@ -1997,11 +1994,11 @@ class _EscrowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = escrow.status;
     final accent = switch (status) {
-      EscrowStatus.cbCreated => const Color(0xFF1DC99A),
-      EscrowStatus.cbClaimed => const Color(0xFF4F8EF7),
-      EscrowStatus.cbRefunded => const Color(0xFFF5A623),
-      EscrowStatus.failed => const Color(0xFFF06060),
-      _ => const Color(0xFF6B7A99),
+      EscrowStatus.cbCreated => AppColor.of(context).success,
+      EscrowStatus.cbClaimed => AppColor.of(context).primary,
+      EscrowStatus.cbRefunded => AppColor.of(context).warning,
+      EscrowStatus.failed => AppColor.of(context).error,
+      _ => AppColor.of(context).textSecondary,
     };
     final statusLabel = switch (status) {
       EscrowStatus.cbCreated => 'LOCKED',
@@ -2027,7 +2024,7 @@ class _EscrowCard extends StatelessWidget {
           style: GoogleFonts.sora(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: AppColor.of(context).onPrimary,
             letterSpacing: 0.8,
           ),
         ),
@@ -2221,8 +2218,8 @@ class _TimelineCard extends StatelessWidget {
         trade.status == TradeStatus.disputed ||
         trade.status == TradeStatus.expired;
 
-    const doneColor = Color(0xFF1DC99A);
-    const activeColor = Color(0xFF4F8EF7);
+    final doneColor = AppColor.of(context).success;
+    final activeColor = AppColor.of(context).primary;
 
     return _SectionCard(
       icon: Icons.route_rounded,
@@ -2262,7 +2259,7 @@ class _TimelineCard extends StatelessWidget {
                             color: colors.background,
                             border: Border.all(color: activeColor, width: 2),
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Icon(
                               Icons.circle,
                               color: activeColor,
@@ -2283,7 +2280,7 @@ class _TimelineCard extends StatelessWidget {
                           ),
                         ),
                         child: isDone
-                            ? const Icon(
+                            ? Icon(
                                 Icons.check_rounded,
                                 color: doneColor,
                                 size: 14,
@@ -2452,7 +2449,7 @@ class _DataRowState extends State<_DataRow> {
 
   @override
   Widget build(BuildContext context) {
-    const doneColor = Color(0xFF1DC99A);
+    final doneColor = AppColor.of(context).success;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -2509,7 +2506,7 @@ class _DataRowState extends State<_DataRow> {
                         _copied ? Icons.check_rounded : Icons.copy_rounded,
                         size: 11,
                         color: _copied
-                            ? Colors.white
+                            ? AppColor.of(context).onPrimary
                             : widget.colors.textSecondary,
                       ),
                     ),
@@ -2606,13 +2603,11 @@ class _CompletedCard extends StatefulWidget {
 class _CompletedCardState extends State<_CompletedCard> {
   bool _reviewSubmitted = false;
 
-  static const _green = Color(0xFF1DC99A);
-
   Future<void> _openReviewSheet() async {
     final result = await showModalBottomSheet<_ReviewResult>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) =>
           _ReviewSheet(tradeId: widget.trade.id, colors: AppColor.of(context)),
     );
@@ -2646,23 +2641,24 @@ class _CompletedCardState extends State<_CompletedCard> {
 
   @override
   Widget build(BuildContext context) {
+    final green = AppColor.of(context).success;
     final colors = widget.colors;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _green),
+        border: Border.all(color: green),
       ),
       child: Column(
         children: [
           Container(
             width: 64,
             height: 64,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: _green),
-            child: const Icon(
+            decoration: BoxDecoration(shape: BoxShape.circle, color: green),
+            child: Icon(
               Icons.check_rounded,
-              color: Colors.white,
+              color: AppColor.of(context).onPrimary,
               size: 32,
             ),
           ),
@@ -2688,13 +2684,13 @@ class _CompletedCardState extends State<_CompletedCard> {
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.star_rounded, color: _green, size: 18),
+                    Icon(Icons.star_rounded, color: green, size: 18),
                     const SizedBox(width: 8),
                     Text(
                       'Review submitted — thank you!',
                       style: GoogleFonts.sora(
                         fontSize: 13,
-                        color: _green,
+                        color: green,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2708,19 +2704,19 @@ class _CompletedCardState extends State<_CompletedCard> {
                     decoration: BoxDecoration(
                       color: colors.background,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _green),
+                      border: Border.all(color: green),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.star_rounded, color: _green, size: 18),
+                        Icon(Icons.star_rounded, color: green, size: 18),
                         const SizedBox(width: 8),
                         Text(
                           'Rate This Trade',
                           style: GoogleFonts.sora(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: _green,
+                            color: green,
                           ),
                         ),
                       ],
@@ -2756,7 +2752,7 @@ class _CancelledCard extends StatelessWidget {
             shape: BoxShape.circle,
             color: colors.error,
           ),
-          child: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+          child: Icon(Icons.close_rounded, color: AppColor.of(context).onPrimary, size: 28),
         ),
         const SizedBox(height: 14),
         Text(
@@ -2801,7 +2797,7 @@ class _DisputedCard extends StatelessWidget {
             shape: BoxShape.circle,
             color: colors.error,
           ),
-          child: const Icon(Icons.flag_rounded, color: Colors.white, size: 28),
+          child: Icon(Icons.flag_rounded, color: AppColor.of(context).onPrimary, size: 28),
         ),
         const SizedBox(height: 14),
         Text(
@@ -3053,9 +3049,9 @@ class _ActionBtn extends StatelessWidget {
         width: double.infinity,
         decoration: BoxDecoration(
           color: outlined
-              ? Colors.transparent
+              ? AppColor.of(context).surface
               : loading
-              ? accent.withAlpha(128)
+              ? accent.withValues(alpha: ((128) / 255.0))
               : accent,
           borderRadius: BorderRadius.circular(16),
           border: outlined ? Border.all(color: accent, width: 1.5) : null,
@@ -3067,7 +3063,7 @@ class _ActionBtn extends StatelessWidget {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: outlined ? accent : Colors.white,
+                    color: outlined ? accent : AppColor.of(context).onPrimary,
                   ),
                 )
               : Row(
@@ -3076,7 +3072,7 @@ class _ActionBtn extends StatelessWidget {
                     Icon(
                       icon,
                       size: compact ? 16 : 18,
-                      color: outlined ? accent : Colors.white,
+                      color: outlined ? accent : AppColor.of(context).onPrimary,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -3084,7 +3080,7 @@ class _ActionBtn extends StatelessWidget {
                       style: GoogleFonts.sora(
                         fontSize: compact ? 13 : 14.5,
                         fontWeight: FontWeight.w700,
-                        color: outlined ? accent : Colors.white,
+                        color: outlined ? accent : AppColor.of(context).onPrimary,
                         letterSpacing: -0.2,
                       ),
                     ),
@@ -3229,7 +3225,7 @@ class _ConfirmSheet extends StatelessWidget {
                         style: GoogleFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppColor.of(context).onPrimary,
                         ),
                       ),
                     ),
@@ -3285,9 +3281,9 @@ class _ProofPickSheet extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.photo_library_rounded,
-                    color: Colors.white,
+                    color: AppColor.of(context).onPrimary,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
@@ -3296,7 +3292,7 @@ class _ProofPickSheet extends StatelessWidget {
                     style: GoogleFonts.sora(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: AppColor.of(context).onPrimary,
                     ),
                   ),
                 ],
@@ -3395,7 +3391,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         ? Icons.star_rounded
                         : Icons.star_outline_rounded,
                     color: star <= _rating
-                        ? const Color(0xFFFBBC04)
+                        ? AppColor.of(context).warning
                         : colors.textSecondary,
                     size: star <= _rating ? 40 : 34,
                   ),
@@ -3451,7 +3447,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   style: GoogleFonts.sora(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: AppColor.of(context).onPrimary,
                   ),
                 ),
               ),
@@ -3462,3 +3458,4 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     );
   }
 }
+

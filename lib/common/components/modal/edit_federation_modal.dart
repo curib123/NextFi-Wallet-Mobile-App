@@ -19,7 +19,7 @@ Future<void> showEditFederationModal(
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (sheetContext) {
       return StatefulBuilder(
         builder: (context, setState) {
@@ -44,15 +44,15 @@ Future<void> showEditFederationModal(
               top: 12,
             ),
             child: Material(
-              color: Colors.transparent,
+              color: AppColor.of(context).surface,
               child: Container(
                 decoration: BoxDecoration(
                   color: c.surface,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: c.border.withOpacity(0.45)),
+                  border: Border.all(color: c.border.withValues(alpha: 0.45)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: AppColor.of(context).textPrimary.withValues(alpha: 0.12),
                       blurRadius: 28,
                       offset: const Offset(0, 12),
                     ),
@@ -71,7 +71,7 @@ Future<void> showEditFederationModal(
                             width: 44,
                             height: 5,
                             decoration: BoxDecoration(
-                              color: c.border.withOpacity(0.9),
+                              color: c.border.withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(99),
                             ),
                           ),
@@ -83,7 +83,7 @@ Future<void> showEditFederationModal(
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: c.primary.withOpacity(0.12),
+                                color: c.primary.withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
                               alignment: Alignment.center,
@@ -131,23 +131,23 @@ Future<void> showEditFederationModal(
                             suffixText: '*$fixedDomain',
                             isDense: true,
                             filled: true,
-                            fillColor: c.background.withOpacity(0.55),
+                            fillColor: c.background.withValues(alpha: 0.55),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
-                                color: c.border.withOpacity(0.5),
+                                color: c.border.withValues(alpha: 0.5),
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
-                                color: c.border.withOpacity(0.5),
+                                color: c.border.withValues(alpha: 0.5),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
-                                color: c.primary.withOpacity(0.65),
+                                color: c.primary.withValues(alpha: 0.65),
                                 width: 1.4,
                               ),
                             ),
@@ -161,7 +161,7 @@ Future<void> showEditFederationModal(
                             vertical: 9,
                           ),
                           decoration: BoxDecoration(
-                            color: c.primary.withOpacity(0.07),
+                            color: c.primary.withValues(alpha: 0.07),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -198,7 +198,7 @@ Future<void> showEditFederationModal(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: c.textPrimary,
                                   side: BorderSide(
-                                    color: c.border.withOpacity(0.65),
+                                    color: c.border.withValues(alpha: 0.65),
                                   ),
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12,
@@ -236,7 +236,7 @@ Future<void> showEditFederationModal(
                                     : null,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: c.primary,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: AppColor.of(context).onPrimary,
                                   elevation: 0,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12,
@@ -246,12 +246,12 @@ Future<void> showEditFederationModal(
                                   ),
                                 ),
                                 child: vm.editingFederationId == item.id
-                                    ? const SizedBox(
+                                    ? SizedBox(
                                         height: 16,
                                         width: 16,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Colors.white,
+                                          color: AppColor.of(context).onPrimary,
                                         ),
                                       )
                                     : const Text(

@@ -35,8 +35,6 @@ class MerchantInfoSection extends StatelessWidget {
   final int? reviewCount;
   final bool loadingReviews;
 
-  static const _amber = Color(0xFFD97706);
-
   @override
   Widget build(BuildContext context) {
     final tierColor = getTierColor(profile.tier);
@@ -100,12 +98,12 @@ class MerchantInfoSection extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(tierIcon, size: 12, color: Colors.white),
+                      Icon(tierIcon, size: 12, color: c.onPrimary),
                       const SizedBox(width: 4),
                       Text(
                         tierLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: c.onPrimary,
                           fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.3,
@@ -221,16 +219,16 @@ class MerchantInfoSection extends StatelessWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.star_rounded,
                               size: 13,
-                              color: _amber,
+                              color: c.warning,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               (averageRating ?? 5.0).toStringAsFixed(1),
-                              style: const TextStyle(
-                                color: _amber,
+                              style: TextStyle(
+                                color: c.warning,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.3,
@@ -344,13 +342,13 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
       builder: (_, __) {
         final skeletonColor = isLight
             ? Color.lerp(
-                const Color(0xFFE5E7EB),
-                const Color(0xFFD1D5DB),
+                c.border,
+                c.border,
                 _a.value,
               )!
             : Color.lerp(
-                const Color(0xFF2A2A2A),
-                const Color(0xFF3A3A3A),
+                c.textPrimary,
+                c.textPrimary,
                 _a.value,
               )!;
 
@@ -430,8 +428,6 @@ class ReviewsSection extends StatelessWidget {
   final List<ReviewModel> reviews;
   final double? averageRating;
 
-  static const _amber = Color(0xFFD97706);
-
   @override
   Widget build(BuildContext context) {
     final recent = reviews.take(3).toList();
@@ -460,10 +456,10 @@ class ReviewsSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: c.border),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.star_rounded,
                     size: 14,
-                    color: _amber,
+                    color: c.warning,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -481,8 +477,8 @@ class ReviewsSection extends StatelessWidget {
                 // Average score
                 Text(
                   (averageRating ?? 5.0).toStringAsFixed(1),
-                  style: const TextStyle(
-                    color: _amber,
+                  style: TextStyle(
+                    color: c.warning,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
@@ -576,8 +572,6 @@ class ReviewItem extends StatelessWidget {
   final ReviewModel review;
   final bool? isLight;
 
-  static const _amber = Color(0xFFD97706);
-
   @override
   Widget build(BuildContext context) {
     final hasComment = review.comment != null && review.comment!.isNotEmpty;
@@ -605,7 +599,7 @@ class ReviewItem extends StatelessWidget {
                           ? Icons.star_rounded
                           : Icons.star_outline_rounded,
                       size: 13,
-                      color: i < review.rating ? _amber : c.border,
+                      color: i < review.rating ? c.warning : c.border,
                     ),
                   ),
                 ),

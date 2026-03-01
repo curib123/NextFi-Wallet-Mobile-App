@@ -21,9 +21,9 @@ class RangeTabs extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: c.surfaceContainerHighest.withOpacity(0.5),
+        color: c.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.outlineVariant.withOpacity(0.4)),
+        border: Border.all(color: c.outlineVariant.withValues(alpha: 0.4)),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(

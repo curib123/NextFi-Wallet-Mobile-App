@@ -54,15 +54,13 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ── System UI ────────────────────────────────────────────────────
 
-  void _applySystemUi(Brightness brightness) {
+  void _applySystemUi(Brightness brightness, AppColor colors) {
     final isDark = brightness == Brightness.dark;
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
         statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: isDark
-            ? AppColor.dark.background
-            : AppColor.light.background,
+        systemNavigationBarColor: colors.background,
       ),
     );
   }
@@ -191,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    _applySystemUi(isDark ? Brightness.dark : Brightness.light);
+    _applySystemUi(isDark ? Brightness.dark : Brightness.light, colors);
     final bottom = MediaQuery.of(context).padding.bottom;
     final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
 
@@ -227,7 +225,11 @@ class _LoginScreenState extends State<LoginScreen>
                   const Spacer(flex: 3),
 
                   // ── Logo
-                  _fadeSlide(visible: _visible, delay: 0, child: _buildLogo()),
+                  _fadeSlide(
+                    visible: _visible,
+                    delay: 0,
+                    child: _buildLogo(colors),
+                  ),
 
                   const SizedBox(height: 20),
 
@@ -266,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen>
           if (isLoading)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.5),
+                color: colors.textPrimary.withValues(alpha: 0.5),
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.all(32),
@@ -275,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen>
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: colors.textPrimary.withValues(alpha: 0.2),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -342,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ── Logo ─────────────────────────────────────────────────────────
 
-  Widget _buildLogo() {
+  Widget _buildLogo(AppColor colors) {
     return Container(
       width: 56,
       height: 56,
@@ -350,7 +352,7 @@ class _LoginScreenState extends State<LoginScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3A5BFF).withOpacity(0.25),
+            color: colors.primary.withValues(alpha: 0.25),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -359,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Image.asset(
-          'assets/icon/ic_stat_notification.png',
+          'assets/icon/icon.png',
           width: 56,
           height: 56,
           fit: BoxFit.cover,
@@ -402,8 +404,8 @@ class _LoginScreenState extends State<LoginScreen>
   // ── Buttons ──────────────────────────────────────────────────────
 
   Widget _buildButtons(AppColor colors, bool isDark) {
-    final googleBg = isDark ? const Color(0xFFFFFFFF) : const Color(0xFFFFFFFF);
-    const googleText = Color(0xFF1A1A2E);
+    final googleBg = isDark ? colors.surface : colors.onPrimary;
+    final googleText = colors.textPrimary;
 
     final fbBg = colors.surface;
     final fbText = colors.textPrimary;
@@ -417,8 +419,8 @@ class _LoginScreenState extends State<LoginScreen>
           onTap: _signInGoogle,
           backgroundColor: googleBg,
           textColor: googleText,
-          borderColor: isDark ? null : colors.border,
-          loadingColor: const Color(0xFF3A5BFF),
+          borderColor: colors.border,
+          loadingColor: colors.primary,
         ),
         const SizedBox(height: 12),
         _AuthButton(
@@ -429,7 +431,7 @@ class _LoginScreenState extends State<LoginScreen>
           backgroundColor: fbBg,
           textColor: fbText,
           borderColor: colors.border,
-          loadingColor: const Color(0xFF1877F2),
+          loadingColor: colors.primary,
         ),
       ],
     );
@@ -444,7 +446,7 @@ class _LoginScreenState extends State<LoginScreen>
         text: TextSpan(
           style: TextStyle(
             fontSize: 12,
-            color: colors.textSecondary.withOpacity(0.6),
+            color: colors.textSecondary.withValues(alpha: 0.6),
             height: 1.6,
           ),
           children: [
@@ -452,7 +454,7 @@ class _LoginScreenState extends State<LoginScreen>
             TextSpan(
               text: 'Terms of Service',
               style: TextStyle(
-                color: const Color(0xFF3A5BFF).withOpacity(0.85),
+                color: colors.primary.withValues(alpha: 0.85),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -460,7 +462,7 @@ class _LoginScreenState extends State<LoginScreen>
             TextSpan(
               text: 'Privacy Policy',
               style: TextStyle(
-                color: const Color(0xFF3A5BFF).withOpacity(0.85),
+                color: colors.primary.withValues(alpha: 0.85),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -528,7 +530,7 @@ class _AuthButtonState extends State<_AuthButton> {
           height: 56,
           decoration: BoxDecoration(
             color: _pressed
-                ? widget.backgroundColor.withOpacity(0.82)
+                ? widget.backgroundColor.withValues(alpha: 0.82)
                 : widget.backgroundColor,
             borderRadius: BorderRadius.circular(14),
             border: widget.borderColor != null
@@ -538,7 +540,7 @@ class _AuthButtonState extends State<_AuthButton> {
                 ? []
                 : [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: AppColor.of(context).textPrimary.withValues(alpha: 0.06),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -589,12 +591,16 @@ class _GoogleIcon extends StatelessWidget {
     return SizedBox(
       width: 20,
       height: 20,
-      child: CustomPaint(painter: _GoogleLogoPainter()),
+      child: CustomPaint(painter: _GoogleLogoPainter(AppColor.of(context))),
     );
   }
 }
 
 class _GoogleLogoPainter extends CustomPainter {
+  final AppColor colors;
+
+  _GoogleLogoPainter(this.colors);
+
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width;
@@ -605,19 +611,19 @@ class _GoogleLogoPainter extends CustomPainter {
     final bounds = Rect.fromCircle(center: Offset(cx, cy), radius: r);
 
     final blue = Paint()
-      ..color = const Color(0xFF4285F4)
+      ..color = colors.primary
       ..style = PaintingStyle.fill;
     final red = Paint()
-      ..color = const Color(0xFFEA4335)
+      ..color = colors.error
       ..style = PaintingStyle.fill;
     final yellow = Paint()
-      ..color = const Color(0xFFFBBC05)
+      ..color = colors.warning
       ..style = PaintingStyle.fill;
     final green = Paint()
-      ..color = const Color(0xFF34A853)
+      ..color = colors.success
       ..style = PaintingStyle.fill;
     final white = Paint()
-      ..color = Colors.white
+      ..color = colors.onPrimary
       ..style = PaintingStyle.fill;
 
     canvas.drawArc(bounds, -math.pi / 2, math.pi, true, blue);
@@ -647,20 +653,21 @@ class _FacebookIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
     return Container(
       width: 20,
       height: 20,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Color(0xFF1877F2),
+        color: colors.primary,
       ),
-      child: const Center(
+      child: Center(
         child: Text(
           'f',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w800,
-            color: Colors.white,
+            color: colors.onPrimary,
             height: 1.2,
             fontFamily: 'Georgia',
           ),

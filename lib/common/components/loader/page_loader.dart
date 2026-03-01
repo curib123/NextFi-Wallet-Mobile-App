@@ -135,12 +135,12 @@ class _WavingDotsLoaderState extends State<WavingDotsLoader>
                       width:  r * 2,
                       height: barHeight,
                       decoration: BoxDecoration(
-                        color: widget.color.withOpacity(alpha),
+                        color: widget.color.withValues(alpha: alpha),
                         borderRadius: BorderRadius.circular(radius),
                         boxShadow: sin.abs() > 0.5
                             ? [
                           BoxShadow(
-                            color:      widget.color.withOpacity(alpha * 0.35),
+                            color:      widget.color.withValues(alpha: alpha * 0.35),
                             blurRadius: r * 2.5,
                             spreadRadius: 0,
                           ),
@@ -230,7 +230,7 @@ class _DualArcPainter extends CustomPainter {
 
     // ── Track (outer faint ring) ──────────────────────────
     final trackPaint = Paint()
-      ..color  = color.withOpacity(0.12)
+      ..color  = color.withValues(alpha: 0.12)
       ..style  = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..strokeCap   = StrokeCap.round;
@@ -247,7 +247,7 @@ class _DualArcPainter extends CustomPainter {
       ..shader = SweepGradient(
         startAngle: startAngle1,
         endAngle:   startAngle1 + sweep1,
-        colors:     [color.withOpacity(0.0), color],
+        colors:     [color.withValues(alpha: 0.0), color],
         tileMode:   TileMode.clamp,
       ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: outerR))
       ..style       = PaintingStyle.stroke
@@ -270,7 +270,7 @@ class _DualArcPainter extends CustomPainter {
     final startAngle2 = t2 + math.pi / 4;
 
     final innerPaint = Paint()
-      ..color       = color.withOpacity(0.55)
+      ..color       = color.withValues(alpha: 0.55)
       ..style       = PaintingStyle.stroke
       ..strokeWidth = stroke * 0.75
       ..strokeCap   = StrokeCap.round;
@@ -289,7 +289,7 @@ class _DualArcPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(cx, cy),
       dotR * pulse,
-      Paint()..color = color.withOpacity(0.7),
+      Paint()..color = color.withValues(alpha: 0.7),
     );
   }
 

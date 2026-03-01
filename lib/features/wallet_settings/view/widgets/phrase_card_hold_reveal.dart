@@ -50,23 +50,23 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
           end: Alignment.bottomRight,
           colors: [
             colors.surface,
-            colors.surface.withOpacity(0.9),
+            colors.surface.withValues(alpha: 0.9),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: colors.border.withOpacity(0.15),
+          color: colors.border.withValues(alpha: 0.15),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: colors.primary.withOpacity(0.04),
+            color: colors.primary.withValues(alpha: 0.04),
             blurRadius: 24,
             offset: const Offset(0, 8),
             spreadRadius: -4,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: AppColor.of(context).textPrimary.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -109,8 +109,8 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colors.background.withOpacity(0.8),
-              colors.background.withOpacity(0.6),
+              colors.background.withValues(alpha: 0.8),
+              colors.background.withValues(alpha: 0.6),
             ],
           ),
         ),
@@ -126,9 +126,9 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        colors.primary.withOpacity(0),
-                        colors.primary.withOpacity(0.05),
-                        colors.primary.withOpacity(0),
+                        colors.primary.withValues(alpha: 0),
+                        colors.primary.withValues(alpha: 0.05),
+                        colors.primary.withValues(alpha: 0),
                       ],
                       stops: [
                         _shimmerController.value - 0.3,
@@ -150,13 +150,13 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        colors.primary.withOpacity(0.12),
-                        colors.primary.withOpacity(0.06),
+                        colors.primary.withValues(alpha: 0.12),
+                        colors.primary.withValues(alpha: 0.06),
                       ],
                     ),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: colors.primary.withOpacity(0.2),
+                      color: colors.primary.withValues(alpha: 0.2),
                       width: 2,
                     ),
                   ),
@@ -183,7 +183,7 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
                   "Your recovery phrase is secured",
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: colors.textSecondary.withOpacity(0.8),
+                    color: colors.textSecondary.withValues(alpha: 0.8),
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.1,
@@ -199,10 +199,10 @@ class _PhraseCardHoldRevealState extends State<PhraseCardHoldReveal>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: colors.warning.withOpacity(0.12),
+                        color: colors.warning.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: colors.warning.withOpacity(0.3),
+                          color: colors.warning.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -326,18 +326,18 @@ class _WordChipState extends State<_WordChip>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                widget.colors.background.withOpacity(0.9),
-                widget.colors.background.withOpacity(0.7),
+                widget.colors.background.withValues(alpha: 0.9),
+                widget.colors.background.withValues(alpha: 0.7),
               ],
             ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: widget.colors.border.withOpacity(0.2),
+              color: widget.colors.border.withValues(alpha: 0.2),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: AppColor.of(context).textPrimary.withValues(alpha: 0.02),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -351,7 +351,7 @@ class _WordChipState extends State<_WordChip>
                 child: Text(
                   '${widget.index}.',
                   style: TextStyle(
-                    color: widget.colors.textSecondary.withOpacity(0.6),
+                    color: widget.colors.textSecondary.withValues(alpha: 0.6),
                     fontWeight: FontWeight.w700,
                     fontSize: 11,
                     letterSpacing: 0.1,

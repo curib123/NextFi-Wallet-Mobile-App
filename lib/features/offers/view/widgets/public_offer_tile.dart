@@ -85,11 +85,12 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       final methods = await _offerPaymentCore.getPaymentMethodsForOffer(
         widget.offer.id,
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _paymentMethodsMap = {for (final m in methods) m.id: m};
           _loadingPaymentMethods = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingPaymentMethods = false);
     }
@@ -106,11 +107,12 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     }
     try {
       final p = await _merchantCore.getPublic(sid);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _merchantProfile = p;
           _loadingMerchant = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingMerchant = false);
     }
@@ -125,12 +127,13 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     try {
       final avg = await _reviewsCore.getUserAverageRating(sid);
       final count = await _reviewsCore.getUserReviewCount(sid);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _averageRating = avg;
           _reviewCount = count;
           _loadingReviews = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingReviews = false);
     }
@@ -138,15 +141,14 @@ class _PublicOfferTileState extends State<PublicOfferTile>
 
   bool get _isBuy => widget.offer.type == OfferType.sell;
 
-  Color get _typeColor =>
-      _isBuy ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+  Color get _typeColor => _isBuy ? widget.c.success : widget.c.error;
 
   Color _statusColor(String s) => switch (s.toUpperCase()) {
-    'ACTIVE' => const Color(0xFF16A34A),
-    'PAUSED' => const Color(0xFFD97706),
-    'COMPLETED' => const Color(0xFF2563EB),
-    'CANCELLED' => const Color(0xFFDC2626),
-    _ => const Color(0xFF6B7280),
+    'ACTIVE' => widget.c.success,
+    'PAUSED' => widget.c.warning,
+    'COMPLETED' => widget.c.primary,
+    'CANCELLED' => widget.c.error,
+    _ => widget.c.textSecondary,
   };
 
   @override
@@ -173,23 +175,23 @@ class _PublicOfferTileState extends State<PublicOfferTile>
           child: Container(
             decoration: BoxDecoration(
               color: c.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: c.border),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
+                  color: c.textPrimary.withValues(alpha: 0.06),
                   blurRadius: 20,
                   offset: const Offset(0, 4),
                 ),
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: c.textPrimary.withValues(alpha: 0.03),
                   blurRadius: 3,
                   offset: const Offset(0, 1),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -197,7 +199,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                   Container(height: 3, color: typeColor),
 
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -216,9 +218,9 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                           shimmerAnim: widget.shimmerAnim,
                         ),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 10),
                         _SolidDivider(c: c),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 10),
 
                         // ── Price Row
                         _PriceRow(
@@ -230,9 +232,9 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                           shimmerAnim: widget.shimmerAnim,
                         ),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 10),
                         _SolidDivider(c: c),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 10),
 
                         // ── Footer Row
                         _FooterRow(
@@ -296,20 +298,20 @@ class _MerchantRow extends StatelessWidget {
       children: [
         // Direction badge
         Container(
-          width: 40,
-          height: 40,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             color: c.background,
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: c.border),
           ),
           child: Icon(
             isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-            size: 18,
+            size: 16,
             color: typeColor,
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
 
         Expanded(
           child: loadingMerchant
@@ -333,7 +335,7 @@ class _MerchantRow extends StatelessWidget {
 
         _Pill(
           label: statusText,
-          textColor: Colors.white,
+          textColor: c.onPrimary,
           bg: statusColor,
           fontSize: 9.5,
           weight: FontWeight.w800,
@@ -371,12 +373,12 @@ class _MerchantMeta extends StatelessWidget {
     MerchantTier.platinum: 'PLATINUM',
     MerchantTier.diamond: 'DIAMOND',
   };
-  static const _tierColor = {
-    MerchantTier.diamond: Color(0xFF06B6D4),
-    MerchantTier.platinum: Color(0xFF64748B),
-    MerchantTier.gold: Color(0xFFF59E0B),
-    MerchantTier.silver: Color(0xFF94A3B8),
-    MerchantTier.bronze: Color(0xFFB87333),
+  Map<MerchantTier, Color> get _tierColor => {
+    MerchantTier.diamond: c.info,
+    MerchantTier.platinum: c.textSecondary,
+    MerchantTier.gold: c.warning,
+    MerchantTier.silver: c.accent,
+    MerchantTier.bronze: c.error,
   };
   static const _tierIcon = {
     MerchantTier.bronze: Icons.shield_outlined,
@@ -385,11 +387,11 @@ class _MerchantMeta extends StatelessWidget {
     MerchantTier.platinum: Icons.military_tech_outlined,
     MerchantTier.diamond: Icons.diamond_outlined,
   };
-  static const _availColor = {
-    SellerAvailability.available: Color(0xFF16A34A),
-    SellerAvailability.unavailable: Color(0xFF6B7280),
-    SellerAvailability.onBreak: Color(0xFFD97706),
-    SellerAvailability.unknown: Color(0xFF6B7280),
+  Map<SellerAvailability, Color> get _availColor => {
+    SellerAvailability.available: c.success,
+    SellerAvailability.unavailable: c.textSecondary,
+    SellerAvailability.onBreak: c.warning,
+    SellerAvailability.unknown: c.textSecondary,
   };
   static const _availLabel = {
     SellerAvailability.available: 'Online',
@@ -427,7 +429,7 @@ class _MerchantMeta extends StatelessWidget {
             const SizedBox(width: 7),
             _Pill(
               label: _tierLabel[profile.tier]!,
-              textColor: Colors.white,
+              textColor: c.onPrimary,
               bg: tierColor,
               icon: _tierIcon[profile.tier],
               fontSize: 9,
@@ -458,11 +460,7 @@ class _MerchantMeta extends StatelessWidget {
             if (loadingReviews)
               _SkimBox(c: c, w: 42, h: 10, r: 3, anim: shimmerAnim)
             else ...[
-              Icon(
-                Icons.star_rounded,
-                size: 11,
-                color: const Color(0xFFD97706),
-              ),
+              Icon(Icons.star_rounded, size: 11, color: c.warning),
               const SizedBox(width: 2),
               Text(
                 (averageRating ?? 5.0).toStringAsFixed(1),
@@ -563,10 +561,10 @@ class _PriceRow extends StatelessWidget {
     // Price chip
     final priceChip = AnimatedContainer(
       duration: const Duration(milliseconds: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: hasPrice ? typeColor : c.background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: hasPrice ? typeColor : c.border),
       ),
       child: hasPrice
@@ -576,20 +574,25 @@ class _PriceRow extends StatelessWidget {
                 Container(
                   width: 5,
                   height: 5,
-                  decoration: const BoxDecoration(
-                    color: Color(0x99FFFFFF),
+                  decoration: BoxDecoration(
+                    color: c.onPrimary,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 7),
-                Text(
-                  marketPrice!,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13.5,
-                    letterSpacing: -0.3,
-                    fontFeatures: [FontFeature.tabularFigures()],
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 112),
+                  child: Text(
+                    marketPrice!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.onPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      letterSpacing: -0.2,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
               ],
@@ -601,7 +604,7 @@ class _PriceRow extends StatelessWidget {
               style: TextStyle(
                 color: c.textSecondary,
                 fontWeight: FontWeight.w700,
-                fontSize: 16,
+                fontSize: 14,
                 letterSpacing: 0.5,
               ),
             ),
@@ -627,9 +630,9 @@ class _PriceRow extends StatelessWidget {
                           text: offer.asset,
                           style: TextStyle(
                             color: c.textPrimary,
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: -0.8,
+                            letterSpacing: -0.6,
                             height: 1.1,
                           ),
                         ),
@@ -637,9 +640,9 @@ class _PriceRow extends StatelessWidget {
                           text: ' / ${offer.fiatCurrency.toUpperCase()}',
                           style: TextStyle(
                             color: c.textSecondary,
-                            fontSize: 15,
+                            fontSize: 13.5,
                             fontWeight: FontWeight.w500,
-                            letterSpacing: -0.3,
+                            letterSpacing: -0.2,
                           ),
                         ),
                       ],
@@ -648,7 +651,7 @@ class _PriceRow extends StatelessWidget {
                   if (margin != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
+                        horizontal: 6,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
@@ -657,9 +660,9 @@ class _PriceRow extends StatelessWidget {
                       ),
                       child: Text(
                         margin,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
+                        style: TextStyle(
+                          color: c.onPrimary,
+                          fontSize: 9.8,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.1,
                           fontFeatures: [FontFeature.tabularFigures()],
@@ -669,21 +672,21 @@ class _PriceRow extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
 
               // Min · Max limits
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   _LimitText(c: c, prefix: 'Min', value: offer.minAmount),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Container(
-                      width: 3,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: c.border,
-                        shape: BoxShape.circle,
-                      ),
+                  Container(
+                    width: 3,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: c.border,
+                      shape: BoxShape.circle,
                     ),
                   ),
                   _LimitText(c: c, prefix: 'Max', value: offer.maxAmount),
@@ -693,8 +696,11 @@ class _PriceRow extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(width: 12),
-        priceChip,
+        const SizedBox(width: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 148),
+          child: priceChip,
+        ),
       ],
     );
   }
@@ -718,7 +724,7 @@ class _LimitText extends StatelessWidget {
           text: '$prefix ',
           style: TextStyle(
             color: c.textSecondary,
-            fontSize: 11.5,
+            fontSize: 10.8,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -726,7 +732,7 @@ class _LimitText extends StatelessWidget {
           text: value != null ? '$value' : '—',
           style: TextStyle(
             color: value != null ? c.textPrimary : c.textSecondary,
-            fontSize: 11.5,
+            fontSize: 10.8,
             fontWeight: FontWeight.w600,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
@@ -779,15 +785,15 @@ class _FooterRow extends StatelessWidget {
           children: [
             Expanded(
               child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 5,
+                runSpacing: 5,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   _Pill(
                     label: isBuy ? 'BUY' : 'SELL',
-                    textColor: Colors.white,
+                    textColor: c.onPrimary,
                     bg: typeColor,
-                    fontSize: 10.5,
+                    fontSize: 10,
                     weight: FontWeight.w800,
                   ),
                   if (successRateLabel != null)
@@ -811,16 +817,16 @@ class _FooterRow extends StatelessWidget {
 
             // Chevron button
             Container(
-              width: 28,
-              height: 28,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
                 color: c.background,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(7),
                 border: Border.all(color: c.border),
               ),
               child: Icon(
                 Icons.chevron_right_rounded,
-                size: 16,
+                size: 15,
                 color: c.textSecondary,
               ),
             ),
@@ -828,7 +834,7 @@ class _FooterRow extends StatelessWidget {
         ),
 
         if (loadingPaymentMethods || effectiveIds.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           if (loadingPaymentMethods)
             _SkimBox(c: c, w: 110, h: 11, r: 4, anim: shimmerAnim)
           else
@@ -865,7 +871,7 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
     decoration: BoxDecoration(
       color: c.background,
       borderRadius: BorderRadius.circular(6),
@@ -874,14 +880,19 @@ class _InfoChip extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 10.5, color: iconColor),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+        Icon(icon, size: 10, color: iconColor),
+        const SizedBox(width: 3),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 116),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
@@ -904,12 +915,12 @@ class _PaymentRow extends StatelessWidget {
   final List<PaymentMethodModel> methods;
   final String fallbackNames;
 
-  static const _logoColors = [
-    Color(0xFF3B82F6),
-    Color(0xFF8B5CF6),
-    Color(0xFF10B981),
-    Color(0xFFF59E0B),
-    Color(0xFFEF4444),
+  List<Color> get _logoColors => [
+    c.primary,
+    c.primary,
+    c.success,
+    c.warning,
+    c.error,
   ];
 
   @override
@@ -918,7 +929,7 @@ class _PaymentRow extends StatelessWidget {
 
     if (!hasLogos) {
       return Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: [
           Icon(
             Icons.account_balance_wallet_outlined,
@@ -926,12 +937,16 @@ class _PaymentRow extends StatelessWidget {
             color: c.textSecondary,
           ),
           const SizedBox(width: 5),
-          Text(
-            fallbackNames,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: Text(
+              fallbackNames,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -943,7 +958,7 @@ class _PaymentRow extends StatelessWidget {
     final extra = methods.length - maxLogos;
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: MainAxisSize.max,
       children: [
         // Overlapping logo stack
         SizedBox(
@@ -980,8 +995,7 @@ class _PaymentRow extends StatelessWidget {
           ),
         ] else if (methods.length == 1) ...[
           const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 90),
+          Expanded(
             child: Text(
               methods.first.name,
               style: TextStyle(
@@ -989,17 +1003,22 @@ class _PaymentRow extends StatelessWidget {
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
               ),
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
         ] else ...[
           const SizedBox(width: 6),
-          Text(
-            shown.map((m) => m.name).join(' · '),
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: Text(
+              shown.map((m) => m.name).join(' · '),
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1051,7 +1070,7 @@ class _LogoAvatar extends StatelessWidget {
       style: TextStyle(
         fontSize: size * 0.40,
         fontWeight: FontWeight.w800,
-        color: Colors.white,
+        color: c.onPrimary,
       ),
     ),
   );
@@ -1148,30 +1167,55 @@ class _SkimBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    return AnimatedBuilder(
-      animation: anim,
-      builder: (_, __) {
-        final skeletonColor = isLight
-            ? Color.lerp(
-                const Color(0xFFEEF0F4),
-                const Color(0xFFE0E3EA),
-                anim.value,
-              )!
-            : Color.lerp(
-                const Color(0xFF1E2736),
-                const Color(0xFF2A3548),
-                anim.value,
-              )!;
-        return Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: skeletonColor,
-            borderRadius: BorderRadius.circular(r),
-          ),
-        );
-      },
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark
+        ? c.border.withValues(alpha: 0.52)
+        : c.background.withValues(alpha: 0.98);
+    final highlight = isDark
+        ? c.textPrimary.withValues(alpha: 0.20)
+        : c.onPrimary.withValues(alpha: 0.72);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(r),
+      child: SizedBox(
+        width: w,
+        height: h,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: base),
+            AnimatedBuilder(
+              animation: anim,
+              builder: (_, __) {
+                final bandWidth = w * 0.52;
+                final travel = w + (bandWidth * 2);
+                final left = (travel * anim.value) - bandWidth;
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: left,
+                      top: 0,
+                      bottom: 0,
+                      width: bandWidth,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              highlight.withValues(alpha: 0),
+                              highlight,
+                              highlight.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

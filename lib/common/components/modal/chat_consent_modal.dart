@@ -7,7 +7,7 @@ Future<bool> showChatConsentModal(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => const _ChatConsentSheet(),
   );
   return accepted == true;
@@ -38,10 +38,10 @@ class _ChatConsentSheetState extends State<_ChatConsentSheet> {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: c.border.withOpacity(0.32), width: 1),
+          border: Border.all(color: c.border.withValues(alpha: 0.32), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.14),
+              color: AppColor.of(context).textPrimary.withValues(alpha: 0.14),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
@@ -57,7 +57,7 @@ class _ChatConsentSheetState extends State<_ChatConsentSheet> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.12),
+                    color: c.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
@@ -94,14 +94,14 @@ class _ChatConsentSheetState extends State<_ChatConsentSheet> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: c.background.withOpacity(0.55),
+                color: c.background.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.border.withOpacity(0.2)),
+                border: Border.all(color: c.border.withValues(alpha: 0.2)),
               ),
               child: Text(
                 'By continuing, you agree that chat metadata and encrypted message payload fields may be processed and stored to deliver direct messaging, moderation, dispute support, fraud prevention, and legal compliance. Do not share private keys, passwords, OTPs, or sensitive payment credentials in chat. NextFi may retain records according to applicable laws and policy.',
                 style: TextStyle(
-                  color: c.textPrimary.withOpacity(0.92),
+                  color: c.textPrimary.withValues(alpha: 0.92),
                   fontSize: 12.4,
                   height: 1.5,
                 ),
@@ -146,7 +146,7 @@ class _ChatConsentSheetState extends State<_ChatConsentSheet> {
                     onPressed: () => Navigator.of(context).pop(false),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.textPrimary,
-                      side: BorderSide(color: c.border.withOpacity(0.55)),
+                      side: BorderSide(color: c.border.withValues(alpha: 0.55)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -163,9 +163,9 @@ class _ChatConsentSheetState extends State<_ChatConsentSheet> {
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: c.primary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: c.border.withOpacity(0.2),
-                      disabledForegroundColor: c.textSecondary.withOpacity(
+                      foregroundColor: AppColor.of(context).onPrimary,
+                      disabledBackgroundColor: c.border.withValues(alpha: 0.2),
+                      disabledForegroundColor: c.textSecondary.withValues(alpha: 
                         0.45,
                       ),
                       elevation: 0,

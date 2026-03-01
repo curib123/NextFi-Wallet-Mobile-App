@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class ScanOverlay extends StatefulWidget {
   const ScanOverlay({
@@ -32,10 +33,7 @@ class _ScanOverlayState extends State<ScanOverlay>
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
 
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
   }
 
   @override
@@ -46,6 +44,8 @@ class _ScanOverlayState extends State<ScanOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
         final shortest = math.min(constraints.maxWidth, constraints.maxHeight);
@@ -60,6 +60,8 @@ class _ScanOverlayState extends State<ScanOverlay>
                 borderRadius: widget.borderRadius,
                 strokeWidth: widget.strokeWidth,
                 cornerLength: widget.cornerLength,
+                colors: colors,
+                isDark: isDark,
               ),
             ),
             AnimatedBuilder(
@@ -78,19 +80,19 @@ class _ScanOverlayState extends State<ScanOverlay>
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.transparent,
-                          Colors.white.withOpacity(0.8),
-                          Colors.white,
-                          Colors.white.withOpacity(0.8),
-                          Colors.transparent,
+                          colors.primary.withValues(alpha: 0.0),
+                          colors.primary.withValues(alpha: 0.35),
+                          colors.primary,
+                          colors.primary.withValues(alpha: 0.35),
+                          colors.primary.withValues(alpha: 0.0),
                         ],
                         stops: const [0, 0.2, 0.5, 0.8, 1],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.white.withOpacity(0.5),
-                          blurRadius: 8,
-                          spreadRadius: 1,
+                          color: colors.primary.withValues(alpha: 0.45),
+                          blurRadius: 10,
+                          spreadRadius: 0.6,
                         ),
                       ],
                     ),
@@ -111,16 +113,21 @@ class _OverlayPainter extends CustomPainter {
     required this.borderRadius,
     required this.strokeWidth,
     required this.cornerLength,
+    required this.colors,
+    required this.isDark,
   });
 
   final double cutOutSize;
   final double borderRadius;
   final double strokeWidth;
   final double cornerLength;
+  final AppColor colors;
+  final bool isDark;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final dimPaint = Paint()..color = Colors.black.withOpacity(0.65);
+    final dimPaint = Paint()
+      ..color = Colors.black.withValues(alpha: isDark ? 0.62 : 0.54);
 
     final left = (size.width - cutOutSize) / 2;
     final top = (size.height - cutOutSize) / 2;
@@ -138,13 +145,13 @@ class _OverlayPainter extends CustomPainter {
     canvas.drawPath(path, dimPaint);
 
     final cornerPaint = Paint()
-      ..color = Colors.white
+      ..color = colors.primary
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final glowPaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = colors.primary.withValues(alpha: 0.34)
       ..strokeWidth = strokeWidth + 4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
@@ -181,5 +188,16 @@ class _OverlayPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _OverlayPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _OverlayPainter oldDelegate) {
+    return oldDelegate.cutOutSize != cutOutSize ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.cornerLength != cornerLength ||
+        oldDelegate.isDark != isDark ||
+        oldDelegate.colors.background != colors.background ||
+        oldDelegate.colors.surface != colors.surface ||
+        oldDelegate.colors.textPrimary != colors.textPrimary ||
+        oldDelegate.colors.border != colors.border ||
+        oldDelegate.colors.primary != colors.primary;
+  }
 }

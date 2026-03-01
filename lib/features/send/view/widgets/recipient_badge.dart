@@ -24,24 +24,24 @@ class RecipientBadge extends StatelessWidget {
 
   /// Returns a solid, non-opacity tinted background color derived from the
   /// brand color but mixed toward the surface so it stays readable.
-  Color _solidTint(Color brand, bool isDark) {
+  Color _solidTint(Color brand, bool isDark, AppColor c) {
     // Blend brand toward white (light) or dark surface
-    final base = isDark ? const Color(0xFF171923) : const Color(0xFFE6E8EC);
+    final base = isDark ? c.textPrimary : c.surface;
     return Color.lerp(base, brand, isDark ? 0.14 : 0.10)!;
   }
 
-  Color _solidBorder(Color brand, bool isDark) {
-    final base = isDark ? const Color(0xFF171923) : const Color(0xFFE6E8EC);
+  Color _solidBorder(Color brand, bool isDark, AppColor c) {
+    final base = isDark ? c.textPrimary : c.surface;
     return Color.lerp(base, brand, isDark ? 0.26 : 0.22)!;
   }
 
-  Color _solidAvatarBg(Color brand, bool isDark) {
-    final base = isDark ? const Color(0xFF171923) : const Color(0xFFFFFFFF);
+  Color _solidAvatarBg(Color brand, bool isDark, AppColor c) {
+    final base = isDark ? c.textPrimary : c.onPrimary;
     return Color.lerp(base, brand, isDark ? 0.22 : 0.15)!;
   }
 
-  Color _solidEditBg(Color brand, bool isDark) {
-    final base = isDark ? const Color(0xFF1E2130) : const Color(0xFFFFFFFF);
+  Color _solidEditBg(Color brand, bool isDark, AppColor c) {
+    final base = isDark ? c.textPrimary : c.onPrimary;
     return Color.lerp(base, brand, isDark ? 0.20 : 0.13)!;
   }
 
@@ -51,10 +51,10 @@ class RecipientBadge extends StatelessWidget {
     final color = Color(colorValue);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final bgColor     = _solidTint(color, isDark);
-    final borderColor = _solidBorder(color, isDark);
-    final avatarBg    = _solidAvatarBg(color, isDark);
-    final editBg      = _solidEditBg(color, isDark);
+    final bgColor = _solidTint(color, isDark, c);
+    final borderColor = _solidBorder(color, isDark, c);
+    final avatarBg = _solidAvatarBg(color, isDark, c);
+    final editBg = _solidEditBg(color, isDark, c);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),

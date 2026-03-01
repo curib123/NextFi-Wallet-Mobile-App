@@ -7,7 +7,7 @@ Future<bool> showVerificationConsentModal(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => const _VerificationConsentSheet(),
   );
   return accepted == true;
@@ -39,10 +39,10 @@ class _VerificationConsentSheetState extends State<_VerificationConsentSheet> {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: c.border.withOpacity(0.32), width: 1),
+          border: Border.all(color: c.border.withValues(alpha: 0.32), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.14),
+              color: AppColor.of(context).textPrimary.withValues(alpha: 0.14),
               blurRadius: 24,
               offset: const Offset(0, 8),
             ),
@@ -58,7 +58,7 @@ class _VerificationConsentSheetState extends State<_VerificationConsentSheet> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.12),
+                    color: c.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
@@ -91,14 +91,14 @@ class _VerificationConsentSheetState extends State<_VerificationConsentSheet> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: c.background.withOpacity(0.55),
+                color: c.background.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.border.withOpacity(0.2)),
+                border: Border.all(color: c.border.withValues(alpha: 0.2)),
               ),
               child: Text(
                 'By proceeding, you authorize NextFi and its verification providers to collect, process, and store your personal data, including profile details, government ID images, selfie images, and payment account details, for KYC/AML compliance, fraud prevention, sanctions screening, and legal obligations. Data may be shared with regulated processors and competent authorities when required by law and retained according to applicable regulations and NextFi policy.',
                 style: TextStyle(
-                  color: c.textPrimary.withOpacity(0.92),
+                  color: c.textPrimary.withValues(alpha: 0.92),
                   fontSize: 12.4,
                   height: 1.5,
                 ),
@@ -143,7 +143,7 @@ class _VerificationConsentSheetState extends State<_VerificationConsentSheet> {
                     onPressed: () => Navigator.of(context).pop(false),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.textPrimary,
-                      side: BorderSide(color: c.border.withOpacity(0.55)),
+                      side: BorderSide(color: c.border.withValues(alpha: 0.55)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -160,9 +160,9 @@ class _VerificationConsentSheetState extends State<_VerificationConsentSheet> {
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: c.primary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: c.border.withOpacity(0.2),
-                      disabledForegroundColor: c.textSecondary.withOpacity(
+                      foregroundColor: AppColor.of(context).onPrimary,
+                      disabledBackgroundColor: c.border.withValues(alpha: 0.2),
+                      disabledForegroundColor: c.textSecondary.withValues(alpha: 
                         0.45,
                       ),
                       elevation: 0,

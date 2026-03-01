@@ -263,7 +263,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     final payload = await showModalBottomSheet<(String, String?)>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => const _AddFriendSheet(),
     );
 
@@ -335,7 +335,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
@@ -353,7 +353,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.4),
+                  color: c.border.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -361,7 +361,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: c.error.withOpacity(0.1),
+                  color: c.error.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -398,7 +398,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
                         foregroundColor: c.textPrimary,
-                        side: BorderSide(color: c.border.withOpacity(0.35)),
+                        side: BorderSide(color: c.border.withValues(alpha: 0.35)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -413,7 +413,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
                         backgroundColor: c.error,
-                        foregroundColor: Colors.white,
+                        foregroundColor: c.onPrimary,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -639,7 +639,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: c.primary.withOpacity(0.12),
+                  color: c.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
@@ -669,7 +669,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
           children: [
             Icon(
               Icons.search_rounded,
-              color: c.textSecondary.withOpacity(0.55),
+              color: c.textSecondary.withValues(alpha: 0.55),
               size: 19,
             ),
             const SizedBox(width: 8),
@@ -682,7 +682,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 decoration: InputDecoration(
                   hintText: 'Search messages, friends…',
                   hintStyle: TextStyle(
-                    color: c.textSecondary.withOpacity(0.55),
+                    color: c.textSecondary.withValues(alpha: 0.55),
                     fontSize: 14,
                   ),
                   border: InputBorder.none,
@@ -709,22 +709,22 @@ class _ChatHubScreenState extends State<ChatHubScreen>
         child: TabBar(
           controller: _tabCtrl,
           padding: EdgeInsets.zero,
-          indicatorPadding: const EdgeInsets.all(3),
-          labelColor: Colors.white,
+          indicatorPadding: EdgeInsets.all(3),
+          labelColor: c.onPrimary,
           unselectedLabelColor: c.textSecondary,
           indicator: BoxDecoration(
             color: c.primary,
             borderRadius: BorderRadius.circular(17),
             boxShadow: [
               BoxShadow(
-                color: c.primary.withOpacity(0.25),
+                color: c.primary.withValues(alpha: 0.25),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
           indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: Colors.transparent,
+          dividerColor: c.surface,
           labelStyle: const TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 13,
@@ -734,16 +734,16 @@ class _ChatHubScreenState extends State<ChatHubScreen>
             fontSize: 13,
           ),
           tabs: [
-            _tab('Chats', unreadCount),
-            _tab('Friends', _friends.length),
-            _tab('Requests', pendingCount),
+            _tab(c, 'Chats', unreadCount),
+            _tab(c, 'Friends', _friends.length),
+            _tab(c, 'Requests', pendingCount),
           ],
         ),
       ),
     );
   }
 
-  Tab _tab(String label, int count) {
+  Tab _tab(AppColor c, String label, int count) {
     return Tab(
       height: 40,
       child: Row(
@@ -756,15 +756,15 @@ class _ChatHubScreenState extends State<ChatHubScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.25),
+                color: c.onPrimary.withValues(alpha: 0.25),
                 borderRadius: BorderRadius.circular(99),
               ),
               child: Text(
                 count > 99 ? '99+' : count.toString(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9.5,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: c.onPrimary,
                 ),
               ),
             ),
@@ -785,7 +785,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: c.error.withOpacity(0.08),
+                color: c.error.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.wifi_off_rounded, color: c.error, size: 28),
@@ -911,7 +911,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                                 width: 12,
                                 height: 12,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981),
+                                  color: c.success,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: c.background,
@@ -973,8 +973,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
         );
         if (mounted) _load(showLoader: false);
       },
-      splashColor: c.primary.withOpacity(0.05),
-      highlightColor: c.primary.withOpacity(0.03),
+      splashColor: c.primary.withValues(alpha: 0.05),
+      highlightColor: c.primary.withValues(alpha: 0.03),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         child: Container(
@@ -984,8 +984,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: unread > 0
-                  ? c.primary.withOpacity(0.28)
-                  : c.border.withOpacity(0.28),
+                  ? c.primary.withValues(alpha: 0.28)
+                  : c.border.withValues(alpha: 0.28),
             ),
           ),
           child: Row(
@@ -1006,7 +1006,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                         width: 12,
                         height: 12,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
+                          color: c.success,
                           shape: BoxShape.circle,
                           border: Border.all(color: c.surface, width: 2),
                         ),
@@ -1066,7 +1066,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: unread > 0
-                            ? c.textPrimary.withOpacity(0.9)
+                            ? c.textPrimary.withValues(alpha: 0.9)
                             : c.textSecondary,
                         fontSize: 13,
                         fontWeight: unread > 0
@@ -1082,8 +1082,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: unread > 0
-                      ? c.primary.withOpacity(0.14)
-                      : c.textSecondary.withOpacity(0.1),
+                      ? c.primary.withValues(alpha: 0.14)
+                      : c.textSecondary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
@@ -1149,7 +1149,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                         width: 12,
                         height: 12,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
+                          color: c.success,
                           shape: BoxShape.circle,
                           border: Border.all(color: c.background, width: 2),
                         ),
@@ -1194,8 +1194,8 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                   ),
                   child: Text(
                     unread > 99 ? '99+' : '$unread',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: c.onPrimary,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1211,7 +1211,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.1),
+                    color: c.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -1231,12 +1231,12 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: c.error.withOpacity(0.07),
+                    color: c.error.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: Icon(
                     Icons.person_remove_outlined,
-                    color: c.error.withOpacity(0.75),
+                    color: c.error.withValues(alpha: 0.75),
                     size: 16,
                   ),
                 ),
@@ -1359,7 +1359,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           ),
                           decoration: BoxDecoration(
                             color: (isIncoming ? c.primary : c.textSecondary)
-                                .withOpacity(0.1),
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(99),
                           ),
                           child: Text(
@@ -1376,7 +1376,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           Text(
                             at,
                             style: TextStyle(
-                              color: c.textSecondary.withOpacity(0.6),
+                              color: c.textSecondary.withValues(alpha: 0.6),
                               fontSize: 10.5,
                             ),
                           ),
@@ -1412,7 +1412,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size.fromHeight(38),
                             backgroundColor: c.primary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: c.onPrimary,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(11),
@@ -1441,7 +1441,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(38),
                             foregroundColor: c.error,
-                            side: BorderSide(color: c.error.withOpacity(0.3)),
+                            side: BorderSide(color: c.error.withValues(alpha: 0.3)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(11),
                             ),
@@ -1464,7 +1464,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(38),
                         foregroundColor: c.textSecondary,
-                        side: BorderSide(color: c.border.withOpacity(0.35)),
+                        side: BorderSide(color: c.border.withValues(alpha: 0.35)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(11),
                         ),
@@ -1491,13 +1491,13 @@ class _ChatHubScreenState extends State<ChatHubScreen>
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: c.textSecondary.withOpacity(0.07),
+                color: c.textSecondary.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
                 size: 32,
-                color: c.textSecondary.withOpacity(0.35),
+                color: c.textSecondary.withValues(alpha: 0.35),
               ),
             ),
             const SizedBox(height: 16),
@@ -1571,7 +1571,7 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: c.border.withOpacity(0.4),
+                    color: c.border.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
@@ -1583,7 +1583,7 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: c.primary.withOpacity(0.12),
+                      color: c.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: Icon(
@@ -1635,16 +1635,16 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                   fillColor: c.background,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.22)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.22)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(
-                      color: c.primary.withOpacity(0.55),
+                      color: c.primary.withValues(alpha: 0.55),
                       width: 1.5,
                     ),
                   ),
@@ -1663,16 +1663,16 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                   fillColor: c.background,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.22)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: c.border.withOpacity(0.22)),
+                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.22)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(
-                      color: c.primary.withOpacity(0.55),
+                      color: c.primary.withValues(alpha: 0.55),
                       width: 1.5,
                     ),
                   ),
@@ -1687,7 +1687,7 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
                         foregroundColor: c.textPrimary,
-                        side: BorderSide(color: c.border.withOpacity(0.35)),
+                        side: BorderSide(color: c.border.withValues(alpha: 0.35)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -1709,7 +1709,7 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size.fromHeight(50),
                         backgroundColor: c.primary,
-                        foregroundColor: Colors.white,
+                        foregroundColor: c.onPrimary,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -1727,4 +1727,5 @@ class _AddFriendSheetState extends State<_AddFriendSheet> {
     );
   }
 }
+
 

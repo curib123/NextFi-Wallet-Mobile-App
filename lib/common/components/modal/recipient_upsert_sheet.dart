@@ -22,7 +22,7 @@ Future<bool?> showRecipientUpsertSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _RecipientEditSheet(initial: initial, address: address),
   );
 }
@@ -224,7 +224,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       height: 4,
       margin: const EdgeInsets.only(top: 12, bottom: 16),
       decoration: BoxDecoration(
-        color: c.border.withOpacity(0.5),
+        color: c.border.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(100),
       ),
     );
@@ -248,7 +248,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: c.primary.withOpacity(0.3),
+                      color: c.primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -256,7 +256,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                 ),
                 child: Icon(
                   isEdit ? LucideIcons.edit3 : LucideIcons.userPlus,
-                  color: Colors.white,
+                  color: AppColor.of(context).onPrimary,
                   size: 22,
                 ),
               ),
@@ -285,7 +285,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                 ),
               ),
               Material(
-                color: Colors.transparent,
+                color: AppColor.of(context).surface,
                 child: InkWell(
                   onTap: _close,
                   borderRadius: BorderRadius.circular(12),
@@ -310,9 +310,9 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
               margin: const EdgeInsets.only(top: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: c.warning.withOpacity(0.12),
+                color: c.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.warning.withOpacity(0.3), width: 1),
+                border: Border.all(color: c.warning.withValues(alpha: 0.3), width: 1),
               ),
               child: Row(
                 children: [
@@ -347,20 +347,20 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
         ? (
             LucideIcons.checkCircle2,
             'Valid Stellar address',
-            c.success.withOpacity(0.12),
+            c.success.withValues(alpha: 0.12),
             c.success,
           )
         : _isMuxedLike
         ? (
             LucideIcons.alertCircle,
             'Muxed (M...) not supported',
-            c.warning.withOpacity(0.12),
+            c.warning.withValues(alpha: 0.12),
             c.warning,
           )
         : (
             LucideIcons.xCircle,
             'Invalid address format',
-            c.error.withOpacity(0.12),
+            c.error.withValues(alpha: 0.12),
             c.error,
           );
 
@@ -372,7 +372,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: fgColor.withOpacity(0.2), width: 1),
+        border: Border.all(color: fgColor.withValues(alpha: 0.2), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -414,7 +414,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
           children: _palette.map((colorValue) {
             final selected = _color == colorValue;
             return Material(
-              color: Colors.transparent,
+              color: AppColor.of(context).surface,
               child: InkWell(
                 borderRadius: BorderRadius.circular(24),
                 onTap: () {
@@ -431,7 +431,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                     boxShadow: selected
                         ? [
                             BoxShadow(
-                              color: Color(colorValue).withOpacity(0.4),
+                              color: Color(colorValue).withValues(alpha: 0.4),
                               blurRadius: 12,
                               spreadRadius: 2,
                               offset: const Offset(0, 4),
@@ -439,13 +439,13 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                           ]
                         : null,
                     border: selected
-                        ? Border.all(color: Colors.white, width: 3)
+                        ? Border.all(color: AppColor.of(context).onPrimary, width: 3)
                         : null,
                   ),
                   child: selected
-                      ? const Icon(
+                      ? Icon(
                           LucideIcons.check,
-                          color: Colors.white,
+                          color: AppColor.of(context).onPrimary,
                           size: 20,
                         )
                       : null,
@@ -495,14 +495,14 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isFocused
-                  ? c.primary.withOpacity(0.5)
-                  : c.border.withOpacity(0.3),
+                  ? c.primary.withValues(alpha: 0.5)
+                  : c.border.withValues(alpha: 0.3),
               width: isFocused ? 2 : 1,
             ),
             boxShadow: isFocused
                 ? [
                     BoxShadow(
-                      color: c.primary.withOpacity(0.1),
+                      color: c.primary.withValues(alpha: 0.1),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -530,7 +530,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
               hintText: hint,
               hintStyle: TextStyle(
                 fontSize: maxLines != null ? 12 : 14,
-                color: c.textSecondary.withOpacity(0.5),
+                color: c.textSecondary.withValues(alpha: 0.5),
               ),
               prefixIcon: Icon(
                 icon,
@@ -589,7 +589,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: AppColor.of(context).textPrimary.withValues(alpha: 0.1),
                 blurRadius: 20,
                 offset: const Offset(0, -4),
               ),
@@ -672,7 +672,7 @@ class _RecipientEditSheetState extends State<_RecipientEditSheet>
                       color: c.surface,
                       border: Border(
                         top: BorderSide(
-                          color: c.border.withOpacity(0.3),
+                          color: c.border.withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),

@@ -7,7 +7,6 @@ import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/offers/view/trade_order_screen.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
-import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/models/trades_models.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
 
@@ -251,7 +250,7 @@ class _IconBtn extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border.withOpacity(0.25)),
+        border: Border.all(color: c.border.withValues(alpha: 0.25)),
       ),
       child: Icon(icon, size: 17, color: c.textSecondary),
     ),
@@ -282,7 +281,7 @@ class _SummaryStrip extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border.withOpacity(0.2)),
+          border: Border.all(color: c.border.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
@@ -350,7 +349,7 @@ class _VSep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 1, height: 28, color: c.border.withOpacity(0.2),
+    width: 1, height: 28, color: c.border.withValues(alpha: 0.2),
   );
 }
 
@@ -376,7 +375,7 @@ class _FilterRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: c.border.withOpacity(0.2)),
+        border: Border.all(color: c.border.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -417,10 +416,10 @@ class _FilterChip extends StatelessWidget {
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? c.primary : Colors.transparent,
+          color: active ? c.primary : c.surface,
           borderRadius: BorderRadius.circular(8),
           boxShadow: active
-              ? [BoxShadow(color: c.primary.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2))]
+              ? [BoxShadow(color: c.primary.withValues(alpha: 0.2), blurRadius: 6, offset: const Offset(0, 2))]
               : null,
         ),
         child: Row(
@@ -430,7 +429,7 @@ class _FilterChip extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: active ? Colors.white : c.textSecondary,
+                color: active ? c.onPrimary : c.textSecondary,
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
                 letterSpacing: -0.2,
@@ -443,14 +442,14 @@ class _FilterChip extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
                   color: active
-                      ? Colors.white.withOpacity(0.25)
-                      : c.textSecondary.withOpacity(0.12),
+                      ? c.onPrimary.withValues(alpha: 0.25)
+                      : c.textSecondary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(5),
                 ),
                 child: Text(
                   '$count',
                   style: TextStyle(
-                    color: active ? Colors.white : c.textSecondary,
+                    color: active ? c.onPrimary : c.textSecondary,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
@@ -508,8 +507,8 @@ class _TradeTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isActive
-                ? meta.color.withOpacity(0.3)
-                : c.border.withOpacity(0.18),
+                ? meta.color.withValues(alpha: 0.3)
+                : c.border.withValues(alpha: 0.18),
             width: isActive ? 1.5 : 1,
           ),
         ),
@@ -564,7 +563,7 @@ class _TradeTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c.background,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: c.border.withOpacity(0.12)),
+                border: Border.all(color: c.border.withValues(alpha: 0.12)),
               ),
               child: Row(
                 children: [
@@ -585,7 +584,7 @@ class _TradeTile extends StatelessWidget {
                     child: Icon(
                       Icons.swap_horiz_rounded,
                       size: 16,
-                      color: c.textSecondary.withOpacity(0.4),
+                      color: c.textSecondary.withValues(alpha: 0.4),
                     ),
                   ),
 
@@ -612,7 +611,7 @@ class _TradeTile extends StatelessWidget {
                 Text(
                   _shortId(trade.id),
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.45),
+                    color: c.textSecondary.withValues(alpha: 0.45),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.3,
@@ -673,12 +672,12 @@ class _AssetBadge extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            c.primary.withOpacity(0.15),
-            c.primary.withOpacity(0.05),
+            c.primary.withValues(alpha: 0.15),
+            c.primary.withValues(alpha: 0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.primary.withOpacity(0.15)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.15)),
       ),
       child: Center(
         child: Text(
@@ -704,9 +703,9 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
-      color: meta.color.withOpacity(0.1),
+      color: meta.color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: meta.color.withOpacity(0.2)),
+      border: Border.all(color: meta.color.withValues(alpha: 0.2)),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -777,7 +776,7 @@ class _AmountBlock extends StatelessWidget {
             TextSpan(
               text: '  $unit',
               style: TextStyle(
-                color: valueColor.withOpacity(0.6),
+                color: valueColor.withValues(alpha: 0.6),
                 fontSize: 10.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -820,7 +819,7 @@ class _EmptyState extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.border.withOpacity(0.18)),
+              border: Border.all(color: c.border.withValues(alpha: 0.18)),
             ),
             child: Column(
               children: [
@@ -828,11 +827,11 @@ class _EmptyState extends StatelessWidget {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: c.textSecondary.withOpacity(0.08),
+                    color: c.textSecondary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(Icons.receipt_long_outlined,
-                      color: c.textSecondary.withOpacity(0.5), size: 24),
+                      color: c.textSecondary.withValues(alpha: 0.5), size: 24),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -884,7 +883,7 @@ class _ErrorState extends StatelessWidget {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: c.error.withOpacity(0.08),
+              color: c.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(Icons.cloud_off_rounded, color: c.error, size: 24),
@@ -916,8 +915,8 @@ class _ErrorState extends StatelessWidget {
               ),
               child: Text(
                 'Try again',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: c.onPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
                   letterSpacing: -0.2,

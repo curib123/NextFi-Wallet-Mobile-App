@@ -562,7 +562,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -671,7 +671,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -818,7 +818,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -1257,7 +1257,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -1340,7 +1340,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -1526,7 +1526,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -1569,7 +1569,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: c.border, width: 1),
       ),
@@ -1584,9 +1584,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: c.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: c.onPrimary,
               elevation: 0,
-              shadowColor: Colors.transparent,
+              shadowColor: c.surface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -1614,3 +1614,4 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 }
+

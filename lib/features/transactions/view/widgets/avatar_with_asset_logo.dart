@@ -28,13 +28,13 @@ class AvatarWithAssetLogo extends StatelessWidget {
           : '•';
       baseAvatar = CircleAvatar(
         backgroundColor: bg,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColor.of(context).onPrimary,
         child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w800)),
       );
     } else {
       baseAvatar = CircleAvatar(
         backgroundColor:
-        (isIncoming ? colors.success : colors.error).withOpacity(0.15),
+        (isIncoming ? colors.success : colors.error).withValues(alpha: 0.15),
         child: Icon(
           isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
           color: isIncoming ? colors.success : colors.error,
@@ -61,7 +61,7 @@ class AvatarWithAssetLogo extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.surface,
                 shape: BoxShape.circle,
-                border: Border.all(color: colors.primary.withOpacity(0.12)),
+                border: Border.all(color: colors.primary.withValues(alpha: 0.12)),
               ),
               padding: const EdgeInsets.all(1.5),
               child: AssetLogo(keyOrSymbol: asset),

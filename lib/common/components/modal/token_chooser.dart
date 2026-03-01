@@ -58,7 +58,7 @@ Future<void> showTokenSelector(
 
   await showModalBottomSheet(
     context: context,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     isScrollControlled: true,
     useSafeArea: true,
     builder: (ctx) => _TokenSelectorSheet(
@@ -135,7 +135,7 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
       height: 4,
       margin: const EdgeInsets.only(top: 12, bottom: 20),
       decoration: BoxDecoration(
-        color: widget.colors.border.withOpacity(0.5),
+        color: widget.colors.border.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(100),
       ),
     );
@@ -154,15 +154,15 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: widget.colors.primary.withOpacity(0.25),
+                  color: widget.colors.primary.withValues(alpha: 0.25),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: const Icon(
+            child: Icon(
               LucideIcons.coins,
-              color: Colors.white,
+              color: AppColor.of(context).onPrimary,
               size: 20,
             ),
           ),
@@ -211,7 +211,7 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
                 blurRadius: 24,
                 offset: const Offset(0, -4),
               ),
@@ -299,14 +299,14 @@ class _TokenTileState extends State<_TokenTile> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _isPressed
-                ? widget.colors.primary.withOpacity(0.3)
-                : widget.colors.border.withOpacity(0.2),
+                ? widget.colors.primary.withValues(alpha: 0.3)
+                : widget.colors.border.withValues(alpha: 0.2),
             width: _isPressed ? 2 : 1,
           ),
           boxShadow: _isPressed
               ? [
             BoxShadow(
-              color: widget.colors.primary.withOpacity(0.1),
+              color: widget.colors.primary.withValues(alpha: 0.1),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -351,12 +351,12 @@ class _TokenTileState extends State<_TokenTile> {
                             gradient: widget.colors.primaryGradient,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Native',
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppColor.of(context).onPrimary,
                             ),
                           ),
                         ),
@@ -368,7 +368,7 @@ class _TokenTileState extends State<_TokenTile> {
                     widget.subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: widget.colors.textSecondary.withOpacity(0.8),
+                      color: widget.colors.textSecondary.withValues(alpha: 0.8),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -396,7 +396,7 @@ class _TokenTileState extends State<_TokenTile> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: widget.colors.primary.withOpacity(0.1),
+                    color: widget.colors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -448,7 +448,7 @@ class _TokenLogo extends StatelessWidget {
     Widget fallback() {
       final gradientColors = isNative
           ? [colors.primary, colors.accent]
-          : [colors.textSecondary.withOpacity(0.2), colors.border];
+          : [colors.textSecondary.withValues(alpha: 0.2), colors.border];
 
       return Container(
         width: size,
@@ -463,7 +463,7 @@ class _TokenLogo extends StatelessWidget {
           boxShadow: isNative
               ? [
             BoxShadow(
-              color: colors.primary.withOpacity(0.3),
+              color: colors.primary.withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -476,7 +476,7 @@ class _TokenLogo extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: isNative ? Colors.white : colors.textSecondary,
+              color: isNative ? AppColor.of(context).onPrimary : colors.textSecondary,
             ),
           ),
         ),
@@ -493,7 +493,7 @@ class _TokenLogo extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(size / 2),
         border: Border.all(
-          color: colors.border.withOpacity(0.2),
+          color: colors.border.withValues(alpha: 0.2),
           width: 1.5,
         ),
       ),

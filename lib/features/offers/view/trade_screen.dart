@@ -32,6 +32,7 @@ class _TradeScreenState extends State<TradeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fiatCtrl = TextEditingController();
   final _cryptoCtrl = TextEditingController();
+  final _receiverAddressCtrl = TextEditingController();
   final _tradesCore = TradesCoreService.I;
   final _walletCore = WalletCoreService.I;
   final _offerPaymentCore = OfferPaymentMethodCoreService.I;
@@ -59,6 +60,14 @@ class _TradeScreenState extends State<TradeScreen> {
   OfferModel get offer => widget.offer;
 
   bool get _userIsBuyer => offer.type == OfferType.sell;
+  bool get _receiverIsCurrentActor => _userIsBuyer;
+
+  WalletAddress? get _activeWallet {
+    for (final w in _wallets) {
+      if (w.isActive && w.publicAddress.trim().isNotEmpty) return w;
+    }
+    return null;
+  }
 
   String? get _sellerWalletAddress {
     final raw = offer.seller;
@@ -105,6 +114,7 @@ class _TradeScreenState extends State<TradeScreen> {
     _cryptoCtrl.removeListener(_onCryptoChanged);
     _fiatCtrl.dispose();
     _cryptoCtrl.dispose();
+    _receiverAddressCtrl.dispose();
     super.dispose();
   }
 
@@ -248,7 +258,7 @@ class _TradeScreenState extends State<TradeScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedWallet == null) {
+    if (!_userIsBuyer && _selectedWallet == null) {
       showFloatingSnackBar(
         context,
         message: 'No wallet address found. Please add a wallet first.',
@@ -293,22 +303,44 @@ class _TradeScreenState extends State<TradeScreen> {
       return;
     }
 
-    final hasBuyType = offer.type == OfferType.buy;
-    final sellerReceiverAddress = _sellerWalletAddress;
-    if (hasBuyType &&
-        (sellerReceiverAddress == null || sellerReceiverAddress.isEmpty)) {
-      showFloatingSnackBar(
-        context,
-        message:
-            'Merchant crypto receiving address is missing for this BUY offer. Ask merchant to update the offer.',
-        type: SnackBarType.error,
-      );
-      return;
+    String cryptoReceiverAddress = '';
+    if (_receiverIsCurrentActor) {
+      final activeAddress = _activeWallet?.publicAddress.trim() ?? '';
+      if (activeAddress.isEmpty) {
+        showFloatingSnackBar(
+          context,
+          message: 'Active wallet address is missing. Please set an active wallet first.',
+          type: SnackBarType.error,
+        );
+        return;
+      }
+      cryptoReceiverAddress = activeAddress;
+    } else {
+      final sellerReceiverAddress = _sellerWalletAddress;
+      if (sellerReceiverAddress != null && sellerReceiverAddress.isNotEmpty) {
+        cryptoReceiverAddress = sellerReceiverAddress;
+      } else {
+        final manual = _receiverAddressCtrl.text.trim();
+        if (manual.isEmpty) {
+          showFloatingSnackBar(
+            context,
+            message: 'Receiver address (where funds will be sent) is required.',
+            type: SnackBarType.error,
+          );
+          return;
+        }
+        if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(manual)) {
+          showFloatingSnackBar(
+            context,
+            message: 'Receiver address format is invalid.',
+            type: SnackBarType.error,
+          );
+          return;
+        }
+        cryptoReceiverAddress = manual;
+      }
     }
 
-    final cryptoReceiverAddress = hasBuyType
-        ? sellerReceiverAddress!
-        : _selectedWallet!.publicAddress;
     if (cryptoReceiverAddress.trim().isEmpty) {
       showFloatingSnackBar(context, message: 'Crypto receiver address is missing.', type: SnackBarType.error);
       return;
@@ -357,8 +389,8 @@ class _TradeScreenState extends State<TradeScreen> {
         backgroundColor: c.background,
         elevation: 0,
         scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
+        surfaceTintColor: c.surface,
+        shadowColor: c.surface,
         centerTitle: false,
         titleSpacing: 16,
         title: Text(
@@ -486,30 +518,89 @@ class _TradeScreenState extends State<TradeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionLabel(
-                    c: c,
-                    label: isBuy
-                        ? 'Receive ${offer.asset} to'
-                        : 'Your wallet (crypto source)',
-                  ),
+                  _SectionLabel(c: c, label: 'Receiver address'),
                   const SizedBox(height: 10),
-                  if (_wallets.isEmpty)
-                    _InfoChip(
+                  if (_receiverIsCurrentActor)
+                    _ReadOnlyAddressTile(
                       c: c,
-                      message: 'No wallet found - add one in your wallet settings',
-                      isWarning: true,
+                      label: 'Receiving to',
+                      address: _activeWallet?.publicAddress.trim(),
+                    )
+                  else if ((_sellerWalletAddress ?? '').isNotEmpty)
+                    _ReadOnlyAddressTile(
+                      c: c,
+                      label: 'Receiving to',
+                      address: _sellerWalletAddress,
                     )
                   else
-                    _WalletSelector(
-                      c: c,
-                      wallets: _wallets,
-                      selected: _selectedWallet,
-                      onChanged: (w) => setState(() => _selectedWallet = w),
+                    TextFormField(
+                      controller: _receiverAddressCtrl,
+                      textCapitalization: TextCapitalization.characters,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+                      ],
+                      validator: (v) {
+                        if (!_receiverIsCurrentActor && (_sellerWalletAddress ?? '').isEmpty) {
+                          final value = (v ?? '').trim();
+                          if (value.isEmpty) {
+                            return 'Receiver address (where funds will be sent) is required';
+                          }
+                          if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(value)) {
+                            return 'Invalid Stellar address';
+                          }
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Receiver address (where funds will be sent)',
+                        hintText: 'G...',
+                        filled: true,
+                        fillColor: c.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: c.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: c.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: c.primary, width: 1.6),
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
+
+            if (!isBuy) ...[
+              _PanelCard(
+                c: c,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionLabel(c: c, label: 'Your wallet (crypto source)'),
+                    const SizedBox(height: 10),
+                    if (_wallets.isEmpty)
+                    _InfoChip(
+                      c: c,
+                      message: 'No wallet found - add one in your wallet settings',
+                      isWarning: true,
+                    )
+                    else
+                      _WalletSelector(
+                        c: c,
+                        wallets: _wallets,
+                        selected: _selectedWallet,
+                        onChanged: (w) => setState(() => _selectedWallet = w),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             if (_userAccounts.isNotEmpty && !isBuy) ...[
               _PanelCard(
@@ -550,6 +641,52 @@ class _TradeScreenState extends State<TradeScreen> {
 }
 
 // ─── Loading ──────────────────────────────────────────────────────────────────
+
+class _ReadOnlyAddressTile extends StatelessWidget {
+  const _ReadOnlyAddressTile({
+    required this.c,
+    required this.label,
+    required this.address,
+  });
+
+  final AppColor c;
+  final String label;
+  final String? address;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = (address ?? '').trim();
+    if (value.isEmpty) {
+      return _InfoChip(
+        c: c,
+        message: 'Receiver address is unavailable.',
+        isWarning: true,
+      );
+    }
+
+    final short = value.length > 14
+        ? '${value.substring(0, 6)}...${value.substring(value.length - 6)}'
+        : value;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Text(
+        '$label: $short',
+        style: TextStyle(
+          color: c.textPrimary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
 
 class _LoadingBody extends StatelessWidget {
   const _LoadingBody();

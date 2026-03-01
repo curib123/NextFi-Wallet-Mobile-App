@@ -285,16 +285,16 @@ class _NotAuthenticatedView extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
+                          Icon(
                             LucideIcons.logIn,
-                            color: Colors.white,
+                            color: AppColor.of(context).onPrimary,
                             size: 18,
                           ),
                           const SizedBox(width: _S.s10),
-                          const Text(
+                          Text(
                             'Login to Continue',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColor.of(context).onPrimary,
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               letterSpacing: -0.3,
@@ -374,13 +374,13 @@ class _AddButtonState extends State<_AddButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(LucideIcons.userPlus, color: Colors.white, size: 18),
+              Icon(LucideIcons.userPlus, color: AppColor.of(context).onPrimary, size: 18),
               if (!widget.compact) ...[
                 const SizedBox(width: _S.s10),
-                const Text(
+                Text(
                   'Add Recipient',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColor.of(context).onPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
@@ -568,7 +568,7 @@ class _RecipientTileState extends State<RecipientTile> {
         decoration: BoxDecoration(
           color: _pressed
               ? colors.surface.withValues(alpha: isDark ? 0.9 : 0.6)
-              : Colors.transparent,
+              : AppColor.of(context).surface,
           borderRadius: BorderRadius.circular(_S.r16),
           border: Border.all(
             color: _pressed
@@ -738,7 +738,7 @@ class _MoreMenuButton extends StatelessWidget {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       isScrollControlled: true,
       builder: (ctx) => _ActionSheet(
         colors: colors,
@@ -794,12 +794,12 @@ class _ActionSheet extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? colors.surface : Colors.white,
+        color: isDark ? colors.surface : AppColor.of(context).onPrimary,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(_S.r24)),
         border: Border(top: BorderSide(color: colors.border, width: 1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: AppColor.of(context).textPrimary.withValues(alpha: 0.18),
             blurRadius: 32,
             offset: const Offset(0, -6),
           ),
@@ -971,7 +971,7 @@ class _SheetTileState extends State<_SheetTile> {
               ? (widget.isDestructive
                     ? widget.colors.error.withValues(alpha: 0.08)
                     : widget.colors.surface)
-              : Colors.transparent,
+              : AppColor.of(context).surface,
           borderRadius: BorderRadius.circular(_S.r12),
         ),
         child: Row(
@@ -1105,7 +1105,7 @@ Future<bool?> _confirmDelete(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => Dialog(
-      backgroundColor: isDark ? colors.surface : Colors.white,
+      backgroundColor: isDark ? colors.surface : AppColor.of(context).onPrimary,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(_S.r20),
         side: BorderSide(color: colors.border, width: 1),
@@ -1183,7 +1183,7 @@ Future<bool?> _confirmDelete(
                     onPressed: () => Navigator.pop(ctx, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colors.error,
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppColor.of(context).onPrimary,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(

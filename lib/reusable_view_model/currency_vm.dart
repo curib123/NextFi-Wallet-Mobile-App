@@ -62,6 +62,7 @@ class CurrencyVM extends ChangeNotifier {
 
   /// True when no live rates are available — UI should show "—" not a stale value.
   bool _ratesUnavailable = false;
+  bool _usingFallbackRates = false;
 
   // Cache timestamps
   DateTime? _lastRateRefresh;
@@ -96,6 +97,7 @@ class CurrencyVM extends ChangeNotifier {
   /// True when rates could not be fetched. UI should show "—" or "N/A"
   /// instead of displaying a balance with a stale or zero rate.
   bool get ratesUnavailable => _ratesUnavailable;
+  bool get usingFallbackRates => _usingFallbackRates;
 
   double get usdcRate => _usdcRate;
   double get xlmRate => _xlmRate;
@@ -223,6 +225,7 @@ class CurrencyVM extends ChangeNotifier {
           _lastUsdcPerXlm = _xlmRate > 0 && _usdcRate > 0
               ? _xlmRate / _usdcRate
               : 0.0;
+          _usingFallbackRates = true;
 
           final cacheAge = _getCacheAge(cache);
           debugPrint(
@@ -242,6 +245,7 @@ class CurrencyVM extends ChangeNotifier {
           final oldPrice = _lastUsdcPerXlm;
           _lastUsdcPerXlm = p.usdcPerXlm;
           _ratesUnavailable = false;
+          _usingFallbackRates = false;
           _recomputeXlmFiat();
           _consecutiveErrors = 0; // Reset error counter on success
 
@@ -296,6 +300,7 @@ class CurrencyVM extends ChangeNotifier {
     _xlmRate = 0;
     _lastUsdcPerXlm = 0;
     _ratesUnavailable = true;
+    _usingFallbackRates = false;
     debugPrint('CurrencyVM: Rates zeroed ($reason) — UI should show N/A');
     notifyListeners();
   }
@@ -310,6 +315,7 @@ class CurrencyVM extends ChangeNotifier {
       if (fx != null && fx.isFinite && fx > 0) {
         _usdcRate = fx;
         _ratesUnavailable = false;
+        _usingFallbackRates = false;
         _lastRateRefresh = DateTime.now();
 
         if (!_usdcCtrl.isClosed && !_disposed) {
@@ -566,6 +572,7 @@ class CurrencyVM extends ChangeNotifier {
         ? usdcPerXlm
         : (xlm / usdc);
     _ratesUnavailable = false;
+    _usingFallbackRates = true;
     debugPrint(
       'CurrencyVM: Restored recent cached rates (${age.inMinutes}m old)',
     );

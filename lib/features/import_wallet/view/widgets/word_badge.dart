@@ -16,10 +16,10 @@ class WordBadge extends StatelessWidget {
 
     if (count == 12 || count == 24) {
       primaryColor = colors.success;
-      bgColor = colors.success.withOpacity(0.1);
+      bgColor = colors.success.withValues(alpha: 0.1);
     } else if (count > 0) {
       primaryColor = colors.warning;
-      bgColor = colors.warning.withOpacity(0.1);
+      bgColor = colors.warning.withValues(alpha: 0.1);
     } else {
       bgColor = colors.surface;
     }
@@ -30,7 +30,7 @@ class WordBadge extends StatelessWidget {
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: primaryColor.withOpacity(0.2),
+          color: primaryColor.withValues(alpha: 0.2),
           width: 1,
         ),
       ),

@@ -20,7 +20,7 @@ class SettingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
 
-    final leadingBg = (item.accentColor ?? c.primary).withOpacity(0.07);
+    final leadingBg = (item.accentColor ?? c.primary).withValues(alpha: 0.07);
 
     final Widget leading = Container(
       width: 42,
@@ -37,10 +37,10 @@ class SettingTile extends StatelessWidget {
         Icon(
           LucideIcons.chevronRight,
           size: 18,
-          color: item.enabled ? c.textSecondary.withOpacity(0.9) : c.textSecondary.withOpacity(0.4),
+          color: item.enabled ? c.textSecondary.withValues(alpha: 0.9) : c.textSecondary.withValues(alpha: 0.4),
         );
 
-    final textPrimary = item.enabled ? c.textPrimary : c.textSecondary.withOpacity(0.6);
+    final textPrimary = item.enabled ? c.textPrimary : c.textSecondary.withValues(alpha: 0.6);
 
     return MergeSemantics(
       child: Semantics(
@@ -53,7 +53,7 @@ class SettingTile extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Material(
-              color: Colors.transparent,
+              color: c.surface,
               child: InkWell(
                 onTap: item.enabled ? onTap : null,
                 borderRadius: BorderRadius.circular(12),

@@ -19,7 +19,7 @@ class QrPreviewCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.primary.withOpacity(0.08)),
+          border: Border.all(color: c.primary.withValues(alpha: 0.08)),
         ),
         child: Column(
           children: [
@@ -28,7 +28,7 @@ class QrPreviewCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                color: Colors.white,
+                color: c.onPrimary,
                 child: QrImageView(data: address, version: QrVersions.auto, size: 220),
               ),
             ),

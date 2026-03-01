@@ -24,13 +24,13 @@ class RecipientAddTemplate extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Explicit solid colors — no runtime opacity mixing
-    final bgColor     = isDark ? const Color(0xFF12151E) : const Color(0xFFF6F7FA);
-    final borderColor = isDark ? const Color(0xFF2A2F3A) : const Color(0xFFDDE0E8);
-    final iconBg      = isDark ? const Color(0xFF1E2436) : const Color(0xFFE8ECFF);
-    final iconColor   = isDark ? const Color(0xFF7B95FF) : const Color(0xFF3A5BFF);
-    final saveBg      = isDark ? const Color(0xFF1E2436) : const Color(0xFFDDE4FF);
-    final saveColor   = isDark ? const Color(0xFF7B95FF) : const Color(0xFF2C46CC);
-    final addressColor = isDark ? const Color(0xFF6B7280) : const Color(0xFF8B93A8);
+    final bgColor     = isDark ? c.textPrimary : c.background;
+    final borderColor = isDark ? c.textPrimary : c.border;
+    final iconBg      = isDark ? c.textPrimary : c.background;
+    final iconColor   = isDark ? c.info : c.primary;
+    final saveBg      = isDark ? c.textPrimary : c.surface;
+    final saveColor   = isDark ? c.info : c.primaryDark;
+    final addressColor = isDark ? c.textSecondary : c.accent;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),

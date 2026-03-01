@@ -390,7 +390,7 @@ class _SelfieVerificationStepScreenState
               final picked = await showModalBottomSheet<CountryModel>(
                 context: context,
                 isScrollControlled: true,
-                backgroundColor: Colors.transparent,
+                backgroundColor: c.surface,
                 builder: (_) => _CountryPickerSheet(
                   c: c,
                   title: 'Country of Residence',
@@ -475,7 +475,7 @@ class _SelfieVerificationStepScreenState
               final picked = await showModalBottomSheet<CountryModel>(
                 context: context,
                 isScrollControlled: true,
-                backgroundColor: Colors.transparent,
+                backgroundColor: c.surface,
                 builder: (_) => _CountryPickerSheet(
                   c: c,
                   title: 'Issuing Country',
@@ -582,8 +582,8 @@ class _SelfieVerificationStepScreenState
               onPressed: _submitting || _picking ? null : _submit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.primary,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: c.primary.withOpacity(0.45),
+                foregroundColor: c.onPrimary,
+                disabledBackgroundColor: c.primary.withValues(alpha: 0.45),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -599,7 +599,7 @@ class _SelfieVerificationStepScreenState
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor:
-                                const AlwaysStoppedAnimation(Colors.white),
+                                AlwaysStoppedAnimation(c.onPrimary),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -641,7 +641,7 @@ class _HeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.22)),
+        border: Border.all(color: c.border.withValues(alpha: 0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -746,11 +746,11 @@ class _AppTextField extends StatelessWidget {
         fillColor: c.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
@@ -795,7 +795,7 @@ class _DatePickerField extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: c.border.withOpacity(0.25)),
+          border: Border.all(color: c.border.withValues(alpha: 0.25)),
         ),
         child: Row(
           children: [
@@ -819,7 +819,7 @@ class _DatePickerField extends StatelessWidget {
                   color: c.success, size: 18)
             else
               Icon(Icons.chevron_right_rounded,
-                  color: c.textSecondary.withOpacity(0.5), size: 20),
+                  color: c.textSecondary.withValues(alpha: 0.5), size: 20),
           ],
         ),
       ),
@@ -860,11 +860,11 @@ class _GovernmentIdTypeDropdown extends StatelessWidget {
         fillColor: c.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+          borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
@@ -928,8 +928,8 @@ class _UploadCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hasFile
-              ? c.success.withOpacity(0.3)
-              : c.border.withOpacity(0.24),
+              ? c.success.withValues(alpha: 0.3)
+              : c.border.withValues(alpha: 0.24),
         ),
       ),
       child: Column(
@@ -942,8 +942,8 @@ class _UploadCard extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   color: hasFile
-                      ? c.success.withOpacity(0.1)
-                      : c.primary.withOpacity(0.08),
+                      ? c.success.withValues(alpha: 0.1)
+                      : c.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
@@ -981,7 +981,7 @@ class _UploadCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: c.success.withOpacity(0.12),
+                    color: c.success.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -1009,11 +1009,11 @@ class _UploadCard extends StatelessWidget {
                       fit: BoxFit.cover,
                     )
                   : Container(
-                      color: c.border.withOpacity(0.08),
+                      color: c.border.withValues(alpha: 0.08),
                       child: Center(
                         child: Icon(
                           Icons.image_outlined,
-                          color: c.textSecondary.withOpacity(0.45),
+                          color: c.textSecondary.withValues(alpha: 0.45),
                           size: 28,
                         ),
                       ),
@@ -1030,7 +1030,7 @@ class _UploadCard extends StatelessWidget {
                     onPressed: busy ? null : onCamera,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.textPrimary,
-                      side: BorderSide(color: c.border.withOpacity(0.3)),
+                      side: BorderSide(color: c.border.withValues(alpha: 0.3)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(11),
                       ),
@@ -1063,7 +1063,7 @@ class _UploadCard extends StatelessWidget {
                       onPressed: busy ? null : onGallery,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: c.textPrimary,
-                        side: BorderSide(color: c.border.withOpacity(0.3)),
+                        side: BorderSide(color: c.border.withValues(alpha: 0.3)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(11),
                         ),
@@ -1097,7 +1097,7 @@ class _UploadCard extends StatelessWidget {
                     onPressed: busy ? null : onClear,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: c.error,
-                      side: BorderSide(color: c.error.withOpacity(0.3)),
+                      side: BorderSide(color: c.error.withValues(alpha: 0.3)),
                       padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(11),
@@ -1142,7 +1142,7 @@ class _CountryPickerField extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: c.border.withOpacity(0.25)),
+          border: Border.all(color: c.border.withValues(alpha: 0.25)),
         ),
         child: Row(
           children: [
@@ -1179,7 +1179,7 @@ class _CountryPickerField extends StatelessWidget {
               Icon(Icons.check_circle_outline_rounded, color: c.success, size: 18)
             else
               Icon(Icons.chevron_right_rounded,
-                  color: c.textSecondary.withOpacity(0.5), size: 20),
+                  color: c.textSecondary.withValues(alpha: 0.5), size: 20),
           ],
         ),
       ),
@@ -1268,7 +1268,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: c.border.withOpacity(0.35),
+                color: c.border.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1295,7 +1295,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: c.border.withOpacity(0.1),
+                        color: c.border.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(Icons.close_rounded,
@@ -1317,7 +1317,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search country…',
                   hintStyle: TextStyle(
-                    color: c.textSecondary.withOpacity(0.5),
+                    color: c.textSecondary.withValues(alpha: 0.5),
                     fontSize: 14,
                   ),
                   filled: true,
@@ -1326,11 +1326,11 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                       Icon(Icons.search_rounded, color: c.textSecondary, size: 20),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
-                    borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
-                    borderSide: BorderSide(color: c.border.withOpacity(0.25)),
+                    borderSide: BorderSide(color: c.border.withValues(alpha: 0.25)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -1342,7 +1342,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
             ),
             const SizedBox(height: 8),
 
-            Divider(height: 1, color: c.border.withOpacity(0.15)),
+            Divider(height: 1, color: c.border.withValues(alpha: 0.15)),
 
             // ── List ─────────────────────────────────────────
             Expanded(
@@ -1415,7 +1415,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: _filtered.length,
       separatorBuilder: (_, __) =>
-          Divider(height: 1, indent: 56, color: c.border.withOpacity(0.12)),
+          Divider(height: 1, indent: 56, color: c.border.withValues(alpha: 0.12)),
       itemBuilder: (_, i) {
         final country = _filtered[i];
         return InkWell(
@@ -1488,9 +1488,9 @@ class _PaymentAccountHint extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.06),
+        color: c.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.primary.withOpacity(0.18)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.18)),
       ),
       child: Row(
         children: [

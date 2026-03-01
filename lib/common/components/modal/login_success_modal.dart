@@ -13,7 +13,7 @@ Future<void> showLoginSuccessModal(BuildContext context, {required User user}) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Success',
-    barrierColor: Colors.black.withOpacity(0.5),
+    barrierColor: AppColor.of(context).textPrimary.withValues(alpha: 0.5),
     transitionDuration: const Duration(milliseconds: 350),
     pageBuilder: (_, __, ___) {
       return Material(
@@ -106,10 +106,14 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
     final colors = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final surfaceColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final surfaceColor = isDark
+        ? colors.surface.withValues(alpha: 0.98)
+        : colors.onPrimary;
     final dividerColor = isDark
-        ? Colors.white.withOpacity(0.06)
-        : Colors.black.withOpacity(0.06);
+        ? colors.border.withValues(alpha: 0.65)
+        : colors.textPrimary.withValues(alpha: 0.06);
+    final primaryTextColor = colors.textPrimary;
+    final secondaryTextColor = colors.textSecondary;
 
     return Center(
       child: Padding(
@@ -122,13 +126,17 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
             border: Border.all(color: dividerColor, width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.45 : 0.12),
+                color: colors.textPrimary.withValues(
+                  alpha: isDark ? 0.42 : 0.12,
+                ),
                 blurRadius: 48,
                 spreadRadius: -4,
                 offset: const Offset(0, 20),
               ),
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+                color: colors.textPrimary.withValues(
+                  alpha: isDark ? 0.18 : 0.05,
+                ),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -145,9 +153,9 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        colors.primary.withOpacity(0.0),
+                        colors.primary.withValues(alpha: 0.0),
                         colors.primary,
-                        colors.primary.withOpacity(0.0),
+                        colors.primary.withValues(alpha: 0.0),
                       ],
                     ),
                   ),
@@ -158,7 +166,6 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-
                       // ── Large centered avatar with check badge ────
                       AnimatedBuilder(
                         animation: _controller,
@@ -173,7 +180,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                                 height: 104,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: colors.primary.withOpacity(0.08),
+                                  color: colors.primary.withValues(alpha: 0.08),
                                 ),
                               ),
                               // Avatar
@@ -187,7 +194,9 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: colors.primary.withOpacity(0.25),
+                                        color: colors.primary.withValues(
+                                          alpha: 0.25,
+                                        ),
                                         width: 2.5,
                                       ),
                                     ),
@@ -196,8 +205,8 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                                         user: widget.user,
                                         radius: 44,
                                         colors: colors,
-                                        backgroundColor:
-                                        colors.primary.withOpacity(0.15),
+                                        backgroundColor: colors.primary
+                                            .withValues(alpha: 0.15),
                                         fontSize: 30,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -222,10 +231,10 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                                         width: 2.5,
                                       ),
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       LucideIcons.check,
                                       size: 13,
-                                      color: Colors.white,
+                                      color: AppColor.of(context).onPrimary,
                                     ),
                                   ),
                                 ),
@@ -247,7 +256,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
-                                color: colors.textPrimary,
+                                color: primaryTextColor,
                                 letterSpacing: -0.4,
                                 height: 1.1,
                               ),
@@ -260,7 +269,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                               widget.user.email,
                               style: TextStyle(
                                 fontSize: 13.5,
-                                color: colors.textSecondary,
+                                color: secondaryTextColor,
                                 height: 1.3,
                               ),
                               maxLines: 1,
@@ -270,10 +279,12 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                             const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
-                                color: colors.primary.withOpacity(0.1),
+                                color: colors.primary.withValues(alpha: 0.1),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -316,7 +327,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                               style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
-                                color: colors.textPrimary,
+                                color: primaryTextColor,
                                 letterSpacing: -0.4,
                               ),
                             ),
@@ -325,7 +336,7 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                               "You're signed in and ready to go.",
                               style: TextStyle(
                                 fontSize: 13.5,
-                                color: colors.textSecondary,
+                                color: secondaryTextColor,
                                 height: 1.4,
                               ),
                               textAlign: TextAlign.center,
@@ -344,9 +355,9 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
                           onPressed: () => _continue(context),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.primary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColor.of(context).onPrimary,
                             elevation: 0,
-                            shadowColor: Colors.transparent,
+                            shadowColor: AppColor.of(context).surface,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),

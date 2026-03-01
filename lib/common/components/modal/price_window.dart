@@ -14,7 +14,7 @@ void showPriceWindowModal(
 
   showModalBottomSheet(
     context: context,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (context) => Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
@@ -123,7 +123,7 @@ class _ModalWindowOption extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isSelected
                     ? colors.primary
-                    : colors.border.withOpacity(isDark ? 0.15 : 0.1),
+                    : colors.border.withValues(alpha: isDark ? 0.15 : 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -131,7 +131,7 @@ class _ModalWindowOption extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : colors.textSecondary,
+                  color: isSelected ? AppColor.of(context).onPrimary : colors.textSecondary,
                   letterSpacing: -0.2,
                 ),
               ),

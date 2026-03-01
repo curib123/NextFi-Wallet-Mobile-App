@@ -328,7 +328,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   Future<ImageSource?> _showProofSourceSheet() async {
     return showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => _ProofSourceSheet(colors: AppColor.of(context)),
     );
   }
@@ -704,9 +704,9 @@ class _MessageBubble extends StatelessWidget {
     final isHttp = src.startsWith('http://') || src.startsWith('https://');
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.95),
+      barrierColor: colors.textPrimary.withValues(alpha: 0.95),
       builder: (context) => Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: colors.surface,
         body: SafeArea(
           child: Stack(
             children: [
@@ -718,18 +718,18 @@ class _MessageBubble extends StatelessWidget {
                       ? Image.network(
                           src,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(
+                          errorBuilder: (_, __, ___) => Icon(
                             Icons.broken_image_rounded,
-                            color: Colors.white70,
+                            color: colors.onPrimary,
                             size: 42,
                           ),
                         )
                       : Image.file(
                           File(src),
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(
+                          errorBuilder: (_, __, ___) => Icon(
                             Icons.broken_image_rounded,
-                            color: Colors.white70,
+                            color: colors.onPrimary,
                             size: 42,
                           ),
                         ),
@@ -740,7 +740,7 @@ class _MessageBubble extends StatelessWidget {
                 right: 8,
                 child: IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  icon: Icon(Icons.close_rounded, color: colors.onPrimary),
                 ),
               ),
             ],
@@ -817,7 +817,7 @@ class _MessageBubble extends StatelessWidget {
           border: isMe ? null : Border.all(color: colors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: colors.textPrimary.withValues(alpha: 0.06),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -835,14 +835,14 @@ class _MessageBubble extends StatelessWidget {
                   if (_isUploadingProof)
                     Positioned.fill(
                       child: Container(
-                        color: Colors.black.withValues(alpha: 0.25),
+                        color: colors.textPrimary.withValues(alpha: 0.25),
                         alignment: Alignment.center,
-                        child: const SizedBox(
+                        child: SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: colors.onPrimary,
                           ),
                         ),
                       ),
@@ -856,7 +856,7 @@ class _MessageBubble extends StatelessWidget {
                   style: GoogleFonts.sora(
                     fontSize: 11,
                     color: isMe
-                        ? Colors.white.withValues(alpha: 0.85)
+                        ? colors.onPrimary.withValues(alpha: 0.85)
                         : colors.textSecondary,
                   ),
                 ),
@@ -868,7 +868,7 @@ class _MessageBubble extends StatelessWidget {
                 _withBreakHints(_text),
                 style: GoogleFonts.sora(
                   fontSize: 14,
-                  color: isMe ? Colors.white : colors.textPrimary,
+                  color: isMe ? colors.onPrimary : colors.textPrimary,
                   height: 1.4,
                 ),
                 softWrap: true,
@@ -879,7 +879,7 @@ class _MessageBubble extends StatelessWidget {
               style: GoogleFonts.sora(
                 fontSize: 10,
                 color: isMe
-                    ? Colors.white.withValues(alpha: 0.7)
+                    ? colors.onPrimary.withValues(alpha: 0.7)
                     : colors.textSecondary,
               ),
             ),
@@ -1065,15 +1065,15 @@ class _InputBar extends StatelessWidget {
               ),
             ),
             child: sending
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: colors.onPrimary,
                     ),
                   )
-                : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                : Icon(Icons.send_rounded, color: colors.onPrimary, size: 20),
           ),
         ),
       ],
@@ -1193,13 +1193,13 @@ class _SourceOption extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         elevation: 0,
       ),
-      icon: Icon(icon, color: Colors.white, size: 18),
+      icon: Icon(icon, color: colors.onPrimary, size: 18),
       label: Text(
         label,
         style: GoogleFonts.sora(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: Colors.white,
+          color: colors.onPrimary,
         ),
       ),
     ),

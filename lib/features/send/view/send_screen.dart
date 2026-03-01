@@ -41,15 +41,15 @@ class _ST {
   final bool isDark;
 
   // ── Backgrounds & surfaces ──────────────────────────────────────
-  final Color cardBg;       // white / surface dark
-  final Color inputBg;      // slightly deeper input field bg
-  final Color chipBg;       // inactive chip / pill bg
-  final Color chipBorder;   // inactive chip border
+  final Color cardBg; // white / surface dark
+  final Color inputBg; // slightly deeper input field bg
+  final Color chipBg; // inactive chip / pill bg
+  final Color chipBorder; // inactive chip border
 
   // ── Primary tints ───────────────────────────────────────────────
-  final Color primaryTint;       // button/chip fill when active
+  final Color primaryTint; // button/chip fill when active
   final Color primaryTintBorder; // border of active primary areas
-  final Color primaryMuted;      // icon / label on tinted bg
+  final Color primaryMuted; // icon / label on tinted bg
 
   // ── Status tints ────────────────────────────────────────────────
   final Color successTint;
@@ -61,9 +61,9 @@ class _ST {
   final Color warningBorder;
 
   // ── Text ────────────────────────────────────────────────────────
-  final Color labelColor;    // secondary label (caps)
-  final Color metaColor;     // small metadata / hints
-  final Color monoColor;     // monospaced address text
+  final Color labelColor; // secondary label (caps)
+  final Color metaColor; // small metadata / hints
+  final Color monoColor; // monospaced address text
   final Color dividerColor;
 
   const _ST._({
@@ -89,53 +89,30 @@ class _ST {
   });
 
   static _ST of(BuildContext context) {
+    final c = AppColor.of(context);
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return dark ? _dark : _light;
+    return _ST._(
+      isDark: dark,
+      cardBg: dark ? c.surface : c.onPrimary,
+      inputBg: c.background,
+      chipBg: c.background,
+      chipBorder: c.border,
+      primaryTint: c.background,
+      primaryTintBorder: c.border,
+      primaryMuted: c.primary,
+      successTint: c.background,
+      successBorder: c.border,
+      successText: c.success,
+      errorTint: c.background,
+      errorBorder: c.border,
+      warningTint: c.background,
+      warningBorder: c.border,
+      labelColor: c.textSecondary,
+      metaColor: c.textSecondary,
+      monoColor: c.textSecondary,
+      dividerColor: c.border,
+    );
   }
-
-  static const _dark = _ST._(
-    isDark: true,
-    cardBg:            Color(0xFF171923),
-    inputBg:           Color(0xFF12141C),
-    chipBg:            Color(0xFF1C1F2B),
-    chipBorder:        Color(0xFF2A2F3E),
-    primaryTint:       Color(0xFF1A2140),
-    primaryTintBorder: Color(0xFF2A3660),
-    primaryMuted:      Color(0xFF6B8AFF),
-    successTint:       Color(0xFF0D2018),
-    successBorder:     Color(0xFF174D2E),
-    successText:       Color(0xFF34C759),
-    errorTint:         Color(0xFF250E0E),
-    errorBorder:       Color(0xFF4D1515),
-    warningTint:       Color(0xFF231A06),
-    warningBorder:     Color(0xFF4D3800),
-    labelColor:        Color(0xFF6B7280),
-    metaColor:         Color(0xFF4B5260),
-    monoColor:         Color(0xFF7A8299),
-    dividerColor:      Color(0xFF222530),
-  );
-
-  static const _light = _ST._(
-    isDark: false,
-    cardBg:            Color(0xFFFFFFFF),
-    inputBg:           Color(0xFFF6F7FA),
-    chipBg:            Color(0xFFF0F2F5),
-    chipBorder:        Color(0xFFDDE0E8),
-    primaryTint:       Color(0xFFE8ECFF),
-    primaryTintBorder: Color(0xFFBBCAFF),
-    primaryMuted:      Color(0xFF3A5BFF),
-    successTint:       Color(0xFFEAFAF0),
-    successBorder:     Color(0xFFB2E8C4),
-    successText:       Color(0xFF1A7A3C),
-    errorTint:         Color(0xFFFFF0EF),
-    errorBorder:       Color(0xFFFFBDBB),
-    warningTint:       Color(0xFFFFF8EC),
-    warningBorder:     Color(0xFFFFDFA0),
-    labelColor:        Color(0xFF8B93A8),
-    metaColor:         Color(0xFFABB2C2),
-    monoColor:         Color(0xFF8D96AA),
-    dividerColor:      Color(0xFFEEF0F4),
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,7 +142,7 @@ class SendScreen extends StatefulWidget {
 
 class _SendScreenState extends State<SendScreen> {
   final _form = GlobalKey<FormState>();
-  final _toCtl  = TextEditingController();
+  final _toCtl = TextEditingController();
   final _amtCtl = TextEditingController();
   final _memoCtl = TextEditingController();
 
@@ -196,7 +173,9 @@ class _SendScreenState extends State<SendScreen> {
 
     final vm = context.read<SendVM>();
     vm.configure(
-      token: widget.token.toUpperCase() == 'XLM' ? SendToken.xlm : SendToken.usdc,
+      token: widget.token.toUpperCase() == 'XLM'
+          ? SendToken.xlm
+          : SendToken.usdc,
       senderAddress: widget.address,
       senderBalanceToken: widget.balance,
       prefillTo: widget.prefillAddress,
@@ -223,7 +202,8 @@ class _SendScreenState extends State<SendScreen> {
 
     if (widget.autoOpenScanner && !_scannerOpenedOnce) {
       final hasPrefill =
-          (widget.prefillAddress ?? '').trim().isNotEmpty || _toCtl.text.trim().isNotEmpty;
+          (widget.prefillAddress ?? '').trim().isNotEmpty ||
+          _toCtl.text.trim().isNotEmpty;
       if (!hasPrefill) {
         _scannerOpenedOnce = true;
         WidgetsBinding.instance.addPostFrameCallback((_) => _openScanner());
@@ -245,8 +225,10 @@ class _SendScreenState extends State<SendScreen> {
   // ──────────────────────────────────────────────────────────────────────────
 
   bool _looksLikeStellarPk(String x) => RegExp(r'^G[A-Z2-7]{55}$').hasMatch(x);
-  bool _looksLikeFederation(String x) => RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
-  bool _looksLikeFederationAliasInput(String x) => RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(x);
+  bool _looksLikeFederation(String x) =>
+      RegExp(r'^[^*\s]+\*[^*\s]+$').hasMatch(x);
+  bool _looksLikeFederationAliasInput(String x) =>
+      RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(x);
 
   void _onRecipientChanged() {
     final vm = context.read<SendVM>();
@@ -311,8 +293,10 @@ class _SendScreenState extends State<SendScreen> {
     });
 
     try {
-      final resolved = await FederationAddressCoreService.I
-          .resolveByName(federationAddress, domain: _federationDomain);
+      final resolved = await FederationAddressCoreService.I.resolveByName(
+        federationAddress,
+        domain: _federationDomain,
+      );
       if (!mounted || requestId != _federationResolveSeq) return;
 
       final accountId = resolved.accountId.trim();
@@ -340,34 +324,50 @@ class _SendScreenState extends State<SendScreen> {
 
   Future<void> _loadFederationDomain() async {
     if (!mounted) return;
-    setState(() => _federationDomain = FederationAddressCoreService.defaultDomain);
+    setState(
+      () => _federationDomain = FederationAddressCoreService.defaultDomain,
+    );
     _updateFederationSuggestions(_toCtl.text.trim());
   }
 
   void _updateFederationSuggestions(String input) {
     final domain = _federationDomain.trim();
-    if (domain.isEmpty || input.isEmpty || input.contains('*') ||
+    if (domain.isEmpty ||
+        input.isEmpty ||
+        input.contains('*') ||
         !_looksLikeFederationAliasInput(input)) {
-      if (_federationSuggestions.isNotEmpty) setState(() => _federationSuggestions = const []);
+      if (_federationSuggestions.isNotEmpty)
+        setState(() => _federationSuggestions = const []);
       return;
     }
     final candidate = '${input.toLowerCase()}*$domain';
-    if (_federationSuggestions.length == 1 && _federationSuggestions.first == candidate) return;
+    if (_federationSuggestions.length == 1 &&
+        _federationSuggestions.first == candidate)
+      return;
     setState(() => _federationSuggestions = [candidate]);
   }
 
   void _applyFederationSuggestion(String value) {
     _toCtl.text = value;
-    _toCtl.selection = TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
+    _toCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _toCtl.text.length),
+    );
   }
 
   Future<void> _lookupRecipient(String address) async {
-    setState(() { _recipientLoading = true; _resolvedRecipient = null; });
+    setState(() {
+      _recipientLoading = true;
+      _resolvedRecipient = null;
+    });
     try {
       final recipientVM = context.read<RecipientAddressVM>();
       await recipientVM.ready;
       final match = recipientVM.byAddress(address);
-      if (mounted) setState(() { _resolvedRecipient = match; _recipientLoading = false; });
+      if (mounted)
+        setState(() {
+          _resolvedRecipient = match;
+          _recipientLoading = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _recipientLoading = false);
     }
@@ -385,7 +385,8 @@ class _SendScreenState extends State<SendScreen> {
 
   double _floorTo(double v, int dec) {
     final scale = math.pow(10, dec);
-    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale).toDouble();
+    return (v >= 0 ? (v * scale).floor() / scale : (v * scale).ceil() / scale)
+        .toDouble();
   }
 
   String _fmtAmount(double v, {int decimals = 7}) {
@@ -405,7 +406,9 @@ class _SendScreenState extends State<SendScreen> {
     }
     final v = _floorTo(targetAmount, 7);
     _amtCtl.text = _fmtAmount(v);
-    _amtCtl.selection = TextSelection.fromPosition(TextPosition(offset: _amtCtl.text.length));
+    _amtCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _amtCtl.text.length),
+    );
     _lastPct = percent;
     setState(() {});
   }
@@ -429,7 +432,7 @@ class _SendScreenState extends State<SendScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => ChangeNotifierProvider.value(
         value: vm,
         child: _ReviewSheet(
@@ -442,21 +445,37 @@ class _SendScreenState extends State<SendScreen> {
 
   Future<void> _doSend(SendVM vm) async {
     late final AppAlertController ctl;
-    ctl = showAppAlert(context, type: AppAlertType.loading,
-        title: 'Submitting…', subtitle: 'Broadcasting your transaction to the network.',
-        primaryText: 'Hide');
+    ctl = showAppAlert(
+      context,
+      type: AppAlertType.loading,
+      title: 'Submitting…',
+      subtitle: 'Broadcasting your transaction to the network.',
+      primaryText: 'Hide',
+    );
     try {
       final txid = await vm.submit(memo: _currentMemoOrNull());
       if (!mounted) return;
-      ctl.update(AppAlertType.success, title: 'Submitted', subtitle: txid,
-          primaryText: 'Copy TxID', onPrimary: () async {
-            await Clipboard.setData(ClipboardData(text: txid));
-            ctl.close();
-          });
-      _amtCtl.clear(); _memoCtl.clear(); _lastPct = null;
+      ctl.update(
+        AppAlertType.success,
+        title: 'Submitted',
+        subtitle: txid,
+        primaryText: 'Copy TxID',
+        onPrimary: () async {
+          await Clipboard.setData(ClipboardData(text: txid));
+          ctl.close();
+        },
+      );
+      _amtCtl.clear();
+      _memoCtl.clear();
+      _lastPct = null;
     } catch (e) {
       if (!mounted) return;
-      ctl.update(AppAlertType.error, title: 'Send failed', subtitle: '$e', primaryText: 'Close');
+      ctl.update(
+        AppAlertType.error,
+        title: 'Send failed',
+        subtitle: '$e',
+        primaryText: 'Close',
+      );
     }
   }
 
@@ -469,10 +488,15 @@ class _SendScreenState extends State<SendScreen> {
     FocusScope.of(context).unfocus();
     await Future.delayed(const Duration(milliseconds: 60));
 
-    final raw = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen()));
+    final raw = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
     if (!mounted || raw is! String) return;
 
-    String? addr; String? memoText; String? memoType;
+    String? addr;
+    String? memoText;
+    String? memoType;
     final s = raw.trim();
     final schemeIdx = s.toLowerCase().indexOf('stellar:');
     if (schemeIdx != -1) {
@@ -483,8 +507,12 @@ class _SendScreenState extends State<SendScreen> {
       if (_looksLikeStellarPk(path)) addr = path;
       if (qIdx != -1) {
         try {
-          final params = Uri.splitQueryString(cut.substring(qIdx + 1), encoding: utf8);
-          memoText = params['memo']; memoType = params['memo_type']?.toLowerCase();
+          final params = Uri.splitQueryString(
+            cut.substring(qIdx + 1),
+            encoding: utf8,
+          );
+          memoText = params['memo'];
+          memoType = params['memo_type']?.toLowerCase();
         } catch (_) {}
       }
     } else {
@@ -493,15 +521,27 @@ class _SendScreenState extends State<SendScreen> {
 
     if (addr == null) {
       if (!mounted) return;
-      showFloatingSnackBar(context, message: 'No valid Stellar address found', type: SnackBarType.warning);
+      showFloatingSnackBar(
+        context,
+        message: 'No valid Stellar address found',
+        type: SnackBarType.warning,
+      );
       return;
     }
     if (memoText != null && memoText.trim().isNotEmpty) {
-      if (memoType == null || memoType == 'text') { _memoCtl.text = memoText; }
-      else if (mounted) showFloatingSnackBar(context, message: 'QR memo type "$memoType" not supported (only TEXT).', type: SnackBarType.warning);
+      if (memoType == null || memoType == 'text') {
+        _memoCtl.text = memoText;
+      } else if (mounted)
+        showFloatingSnackBar(
+          context,
+          message: 'QR memo type "$memoType" not supported (only TEXT).',
+          type: SnackBarType.warning,
+        );
     }
     _toCtl.text = addr;
-    _toCtl.selection = TextSelection.fromPosition(TextPosition(offset: _toCtl.text.length));
+    _toCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _toCtl.text.length),
+    );
     if (mounted) context.read<SendVM>().setRecipient(addr);
   }
 
@@ -510,18 +550,22 @@ class _SendScreenState extends State<SendScreen> {
     FocusScope.of(context).unfocus();
     final picked = await Navigator.push<RecipientAddressModel>(
       context,
-      MaterialPageRoute(builder: (innerCtx) => RecipientListWidget(
-        colors: AppColor.of(innerCtx),
-        showAppBar: true,
-        onSelect: (r) => Navigator.of(innerCtx).pop(r),
-        fromAddress: widget.address,
-      )),
+      MaterialPageRoute(
+        builder: (innerCtx) => RecipientListWidget(
+          colors: AppColor.of(innerCtx),
+          showAppBar: true,
+          onSelect: (r) => Navigator.of(innerCtx).pop(r),
+          fromAddress: widget.address,
+        ),
+      ),
     );
     if (!mounted || picked == null) return;
     final vm = context.read<SendVM>();
     final addr = picked.address.trim();
     _toCtl.text = addr;
-    _toCtl.selection = TextSelection.fromPosition(TextPosition(offset: addr.length));
+    _toCtl.selection = TextSelection.fromPosition(
+      TextPosition(offset: addr.length),
+    );
     vm.pickRecipient(addr, displayName: picked.name);
   }
 
@@ -543,13 +587,21 @@ class _SendScreenState extends State<SendScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c  = AppColor.of(context);
-    final t  = _ST.of(context);
+    final c = AppColor.of(context);
+    final t = _ST.of(context);
     final vm = context.watch<SendVM>();
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
 
-    if (vm.loading) return Scaffold(backgroundColor: c.background, body: const _LoadingState());
-    if (vm.error != null) return Scaffold(backgroundColor: c.background, body: _ErrorState(message: vm.error!, onRetry: _refresh));
+    if (vm.loading)
+      return Scaffold(
+        backgroundColor: c.background,
+        body: const _LoadingState(),
+      );
+    if (vm.error != null)
+      return Scaffold(
+        backgroundColor: c.background,
+        body: _ErrorState(message: vm.error!, onRetry: _refresh),
+      );
 
     return Scaffold(
       backgroundColor: c.background,
@@ -679,9 +731,13 @@ class _SendScreenState extends State<SendScreen> {
               Expanded(
                 child: TextField(
                   controller: _amtCtl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,7}$')),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,7}$'),
+                    ),
                   ],
                   style: TextStyle(
                     fontSize: 44,
@@ -720,11 +776,7 @@ class _SendScreenState extends State<SendScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _MaxButton(
-                    t: t,
-                    c: c,
-                    onTap: () => _applyPercent(vm, 1.0),
-                  ),
+                  _MaxButton(t: t, c: c, onTap: () => _applyPercent(vm, 1.0)),
                 ],
               ),
             ],
@@ -749,7 +801,8 @@ class _SendScreenState extends State<SendScreen> {
           if (i > 0) const SizedBox(width: 8),
           Expanded(
             child: _buildPctChip(
-              c, t,
+              c,
+              t,
               label: presets[i].$1,
               pct: presets[i].$2,
               vm: vm,
@@ -760,7 +813,13 @@ class _SendScreenState extends State<SendScreen> {
     );
   }
 
-  Widget _buildPctChip(AppColor c, _ST t, {required String label, required double pct, required SendVM vm}) {
+  Widget _buildPctChip(
+    AppColor c,
+    _ST t, {
+    required String label,
+    required double pct,
+    required SendVM vm,
+  }) {
     final active = _lastPct != null && (_lastPct! - pct).abs() < 0.001;
     return GestureDetector(
       onTap: () => _applyPercent(vm, pct),
@@ -796,9 +855,13 @@ class _SendScreenState extends State<SendScreen> {
     final resolvedAccountId = _resolvedFederation?.accountId.trim();
     final hasValidAddr =
         _looksLikeStellarPk(addr) ||
-            (_looksLikeFederation(addr) && resolvedAccountId != null && _looksLikeStellarPk(resolvedAccountId));
+        (_looksLikeFederation(addr) &&
+            resolvedAccountId != null &&
+            _looksLikeStellarPk(resolvedAccountId));
     final hasFederationInput = _looksLikeFederation(addr);
-    final recipientLookupAddress = _looksLikeStellarPk(addr) ? addr : (resolvedAccountId ?? addr);
+    final recipientLookupAddress = _looksLikeStellarPk(addr)
+        ? addr
+        : (resolvedAccountId ?? addr);
     final isLoading = _recipientLoading || _federationLoading;
 
     return Container(
@@ -818,14 +881,16 @@ class _SendScreenState extends State<SendScreen> {
               const Spacer(),
               _IconPill(
                 icon: LucideIcons.qrCode,
-                t: t, c: c,
+                t: t,
+                c: c,
                 onTap: _openScanner,
                 tooltip: 'Scan QR',
               ),
               const SizedBox(width: 8),
               _IconPill(
                 icon: LucideIcons.contact2,
-                t: t, c: c,
+                t: t,
+                c: c,
                 onTap: _openRecipientsPicker,
                 tooltip: 'Contacts',
               ),
@@ -844,21 +909,29 @@ class _SendScreenState extends State<SendScreen> {
               t: t,
               c: c,
               onEdit: () async {
-                final ok = await showRecipientUpsertSheet(context, initial: _resolvedRecipient);
+                final ok = await showRecipientUpsertSheet(
+                  context,
+                  initial: _resolvedRecipient,
+                );
                 if (ok == true && mounted) _lookupRecipient(_toCtl.text.trim());
               },
             )
           else if (hasValidAddr && _resolvedRecipient == null)
-              _RecipientAddTemplate(
-                address: recipientLookupAddress,
-                t: t, c: c,
-                onAdd: () async {
-                  final saved = await showRecipientUpsertSheet(context, address: recipientLookupAddress);
-                  if (saved == true && mounted) _lookupRecipient(recipientLookupAddress);
-                },
-              )
-            else
-              _buildAddressInput(c, t, addr),
+            _RecipientAddTemplate(
+              address: recipientLookupAddress,
+              t: t,
+              c: c,
+              onAdd: () async {
+                final saved = await showRecipientUpsertSheet(
+                  context,
+                  address: recipientLookupAddress,
+                );
+                if (saved == true && mounted)
+                  _lookupRecipient(recipientLookupAddress);
+              },
+            )
+          else
+            _buildAddressInput(c, t, addr),
 
           if (_federationSuggestions.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -908,20 +981,23 @@ class _SendScreenState extends State<SendScreen> {
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           suffixIcon: addr.isNotEmpty
               ? Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: IconButton(
-              onPressed: () {
-                _toCtl.clear();
-                setState(() => _resolvedRecipient = null);
-                context.read<SendVM>().setRecipient('');
-              },
-              icon: Icon(LucideIcons.x, size: 16, color: t.labelColor),
-              splashRadius: 18,
-            ),
-          )
+                  padding: const EdgeInsets.only(right: 6),
+                  child: IconButton(
+                    onPressed: () {
+                      _toCtl.clear();
+                      setState(() => _resolvedRecipient = null);
+                      context.read<SendVM>().setRecipient('');
+                    },
+                    icon: Icon(LucideIcons.x, size: 16, color: t.labelColor),
+                    splashRadius: 18,
+                  ),
+                )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 15,
+            vertical: 15,
+          ),
         ),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
       ),
@@ -932,49 +1008,57 @@ class _SendScreenState extends State<SendScreen> {
     return Wrap(
       spacing: 8,
       runSpacing: 6,
-      children: _federationSuggestions.map((s) => GestureDetector(
-        onTap: () => _applyFederationSuggestion(s),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width - 80,
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: t.primaryTint,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: t.primaryTintBorder, width: 1),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.atSign, size: 13, color: c.primary),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    s,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
+      children: _federationSuggestions
+          .map(
+            (s) => GestureDetector(
+              onTap: () => _applyFederationSuggestion(s),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width - 80,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: t.primaryTint,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: t.primaryTintBorder, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(LucideIcons.atSign, size: 13, color: c.primary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          s,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      )).toList(),
+          )
+          .toList(),
     );
   }
 
   Widget _buildFederationStatus(AppColor c, _ST t) {
     if (_federationLoading) {
       return _StatusBanner(
-        t: t, c: c,
+        t: t,
+        c: c,
         icon: null,
         title: 'Resolving federation address…',
         color: c.primary,
@@ -985,7 +1069,8 @@ class _SendScreenState extends State<SendScreen> {
     }
     if (_federationError != null) {
       return _StatusBanner(
-        t: t, c: c,
+        t: t,
+        c: c,
         icon: LucideIcons.alertCircle,
         title: _federationError!,
         color: c.error,
@@ -996,7 +1081,8 @@ class _SendScreenState extends State<SendScreen> {
     final resolved = _resolvedFederation;
     if (resolved != null && resolved.accountId.trim().isNotEmpty) {
       return _StatusBanner(
-        t: t, c: c,
+        t: t,
+        c: c,
         icon: LucideIcons.checkCircle2,
         title: 'Resolved → ${_shortenAddress(resolved.accountId)}',
         subtitle: resolved.stellarAddress,
@@ -1012,19 +1098,39 @@ class _SendScreenState extends State<SendScreen> {
   Widget _buildTrustlineStatus(AppColor c, _ST t, SendVM vm) {
     if (vm.to.trim().isEmpty) return const SizedBox.shrink();
     if (vm.checking) {
-      return _StatusBanner(t: t, c: c, icon: null, title: 'Verifying trustline…',
-          color: c.primary, tint: t.primaryTint, border: t.primaryTintBorder, showSpinner: true);
+      return _StatusBanner(
+        t: t,
+        c: c,
+        icon: null,
+        title: 'Verifying trustline…',
+        color: c.primary,
+        tint: t.primaryTint,
+        border: t.primaryTintBorder,
+        showSpinner: true,
+      );
     }
     if (vm.destHasUsdcTL == false) {
-      return _StatusBanner(t: t, c: c, icon: LucideIcons.alertCircle,
-          title: 'Cannot receive USDC',
-          subtitle: 'Recipient needs to add a USDC trustline first',
-          color: c.error, tint: t.errorTint, border: t.errorBorder);
+      return _StatusBanner(
+        t: t,
+        c: c,
+        icon: LucideIcons.alertCircle,
+        title: 'Cannot receive USDC',
+        subtitle: 'Recipient needs to add a USDC trustline first',
+        color: c.error,
+        tint: t.errorTint,
+        border: t.errorBorder,
+      );
     }
     if (vm.destHasUsdcTL == true) {
-      return _StatusBanner(t: t, c: c, icon: LucideIcons.checkCircle2,
-          title: 'Ready to receive USDC',
-          color: t.successText, tint: t.successTint, border: t.successBorder);
+      return _StatusBanner(
+        t: t,
+        c: c,
+        icon: LucideIcons.checkCircle2,
+        title: 'Ready to receive USDC',
+        color: t.successText,
+        tint: t.successTint,
+        border: t.successBorder,
+      );
     }
     return const SizedBox.shrink();
   }
@@ -1057,7 +1163,12 @@ class _SendScreenState extends State<SendScreen> {
                 ),
                 child: Text(
                   'OPTIONAL',
-                  style: TextStyle(color: t.metaColor, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.6),
+                  style: TextStyle(
+                    color: t.metaColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -1083,7 +1194,11 @@ class _SendScreenState extends State<SendScreen> {
             ),
             decoration: InputDecoration(
               hintText: 'Add a note (e.g. invoice ref, exchange tag)',
-              hintStyle: TextStyle(color: t.metaColor, fontSize: 13.5, letterSpacing: -0.2),
+              hintStyle: TextStyle(
+                color: t.metaColor,
+                fontSize: 13.5,
+                letterSpacing: -0.2,
+              ),
               border: InputBorder.none,
               contentPadding: EdgeInsets.zero,
               isDense: true,
@@ -1098,7 +1213,11 @@ class _SendScreenState extends State<SendScreen> {
                 const SizedBox(width: 6),
                 Text(
                   'Memo exceeds 28 bytes — shorten it',
-                  style: TextStyle(color: c.error, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: c.error,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -1137,7 +1256,11 @@ class _SendScreenState extends State<SendScreen> {
                 const SizedBox(width: 10),
                 Text(
                   'Recipient receives',
-                  style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const Spacer(),
                 Text(
@@ -1157,25 +1280,39 @@ class _SendScreenState extends State<SendScreen> {
           _buildDivider(t),
           const SizedBox(height: 12),
 
-          _BreakdownRow(icon: LucideIcons.zap,         label: 'Network fee',
-              value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM', t: t, c: c),
+          _BreakdownRow(
+            icon: LucideIcons.zap,
+            label: 'Network fee',
+            value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
+            t: t,
+            c: c,
+          ),
 
           if (vm.isXlm && vm.totalDeductFromBalance > 0) ...[
             const SizedBox(height: 8),
-            _BreakdownRow(icon: LucideIcons.minusCircle, label: 'Total deducted',
-                value: '${_numFmt.format(vm.totalDeductFromBalance)} XLM', t: t, c: c),
+            _BreakdownRow(
+              icon: LucideIcons.minusCircle,
+              label: 'Total deducted',
+              value: '${_numFmt.format(vm.totalDeductFromBalance)} XLM',
+              t: t,
+              c: c,
+            ),
           ],
           const SizedBox(height: 8),
-          _BreakdownRow(icon: LucideIcons.wallet,       label: 'Remaining',
-              value: '${_fmtAmount(vm.remainingExpendable)} $tokenStr',
-              t: t, c: c, muted: true),
+          _BreakdownRow(
+            icon: LucideIcons.wallet,
+            label: 'Remaining',
+            value: '${_fmtAmount(vm.remainingExpendable)} $tokenStr',
+            t: t,
+            c: c,
+            muted: true,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDivider(_ST t) =>
-      Container(height: 1, color: t.dividerColor);
+  Widget _buildDivider(_ST t) => Container(height: 1, color: t.dividerColor);
 
   // ── ACTION BAR ────────────────────────────────────────────────────────────
   Widget _buildActionBar(AppColor c, _ST t, SendVM vm) {
@@ -1189,7 +1326,7 @@ class _SendScreenState extends State<SendScreen> {
         border: Border.all(color: t.chipBorder, width: 1),
         boxShadow: [
           BoxShadow(
-            color: t.isDark ? const Color(0x55000000) : const Color(0x14000000),
+            color: c.textPrimary.withValues(alpha: t.isDark ? 0.20 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, -4),
           ),
@@ -1200,18 +1337,24 @@ class _SendScreenState extends State<SendScreen> {
         child: SizedBox(
           height: 54,
           child: AppElevatedButton(
-            onPressed: canSubmit ? () async {
-              HapticFeedback.mediumImpact();
-              await _confirmAndSend(vm);
-            } : null,
+            onPressed: canSubmit
+                ? () async {
+                    HapticFeedback.mediumImpact();
+                    await _confirmAndSend(vm);
+                  }
+                : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: canSubmit ? c.primary : t.chipBg,
-              foregroundColor: canSubmit ? Colors.white : t.labelColor,
+              foregroundColor: canSubmit
+                  ? AppColor.of(context).onPrimary
+                  : t.labelColor,
               disabledBackgroundColor: t.chipBg,
               disabledForegroundColor: t.labelColor,
               elevation: 0,
-              shadowColor: Colors.transparent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shadowColor: AppColor.of(context).surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1220,7 +1363,11 @@ class _SendScreenState extends State<SendScreen> {
                 const SizedBox(width: 10),
                 Text(
                   canSubmit ? 'Review & Send' : 'Complete all fields',
-                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, letterSpacing: -0.3),
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ],
             ),
@@ -1288,8 +1435,11 @@ class _MaxButton extends StatelessWidget {
 
 class _IconPill extends StatelessWidget {
   const _IconPill({
-    required this.icon, required this.t, required this.c,
-    required this.onTap, required this.tooltip,
+    required this.icon,
+    required this.t,
+    required this.c,
+    required this.onTap,
+    required this.tooltip,
   });
   final IconData icon;
   final _ST t;
@@ -1333,18 +1483,19 @@ class _RecipientBadge extends StatelessWidget {
   final VoidCallback onEdit;
 
   String _short(String addr) => addr.length <= 16
-      ? addr : '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
+      ? addr
+      : '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
 
   Color _mix(Color a, Color b, double t) => Color.lerp(a, b, t)!;
 
   @override
   Widget build(BuildContext context) {
     final brand = Color(colorValue);
-    final base  = t.isDark ? const Color(0xFF171923) : const Color(0xFFFFFFFF);
-    final bgCol     = _mix(base, brand, t.isDark ? 0.13 : 0.09);
+    final base = t.isDark ? c.surface : c.onPrimary;
+    final bgCol = _mix(base, brand, t.isDark ? 0.13 : 0.09);
     final borderCol = _mix(base, brand, t.isDark ? 0.25 : 0.20);
-    final avatarBg  = _mix(base, brand, t.isDark ? 0.22 : 0.16);
-    final editBg    = _mix(t.isDark ? const Color(0xFF1E2130) : const Color(0xFFF0F0F8), brand, 0.14);
+    final avatarBg = _mix(base, brand, t.isDark ? 0.22 : 0.16);
+    final editBg = _mix(t.isDark ? c.surface : c.background, brand, 0.14);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1358,11 +1509,19 @@ class _RecipientBadge extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: avatarBg, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: avatarBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Center(
               child: Text(
                 name.isNotEmpty ? name[0].toUpperCase() : '?',
-                style: TextStyle(color: brand, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.5),
+                style: TextStyle(
+                  color: brand,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  letterSpacing: -0.5,
+                ),
               ),
             ),
           ),
@@ -1372,14 +1531,32 @@ class _RecipientBadge extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.4, height: 1.2)),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                    letterSpacing: -0.4,
+                    height: 1.2,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(_short(address),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    softWrap: false,
-                    style: TextStyle(color: t.monoColor, fontFamily: 'monospace', fontSize: 11.5, letterSpacing: 0.3, height: 1.3)),
+                Text(
+                  _short(address),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: t.monoColor,
+                    fontFamily: 'monospace',
+                    fontSize: 11.5,
+                    letterSpacing: 0.3,
+                    height: 1.3,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1395,7 +1572,9 @@ class _RecipientBadge extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: borderCol, width: 1),
               ),
-              child: Center(child: Icon(LucideIcons.pencil, size: 14, color: brand)),
+              child: Center(
+                child: Icon(LucideIcons.pencil, size: 14, color: brand),
+              ),
             ),
           ),
         ],
@@ -1407,7 +1586,10 @@ class _RecipientBadge extends StatelessWidget {
 // ── Recipient add template (new / unsaved address) ────────────────────────────
 class _RecipientAddTemplate extends StatelessWidget {
   const _RecipientAddTemplate({
-    required this.address, required this.t, required this.c, required this.onAdd,
+    required this.address,
+    required this.t,
+    required this.c,
+    required this.onAdd,
   });
   final String address;
   final _ST t;
@@ -1415,7 +1597,8 @@ class _RecipientAddTemplate extends StatelessWidget {
   final VoidCallback onAdd;
 
   String _short(String addr) => addr.length <= 16
-      ? addr : '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
+      ? addr
+      : '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
 
   @override
   Widget build(BuildContext context) {
@@ -1431,8 +1614,17 @@ class _RecipientAddTemplate extends StatelessWidget {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: t.primaryTint, borderRadius: BorderRadius.circular(12)),
-            child: Center(child: Icon(LucideIcons.userPlus, size: 17, color: t.primaryMuted)),
+            decoration: BoxDecoration(
+              color: t.primaryTint,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Icon(
+                LucideIcons.userPlus,
+                size: 17,
+                color: t.primaryMuted,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1440,14 +1632,30 @@ class _RecipientAddTemplate extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Save to contacts',
-                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13.5, letterSpacing: -0.3, height: 1.2)),
+                Text(
+                  'Save to contacts',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    letterSpacing: -0.3,
+                    height: 1.2,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(_short(address),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    softWrap: false,
-                    style: TextStyle(color: t.monoColor, fontFamily: 'monospace', fontSize: 11.5, letterSpacing: 0.3, height: 1.3)),
+                Text(
+                  _short(address),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: t.monoColor,
+                    fontFamily: 'monospace',
+                    fontSize: 11.5,
+                    letterSpacing: 0.3,
+                    height: 1.3,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1462,8 +1670,15 @@ class _RecipientAddTemplate extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: t.primaryTintBorder, width: 1),
               ),
-              child: Text('Save',
-                  style: TextStyle(color: c.primary, fontWeight: FontWeight.w700, fontSize: 12.5, letterSpacing: -0.2)),
+              child: Text(
+                'Save',
+                style: TextStyle(
+                  color: c.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  letterSpacing: -0.2,
+                ),
+              ),
             ),
           ),
         ],
@@ -1493,12 +1708,20 @@ class _RecipientLoadingLine extends StatelessWidget {
           SizedBox(
             width: 17,
             height: 17,
-            child: CircularProgressIndicator(strokeWidth: 2.5, color: t.primaryMuted),
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: t.primaryMuted,
+            ),
           ),
           const SizedBox(width: 12),
           Text(
             'Looking up address…',
-            style: TextStyle(color: t.labelColor, fontSize: 13, fontWeight: FontWeight.w500, letterSpacing: -0.2),
+            style: TextStyle(
+              color: t.labelColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -0.2,
+            ),
           ),
         ],
       ),
@@ -1509,10 +1732,14 @@ class _RecipientLoadingLine extends StatelessWidget {
 // ── Status banner ──────────────────────────────────────────────────────────────
 class _StatusBanner extends StatelessWidget {
   const _StatusBanner({
-    required this.t, required this.c,
-    required this.icon, required this.title,
+    required this.t,
+    required this.c,
+    required this.icon,
+    required this.title,
     this.subtitle,
-    required this.color, required this.tint, required this.border,
+    required this.color,
+    required this.tint,
+    required this.border,
     this.showSpinner = false,
   });
   final _ST t;
@@ -1538,8 +1765,11 @@ class _StatusBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (showSpinner)
-            SizedBox(height: 17, width: 17,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: color))
+            SizedBox(
+              height: 17,
+              width: 17,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+            )
           else if (icon != null)
             Icon(icon, size: 17, color: color),
           const SizedBox(width: 11),
@@ -1547,12 +1777,26 @@ class _StatusBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(subtitle!,
-                      style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w500, height: 1.4)),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -1566,8 +1810,12 @@ class _StatusBanner extends StatelessWidget {
 // ── Breakdown row ──────────────────────────────────────────────────────────────
 class _BreakdownRow extends StatelessWidget {
   const _BreakdownRow({
-    required this.icon, required this.label, required this.value,
-    required this.t, required this.c, this.muted = false,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.t,
+    required this.c,
+    this.muted = false,
   });
   final IconData icon;
   final String label;
@@ -1583,11 +1831,24 @@ class _BreakdownRow extends StatelessWidget {
         Icon(icon, size: 14, color: muted ? t.metaColor : t.labelColor),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(label,
-              style: TextStyle(color: muted ? t.metaColor : t.labelColor, fontSize: 12.5, fontWeight: FontWeight.w500)),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: muted ? t.metaColor : t.labelColor,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
-        Text(value,
-            style: TextStyle(color: muted ? t.labelColor : c.textPrimary, fontWeight: FontWeight.w700, fontSize: 12.5, letterSpacing: -0.2)),
+        Text(
+          value,
+          style: TextStyle(
+            color: muted ? t.labelColor : c.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12.5,
+            letterSpacing: -0.2,
+          ),
+        ),
       ],
     );
   }
@@ -1609,33 +1870,43 @@ class _ReviewSheetState extends State<_ReviewSheet> {
   bool _sending = false;
 
   String _short(String addr) => addr.length <= 16
-      ? addr : '${addr.substring(0, 8)}…${addr.substring(addr.length - 8)}';
+      ? addr
+      : '${addr.substring(0, 8)}…${addr.substring(addr.length - 8)}';
 
   Future<void> _confirm(SendVM vm, BuildContext ctx) async {
     if (_sending) return;
     setState(() => _sending = true);
     try {
-      final txHash = await vm.submit(memo: widget.memo.isEmpty ? null : widget.memo);
+      final txHash = await vm.submit(
+        memo: widget.memo.isEmpty ? null : widget.memo,
+      );
       if (!mounted) return;
       Navigator.pop(context);
       if (!ctx.mounted) return;
-      showAppAlert(ctx, type: AppAlertType.success,
-          title: 'Transaction Sent',
-          subtitle: 'Broadcast successfully',
-          primaryText: 'Copy TxID',
-          onPrimary: () async => Clipboard.setData(ClipboardData(text: txHash)));
+      showAppAlert(
+        ctx,
+        type: AppAlertType.success,
+        title: 'Transaction Sent',
+        subtitle: 'Broadcast successfully',
+        primaryText: 'Copy TxID',
+        onPrimary: () async => Clipboard.setData(ClipboardData(text: txHash)),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
-      showAppAlert(context, type: AppAlertType.error,
-          title: 'Transaction Failed', subtitle: e.toString());
+      showAppAlert(
+        context,
+        type: AppAlertType.error,
+        title: 'Transaction Failed',
+        subtitle: e.toString(),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final c  = AppColor.of(context);
-    final t  = _ST.of(context);
+    final c = AppColor.of(context);
+    final t = _ST.of(context);
     final vm = context.watch<SendVM>();
     final tokenStr = vm.isXlm ? 'XLM' : 'USDC';
     final numFmt = NumberFormat('#,##0.######');
@@ -1643,15 +1914,18 @@ class _ReviewSheetState extends State<_ReviewSheet> {
     return AnimatedPadding(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: t.cardBg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           boxShadow: [
             BoxShadow(
-              color: t.isDark ? const Color(0x66000000) : const Color(0x20000000),
-              blurRadius: 40, offset: const Offset(0, -8),
+              color: c.textPrimary.withValues(alpha: t.isDark ? 0.24 : 0.10),
+              blurRadius: 40,
+              offset: const Offset(0, -8),
             ),
           ],
         ),
@@ -1662,7 +1936,8 @@ class _ReviewSheetState extends State<_ReviewSheet> {
             children: [
               // ── Drag handle ──
               Container(
-                width: 32, height: 3,
+                width: 32,
+                height: 3,
                 margin: const EdgeInsets.only(top: 12, bottom: 22),
                 decoration: BoxDecoration(
                   color: t.chipBorder,
@@ -1680,12 +1955,22 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                       children: [
                         Text(
                           'CONFIRM',
-                          style: TextStyle(color: t.labelColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                          style: TextStyle(
+                            color: t.labelColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Transaction',
-                          style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.8),
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.8,
+                          ),
                         ),
                       ],
                     ),
@@ -1717,7 +2002,12 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                         children: [
                           Text(
                             'SENDING',
-                            style: TextStyle(color: t.labelColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1),
+                            style: TextStyle(
+                              color: t.labelColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(
@@ -1758,41 +2048,89 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   children: [
                     _ReviewSection(
-                      t: t, c: c,
+                      t: t,
+                      c: c,
                       children: [
-                        _ReviewRow(t: t, c: c, label: 'From',
-                            value: _short(vm.senderAddress), icon: LucideIcons.userCircle),
-                        Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 10), color: t.dividerColor),
-                        _ReviewRow(t: t, c: c,
-                            label: widget.recipientName != null ? 'To · ${widget.recipientName}' : 'To',
-                            value: _short(vm.to), icon: LucideIcons.target),
+                        _ReviewRow(
+                          t: t,
+                          c: c,
+                          label: 'From',
+                          value: _short(vm.senderAddress),
+                          icon: LucideIcons.userCircle,
+                        ),
+                        Container(
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(vertical: 10),
+                          color: t.dividerColor,
+                        ),
+                        _ReviewRow(
+                          t: t,
+                          c: c,
+                          label: widget.recipientName != null
+                              ? 'To · ${widget.recipientName}'
+                              : 'To',
+                          value: _short(vm.to),
+                          icon: LucideIcons.target,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
                     _ReviewSection(
-                      t: t, c: c,
+                      t: t,
+                      c: c,
                       children: [
-                        _ReviewRow(t: t, c: c, label: 'Network fee',
-                            value: '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
-                            icon: LucideIcons.zap),
+                        _ReviewRow(
+                          t: t,
+                          c: c,
+                          label: 'Network fee',
+                          value:
+                              '${(vm.estNetworkFeeXlm ?? 0).toStringAsFixed(7)} XLM',
+                          icon: LucideIcons.zap,
+                        ),
                         if (vm.isXlm) ...[
-                          Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 10), color: t.dividerColor),
-                          _ReviewRow(t: t, c: c, label: 'Total deducted',
-                              value: '${numFmt.format(vm.totalDeductFromBalance)} XLM',
-                              icon: LucideIcons.minusCircle),
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(vertical: 10),
+                            color: t.dividerColor,
+                          ),
+                          _ReviewRow(
+                            t: t,
+                            c: c,
+                            label: 'Total deducted',
+                            value:
+                                '${numFmt.format(vm.totalDeductFromBalance)} XLM',
+                            icon: LucideIcons.minusCircle,
+                          ),
                         ],
-                        Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 10), color: t.dividerColor),
-                        _ReviewRow(t: t, c: c, label: 'Remaining after send',
-                            value: '${numFmt.format(vm.remainingExpendable)} $tokenStr',
-                            icon: LucideIcons.wallet, muted: true),
+                        Container(
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(vertical: 10),
+                          color: t.dividerColor,
+                        ),
+                        _ReviewRow(
+                          t: t,
+                          c: c,
+                          label: 'Remaining after send',
+                          value:
+                              '${numFmt.format(vm.remainingExpendable)} $tokenStr',
+                          icon: LucideIcons.wallet,
+                          muted: true,
+                        ),
                       ],
                     ),
                     if (widget.memo.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       _ReviewSection(
-                        t: t, c: c,
+                        t: t,
+                        c: c,
                         children: [
-                          _ReviewRow(t: t, c: c, label: 'Memo', value: widget.memo, icon: LucideIcons.messageSquare),
+                          _ReviewRow(
+                            t: t,
+                            c: c,
+                            label: 'Memo',
+                            value: widget.memo,
+                            icon: LucideIcons.messageSquare,
+                          ),
                         ],
                       ),
                     ],
@@ -1808,50 +2146,83 @@ class _ReviewSheetState extends State<_ReviewSheet> {
                   children: [
                     Expanded(
                       child: AppOutlinedButton(
-                        onPressed: _sending ? null : () => Navigator.pop(context),
+                        onPressed: _sending
+                            ? null
+                            : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           side: BorderSide(color: t.chipBorder, width: 1.5),
                           foregroundColor: c.textSecondary,
                         ),
-                        child: const Text('Cancel',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.2)),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14.5,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       flex: 2,
                       child: AppElevatedButton(
-                        onPressed: _sending ? null : () => _confirm(vm, context),
+                        onPressed: _sending
+                            ? null
+                            : () => _confirm(vm, context),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                           backgroundColor: c.primary,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColor.of(context).onPrimary,
                           disabledBackgroundColor: t.chipBg,
                           elevation: 0,
                         ),
                         child: _sending
                             ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 17, width: 17,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
-                            const SizedBox(width: 12),
-                            Text('Sending…',
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.2, color: Colors.white)),
-                          ],
-                        )
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    height: 17,
+                                    width: 17,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColor.of(context).onPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Sending…',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14.5,
+                                      letterSpacing: -0.2,
+                                      color: AppColor.of(context).onPrimary,
+                                    ),
+                                  ),
+                                ],
+                              )
                             : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(LucideIcons.checkCircle, size: 17),
-                            SizedBox(width: 10),
-                            Text('Confirm Send',
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, letterSpacing: -0.2)),
-                          ],
-                        ),
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(LucideIcons.checkCircle, size: 17),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'Confirm Send',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14.5,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
                   ],
@@ -1866,7 +2237,11 @@ class _ReviewSheetState extends State<_ReviewSheet> {
 }
 
 class _ReviewSection extends StatelessWidget {
-  const _ReviewSection({required this.t, required this.c, required this.children});
+  const _ReviewSection({
+    required this.t,
+    required this.c,
+    required this.children,
+  });
   final _ST t;
   final AppColor c;
   final List<Widget> children;
@@ -1887,8 +2262,12 @@ class _ReviewSection extends StatelessWidget {
 
 class _ReviewRow extends StatelessWidget {
   const _ReviewRow({
-    required this.t, required this.c,
-    required this.label, required this.value, required this.icon, this.muted = false,
+    required this.t,
+    required this.c,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.muted = false,
   });
   final _ST t;
   final AppColor c;
@@ -1908,11 +2287,26 @@ class _ReviewRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: TextStyle(color: t.metaColor, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.3, height: 1)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: t.metaColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                  height: 1,
+                ),
+              ),
               const SizedBox(height: 4),
-              SelectableText(value,
-                  style: TextStyle(color: muted ? t.labelColor : c.textPrimary, fontWeight: FontWeight.w600, fontSize: 13.5, letterSpacing: -0.2)),
+              SelectableText(
+                value,
+                style: TextStyle(
+                  color: muted ? t.labelColor : c.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13.5,
+                  letterSpacing: -0.2,
+                ),
+              ),
             ],
           ),
         ),
@@ -1928,7 +2322,8 @@ class _ReviewRow extends StatelessWidget {
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
   @override
-  Widget build(BuildContext context) => const PageLoader(label: 'Loading wallet…');
+  Widget build(BuildContext context) =>
+      const PageLoader(label: 'Loading wallet…');
 }
 
 class _ErrorState extends StatelessWidget {
@@ -1947,27 +2342,57 @@ class _ErrorState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(color: t.errorTint, borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: t.errorBorder, width: 1)),
-              child: Center(child: Icon(LucideIcons.alertTriangle, size: 28, color: c.error)),
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: t.errorTint,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: t.errorBorder, width: 1),
+              ),
+              child: Center(
+                child: Icon(
+                  LucideIcons.alertTriangle,
+                  size: 28,
+                  color: c.error,
+                ),
+              ),
             ),
             const SizedBox(height: 22),
-            Text('Unable to Load',
-                style: TextStyle(color: c.textPrimary, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            Text(
+              'Unable to Load',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center,
-                style: TextStyle(color: t.labelColor, fontSize: 13.5, height: 1.55, letterSpacing: -0.2)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: t.labelColor,
+                fontSize: 13.5,
+                height: 1.55,
+                letterSpacing: -0.2,
+              ),
+            ),
             const SizedBox(height: 26),
             AppElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(LucideIcons.refreshCw, size: 17),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 15,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 backgroundColor: c.primary,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColor.of(context).onPrimary,
                 elevation: 0,
               ),
             ),

@@ -21,7 +21,7 @@ void showReserveBalanceModal(
 
   showModalBottomSheet(
     context: context,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     isScrollControlled: true,
     builder: (context) => Container(
       decoration: BoxDecoration(
@@ -62,15 +62,11 @@ void showReserveBalanceModal(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  colors.primary.withOpacity(isDark ? 0.12 : 0.08),
-                  colors.primary.withOpacity(isDark ? 0.08 : 0.04),
+                  colors.primary.withValues(alpha: isDark ? 0.12 : 0.08),
+                  colors.primary.withValues(alpha: isDark ? 0.08 : 0.04),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: colors.primary.withOpacity(0.2),
-                width: 1,
-              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,7 +76,7 @@ void showReserveBalanceModal(
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: colors.primary.withOpacity(0.15),
+                        color: colors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
@@ -135,7 +131,7 @@ void showReserveBalanceModal(
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: colors.textSecondary.withOpacity(0.1),
+                        color: colors.textSecondary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
@@ -175,7 +171,7 @@ void showReserveBalanceModal(
                 ),
                 const SizedBox(height: 12),
                 Divider(
-                  color: colors.border.withOpacity(0.2),
+                  color: colors.border.withValues(alpha: 0.2),
                   height: 1,
                 ),
                 const SizedBox(height: 12),
@@ -213,7 +209,7 @@ void showReserveBalanceModal(
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: colors.primary.withOpacity(0.7),
+                        color: colors.primary.withValues(alpha: 0.7),
                         letterSpacing: -0.1,
                       ),
                     ),
@@ -229,12 +225,8 @@ void showReserveBalanceModal(
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
+              color: colors.background.withValues(alpha: isDark ? 0.24 : 0.52),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: colors.border.withOpacity(isDark ? 0.1 : 0.08),
-                width: 1,
-              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,12 +278,8 @@ void showReserveBalanceModal(
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: colors.primary.withOpacity(0.08),
+              color: colors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: colors.primary.withOpacity(0.15),
-                width: 1,
-              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,7 +423,7 @@ class _SlimReserveRow extends StatelessWidget {
         Icon(
           icon,
           size: 13,
-          color: colors.textSecondary.withOpacity(0.7),
+          color: colors.textSecondary.withValues(alpha: 0.7),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -464,7 +452,7 @@ class _SlimReserveRow extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
-            color: colors.textSecondary.withOpacity(0.6),
+            color: colors.textSecondary.withValues(alpha: 0.6),
             letterSpacing: -0.1,
           ),
         ),

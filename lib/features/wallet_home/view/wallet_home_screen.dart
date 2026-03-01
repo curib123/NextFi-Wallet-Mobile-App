@@ -70,7 +70,7 @@ class _ChatFloatingButton extends StatelessWidget {
           tooltip: 'Messenger',
           elevation: 0,
           backgroundColor: colors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColor.of(context).onPrimary,
           child: const Icon(Icons.chat_bubble_outline_rounded, size: 22),
         ),
         if (unreadCount > 0)
@@ -83,13 +83,16 @@ class _ChatFloatingButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.error,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white, width: 1.6),
+                border: Border.all(
+                  color: AppColor.of(context).onPrimary,
+                  width: 1.6,
+                ),
               ),
               alignment: Alignment.center,
               child: Text(
                 badgeText,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: AppColor.of(context).onPrimary,
                   fontSize: 10.3,
                   fontWeight: FontWeight.w800,
                   height: 1.0,
@@ -124,7 +127,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   StreamSubscription<WalletHomeUiEvent>? _uiSub;
   Timer? _chatRefreshTimer;
   int _unreadChatCount = 0;
-  String? _walletSavePromptAddress;
+  String? _walletAutoSavedAddress;
 
   // First open: no counting animation; enabled only after the FIRST ready has passed.
   bool _animateTotal = false;
@@ -471,14 +474,14 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     }
   }
 
-  Future<void> _maybePromptToSaveActiveWalletAddress() async {
+  Future<void> _autoSaveActiveWalletAddressIfMissing() async {
     if (!mounted) return;
 
     final vm = context.read<WalletHomeVM>();
     final address = (vm.state.address ?? '').trim();
     if (address.isEmpty) return;
 
-    if (_walletSavePromptAddress == address) return;
+    if (_walletAutoSavedAddress == address) return;
 
     final authenticated = await _auth.isAuthenticated;
     if (!mounted) return;
@@ -493,66 +496,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
     if (!mounted) return;
 
     if (existsInBackend) {
-      _walletSavePromptAddress = address;
+      _walletAutoSavedAddress = address;
       return;
     }
 
-    _walletSavePromptAddress = address;
     final label = (vm.state.walletName ?? '').trim();
-
-    showAppAlert(
-      context,
-      type: AppAlertType.warning,
-      title: 'Wallet Not Saved',
-      subtitle:
-          'This wallet address is not saved to your account. Save it now?',
-      primaryText: 'Save Wallet',
-      barrierDismissible: true,
-      onPrimary: () {
-        unawaited(
-          _saveActiveWalletAddressToBackend(
-            address: address,
-            label: label.isEmpty ? null : label,
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _saveActiveWalletAddressToBackend({
-    required String address,
-    String? label,
-  }) async {
-    if (!mounted) return;
-
-    final ctl = showAppAlert(
-      context,
-      type: AppAlertType.loading,
-      title: 'Saving Wallet',
-      subtitle: 'Adding this address to your account...',
-      barrierDismissible: false,
-    );
 
     try {
       await WalletManager.I.saveAddressIfMissing(
         publicAddress: address,
-        label: label,
+        label: label.isEmpty ? null : label,
       );
-      if (!mounted) return;
-      ctl.update(
-        AppAlertType.success,
-        title: 'Wallet Saved',
-        subtitle: 'Your wallet address is now linked to this account.',
-        primaryText: 'Done',
-      );
+      _walletAutoSavedAddress = address;
     } catch (_) {
-      if (!mounted) return;
-      ctl.update(
-        AppAlertType.error,
-        title: 'Save Failed',
-        subtitle: 'Could not save this wallet address. Try again later.',
-        primaryText: 'Close',
-      );
+      // Silent best-effort; we'll retry on next wallet/home refresh.
     }
   }
 
@@ -640,7 +597,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
   void _onUiEvent(WalletHomeUiEvent e) async {
     if (!mounted) return;
 
-    SnackBarType _mapSeverity(UiSeverity s) {
+    SnackBarType mapSeverity(UiSeverity s) {
       switch (s) {
         case UiSeverity.success:
           return SnackBarType.success;
@@ -691,7 +648,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
       showFloatingSnackBar(
         context,
         message: e.message,
-        type: _mapSeverity(e.severity),
+        type: mapSeverity(e.severity),
       );
       return;
     }
@@ -732,7 +689,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
         _animateTotal = _shownInitialTotal;
         _shownInitialTotal = true;
       });
-      unawaited(_maybePromptToSaveActiveWalletAddress());
+      unawaited(_autoSaveActiveWalletAddressIfMissing());
 
       return;
     }

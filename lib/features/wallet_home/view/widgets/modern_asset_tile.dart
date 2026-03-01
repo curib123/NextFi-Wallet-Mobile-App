@@ -55,7 +55,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     );
     _scaleAnimation = Tween<double>(
       begin: 1.0,
-      end: 0.985,
+      end: 0.986,
     ).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
   }
 
@@ -85,6 +85,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     final trendUp = widget.priceDelta >= 0;
     final trendColor = trendUp ? widget.colors.success : widget.colors.error;
     final symbol = widget.asset.symbol.toUpperCase();
+    final pctColor = widget.pct >= 0 ? widget.colors.success : widget.colors.error;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -100,20 +101,19 @@ class _ModernAssetTileState extends State<ModernAssetTile>
             curve: Curves.easeOut,
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
             decoration: BoxDecoration(
-              color: _isPressed
-                  ? widget.colors.background
-                  : widget.colors.surface,
+              color: _isPressed ? widget.colors.background : widget.colors.surface,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: widget.colors.border, width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
+                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.045),
                   blurRadius: _isPressed ? 4 : 10,
                   offset: Offset(0, _isPressed ? 1 : 3),
                 ),
               ],
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _AssetLogo(
                   url: widget.logoUrl,
@@ -124,29 +124,47 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '${widget.formatTokenAmount(widget.balance)} $symbol',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: widget.colors.textPrimary,
-                          letterSpacing: -0.25,
-                          height: 1.15,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          Flexible(
+                          Expanded(
                             child: Text(
-                              widget.asset.name,
+                              symbol,
                               style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: widget.colors.textSecondary,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: widget.colors.textPrimary,
+                                letterSpacing: -0.15,
+                                height: 1.1,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            widget.asset.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: widget.colors.textSecondary,
+                              letterSpacing: -0.05,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${widget.formatTokenAmount(widget.balance)} $symbol',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: widget.colors.textPrimary,
                                 letterSpacing: -0.1,
                               ),
                               maxLines: 1,
@@ -162,78 +180,64 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                      const SizedBox(height: 6),
+                      Text(
+                        '${widget.money.format(widget.coinPriceNow)} / $symbol',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: widget.colors.textSecondary,
+                          letterSpacing: -0.05,
                         ),
-                        decoration: BoxDecoration(
-                          color: widget.colors.background,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: widget.colors.border,
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          '${widget.money.format(widget.coinPriceNow)} / $symbol',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: widget.colors.textSecondary,
-                            letterSpacing: -0.1,
-                          ),
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      widget.money.format(widget.fiatNow),
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: widget.colors.textPrimary,
-                        letterSpacing: -0.3,
-                        height: 1.1,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    _PctBadge(pct: widget.pct, color: widget.colors.success),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: widget.colors.background,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: trendColor, width: 1),
-                      ),
-                      child: Text(
-                        widget.formatSignedMoney(
-                          widget.money,
-                          widget.priceDelta,
-                        ),
+                Container(
+                  width: 1,
+                  height: 44,
+                  color: widget.colors.border.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 94, maxWidth: 118),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.money.format(widget.fiatNow),
+                        textAlign: TextAlign.right,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 16.5,
                           fontWeight: FontWeight.w800,
-                          color: trendColor,
-                          letterSpacing: -0.15,
+                          color: widget.colors.textPrimary,
+                          letterSpacing: -0.25,
+                          height: 1.05,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 7),
+                      _PctBadge(pct: widget.pct, color: pctColor),
+                      const SizedBox(height: 5),
+                      Text(
+                        widget.formatSignedMoney(widget.money, widget.priceDelta),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: trendColor,
+                          letterSpacing: -0.05,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -260,17 +264,17 @@ class _AssetLogo extends StatelessWidget {
     final fallback = Container(
       decoration: BoxDecoration(
         color: colors.background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(11),
         border: Border.all(color: colors.border, width: 1),
       ),
       child: Icon(LucideIcons.coins, size: 22, color: colors.primary),
     );
 
     return SizedBox(
-      width: 48,
-      height: 48,
+      width: 44,
+      height: 44,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(11),
         child: (url == null || url!.isEmpty)
             ? fallback
             : Hero(
@@ -315,31 +319,13 @@ class _PctBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final up = pct >= 0;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
+    return Text(
+      '${up ? '+' : '-'}${pct.abs().toStringAsFixed(2)}%',
+      style: TextStyle(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
         color: color,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            up ? LucideIcons.trendingUp : LucideIcons.trendingDown,
-            size: 12,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${pct.abs().toStringAsFixed(2)}%',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -0.1,
-            ),
-          ),
-        ],
+        letterSpacing: -0.05,
       ),
     );
   }
@@ -354,20 +340,22 @@ class _TypeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(6),
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          fontSize: 8,
-          fontWeight: FontWeight.w900,
-          color: Colors.white,
-          letterSpacing: 0.35,
+        style: TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+          color: color,
+          letterSpacing: 0.15,
           height: 1.0,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

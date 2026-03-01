@@ -557,7 +557,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         preferredSize: const Size.fromHeight(1),
         child: Container(
           height: 1,
-          color: AppColor.of(context).border.withOpacity(0.15),
+          color: AppColor.of(context).border.withValues(alpha: 0.15),
         ),
       ),
     );
@@ -574,7 +574,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: c.error.withOpacity(0.08),
+                color: c.error.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.wifi_off_rounded, color: c.error, size: 28),
@@ -625,7 +625,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-            color: c.error.withOpacity(0.07),
+            color: c.error.withValues(alpha: 0.07),
             child: Text(
               _socketError!,
               style: TextStyle(color: c.error, fontSize: 11.5),
@@ -652,7 +652,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-      color: color.withOpacity(0.08),
+      color: color.withValues(alpha: 0.08),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -684,13 +684,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           Icon(
             Icons.lock_rounded,
             size: 11,
-            color: c.textSecondary.withOpacity(0.5),
+            color: c.textSecondary.withValues(alpha: 0.5),
           ),
           const SizedBox(width: 4),
           Text(
             'End-to-end encrypted',
             style: TextStyle(
-              color: c.textSecondary.withOpacity(0.6),
+              color: c.textSecondary.withValues(alpha: 0.6),
               fontSize: 11.5,
             ),
           ),
@@ -708,13 +708,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.08),
+              color: c.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.lock_rounded,
               size: 28,
-              color: c.primary.withOpacity(0.6),
+              color: c.primary.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 14),
@@ -781,7 +781,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.22),
+                  color: c.border.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
@@ -840,7 +840,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: c.textPrimary.withValues(alpha: 0.05),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
@@ -849,7 +849,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         child: Text(
                           text,
                           style: TextStyle(
-                            color: mine ? Colors.white : c.textPrimary,
+                            color: mine ? c.onPrimary : c.textPrimary,
                             fontSize: 14,
                             height: 1.38,
                           ),
@@ -864,7 +864,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             Text(
                               timestamp,
                               style: TextStyle(
-                                color: c.textSecondary.withOpacity(0.65),
+                                color: c.textSecondary.withValues(alpha: 0.65),
                                 fontSize: 10.5,
                               ),
                             ),
@@ -876,7 +876,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     : Icons.done_all_rounded,
                                 size: 13,
                                 color: pending
-                                    ? c.textSecondary.withOpacity(0.6)
+                                    ? c.textSecondary.withValues(alpha: 0.6)
                                     : c.primary,
                               ),
                             ],
@@ -901,7 +901,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border(top: BorderSide(color: c.border.withOpacity(0.15))),
+        border: Border(top: BorderSide(color: c.border.withValues(alpha: 0.15))),
       ),
       child: SafeArea(
         top: false,
@@ -916,7 +916,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 decoration: BoxDecoration(
                   color: c.background,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: c.border.withOpacity(0.25)),
+                  border: Border.all(color: c.border.withValues(alpha: 0.25)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -931,7 +931,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         decoration: InputDecoration(
                           hintText: 'Message…',
                           hintStyle: TextStyle(
-                            color: c.textSecondary.withOpacity(0.6),
+                            color: c.textSecondary.withValues(alpha: 0.6),
                             fontSize: 14,
                           ),
                           border: InputBorder.none,
@@ -946,7 +946,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     Icon(
                       Icons.lock_outline_rounded,
                       size: 13,
-                      color: c.textSecondary.withOpacity(0.35),
+                      color: c.textSecondary.withValues(alpha: 0.35),
                     ),
                   ],
                 ),
@@ -961,13 +961,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               height: 44,
               decoration: BoxDecoration(
                 color: _inputHasText
-                    ? (_sending ? c.primary.withOpacity(0.6) : c.primary)
-                    : c.primary.withOpacity(0.15),
+                    ? (_sending ? c.primary.withValues(alpha: 0.6) : c.primary)
+                    : c.primary.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
                 boxShadow: _inputHasText
                     ? [
                         BoxShadow(
-                          color: c.primary.withOpacity(0.3),
+                          color: c.primary.withValues(alpha: 0.3),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -983,14 +983,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: c.onPrimary,
                           ),
                         )
                       : Icon(
                           Icons.send_rounded,
                           color: _inputHasText
-                              ? Colors.white
-                              : c.primary.withOpacity(0.5),
+                              ? c.onPrimary
+                              : c.primary.withValues(alpha: 0.5),
                           size: 18,
                         ),
                 ),

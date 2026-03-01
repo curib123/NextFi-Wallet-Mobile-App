@@ -49,7 +49,7 @@ class LineChartPainter extends CustomPainter {
     final shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [color.withOpacity(0.25), color.withOpacity(0.04), color.withOpacity(0.0)],
+      colors: [color.withValues(alpha: 0.25), color.withValues(alpha: 0.04), color.withValues(alpha: 0.0)],
       stops: const [0.0, 0.6, 1.0],
     ).createShader(Offset.zero & size);
 

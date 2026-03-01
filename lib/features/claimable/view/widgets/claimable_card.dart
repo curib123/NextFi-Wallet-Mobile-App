@@ -65,7 +65,7 @@ class _ClaimableCardState extends State<ClaimableCard> {
 
   bool get _hasSavedName => _recipient != null && _recipient!.name.isNotEmpty;
   Color get _recipientColor =>
-      _recipient != null ? Color(_recipient!.color) : Colors.grey;
+      _recipient != null ? Color(_recipient!.color) : AppColor.of(context).textSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -82,10 +82,10 @@ class _ClaimableCardState extends State<ClaimableCard> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isExpired
-              ? c.error.withOpacity(0.15)
+              ? c.error.withValues(alpha: 0.15)
               : widget.item.canClaimNow
-              ? c.primary.withOpacity(0.15)
-              : c.border.withOpacity(0.1),
+              ? c.primary.withValues(alpha: 0.15)
+              : c.border.withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -95,13 +95,13 @@ class _ClaimableCardState extends State<ClaimableCard> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: widget.item.canClaimNow
-                  ? c.primary.withOpacity(0.1)
+                  ? c.primary.withValues(alpha: 0.1)
                   : c.surface,
               shape: BoxShape.circle,
               border: Border.all(
                 color: widget.item.canClaimNow
-                    ? c.primary.withOpacity(0.2)
-                    : c.border.withOpacity(0.15),
+                    ? c.primary.withValues(alpha: 0.2)
+                    : c.border.withValues(alpha: 0.15),
                 width: 1,
               ),
             ),
@@ -154,7 +154,7 @@ class _ClaimableCardState extends State<ClaimableCard> {
                         width: 16,
                         height: 16,
                         decoration: BoxDecoration(
-                          color: _recipientColor.withOpacity(0.15),
+                          color: _recipientColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Center(
@@ -234,9 +234,9 @@ class _ClaimableCardState extends State<ClaimableCard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -336,7 +336,7 @@ class _ClaimableCardState extends State<ClaimableCard> {
           onPressed: widget.onClaim,
           style: ElevatedButton.styleFrom(
             backgroundColor: c.primary,
-            foregroundColor: Colors.white,
+            foregroundColor: c.onPrimary,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             shape: RoundedRectangleBorder(

@@ -11,7 +11,6 @@ import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
 import 'widgets/glass_card.dart';
-import 'widgets/conic_ring_avatar.dart';
 import 'widgets/shimmer_text.dart';
 import 'widgets/fintech_background.dart';
 
@@ -28,7 +27,7 @@ class _WalletCreationScreenState
     extends State<WalletCreationScreen>
     with SingleTickerProviderStateMixin {
 
-  static const _logoAsset = 'assets/icon/ic_stat_notification.png';
+  static const _logoAsset = 'assets/icon/icon.png';
 
   /// ✅ REAL APP INFO
   String _appName = '';
@@ -136,15 +135,13 @@ class _WalletCreationScreenState
                                     children: [
 
                                       /// Logo
-                                      ConicRingAvatar(
-                                        size: 112,
-                                        ringWidth: 3,
-                                        asset: _logoAsset,
-                                        imageSize: 96,
-                                        baseColor:
-                                        colors.primary,
-                                        rotationTurns:
-                                        _bgCtrl.value,
+                                      Image.asset(
+                                        _logoAsset,
+                                        width: 96,
+                                        height: 96,
+                                        fit: BoxFit.contain,
+                                        filterQuality:
+                                        FilterQuality.high,
                                       ),
 
                                       const SizedBox(

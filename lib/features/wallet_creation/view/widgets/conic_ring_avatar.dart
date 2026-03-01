@@ -72,9 +72,9 @@ class _ConicRingPainter extends CustomPainter {
       startAngle: 0,
       endAngle: math.pi * 2,
       colors: [
-        color.withOpacity(.95),
-        color.withOpacity(.25),
-        color.withOpacity(.95),
+        color.withValues(alpha: .95),
+        color.withValues(alpha: .25),
+        color.withValues(alpha: .95),
       ],
       stops: const [0.0, 0.5, 1.0],
       transform: GradientRotation(rotationTurns * math.pi * 2),
@@ -90,7 +90,7 @@ class _ConicRingPainter extends CustomPainter {
     final inner = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = color.withOpacity(.15);
+      ..color = color.withValues(alpha: .15);
 
     canvas.drawCircle(center, radius - strokeWidth / 2 - 1, inner);
   }

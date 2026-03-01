@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class IncomingChipData {
   IncomingChipData({
@@ -31,12 +32,12 @@ class IncomingChipBadge extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: chip.color.withOpacity(0.12),
+        color: chip.color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: chip.color.withOpacity(0.35)),
+        border: Border.all(color: chip.color.withValues(alpha: 0.35)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: AppColor.of(context).textPrimary.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),

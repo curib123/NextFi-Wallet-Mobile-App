@@ -5,7 +5,7 @@ Widget buildTabBar(AppColor colors) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     child: TabBar(
-      dividerColor: Colors.transparent,
+      dividerColor: colors.surface.withValues(alpha: 0),
       indicator: const BoxDecoration(),
       labelColor: colors.primary,
       unselectedLabelColor: colors.textSecondary,

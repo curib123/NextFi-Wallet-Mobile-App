@@ -12,7 +12,7 @@ class DeltaPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
     final clr = up ? c.primary : c.error;
-    final bg  = clr.withOpacity(0.12);
+    final bg  = clr.withValues(alpha: 0.12);
     final icon = up ? LucideIcons.trendingUp : LucideIcons.trendingDown;
 
     return Container(
@@ -20,7 +20,7 @@ class DeltaPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: clr.withOpacity(0.3)),
+        border: Border.all(color: clr.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

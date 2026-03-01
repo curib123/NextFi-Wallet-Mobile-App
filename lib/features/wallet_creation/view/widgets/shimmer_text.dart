@@ -44,7 +44,7 @@ class _ShimmerTextState extends State<ShimmerText>
               end: Alignment.centerRight,
               colors: [
                 widget.baseColor,
-                widget.highlightColor.withOpacity(.95),
+                widget.highlightColor.withValues(alpha: .95),
                 widget.baseColor,
               ],
               stops: const [0.35, 0.5, 0.65],

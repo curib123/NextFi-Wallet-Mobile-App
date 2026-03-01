@@ -438,7 +438,7 @@ class _TradeCardState extends State<_TradeCard>
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
+                color: c.textPrimary.withValues(alpha: 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 2),
               ),
@@ -599,7 +599,7 @@ class _StatusPill extends StatelessWidget {
           width: 5,
           height: 5,
           decoration: BoxDecoration(
-            color: isActive ? color : Colors.white,
+            color: isActive ? color : c.onPrimary,
             shape: BoxShape.circle,
           ),
         ),
@@ -607,7 +607,7 @@ class _StatusPill extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: isActive ? color : Colors.white,
+            color: isActive ? color : c.onPrimary,
             fontSize: 10.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.1,
@@ -734,10 +734,10 @@ class _ErrorState extends StatelessWidget {
                 color: c.primary,
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Text(
+              child: Text(
                 'Try again',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: c.onPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
                   letterSpacing: -0.2,

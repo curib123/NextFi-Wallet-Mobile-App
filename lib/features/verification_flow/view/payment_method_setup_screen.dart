@@ -403,9 +403,9 @@ class _StepHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.05),
+        color: c.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.primary.withOpacity(0.12)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
@@ -413,10 +413,10 @@ class _StepHero extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
+              color: c.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
               border:
-              Border.all(color: c.primary.withOpacity(0.2), width: 1.5),
+              Border.all(color: c.primary.withValues(alpha: 0.2), width: 1.5),
             ),
             child: Icon(
               Icons.account_balance_wallet_outlined,
@@ -473,7 +473,7 @@ class _SectionLabel extends StatelessWidget {
       style: TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w700,
-        color: c.textSecondary.withOpacity(0.6),
+        color: c.textSecondary.withValues(alpha: 0.6),
         letterSpacing: 1.0,
       ),
     );
@@ -503,7 +503,7 @@ class _EmptyCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.22)),
+        border: Border.all(color: c.border.withValues(alpha: 0.22)),
       ),
       child: Row(
         children: [
@@ -511,13 +511,13 @@ class _EmptyCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: c.border.withOpacity(0.07),
+              color: c.border.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               size: 17,
-              color: c.textSecondary.withOpacity(0.45),
+              color: c.textSecondary.withValues(alpha: 0.45),
             ),
           ),
           const SizedBox(width: 12),
@@ -572,7 +572,7 @@ class _MethodLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.08),
+        color: c.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(size * 0.28),
       ),
       child: logo != null && logo.isNotEmpty
@@ -592,7 +592,7 @@ class _MethodLogo extends StatelessWidget {
               height: size * 0.38,
               child: CircularProgressIndicator(
                 strokeWidth: 1.5,
-                color: c.primary.withOpacity(0.35),
+                color: c.primary.withValues(alpha: 0.35),
               ),
             ),
           ),
@@ -632,9 +632,9 @@ class _MethodInfoCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.04),
+        color: c.primary.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: c.primary.withOpacity(0.14), width: 1.2),
+        border: Border.all(color: c.primary.withValues(alpha: 0.14), width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,7 +659,7 @@ class _MethodInfoCard extends StatelessWidget {
                     Text(
                       method.code,
                       style: TextStyle(
-                        color: c.primary.withOpacity(0.7),
+                        color: c.primary.withValues(alpha: 0.7),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.4,
@@ -718,7 +718,7 @@ class _InfoRow extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: 1),
           child:
-          Icon(icon, size: 13.5, color: c.primary.withOpacity(0.55)),
+          Icon(icon, size: 13.5, color: c.primary.withValues(alpha: 0.55)),
         ),
         const SizedBox(width: 7),
         Expanded(
@@ -759,7 +759,7 @@ class _Divider extends StatelessWidget {
   Widget build(BuildContext context) => Divider(
     height: 1,
     thickness: 1,
-    color: c.primary.withOpacity(0.08),
+    color: c.primary.withValues(alpha: 0.08),
   );
 }
 
@@ -799,7 +799,7 @@ class _MethodDropdown extends StatelessWidget {
             color: c.surface,
             borderRadius: BorderRadius.circular(13),
             border:
-            Border.all(color: c.border.withOpacity(0.28), width: 1.2),
+            Border.all(color: c.border.withValues(alpha: 0.28), width: 1.2),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<PaymentMethodModel>(
@@ -820,7 +820,7 @@ class _MethodDropdown extends StatelessWidget {
               hint: Text(
                 'Select payment method',
                 style: TextStyle(
-                  color: c.textSecondary.withOpacity(0.5),
+                  color: c.textSecondary.withValues(alpha: 0.5),
                   fontSize: 13.5,
                 ),
               ),
@@ -989,7 +989,7 @@ class _AccountForm extends StatelessWidget {
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: c.border.withOpacity(0.22)),
+            border: Border.all(color: c.border.withValues(alpha: 0.22)),
           ),
           child: Row(
             children: [
@@ -1090,12 +1090,12 @@ class _AccountTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       decoration: BoxDecoration(
-        color: isActive ? c.primary.withOpacity(0.04) : c.surface,
+        color: isActive ? c.primary.withValues(alpha: 0.04) : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isActive
-              ? c.primary.withOpacity(0.25)
-              : c.border.withOpacity(0.22),
+              ? c.primary.withValues(alpha: 0.25)
+              : c.border.withValues(alpha: 0.22),
           width: isActive ? 1.5 : 1.2,
         ),
       ),
@@ -1129,8 +1129,8 @@ class _AccountTile extends StatelessWidget {
                         border: Border.all(
                             color: c.background, width: 1.5),
                       ),
-                      child: const Icon(Icons.check,
-                          size: 8, color: Colors.white),
+                      child: Icon(Icons.check,
+                          size: 8, color: c.onPrimary),
                     ),
                   ),
               ],
@@ -1138,8 +1138,8 @@ class _AccountTile extends StatelessWidget {
                 : Container(
               decoration: BoxDecoration(
                 color: isActive
-                    ? c.primary.withOpacity(0.1)
-                    : c.border.withOpacity(0.07),
+                    ? c.primary.withValues(alpha: 0.1)
+                    : c.border.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -1149,7 +1149,7 @@ class _AccountTile extends StatelessWidget {
                 size: 18,
                 color: isActive
                     ? c.primary
-                    : c.textSecondary.withOpacity(0.35),
+                    : c.textSecondary.withValues(alpha: 0.35),
               ),
             ),
           ),
@@ -1185,7 +1185,7 @@ class _AccountTile extends StatelessWidget {
               padding:
               const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.1),
+                color: c.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -1204,15 +1204,15 @@ class _AccountTile extends StatelessWidget {
                 padding:
                 const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.07),
+                  color: c.border.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.border.withOpacity(0.2)),
+                  border: Border.all(color: c.border.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   settingActive ? '…' : 'Set Active',
                   style: TextStyle(
                     color: settingActive
-                        ? c.textSecondary.withOpacity(0.3)
+                        ? c.textSecondary.withValues(alpha: 0.3)
                         : c.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -1268,7 +1268,7 @@ class _FocusFieldState extends State<_FocusField> {
     final idleBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
       borderSide:
-      BorderSide(color: c.border.withOpacity(0.28), width: 1.2),
+      BorderSide(color: c.border.withValues(alpha: 0.28), width: 1.2),
     );
 
     return Focus(
@@ -1288,7 +1288,7 @@ class _FocusFieldState extends State<_FocusField> {
           widget.required ? '${widget.label} *' : widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.4),
+            color: c.textSecondary.withValues(alpha: 0.4),
             fontSize: 13.5,
           ),
           labelStyle: TextStyle(
@@ -1308,15 +1308,15 @@ class _FocusFieldState extends State<_FocusField> {
               size: 17,
               color: active
                   ? c.primary
-                  : c.textSecondary.withOpacity(0.5),
+                  : c.textSecondary.withValues(alpha: 0.5),
             ),
           ),
           prefixIconConstraints:
           const BoxConstraints(minWidth: 0, minHeight: 0),
           filled: true,
           fillColor: active
-              ? c.primary.withOpacity(0.03)
-              : c.border.withOpacity(0.05),
+              ? c.primary.withValues(alpha: 0.03)
+              : c.border.withValues(alpha: 0.05),
           contentPadding: EdgeInsets.symmetric(
             horizontal: 14,
             vertical: widget.multiline ? 14 : 0,
@@ -1327,7 +1327,7 @@ class _FocusFieldState extends State<_FocusField> {
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
             borderSide:
-            BorderSide(color: c.error.withOpacity(0.6), width: 1.2),
+            BorderSide(color: c.error.withValues(alpha: 0.6), width: 1.2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -1366,7 +1366,7 @@ class _CreateButton extends StatelessWidget {
             ? null
             : [
           BoxShadow(
-            color: c.primary.withOpacity(0.28),
+            color: c.primary.withValues(alpha: 0.28),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -1376,11 +1376,11 @@ class _CreateButton extends StatelessWidget {
         onPressed: saving ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: c.primary.withOpacity(0.5),
-          disabledForegroundColor: Colors.white70,
+          foregroundColor: c.onPrimary,
+          disabledBackgroundColor: c.primary.withValues(alpha: 0.5),
+          disabledForegroundColor: c.onPrimary,
           elevation: 0,
-          shadowColor: Colors.transparent,
+          shadowColor: c.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -1398,7 +1398,7 @@ class _CreateButton extends StatelessWidget {
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
                   valueColor:
-                  AlwaysStoppedAnimation(Colors.white70),
+                  AlwaysStoppedAnimation(c.onPrimary),
                 ),
               ),
               const SizedBox(width: 10),

@@ -165,7 +165,7 @@ class _IconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = color.withOpacity(0.12);
+    final bg = color.withValues(alpha: 0.12);
     return Container(
       width: size + 20,
       height: size + 20,

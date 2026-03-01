@@ -148,10 +148,10 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
                 onPressed: canContinue ? _continueFlow : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
-                      canContinue ? c.primary : c.border.withOpacity(0.15),
-                  foregroundColor: canContinue ? Colors.white : c.textSecondary,
-                  disabledBackgroundColor: c.border.withOpacity(0.12),
-                  disabledForegroundColor: c.textSecondary.withOpacity(0.5),
+                      canContinue ? c.primary : c.border.withValues(alpha: 0.15),
+                  foregroundColor: canContinue ? c.onPrimary : c.textSecondary,
+                  disabledBackgroundColor: c.border.withValues(alpha: 0.12),
+                  disabledForegroundColor: c.textSecondary.withValues(alpha: 0.5),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -234,7 +234,7 @@ class _HeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.25)),
+        border: Border.all(color: c.border.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,7 +244,7 @@ class _HeroCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.1),
+                  color: accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -291,7 +291,7 @@ class _HeroCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 6,
-              backgroundColor: c.border.withOpacity(0.2),
+              backgroundColor: c.border.withValues(alpha: 0.2),
               valueColor: AlwaysStoppedAnimation<Color>(accent),
             ),
           ),
@@ -390,9 +390,9 @@ class _StatusNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.07),
+        color: accent.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withOpacity(0.18)),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,7 +401,7 @@ class _StatusNotice extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.12),
+              color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: accent, size: 17),
@@ -463,9 +463,9 @@ class _StepTile extends StatelessWidget {
         ? c.success
         : isCurrent
             ? c.primary
-            : c.textSecondary.withOpacity(0.12);
-    final fgColor = (isDone || isCurrent) ? Colors.white : c.textSecondary;
-    final lineColor = (isDone ? c.success : c.textSecondary).withOpacity(0.25);
+            : c.textSecondary.withValues(alpha: 0.12);
+    final fgColor = (isDone || isCurrent) ? c.onPrimary : c.textSecondary;
+    final lineColor = (isDone ? c.success : c.textSecondary).withValues(alpha: 0.25);
 
     return IntrinsicHeight(
       child: Row(
@@ -483,7 +483,7 @@ class _StepTile extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: isDone
-                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 16)
+                      ? Icon(Icons.check_rounded, color: c.onPrimary, size: 16)
                       : Icon(icon, color: fgColor, size: 16),
                 ),
                 if (!isLast)
@@ -509,12 +509,12 @@ class _StepTile extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isCurrent ? c.primary.withOpacity(0.04) : c.surface,
+                  color: isCurrent ? c.primary.withValues(alpha: 0.04) : c.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isCurrent
-                        ? c.primary.withOpacity(0.22)
-                        : c.border.withOpacity(0.22),
+                        ? c.primary.withValues(alpha: 0.22)
+                        : c.border.withValues(alpha: 0.22),
                   ),
                 ),
                 child: Column(
@@ -572,7 +572,7 @@ class _ErrorState extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: c.error.withOpacity(0.08),
+                color: c.error.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.error_outline_rounded, color: c.error, size: 26),
@@ -609,3 +609,4 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
+

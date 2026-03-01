@@ -14,7 +14,7 @@ class AddressRow extends StatelessWidget {
     final c = AppColor.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(color: c.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: c.primary.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(14)),
       child: Row(
         children: [
           Icon(LucideIcons.wallet, size: 18, color: c.primary),

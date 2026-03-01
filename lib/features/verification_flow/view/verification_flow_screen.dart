@@ -252,7 +252,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: c.error.withOpacity(0.08),
+                color: c.error.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.wifi_off_rounded, color: c.error, size: 26),
@@ -401,10 +401,10 @@ class _StatusHeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.25)),
+        border: Border.all(color: c.border.withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: c.textPrimary.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -421,7 +421,7 @@ class _StatusHeroCard extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.1),
+                  color: accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -470,7 +470,7 @@ class _StatusHeroCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 6,
-              backgroundColor: c.border.withOpacity(0.2),
+              backgroundColor: c.border.withValues(alpha: 0.2),
               valueColor: AlwaysStoppedAnimation<Color>(accent),
             ),
           ),
@@ -539,9 +539,9 @@ class _NoticeBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.07),
+        color: accent.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withOpacity(0.18)),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -550,7 +550,7 @@ class _NoticeBanner extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.12),
+              color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: accent, size: 17),
@@ -652,17 +652,17 @@ class _StepRow extends StatelessWidget {
         ? c.success
         : isCurrent
         ? c.primary
-        : c.textSecondary.withOpacity(0.3);
+        : c.textSecondary.withValues(alpha: 0.3);
 
     final bgColor = isDone
         ? c.success
         : isCurrent
         ? c.primary
-        : c.textSecondary.withOpacity(0.12);
+        : c.textSecondary.withValues(alpha: 0.12);
 
     final fgColor = (isDone || isCurrent)
-        ? Colors.white
-        : c.textSecondary.withOpacity(0.5);
+        ? c.onPrimary
+        : c.textSecondary.withValues(alpha: 0.5);
 
     return IntrinsicHeight(
       child: Row(
@@ -681,7 +681,7 @@ class _StepRow extends StatelessWidget {
                     boxShadow: isCurrent
                         ? [
                             BoxShadow(
-                              color: c.primary.withOpacity(0.28),
+                              color: c.primary.withValues(alpha: 0.28),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -689,16 +689,16 @@ class _StepRow extends StatelessWidget {
                         : isDone
                         ? [
                             BoxShadow(
-                              color: c.success.withOpacity(0.2),
+                              color: c.success.withValues(alpha: 0.2),
                               blurRadius: 6,
                             ),
                           ]
                         : null,
                   ),
                   child: isDone
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_rounded,
-                          color: Colors.white,
+                          color: c.onPrimary,
                           size: 16,
                         )
                       : Icon(icon, color: fgColor, size: 16),
@@ -710,7 +710,7 @@ class _StepRow extends StatelessWidget {
                         width: 1.5,
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         decoration: BoxDecoration(
-                          color: dotColor.withOpacity(0.25),
+                          color: dotColor.withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -731,12 +731,12 @@ class _StepRow extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: isCurrent ? c.primary.withOpacity(0.04) : c.surface,
+                  color: isCurrent ? c.primary.withValues(alpha: 0.04) : c.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isCurrent
-                        ? c.primary.withOpacity(0.22)
-                        : c.border.withOpacity(0.22),
+                        ? c.primary.withValues(alpha: 0.22)
+                        : c.border.withValues(alpha: 0.22),
                   ),
                 ),
                 child: Row(
@@ -796,7 +796,7 @@ class _StatusChip extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: c.success.withOpacity(0.1),
+          color: c.success.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -813,7 +813,7 @@ class _StatusChip extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: c.primary.withOpacity(0.1),
+          color: c.primary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -829,7 +829,7 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: c.border.withOpacity(0.15),
+        color: c.border.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -874,7 +874,7 @@ class _CtaButton extends StatelessWidget {
         boxShadow: isActive
             ? [
                 BoxShadow(
-                  color: c.primary.withOpacity(0.3),
+                  color: c.primary.withValues(alpha: 0.3),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -884,10 +884,10 @@ class _CtaButton extends StatelessWidget {
       child: AppElevatedButton(
         onPressed: isActive ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isActive ? c.primary : c.border.withOpacity(0.15),
-          foregroundColor: isActive ? Colors.white : c.textSecondary,
-          disabledBackgroundColor: c.border.withOpacity(0.12),
-          disabledForegroundColor: c.textSecondary.withOpacity(0.5),
+          backgroundColor: isActive ? c.primary : c.border.withValues(alpha: 0.15),
+          foregroundColor: isActive ? c.onPrimary : c.textSecondary,
+          disabledBackgroundColor: c.border.withValues(alpha: 0.12),
+          disabledForegroundColor: c.textSecondary.withValues(alpha: 0.5),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -949,7 +949,7 @@ class _AddPaymentButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: c.textPrimary,
-          side: BorderSide(color: c.border.withOpacity(0.35), width: 1.2),
+          side: BorderSide(color: c.border.withValues(alpha: 0.35), width: 1.2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -960,7 +960,7 @@ class _AddPaymentButton extends StatelessWidget {
             Icon(
               Icons.add_card_rounded,
               size: 17,
-              color: c.textPrimary.withOpacity(0.75),
+              color: c.textPrimary.withValues(alpha: 0.75),
             ),
             const SizedBox(width: 8),
             Text(

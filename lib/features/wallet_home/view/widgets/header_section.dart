@@ -126,12 +126,19 @@ class _HeaderSectionState extends State<HeaderSection> {
           decoration: BoxDecoration(
             color: widget.colors.surface,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: widget.colors.border, width: 1),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Colors.black12,
-                blurRadius: 10,
-                offset: Offset(0, 3),
+                color: (Theme.of(context).brightness == Brightness.dark
+                        ? widget.colors.background
+                        : widget.colors.textPrimary)
+                    .withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.50
+                      : 0.08,
+                ),
+                blurRadius: 14,
+                spreadRadius: -2,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -193,8 +200,22 @@ class _HeaderSectionState extends State<HeaderSection> {
                             forceBaseColor: true,
                           ),
                         ),
-                      ],
+                      ], 
                     ),
+                    if (hasDelta) ...[
+                      const SizedBox(height: 6),
+                      _DeltaChipFiat(
+                        key: ValueKey(
+                          '${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}',
+                        ),
+                        amount: _deltaFiat!,
+                        fmt: widget.currencyFmt,
+                        upColor: _upColor,
+                        downColor: _downColor,
+                        active: true,
+                        neutralColor: widget.colors.textSecondary,
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -211,18 +232,6 @@ class _HeaderSectionState extends State<HeaderSection> {
                             ),
                           ),
                         ),
-                        if (hasDelta)
-                          _DeltaChipFiat(
-                            key: ValueKey(
-                              '${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}',
-                            ),
-                            amount: _deltaFiat!,
-                            fmt: widget.currencyFmt,
-                            upColor: _upColor,
-                            downColor: _downColor,
-                            active: true,
-                            neutralColor: widget.colors.textSecondary,
-                          ),
                       ],
                     ),
                   ],
@@ -234,7 +243,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                 child: AppFilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: widget.colors.primary,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColor.of(context).onPrimary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     shape: RoundedRectangleBorder(
@@ -322,10 +331,10 @@ class _ActionTile extends StatelessWidget {
               height: 54,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: colors.primary, width: 1),
+                color: colors.primary.withValues(alpha: 0.1),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: Colors.white, size: 22),
+              child: Icon(icon, color: AppColor.of(context).onPrimary, size: 22),
             ),
           ),
         ),
@@ -366,33 +375,15 @@ class _DeltaChipFiat extends StatelessWidget {
   Widget build(BuildContext context) {
     final up = amount >= 0;
     final color = active ? (up ? upColor : downColor) : neutralColor;
-    final icon = up ? LucideIcons.trendingUp : LucideIcons.trendingDown;
     final sign = up ? '+' : '-';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? Colors.black
-            : Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 6),
-          Text(
-            '$sign${fmt.format(amount.abs())}',
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.15,
-            ),
-          ),
-        ],
+    return Text(
+      '$sign${fmt.format(amount.abs())}',
+      style: TextStyle(
+        fontSize: 12,
+        color: color,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.15,
       ),
     );
   }

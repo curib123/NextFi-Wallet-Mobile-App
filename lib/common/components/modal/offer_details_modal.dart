@@ -27,7 +27,7 @@ class OfferDetailsModal extends StatefulWidget {
 }
 
 class _OfferDetailsModalState extends State<OfferDetailsModal>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _merchantCore = MerchantProfileCoreService.I;
   final _reviewsCore = ReviewsCoreService.I;
   final _offerPaymentCore = OfferPaymentMethodCoreService.I;
@@ -43,6 +43,8 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnim;
 
   @override
   void initState() {
@@ -56,6 +58,14 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
       begin: const Offset(0, 0.04),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _shimmerAnim = CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    );
     _fadeController.forward();
     _loadData();
   }
@@ -63,6 +73,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
   @override
   void dispose() {
     _fadeController.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
@@ -105,11 +116,12 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     }
     try {
       final profile = await _merchantCore.getPublic(sellerId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _merchantProfile = profile;
           _loadingMerchant = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingMerchant = false);
     }
@@ -124,12 +136,13 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     try {
       final reviews = await _reviewsCore.getUserReviews(userId: sellerId);
       final avgRating = await _reviewsCore.getUserAverageRating(sellerId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _reviews = reviews;
           _averageRating = avgRating;
           _loadingReviews = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingReviews = false);
     }
@@ -141,13 +154,14 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   Color _typeColor(AppColor c) => _isBuy ? c.success : c.error;
 
-  Color _statusColor(String status) => switch (status.toUpperCase()) {
-    'ACTIVE' => const Color(0xFF00C48C),
-    'PAUSED' => const Color(0xFFFAA040),
-    'COMPLETED' => const Color(0xFF5B8DEF),
-    'CANCELLED' => const Color(0xFFFF5C72),
-    _ => const Color(0xFF9CA3AF),
-  };
+  Color _statusColor(String status, AppColor c) =>
+      switch (status.toUpperCase()) {
+        'ACTIVE' => c.success,
+        'PAUSED' => c.warning,
+        'COMPLETED' => c.info,
+        'CANCELLED' => c.error,
+        _ => c.accent,
+      };
 
   static String _tierLabel(MerchantTier t) => const {
     MerchantTier.bronze: 'Bronze',
@@ -157,12 +171,12 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     MerchantTier.diamond: 'Diamond',
   }[t]!;
 
-  static Color _tierColor(MerchantTier t) => const {
-    MerchantTier.diamond: Color(0xFF06B6D4),
-    MerchantTier.platinum: Color(0xFF64748B),
-    MerchantTier.gold: Color(0xFFF59E0B),
-    MerchantTier.silver: Color(0xFF94A3B8),
-    MerchantTier.bronze: Color(0xFFB87333),
+  static Color _tierColor(MerchantTier t, AppColor c) => {
+    MerchantTier.diamond: c.info,
+    MerchantTier.platinum: c.textSecondary,
+    MerchantTier.gold: c.warning,
+    MerchantTier.silver: c.accent,
+    MerchantTier.bronze: c.error,
   }[t]!;
 
   static IconData _tierIcon(MerchantTier t) => const {
@@ -180,11 +194,11 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     SellerAvailability.unknown: 'Offline',
   }[a]!;
 
-  static Color _availColor(SellerAvailability a) => const {
-    SellerAvailability.available: Color(0xFF00C48C),
-    SellerAvailability.unavailable: Color(0xFF9CA3AF),
-    SellerAvailability.onBreak: Color(0xFFFAA040),
-    SellerAvailability.unknown: Color(0xFF9CA3AF),
+  static Color _availColor(SellerAvailability a, AppColor c) => {
+    SellerAvailability.available: c.success,
+    SellerAvailability.unavailable: c.accent,
+    SellerAvailability.onBreak: c.warning,
+    SellerAvailability.unknown: c.accent,
   }[a]!;
 
   // ─── Build ─────────────────────────────────────────────────────────────────
@@ -224,27 +238,30 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                       isBuy: _isBuy,
                       typeColor: typeColor,
                       statusText: statusText,
-                      statusColor: _statusColor(statusText),
+                      statusColor: _statusColor(statusText, c),
                       hasLivePrice: hasLivePrice,
                       marketPrice: widget.marketPrice,
                     ),
 
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 2, 18, 24),
+                      padding: const EdgeInsets.fromLTRB(14, 2, 14, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (_loadingMerchant)
-                            _MerchantCardSkeleton(c: c)
+                            _MerchantCardSkeleton(
+                              c: c,
+                              shimmerAnim: _shimmerAnim,
+                            )
                           else if (_merchantProfile != null)
                             MerchantInfoSection(
                               c: c,
                               profile: _merchantProfile!,
                               getTierLabel: _tierLabel,
-                              getTierColor: _tierColor,
+                              getTierColor: (t) => _tierColor(t, c),
                               getTierIcon: _tierIcon,
                               getAvailabilityLabel: _availLabel,
-                              getAvailabilityColor: _availColor,
+                              getAvailabilityColor: (a) => _availColor(a, c),
                               paymentMethodIds: _effectivePaymentMethodIds
                                   .map(
                                     (id) => _paymentMethodsMap[id]?.name ?? id,
@@ -255,12 +272,13 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                               loadingReviews: _loadingReviews,
                             ),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           _TradeLimitsCard(c: c, offer: offer),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           _DetailsCard(
                             c: c,
                             offer: offer,
+                            shimmerAnim: _shimmerAnim,
                             loadingPaymentMethods: _loadingPaymentMethods,
                             effectivePaymentMethodIds:
                                 _effectivePaymentMethodIds,
@@ -269,10 +287,13 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                           ),
 
                           if (_loadingReviews) ...[
-                            const SizedBox(height: 14),
-                            _ReviewsLoadingCard(c: c),
+                            const SizedBox(height: 10),
+                            _ReviewsLoadingCard(
+                              c: c,
+                              shimmerAnim: _shimmerAnim,
+                            ),
                           ] else if (_reviews.isNotEmpty) ...[
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 10),
                             _ReviewsCard(
                               c: c,
                               reviews: _reviews,
@@ -280,7 +301,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                             ),
                           ],
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 14),
                           _TradeButton(
                             typeColor: typeColor,
                             isBuy: _isBuy,
@@ -327,7 +348,7 @@ class _HeroHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border(bottom: BorderSide(color: c.border)),
@@ -340,7 +361,7 @@ class _HeroHeader extends StatelessWidget {
             child: Container(
               width: 36,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
                 color: c.border,
                 borderRadius: BorderRadius.circular(2),
@@ -354,8 +375,8 @@ class _HeroHeader extends StatelessWidget {
               // Type pill — solid fill
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+                  horizontal: 10,
+                  vertical: 5,
                 ),
                 decoration: BoxDecoration(
                   color: typeColor,
@@ -368,57 +389,59 @@ class _HeroHeader extends StatelessWidget {
                       isBuy
                           ? Icons.arrow_downward_rounded
                           : Icons.arrow_upward_rounded,
-                      size: 15,
-                      color: Colors.white,
+                      size: 14,
+                      color: AppColor.of(context).onPrimary,
                     ),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 4),
                     Text(
                       isBuy ? 'BUY' : 'SELL',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColor.of(context).onPrimary,
                         fontWeight: FontWeight.w800,
-                        fontSize: 11.5,
+                        fontSize: 10.8,
                         letterSpacing: 0.35,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               // Status pill — solid fill
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
                   color: statusColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   statusText,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColor.of(context).onPrimary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 10.8,
+                    fontSize: 10.2,
                     letterSpacing: 0.2,
                   ),
                 ),
               ),
-              const Spacer(),
-              Text(
-                '${offer.asset} / ${offer.fiatCurrency}',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                  letterSpacing: -0.55,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${offer.asset} / ${offer.fiatCurrency}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 17,
+                    letterSpacing: -0.4,
+                  ),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Live price hero
           Row(
@@ -445,7 +468,7 @@ class _HeroHeader extends StatelessWidget {
                           hasLivePrice ? 'Live Market Price' : 'Price',
                           style: TextStyle(
                             color: c.textSecondary,
-                            fontSize: 12.2,
+                            fontSize: 11.6,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -454,11 +477,13 @@ class _HeroHeader extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       hasLivePrice ? marketPrice! : 'Not available',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: hasLivePrice ? c.textPrimary : c.textSecondary,
                         fontWeight: FontWeight.w900,
-                        fontSize: 30,
-                        letterSpacing: -1.1,
+                        fontSize: 26,
+                        letterSpacing: -0.9,
                         height: 1.0,
                       ),
                     ),
@@ -466,10 +491,11 @@ class _HeroHeader extends StatelessWidget {
                 ),
               ),
               // Market rate badge — solid fill
+              const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
+                  horizontal: 10,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: c.background,
@@ -479,14 +505,14 @@ class _HeroHeader extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.trending_up_rounded, size: 15, color: typeColor),
-                    const SizedBox(width: 5),
+                    Icon(Icons.trending_up_rounded, size: 14, color: typeColor),
+                    const SizedBox(width: 4),
                     Text(
                       'Market rate',
                       style: TextStyle(
                         color: c.textPrimary,
                         fontWeight: FontWeight.w700,
-                        fontSize: 11.8,
+                        fontSize: 11.0,
                       ),
                     ),
                   ],
@@ -519,7 +545,7 @@ class _TradeLimitsCard extends StatelessWidget {
             icon: Icons.stacked_bar_chart_rounded,
             label: 'Trade Limits',
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -528,7 +554,7 @@ class _TradeLimitsCard extends StatelessWidget {
                   label: 'Min',
                   value: offer.minAmount?.toString() ?? '—',
                   icon: Icons.south_rounded,
-                  color: const Color(0xFF00C48C),
+                  color: c.success,
                 ),
               ),
               const SizedBox(width: 10),
@@ -538,7 +564,7 @@ class _TradeLimitsCard extends StatelessWidget {
                   label: 'Max',
                   value: offer.maxAmount?.toString() ?? '—',
                   icon: Icons.north_rounded,
-                  color: const Color(0xFFFF5C72),
+                  color: c.error,
                 ),
               ),
             ],
@@ -552,7 +578,7 @@ class _TradeLimitsCard extends StatelessWidget {
                   label: 'Total Qty',
                   value: offer.totalQty?.toString() ?? '—',
                   icon: Icons.layers_outlined,
-                  color: const Color(0xFF5B8DEF),
+                  color: c.info,
                 ),
               ),
               const SizedBox(width: 10),
@@ -562,7 +588,7 @@ class _TradeLimitsCard extends StatelessWidget {
                   label: 'Available',
                   value: offer.availableQty?.toString() ?? '—',
                   icon: Icons.check_circle_outline_rounded,
-                  color: const Color(0xFF00C48C),
+                  color: c.success,
                 ),
               ),
             ],
@@ -579,6 +605,7 @@ class _DetailsCard extends StatelessWidget {
   const _DetailsCard({
     required this.c,
     required this.offer,
+    required this.shimmerAnim,
     required this.loadingPaymentMethods,
     required this.effectivePaymentMethodIds,
     required this.paymentMethodsMap,
@@ -587,6 +614,7 @@ class _DetailsCard extends StatelessWidget {
 
   final AppColor c;
   final OfferModel offer;
+  final Animation<double> shimmerAnim;
   final bool loadingPaymentMethods;
   final List<String> effectivePaymentMethodIds;
   final Map<String, PaymentMethodModel> paymentMethodsMap;
@@ -604,7 +632,7 @@ class _DetailsCard extends StatelessWidget {
             icon: Icons.info_outline_rounded,
             label: 'Details',
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _DetailRow(
             c: c,
             label: 'Payment window',
@@ -623,7 +651,7 @@ class _DetailsCard extends StatelessWidget {
                 : '—',
           ),
           if (loadingPaymentMethods)
-            _LoadingDetailMethodsRow(c: c)
+            _LoadingDetailMethodsRow(c: c, shimmerAnim: shimmerAnim)
           else if (effectivePaymentMethodIds.isEmpty)
             _DetailRow(c: c, label: 'Payment methods', value: '—', isLast: true)
           else
@@ -631,12 +659,14 @@ class _DetailsCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 120,
+                  width: 108,
                   child: Text(
                     'Payment methods',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: c.textSecondary,
-                      fontSize: 12.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -671,8 +701,6 @@ class _ReviewsCard extends StatelessWidget {
   final AppColor c;
   final List<ReviewModel> reviews;
   final double? averageRating;
-
-  static const _amber = Color(0xFFFFAA00);
 
   @override
   Widget build(BuildContext context) {
@@ -709,12 +737,12 @@ class _ReviewsCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.star_rounded, size: 13, color: _amber),
+                      Icon(Icons.star_rounded, size: 13, color: c.warning),
                       const SizedBox(width: 3),
                       Text(
                         averageRating!.toStringAsFixed(1),
-                        style: const TextStyle(
-                          color: _amber,
+                        style: TextStyle(
+                          color: c.warning,
                           fontWeight: FontWeight.w800,
                           fontSize: 12.2,
                         ),
@@ -792,11 +820,11 @@ class _TradeButtonState extends State<_TradeButton>
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          height: 56,
+          height: 50,
           width: double.infinity,
           decoration: BoxDecoration(
             color: widget.typeColor,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Center(
             child: Row(
@@ -806,16 +834,16 @@ class _TradeButtonState extends State<_TradeButton>
                   widget.isBuy
                       ? Icons.arrow_downward_rounded
                       : Icons.arrow_upward_rounded,
-                  color: Colors.white,
-                  size: 20,
+                  color: AppColor.of(context).onPrimary,
+                  size: 18,
                 ),
-                const SizedBox(width: 10),
-                const Text(
+                const SizedBox(width: 8),
+                Text(
                   'Trade Now',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColor.of(context).onPrimary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                    fontSize: 14.5,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -838,10 +866,10 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: c.surface,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       border: Border.all(color: c.border),
     ),
     child: child,
@@ -876,7 +904,7 @@ class _SectionLabel extends StatelessWidget {
         style: TextStyle(
           color: c.textPrimary,
           fontWeight: FontWeight.w800,
-          fontSize: 14,
+          fontSize: 13,
         ),
       ),
     ],
@@ -899,42 +927,46 @@ class _LimitBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
       color: c.background,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       border: Border.all(color: c.border),
     ),
     child: Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(6),
           ),
-          child: Icon(icon, size: 13, color: Colors.white),
+          child: Icon(icon, size: 12, color: AppColor.of(context).onPrimary),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: c.textSecondary,
-                  fontSize: 10.5,
+                  fontSize: 10.0,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 1),
               Text(
                 value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: c.textPrimary,
                   fontWeight: FontWeight.w800,
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                 ),
               ),
             ],
@@ -959,17 +991,19 @@ class _DetailRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+    padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 120,
+          width: 108,
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: c.textSecondary,
-              fontSize: 12.4,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -977,9 +1011,11 @@ class _DetailRow extends StatelessWidget {
         Expanded(
           child: Text(
             value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 12.8,
+              fontSize: 12.3,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -993,8 +1029,6 @@ class _ReviewItem extends StatelessWidget {
   const _ReviewItem({required this.c, required this.review});
   final AppColor c;
   final ReviewModel review;
-
-  static const _amber = Color(0xFFFFAA00);
 
   String _timeAgo(DateTime d) {
     final diff = DateTime.now().difference(d);
@@ -1025,7 +1059,7 @@ class _ReviewItem extends StatelessWidget {
                       ? Icons.star_rounded
                       : Icons.star_outline_rounded,
                   size: 14,
-                  color: i < review.rating ? _amber : c.border,
+                  color: i < review.rating ? c.warning : c.border,
                 ),
               ),
             ),
@@ -1062,10 +1096,10 @@ class _PaymentMethodChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final logo = method.logo;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: c.background,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(9),
         border: Border.all(color: c.border),
       ),
       child: Row(
@@ -1073,25 +1107,30 @@ class _PaymentMethodChip extends StatelessWidget {
         children: [
           if (logo != null && logo.isNotEmpty)
             SizedBox(
-              width: 18,
-              height: 18,
+              width: 16,
+              height: 16,
               child: Image.network(
                 logo,
-                width: 18,
-                height: 18,
+                width: 16,
+                height: 16,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => _fallbackIcon(c),
               ),
             )
           else
             _fallbackIcon(c),
-          const SizedBox(width: 6),
-          Text(
-            method.name,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 12.2,
-              fontWeight: FontWeight.w700,
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 110),
+            child: Text(
+              method.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 11.6,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -1106,40 +1145,91 @@ class _PaymentMethodChip extends StatelessWidget {
 // ─── Skeleton helpers ─────────────────────────────────────────────────────────
 
 class _Skeleton extends StatelessWidget {
-  const _Skeleton({required this.c, required this.height, this.width});
+  const _Skeleton({
+    required this.c,
+    required this.anim,
+    required this.height,
+    this.width,
+  });
   final AppColor c;
+  final Animation<double> anim;
   final double height;
   final double? width;
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final color = isLight ? const Color(0xFFE5E7EB) : const Color(0xFF2A2A2A);
-    return Container(
-      height: height,
-      width: width ?? double.infinity,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark
+        ? c.border.withValues(alpha: 0.52)
+        : c.background.withValues(alpha: 0.98);
+    final highlight = isDark
+        ? c.textPrimary.withValues(alpha: 0.20)
+        : c.onPrimary.withValues(alpha: 0.72);
+    final itemWidth = width ?? double.infinity;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: itemWidth,
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: base),
+            AnimatedBuilder(
+              animation: anim,
+              builder: (_, __) {
+                final safeWidth =
+                    width ?? (MediaQuery.sizeOf(context).width * 0.5);
+                final bandWidth = safeWidth * 0.52;
+                final travel = safeWidth + (bandWidth * 2);
+                final left = (travel * anim.value) - bandWidth;
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: left,
+                      top: 0,
+                      bottom: 0,
+                      width: bandWidth,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              highlight.withValues(alpha: 0),
+                              highlight,
+                              highlight.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _SkeletonChip extends StatelessWidget {
-  const _SkeletonChip({this.width = 90});
+  const _SkeletonChip({required this.anim, this.width = 90});
+  final Animation<double> anim;
   final double width;
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    return _Skeleton(c: c, height: 30, width: width);
+    return _Skeleton(c: c, anim: anim, height: 30, width: width);
   }
 }
 
 class _LoadingDetailMethodsRow extends StatelessWidget {
-  const _LoadingDetailMethodsRow({required this.c});
+  const _LoadingDetailMethodsRow({required this.c, required this.shimmerAnim});
   final AppColor c;
+  final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) {
@@ -1149,12 +1239,14 @@ class _LoadingDetailMethodsRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 108,
             child: Text(
               'Payment methods',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: c.textSecondary,
-                fontSize: 12.4,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1163,10 +1255,10 @@ class _LoadingDetailMethodsRow extends StatelessWidget {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: const [
-                _SkeletonChip(width: 96),
-                _SkeletonChip(width: 104),
-                _SkeletonChip(width: 86),
+              children: [
+                _SkeletonChip(anim: shimmerAnim, width: 96),
+                _SkeletonChip(anim: shimmerAnim, width: 104),
+                _SkeletonChip(anim: shimmerAnim, width: 86),
               ],
             ),
           ),
@@ -1177,8 +1269,9 @@ class _LoadingDetailMethodsRow extends StatelessWidget {
 }
 
 class _MerchantCardSkeleton extends StatelessWidget {
-  const _MerchantCardSkeleton({required this.c});
+  const _MerchantCardSkeleton({required this.c, required this.shimmerAnim});
   final AppColor c;
+  final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) {
@@ -1189,19 +1282,19 @@ class _MerchantCardSkeleton extends StatelessWidget {
         children: [
           Row(
             children: [
-              _Skeleton(c: c, height: 44, width: 44),
+              _Skeleton(c: c, anim: shimmerAnim, height: 44, width: 44),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Skeleton(c: c, height: 10, width: 70),
+                    _Skeleton(c: c, anim: shimmerAnim, height: 10, width: 70),
                     const SizedBox(height: 6),
-                    _Skeleton(c: c, height: 14, width: 160),
+                    _Skeleton(c: c, anim: shimmerAnim, height: 14, width: 160),
                   ],
                 ),
               ),
-              _Skeleton(c: c, height: 24, width: 72),
+              _Skeleton(c: c, anim: shimmerAnim, height: 24, width: 72),
             ],
           ),
           const SizedBox(height: 14),
@@ -1210,26 +1303,26 @@ class _MerchantCardSkeleton extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: const [
-              _SkeletonChip(width: 90),
-              _SkeletonChip(width: 84),
-              _SkeletonChip(width: 94),
+            children: [
+              _SkeletonChip(anim: shimmerAnim, width: 90),
+              _SkeletonChip(anim: shimmerAnim, width: 84),
+              _SkeletonChip(anim: shimmerAnim, width: 94),
             ],
           ),
           const SizedBox(height: 12),
-          _Skeleton(c: c, height: 11),
+          _Skeleton(c: c, anim: shimmerAnim, height: 11),
           const SizedBox(height: 8),
-          _Skeleton(c: c, height: 11, width: 230),
+          _Skeleton(c: c, anim: shimmerAnim, height: 11, width: 230),
           const SizedBox(height: 12),
           _SectionDivider(c: c),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: const [
-              _SkeletonChip(width: 88),
-              _SkeletonChip(width: 110),
-              _SkeletonChip(width: 96),
+            children: [
+              _SkeletonChip(anim: shimmerAnim, width: 88),
+              _SkeletonChip(anim: shimmerAnim, width: 110),
+              _SkeletonChip(anim: shimmerAnim, width: 96),
             ],
           ),
         ],
@@ -1239,8 +1332,9 @@ class _MerchantCardSkeleton extends StatelessWidget {
 }
 
 class _ReviewsLoadingCard extends StatelessWidget {
-  const _ReviewsLoadingCard({required this.c});
+  const _ReviewsLoadingCard({required this.c, required this.shimmerAnim});
   final AppColor c;
+  final Animation<double> shimmerAnim;
 
   @override
   Widget build(BuildContext context) {
@@ -1251,11 +1345,11 @@ class _ReviewsLoadingCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _Skeleton(c: c, height: 16, width: 16),
+              _Skeleton(c: c, anim: shimmerAnim, height: 16, width: 16),
               const SizedBox(width: 8),
-              _Skeleton(c: c, height: 14, width: 64),
+              _Skeleton(c: c, anim: shimmerAnim, height: 14, width: 64),
               const Spacer(),
-              _Skeleton(c: c, height: 24, width: 46),
+              _Skeleton(c: c, anim: shimmerAnim, height: 24, width: 46),
             ],
           ),
           const SizedBox(height: 12),
@@ -1275,15 +1369,25 @@ class _ReviewsLoadingCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        _Skeleton(c: c, height: 12, width: 76),
+                        _Skeleton(
+                          c: c,
+                          anim: shimmerAnim,
+                          height: 12,
+                          width: 76,
+                        ),
                         const Spacer(),
-                        _Skeleton(c: c, height: 10, width: 46),
+                        _Skeleton(
+                          c: c,
+                          anim: shimmerAnim,
+                          height: 10,
+                          width: 46,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    _Skeleton(c: c, height: 10),
+                    _Skeleton(c: c, anim: shimmerAnim, height: 10),
                     const SizedBox(height: 6),
-                    _Skeleton(c: c, height: 10, width: 210),
+                    _Skeleton(c: c, anim: shimmerAnim, height: 10, width: 210),
                   ],
                 ),
               ),

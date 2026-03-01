@@ -11,7 +11,7 @@ class GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(color: Colors.transparent),
+      decoration: BoxDecoration(color: colors.surface),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: child,

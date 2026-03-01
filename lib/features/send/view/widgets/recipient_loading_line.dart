@@ -11,9 +11,9 @@ class RecipientLoadingLine extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Solid surface tint — no opacity
-    final bgColor = isDark ? const Color(0xFF171923) : const Color(0xFFE8EBEF);
-    final borderColor = isDark ? const Color(0xFF252A38) : const Color(0xFFD8DCE4);
-    final spinnerColor = isDark ? const Color(0xFF4D6AFF) : const Color(0xFF3A5BFF);
+    final bgColor = isDark ? c.textPrimary : c.surface;
+    final borderColor = isDark ? c.textPrimary : c.border;
+    final spinnerColor = isDark ? c.primary : c.primary;
 
     return Container(
       height: 60,
