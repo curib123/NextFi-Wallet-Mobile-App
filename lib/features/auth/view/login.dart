@@ -356,7 +356,7 @@ class _LoginScreenState extends State<LoginScreen>
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
-        ], 
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
