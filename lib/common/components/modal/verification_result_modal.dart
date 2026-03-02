@@ -11,7 +11,7 @@ Future<void> showVerificationResultModal(
 }) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     isScrollControlled: true,
     builder: (ctx) => _VerificationResultModal(
       title: title,
@@ -79,7 +79,7 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: c.border.withOpacity(0.18)),
+          border: Border.all(color: c.border.withValues(alpha: 0.18)),
         ),
         child: SafeArea(
           child: Padding(
@@ -93,7 +93,7 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 28),
                   decoration: BoxDecoration(
-                    color: c.border.withOpacity(0.3),
+                    color: c.border.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -169,12 +169,12 @@ class _ResultIcon extends StatelessWidget {
       width: 72,
       height: 72,
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.08),
+        color: accent.withValues(alpha: 0.08),
         shape: BoxShape.circle,
-        border: Border.all(color: accent.withOpacity(0.18), width: 1.5),
+        border: Border.all(color: accent.withValues(alpha: 0.18), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(0.15),
+            color: accent.withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -210,7 +210,7 @@ class _OkButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(0.28),
+            color: accent.withValues(alpha: 0.28),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -223,9 +223,9 @@ class _OkButton extends StatelessWidget {
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: accent,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColor.of(context).onPrimary,
           elevation: 0,
-          shadowColor: Colors.transparent,
+          shadowColor: AppColor.of(context).surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),

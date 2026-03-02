@@ -87,7 +87,7 @@ void showFloatingSnackBar(
       elevation: 0,
       padding: const EdgeInsets.all(0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.surface,
       duration: duration,
       dismissDirection: DismissDirection.horizontal,
       content: _SnackContent(
@@ -110,16 +110,16 @@ void showFloatingSnackBar(
   return switch (type) {
     SnackBarType.success => (
       colors.success,
-      Colors.white,
+      colors.onPrimary,
       LucideIcons.checkCircle2,
     ),
     SnackBarType.warning => (
       colors.warning,
-      Colors.white,
+      colors.onPrimary,
       LucideIcons.alertTriangle,
     ),
-    SnackBarType.error => (colors.error, Colors.white, LucideIcons.xCircle),
-    SnackBarType.info => (colors.primary, Colors.white, LucideIcons.info),
+    SnackBarType.error => (colors.error, colors.onPrimary, LucideIcons.xCircle),
+    SnackBarType.info => (colors.primary, colors.onPrimary, LucideIcons.info),
   };
 }
 
@@ -161,14 +161,17 @@ class _SnackContent extends StatelessWidget {
         /// Soft fintech shadow (NOT glow)
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: colors.textPrimary.withValues(alpha: 0.12),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
 
         /// Subtle border
-        border: Border.all(color: Colors.white.withOpacity(0.06), width: 1),
+        border: Border.all(
+          color: colors.onPrimary.withValues(alpha: 0.06),
+          width: 1,
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
@@ -179,7 +182,7 @@ class _SnackContent extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.12),
+              color: colors.textPrimary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, size: 18, color: fg),
@@ -211,7 +214,7 @@ class _SnackContent extends StatelessWidget {
               onPressed: onAction,
               style: TextButton.styleFrom(
                 foregroundColor: fg,
-                backgroundColor: Colors.black.withOpacity(0.12),
+                backgroundColor: colors.textPrimary.withValues(alpha: 0.12),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 6,
@@ -389,7 +392,7 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
               direction: DismissDirection.horizontal,
               onDismissed: (_) => widget.onClose(),
               child: Material(
-                color: Colors.transparent,
+                color: widget.colors.surface,
                 child: InkWell(
                   onTap: widget.onTap ?? _dismiss,
                   borderRadius: BorderRadius.circular(14),
@@ -400,13 +403,13 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: widget.colors.textPrimary.withValues(alpha: 0.15),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
                       ],
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.06),
+                        color: widget.colors.onPrimary.withValues(alpha: 0.06),
                         width: 1,
                       ),
                     ),
@@ -420,7 +423,7 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.12),
+                            color: widget.colors.textPrimary.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(widget.icon, size: 18, color: widget.fg),

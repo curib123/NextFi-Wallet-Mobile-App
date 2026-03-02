@@ -11,8 +11,10 @@ import 'offers_endpoints.dart';
 typedef TokenProvider = Future<String?> Function();
 
 class OffersService {
-  OffersService({required this.tokenProvider, http.Client? client})
-    : _client = client ?? http.Client();
+  OffersService({
+    required this.tokenProvider,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   final TokenProvider tokenProvider;
   final http.Client _client;
@@ -29,6 +31,7 @@ class OffersService {
     'limit',
     'total',
     'totalPages',
+    'total_pages',
     'success',
     'ok',
     'status',
@@ -36,9 +39,6 @@ class OffersService {
     'error',
     'errors',
   };
-
-  bool _isEnvelopeMap(Map<String, dynamic> map) =>
-      map.keys.every((k) => _envelopeKeys.contains(k.toString()));
 
   Future<Map<String, String>> _publicHeaders() async {
     final token = await tokenProvider();
@@ -56,12 +56,22 @@ class OffersService {
     if (token == null || token.isEmpty) {
       throw ApiException(401, 'Missing JWT token');
     }
-
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
   }
+
+  Map<String, dynamic>? _asStringKeyMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return null;
+  }
+
+  bool _isEnvelopeMap(Map<String, dynamic> map) =>
+      map.keys.every((k) => _envelopeKeys.contains(k.toString()));
 
   Map<String, dynamic>? _extractMap(
     dynamic data, {
@@ -80,21 +90,20 @@ class OffersService {
       return null;
     }
 
-    if (data is Map<String, dynamic>) {
-      if (data.isEmpty) return null;
+    final map = _asStringKeyMap(data);
+    if (map == null || map.isEmpty) return null;
 
-      for (final key in keys) {
-        if (!data.containsKey(key)) continue;
-        final extracted = _extractMap(data[key], keys: keys, depth: depth + 1);
-        if (extracted != null) return extracted;
-      }
+    for (final key in keys) {
+      if (!map.containsKey(key)) continue;
+      final extracted = _extractMap(map[key], keys: keys, depth: depth + 1);
+      if (extracted != null) return extracted;
+    }
 
-      if (!_isEnvelopeMap(data)) return data;
+    if (!_isEnvelopeMap(map)) return map;
 
-      for (final value in data.values) {
-        final extracted = _extractMap(value, keys: keys, depth: depth + 1);
-        if (extracted != null) return extracted;
-      }
+    for (final value in map.values) {
+      final extracted = _extractMap(value, keys: keys, depth: depth + 1);
+      if (extracted != null) return extracted;
     }
 
     return null;
@@ -108,8 +117,12 @@ class OffersService {
     if (depth > 8 || data == null) return const [];
 
     if (data is List) {
-      final items = data.whereType<Map<String, dynamic>>().toList();
+      final items = data
+          .map(_asStringKeyMap)
+          .whereType<Map<String, dynamic>>()
+          .toList();
       if (items.isNotEmpty) return items;
+
       for (final item in data) {
         final nested = _extractListMaps(item, keys: keys, depth: depth + 1);
         if (nested.isNotEmpty) return nested;
@@ -117,26 +130,52 @@ class OffersService {
       return const [];
     }
 
-    if (data is Map<String, dynamic>) {
-      for (final key in keys) {
-        if (!data.containsKey(key)) continue;
-        final nested = _extractListMaps(
-          data[key],
-          keys: keys,
-          depth: depth + 1,
-        );
-        if (nested.isNotEmpty) return nested;
-      }
-      for (final value in data.values) {
-        final nested = _extractListMaps(value, keys: keys, depth: depth + 1);
-        if (nested.isNotEmpty) return nested;
-      }
+    final map = _asStringKeyMap(data);
+    if (map == null) return const [];
+
+    for (final key in keys) {
+      if (!map.containsKey(key)) continue;
+      final nested = _extractListMaps(map[key], keys: keys, depth: depth + 1);
+      if (nested.isNotEmpty) return nested;
+    }
+
+    for (final value in map.values) {
+      final nested = _extractListMaps(value, keys: keys, depth: depth + 1);
+      if (nested.isNotEmpty) return nested;
     }
 
     return const [];
   }
 
-  Future<List<OfferModel>> listPublicOffers(OffersQuery query) async {
+  OffersMeta _extractMeta(dynamic data, {required int fallbackCount}) {
+    final map = _asStringKeyMap(data);
+    if (map != null) {
+      final meta = _asStringKeyMap(map['meta']);
+      if (meta != null) return OffersMeta.fromJson(meta);
+
+      final pagination = _asStringKeyMap(map['pagination']);
+      if (pagination != null) return OffersMeta.fromJson(pagination);
+
+      if (map.containsKey('page') ||
+          map.containsKey('limit') ||
+          map.containsKey('total') ||
+          map.containsKey('totalPages') ||
+          map.containsKey('total_pages')) {
+        return OffersMeta.fromJson(map);
+      }
+    }
+
+    return OffersMeta(
+      total: fallbackCount,
+      page: 1,
+      limit: fallbackCount == 0 ? 20 : fallbackCount,
+      totalPages: 1,
+    );
+  }
+
+  Future<OffersPagedResponse> listPublicPaged({
+    OffersListQuery query = const OffersListQuery(),
+  }) async {
     final res = await _client.get(
       OffersHttp.uri(
         OffersEndpoints.publicList(),
@@ -144,45 +183,32 @@ class OffersService {
       ),
       headers: await _publicHeaders(),
     );
-
     OffersHttp.ensureOk(res);
     final data = OffersHttp.decodeJson<dynamic>(res);
     final items = _extractListMaps(
       data,
       keys: const ['items', 'data', 'offers', 'list'],
-    );
-    return items.map(OfferModel.fromJson).toList();
+    ).map(OfferModel.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: items.length);
+    return OffersPagedResponse(items: items, meta: meta);
   }
 
-  Future<List<OfferModel>> listRecommendedOffers(OffersQuery query) async {
-    final res = await _client.get(
-      OffersHttp.uri(
-        OffersEndpoints.recommendedFeed(),
-        queryParams: query.toQueryMap(),
-      ),
-      headers: await _headers(),
-    );
-
-    OffersHttp.ensureOk(res);
-    final data = OffersHttp.decodeJson<dynamic>(res);
-    final items = _extractListMaps(
-      data,
-      keys: const ['items', 'data', 'offers', 'list'],
-    );
-    return items.map(OfferModel.fromJson).toList();
+  Future<List<OfferModel>> listPublic({
+    OffersListQuery query = const OffersListQuery(),
+  }) async {
+    final page = await listPublicPaged(query: query);
+    return page.items;
   }
 
-  Future<OfferModel> getPublicOffer(String id) async {
+  Future<OfferModel> getPublicById(String id) async {
     final res = await _client.get(
-      OffersHttp.uri(OffersEndpoints.publicById(id)),
+      OffersHttp.uri(OffersEndpoints.publicGetOne(id)),
       headers: await _publicHeaders(),
     );
-
     OffersHttp.ensureOk(res);
     final data = OffersHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'offer', 'item']);
+    final map = _extractMap(data, keys: const ['data', 'item', 'offer']);
     if (map != null) return OfferModel.fromJson(map);
-
     throw ApiException(
       res.statusCode,
       'Unexpected response for GET /offers/$id',
@@ -190,72 +216,131 @@ class OffersService {
     );
   }
 
-  Future<List<OfferModel>> listMyOffers(OffersQuery query) async {
-    final res = await _client.get(
-      OffersHttp.uri(OffersEndpoints.myList(), queryParams: query.toQueryMap()),
+  Future<OfferModel> create(CreateOfferRequest req) async {
+    final res = await _client.post(
+      OffersHttp.uri(OffersEndpoints.create()),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+    OffersHttp.ensureOk(res);
+    final data = OffersHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'offer']);
+    if (map != null) return OfferModel.fromJson(map);
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for POST /offers',
+      body: res.body,
+    );
+  }
+
+  Future<OfferModel> update(String id, UpdateOfferRequest req) async {
+    final res = await _client.patch(
+      OffersHttp.uri(OffersEndpoints.update(id)),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+    OffersHttp.ensureOk(res);
+    final data = OffersHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'offer']);
+    if (map != null) return OfferModel.fromJson(map);
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for PATCH /offers/$id',
+      body: res.body,
+    );
+  }
+
+  Future<OfferModel> pause(String id) async {
+    final res = await _client.patch(
+      OffersHttp.uri(OffersEndpoints.pause(id)),
       headers: await _headers(),
     );
+    OffersHttp.ensureOk(res);
+    final data = OffersHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'offer']);
+    if (map != null) return OfferModel.fromJson(map);
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for PATCH /offers/$id/pause',
+      body: res.body,
+    );
+  }
 
+  Future<OfferModel> resume(String id) async {
+    final res = await _client.patch(
+      OffersHttp.uri(OffersEndpoints.resume(id)),
+      headers: await _headers(),
+    );
+    OffersHttp.ensureOk(res);
+    final data = OffersHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'offer']);
+    if (map != null) return OfferModel.fromJson(map);
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for PATCH /offers/$id/resume',
+      body: res.body,
+    );
+  }
+
+  Future<bool> cancel(String id) async {
+    final res = await _client.delete(
+      OffersHttp.uri(OffersEndpoints.cancel(id)),
+      headers: await _headers(),
+    );
+    OffersHttp.ensureOk(res);
+    return true;
+  }
+
+  Future<OffersPagedResponse> listMinePaged({
+    OffersListQuery query = const OffersListQuery(),
+  }) async {
+    final res = await _client.get(
+      OffersHttp.uri(OffersEndpoints.mine(), queryParams: query.toQueryMap()),
+      headers: await _headers(),
+    );
     OffersHttp.ensureOk(res);
     final data = OffersHttp.decodeJson<dynamic>(res);
     final items = _extractListMaps(
       data,
       keys: const ['items', 'data', 'offers', 'list'],
-    );
-    return items.map(OfferModel.fromJson).toList();
+    ).map(OfferModel.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: items.length);
+    return OffersPagedResponse(items: items, meta: meta);
   }
 
-  Future<OfferModel> createMyOffer(CreateOfferRequest req) async {
-    final res = await _client.post(
-      OffersHttp.uri(OffersEndpoints.createMyOffer()),
-      headers: await _headers(),
-      body: jsonEncode(req.toJson()),
-    );
-
-    OffersHttp.ensureOk(res);
-    final data = OffersHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'offer', 'item']);
-    if (map != null) return OfferModel.fromJson(map);
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for POST /offers/me',
-      body: res.body,
-    );
+  Future<List<OfferModel>> listMine({
+    OffersListQuery query = const OffersListQuery(),
+  }) async {
+    final page = await listMinePaged(query: query);
+    return page.items;
   }
 
-  Future<OfferModel> patchMyOffer(String id, UpdateOfferRequest req) async {
-    final res = await _client.patch(
-      OffersHttp.uri(OffersEndpoints.patchMyOffer(id)),
-      headers: await _headers(),
-      body: jsonEncode(req.toJson()),
-    );
-
-    OffersHttp.ensureOk(res);
-    final data = OffersHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'offer', 'item']);
-    if (map != null) return OfferModel.fromJson(map);
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for PATCH /offers/me/$id',
-      body: res.body,
-    );
-  }
-
-  Future<bool> deleteMyOffer(String id) async {
-    final res = await _client.delete(
-      OffersHttp.uri(OffersEndpoints.deleteMyOffer(id)),
+  Future<OffersPagedResponse> listAdminPaged({
+    OffersListQuery query = const OffersListQuery(),
+  }) async {
+    final res = await _client.get(
+      OffersHttp.uri(
+        OffersEndpoints.adminList(),
+        queryParams: query.toQueryMap(),
+      ),
       headers: await _headers(),
     );
-
     OffersHttp.ensureOk(res);
     final data = OffersHttp.decodeJson<dynamic>(res);
-    if (data is Map<String, dynamic>) {
-      final wrapped = data['data'];
-      if (wrapped is Map<String, dynamic>) return wrapped['success'] == true;
-      return data['success'] == true;
-    }
-    return true;
+    final items = _extractListMaps(
+      data,
+      keys: const ['items', 'data', 'offers', 'list'],
+    ).map(OfferModel.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: items.length);
+    return OffersPagedResponse(items: items, meta: meta);
   }
+
+  Future<List<OfferModel>> listAdmin({
+    OffersListQuery query = const OffersListQuery(),
+  }) async {
+    final page = await listAdminPaged(query: query);
+    return page.items;
+  }
+
+  void dispose() => _client.close();
 }

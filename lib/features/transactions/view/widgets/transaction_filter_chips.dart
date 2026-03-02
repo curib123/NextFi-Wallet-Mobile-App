@@ -37,7 +37,7 @@ class TransactionFilterChips extends StatelessWidget {
         label,
         style: TextStyle(
           fontWeight: FontWeight.w700,
-          color: selected ? Colors.white : colors.primary,
+          color: selected ? colors.onPrimary : colors.primary,
         ),
       ),
       selected: selected,
@@ -46,7 +46,7 @@ class TransactionFilterChips extends StatelessWidget {
       backgroundColor: colors.surface,
       shape: StadiumBorder(
         side: BorderSide(
-          color: selected ? Colors.transparent : colors.primary.withOpacity(0.55),
+          color: selected ? colors.surface : colors.primary.withValues(alpha: 0.55),
           width: 1.2,
         ),
       ),
@@ -57,3 +57,4 @@ class TransactionFilterChips extends StatelessWidget {
     );
   }
 }
+

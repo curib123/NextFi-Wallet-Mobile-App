@@ -1,32 +1,24 @@
-import 'package:next_fi/services/offers/models/offers_models.dart';
-
+/// Review model representing a post-trade rating/feedback
 class ReviewModel {
   final String id;
   final String tradeId;
   final String reviewerId;
+  final String revieweeId;
   final int rating;
   final String? comment;
-  final OfferAsset? asset;
-  final String? fiatCurrency;
   final DateTime? createdAt;
-  final DateTime? updatedAt;
 
   const ReviewModel({
     required this.id,
     required this.tradeId,
     required this.reviewerId,
+    required this.revieweeId,
     required this.rating,
     this.comment,
-    this.asset,
-    this.fiatCurrency,
     this.createdAt,
-    this.updatedAt,
   });
 
   factory ReviewModel.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) =>
-        value == null ? null : DateTime.tryParse(value.toString());
-
     String readString(List<String> keys, {String fallback = ''}) {
       for (final key in keys) {
         final value = json[key];
@@ -37,7 +29,7 @@ class ReviewModel {
       return fallback;
     }
 
-    int readInt(List<String> keys, {int fallback = 0}) {
+    int? readInt(List<String> keys) {
       for (final key in keys) {
         final value = json[key];
         if (value is int) return value;
@@ -47,35 +39,74 @@ class ReviewModel {
           if (parsed != null) return parsed;
         }
       }
-      return fallback;
+      return null;
     }
 
-    String? readNullableString(List<String> keys) {
-      final value = readString(keys);
-      return value.isEmpty ? null : value;
+    DateTime? readDate(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final parsed = DateTime.tryParse(value.toString());
+        if (parsed != null) return parsed;
+      }
+      return null;
     }
-
-    final tradeObj = json['trade'] is Map<String, dynamic>
-        ? json['trade'] as Map<String, dynamic>
-        : null;
 
     return ReviewModel(
       id: readString(const ['id']),
       tradeId: readString(const ['tradeId', 'trade_id']),
-      reviewerId: readString(const [
-        'reviewerId',
-        'reviewer_id',
-        'userId',
-        'user_id',
-      ]),
-      rating: readInt(const ['rating']),
-      comment: readNullableString(const ['comment']),
-      asset: tradeObj == null ? null : offerAssetFromApi(tradeObj['asset']),
-      fiatCurrency: tradeObj == null
+      reviewerId: readString(const ['reviewerId', 'reviewer_id']),
+      revieweeId: readString(const ['revieweeId', 'reviewee_id']),
+      rating: readInt(const ['rating']) ?? 0,
+      comment: readString(const ['comment']).isEmpty
           ? null
-          : (tradeObj['fiatCurrency'] ?? tradeObj['fiat_currency'])?.toString(),
-      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
-      updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
+          : readString(const ['comment']),
+      createdAt: readDate(const ['createdAt', 'created_at']),
     );
   }
+}
+
+/// Reviews meta for pagination
+class ReviewsMeta {
+  final int total;
+  final int page;
+  final int limit;
+  final int totalPages;
+
+  const ReviewsMeta({
+    required this.total,
+    required this.page,
+    required this.limit,
+    required this.totalPages,
+  });
+
+  factory ReviewsMeta.fromJson(Map<String, dynamic> json) {
+    int readInt(List<String> keys, {int fallback = 0}) {
+      for (final key in keys) {
+        final v = json[key];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final p = int.tryParse(v.trim());
+          if (p != null) return p;
+        }
+      }
+      return fallback;
+    }
+
+    return ReviewsMeta(
+      total: readInt(const ['total', 'count']),
+      page: readInt(const ['page'], fallback: 1),
+      limit: readInt(const ['limit', 'pageSize', 'page_size'], fallback: 20),
+      totalPages: readInt(const ['totalPages', 'total_pages'], fallback: 1),
+    );
+  }
+}
+
+/// Paginated reviews response
+class ReviewsPagedResponse {
+  final List<ReviewModel> items;
+  final ReviewsMeta meta;
+
+  const ReviewsPagedResponse({required this.items, required this.meta});
 }

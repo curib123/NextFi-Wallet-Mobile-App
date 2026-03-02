@@ -37,8 +37,14 @@ class UpdateWalletRequest {
   final String? publicAddress;
   final String? network;
   final String? label;
+  final bool? isActive;
 
-  const UpdateWalletRequest({this.publicAddress, this.network, this.label});
+  const UpdateWalletRequest({
+    this.publicAddress,
+    this.network,
+    this.label,
+    this.isActive,
+  });
 
   Map<String, dynamic> toJson() => {
     if (publicAddress != null && publicAddress!.trim().isNotEmpty)
@@ -46,5 +52,6 @@ class UpdateWalletRequest {
     if (network != null && network!.trim().isNotEmpty)
       'network': network!.trim(),
     if (label != null && label!.trim().isNotEmpty) 'label': label!.trim(),
+    if (isActive != null) 'isActive': isActive,
   };
 }

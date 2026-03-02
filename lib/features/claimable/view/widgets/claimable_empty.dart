@@ -32,13 +32,13 @@ class ClaimableEmpty extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.08),
+                color: c.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon ?? LucideIcons.inbox,
                 size: 36,
-                color: c.primary.withOpacity(0.5),
+                color: c.primary.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 20),
@@ -69,7 +69,7 @@ class ClaimableEmpty extends StatelessWidget {
                 onPressed: onCreate,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: c.onPrimary,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   shape: RoundedRectangleBorder(

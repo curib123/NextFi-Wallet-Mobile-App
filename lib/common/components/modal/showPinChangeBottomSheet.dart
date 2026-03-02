@@ -22,7 +22,7 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (_) => const _VerifyCurrentPinSheet(),
     );
 
@@ -36,7 +36,7 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _PinChangeSheet(preAuthed: preAuthed),
   );
 }
@@ -200,7 +200,7 @@ class _VerifyCurrentPinSheetState extends State<_VerifyCurrentPinSheet>
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
                 blurRadius: 24,
                 offset: const Offset(0, -4),
               ),
@@ -451,7 +451,7 @@ class _PinChangeSheetState extends State<_PinChangeSheet>
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
                 blurRadius: 24,
                 offset: const Offset(0, -4),
               ),
@@ -568,7 +568,7 @@ Widget _buildHandle(AppColor colors) {
     width: 40,
     height: 4,
     decoration: BoxDecoration(
-      color: colors.border.withOpacity(0.5),
+      color: colors.border.withValues(alpha: 0.5),
       borderRadius: BorderRadius.circular(100),
     ),
   );
@@ -591,13 +591,13 @@ Widget _buildHeader(
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: colors.primary.withOpacity(0.3),
+              color: colors.primary.withValues(alpha: 0.3),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Icon(icon, color: Colors.white, size: 22),
+        child: Icon(icon, color: colors.onPrimary, size: 22),
       ),
       const SizedBox(width: 14),
       Expanded(
@@ -622,7 +622,7 @@ Widget _buildHeader(
         ),
       ),
       Material(
-        color: Colors.transparent,
+        color: colors.surface,
         child: InkWell(
           onTap: onClose,
           borderRadius: BorderRadius.circular(12),
@@ -642,9 +642,9 @@ Widget _buildLockoutWarning(AppColor colors, Duration remaining) {
   return Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: colors.error.withOpacity(0.1),
+      color: colors.error.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: colors.error.withOpacity(0.3), width: 1),
+      border: Border.all(color: colors.error.withValues(alpha: 0.3), width: 1),
     ),
     child: Row(
       children: [
@@ -667,7 +667,7 @@ Widget _buildLockoutWarning(AppColor colors, Duration remaining) {
                 'Try again in ${remaining.inSeconds}s',
                 style: TextStyle(
                   fontSize: 12,
-                  color: colors.error.withOpacity(0.8),
+                  color: colors.error.withValues(alpha: 0.8),
                 ),
               ),
             ],
@@ -682,9 +682,9 @@ Widget _buildSecurityTips(AppColor colors) {
   return Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: colors.primary.withOpacity(0.08),
+      color: colors.primary.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: colors.primary.withOpacity(0.2), width: 1),
+      border: Border.all(color: colors.primary.withValues(alpha: 0.2), width: 1),
     ),
     child: Row(
       children: [
@@ -729,7 +729,7 @@ Widget _buildPinInput(
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border.withOpacity(0.3), width: 1),
+          border: Border.all(color: colors.border.withValues(alpha: 0.3), width: 1),
         ),
         child: TextFormField(
           controller: controller,
@@ -750,7 +750,7 @@ Widget _buildPinInput(
             counterText: '',
             hintText: '● ● ● ● ● ●',
             hintStyle: TextStyle(
-              color: colors.textSecondary.withOpacity(0.3),
+              color: colors.textSecondary.withValues(alpha: 0.3),
               letterSpacing: 8,
             ),
             suffixIcon: IconButton(
@@ -789,7 +789,7 @@ Widget _buildButton(
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        side: BorderSide(color: colors.border.withOpacity(0.3)),
+        side: BorderSide(color: colors.border.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -802,22 +802,22 @@ Widget _buildButton(
     onPressed: onPressed,
     style: ElevatedButton.styleFrom(
       backgroundColor: colors.primary,
-      foregroundColor: Colors.white,
+      foregroundColor: colors.onPrimary,
       padding: const EdgeInsets.symmetric(vertical: 14),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       elevation: 0,
-      disabledBackgroundColor: colors.textSecondary.withOpacity(0.2),
+      disabledBackgroundColor: colors.textSecondary.withValues(alpha: 0.2),
     ),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (loading)
-          const SizedBox(
+          SizedBox(
             width: 16,
             height: 16,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation(Colors.white),
+              valueColor: AlwaysStoppedAnimation(colors.onPrimary),
             ),
           )
         else

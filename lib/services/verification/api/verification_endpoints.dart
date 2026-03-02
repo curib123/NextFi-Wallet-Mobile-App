@@ -4,4 +4,5 @@ class VerificationEndpoints {
   static String me() => '$base/me';
 
   static String submit() => '$base/submit';
+  static String resubmit() => '$base/resubmit';
 }

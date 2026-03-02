@@ -1,20 +1,40 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:next_fi/services/base_url/base_url.dart';
 
-import '../helpers/reviews_exceptions.dart';
-import '../helpers/reviews_helpers.dart';
 import '../models/reviews_dtos.dart';
 import '../models/reviews_models.dart';
 import 'reviews_endpoints.dart';
 
-typedef TokenProvider = Future<String?> Function();
+/// Reviews HTTP helper
+class ReviewsHttp {
+  static Uri uri(String path, {Map<String, String>? queryParams}) {
+    final base = Uri.parse('$centralized_baseUrl$path');
+    if (queryParams == null || queryParams.isEmpty) return base;
+    final merged = <String, String>{...base.queryParameters, ...queryParams};
+    return base.replace(queryParameters: merged);
+  }
 
+  static T decodeJson<T>(http.Response res) {
+    if (res.body.isEmpty) return {} as T;
+    return jsonDecode(res.body) as T;
+  }
+
+  static void ensureOk(http.Response res) {
+    if (res.statusCode >= 200 && res.statusCode < 300) return;
+    throw Exception('Request failed: ${res.statusCode} - ${res.body}');
+  }
+}
+
+/// Reviews API service
 class ReviewsService {
-  ReviewsService({required this.tokenProvider, http.Client? client})
-    : _client = client ?? http.Client();
+  ReviewsService({
+    required this.tokenProvider,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
-  final TokenProvider tokenProvider;
+  final Future<String?> Function() tokenProvider;
   final http.Client _client;
 
   static const Set<String> _envelopeKeys = {
@@ -29,6 +49,7 @@ class ReviewsService {
     'limit',
     'total',
     'totalPages',
+    'total_pages',
     'success',
     'ok',
     'status',
@@ -37,19 +58,38 @@ class ReviewsService {
     'errors',
   };
 
-  bool _isEnvelopeMap(Map<String, dynamic> map) =>
-      map.keys.every((k) => _envelopeKeys.contains(k.toString()));
-
-  Future<Map<String, String>> _headers() async {
+  Future<Map<String, String>> _publicHeaders() async {
     final token = await tokenProvider();
     if (token == null || token.isEmpty) {
-      throw ApiException(401, 'Missing JWT token');
+      return const {'Content-Type': 'application/json'};
     }
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
   }
+
+  Future<Map<String, String>> _headers() async {
+    final token = await tokenProvider();
+    if (token == null || token.isEmpty) {
+      throw Exception('Missing JWT token');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  Map<String, dynamic>? _asStringKeyMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return null;
+  }
+
+  bool _isEnvelopeMap(Map<String, dynamic> map) =>
+      map.keys.every((k) => _envelopeKeys.contains(k.toString()));
 
   Map<String, dynamic>? _extractMap(
     dynamic data, {
@@ -68,21 +108,20 @@ class ReviewsService {
       return null;
     }
 
-    if (data is Map<String, dynamic>) {
-      if (data.isEmpty) return null;
+    final map = _asStringKeyMap(data);
+    if (map == null || map.isEmpty) return null;
 
-      for (final key in keys) {
-        if (!data.containsKey(key)) continue;
-        final extracted = _extractMap(data[key], keys: keys, depth: depth + 1);
-        if (extracted != null) return extracted;
-      }
+    for (final key in keys) {
+      if (!map.containsKey(key)) continue;
+      final extracted = _extractMap(map[key], keys: keys, depth: depth + 1);
+      if (extracted != null) return extracted;
+    }
 
-      if (!_isEnvelopeMap(data)) return data;
+    if (!_isEnvelopeMap(map)) return map;
 
-      for (final value in data.values) {
-        final extracted = _extractMap(value, keys: keys, depth: depth + 1);
-        if (extracted != null) return extracted;
-      }
+    for (final value in map.values) {
+      final extracted = _extractMap(value, keys: keys, depth: depth + 1);
+      if (extracted != null) return extracted;
     }
 
     return null;
@@ -96,8 +135,12 @@ class ReviewsService {
     if (depth > 8 || data == null) return const [];
 
     if (data is List) {
-      final items = data.whereType<Map<String, dynamic>>().toList();
+      final items = data
+          .map(_asStringKeyMap)
+          .whereType<Map<String, dynamic>>()
+          .toList();
       if (items.isNotEmpty) return items;
+
       for (final item in data) {
         final nested = _extractListMaps(item, keys: keys, depth: depth + 1);
         if (nested.isNotEmpty) return nested;
@@ -105,96 +148,136 @@ class ReviewsService {
       return const [];
     }
 
-    if (data is Map<String, dynamic>) {
-      for (final key in keys) {
-        if (!data.containsKey(key)) continue;
-        final nested = _extractListMaps(
-          data[key],
-          keys: keys,
-          depth: depth + 1,
-        );
-        if (nested.isNotEmpty) return nested;
-      }
-      for (final value in data.values) {
-        final nested = _extractListMaps(value, keys: keys, depth: depth + 1);
-        if (nested.isNotEmpty) return nested;
-      }
+    final map = _asStringKeyMap(data);
+    if (map == null) return const [];
+
+    for (final key in keys) {
+      if (!map.containsKey(key)) continue;
+      final nested = _extractListMaps(map[key], keys: keys, depth: depth + 1);
+      if (nested.isNotEmpty) return nested;
+    }
+
+    for (final value in map.values) {
+      final nested = _extractListMaps(value, keys: keys, depth: depth + 1);
+      if (nested.isNotEmpty) return nested;
     }
 
     return const [];
   }
 
-  Future<ReviewModel> createReviewAsBuyer(CreateReviewRequest req) async {
-    final res = await _client.post(
-      ReviewsHttp.uri(ReviewsEndpoints.createBuyerReview()),
-      headers: await _headers(),
-      body: jsonEncode(req.toJson()),
-    );
+  ReviewsMeta _extractMeta(dynamic data, {required int fallbackCount}) {
+    final map = _asStringKeyMap(data);
+    if (map != null) {
+      final meta = _asStringKeyMap(map['meta']);
+      if (meta != null) return ReviewsMeta.fromJson(meta);
 
-    ReviewsHttp.ensureOk(res);
-    final data = ReviewsHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'review', 'item']);
-    if (map != null) return ReviewModel.fromJson(map);
+      final pagination = _asStringKeyMap(map['pagination']);
+      if (pagination != null) return ReviewsMeta.fromJson(pagination);
 
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for POST /reviews',
-      body: res.body,
+      if (map.containsKey('page') ||
+          map.containsKey('limit') ||
+          map.containsKey('total') ||
+          map.containsKey('totalPages') ||
+          map.containsKey('total_pages')) {
+        return ReviewsMeta.fromJson(map);
+      }
+    }
+
+    return ReviewsMeta(
+      total: fallbackCount,
+      page: 1,
+      limit: fallbackCount == 0 ? 20 : fallbackCount,
+      totalPages: 1,
     );
   }
 
-  Future<List<ReviewModel>> listMyReviews(ReviewsQuery query) async {
+  /// Get public reviews for a user
+  Future<ReviewsPagedResponse> getUserReviewsPaged({
+    required String userId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async {
     final res = await _client.get(
       ReviewsHttp.uri(
-        ReviewsEndpoints.listMyReviews(),
-        queryParams: query.toQueryMap(),
+        ReviewsEndpoints.userReviews(userId),
+        queryParams: query.toQueryParams(),
       ),
-      headers: await _headers(),
+      headers: await _publicHeaders(),
     );
-
     ReviewsHttp.ensureOk(res);
     final data = ReviewsHttp.decodeJson<dynamic>(res);
     final items = _extractListMaps(
       data,
       keys: const ['items', 'data', 'reviews', 'list'],
-    );
-    return items.map(ReviewModel.fromJson).toList();
+    ).map(ReviewModel.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: items.length);
+    return ReviewsPagedResponse(items: items, meta: meta);
   }
 
-  Future<ReviewModel> createReviewAsSeller(CreateReviewRequest req) async {
+  /// Get list of reviews for a user (non-paginated)
+  Future<List<ReviewModel>> getUserReviews({
+    required String userId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async {
+    final page = await getUserReviewsPaged(userId: userId, query: query);
+    return page.items;
+  }
+
+  /// Get average rating for a user
+  Future<double?> getUserAverageRating(String userId) async {
+    try {
+      final reviews = await getUserReviews(userId: userId);
+      if (reviews.isEmpty) return null;
+      final total = reviews.fold<int>(0, (sum, r) => sum + r.rating);
+      return total / reviews.length;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get review count for a user
+  Future<int> getUserReviewCount(String userId) async {
+    try {
+      final reviews = await getUserReviews(userId: userId);
+      return reviews.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Create a new review (authenticated)
+  Future<ReviewModel> create(CreateReviewRequest req) async {
     final res = await _client.post(
-      ReviewsHttp.uri(ReviewsEndpoints.createSellerReview()),
+      ReviewsHttp.uri(ReviewsEndpoints.create()),
       headers: await _headers(),
       body: jsonEncode(req.toJson()),
     );
-
     ReviewsHttp.ensureOk(res);
     final data = ReviewsHttp.decodeJson<dynamic>(res);
-    final map = _extractMap(data, keys: const ['data', 'review', 'item']);
+    final map = _extractMap(data, keys: const ['data', 'item', 'review']);
     if (map != null) return ReviewModel.fromJson(map);
-
-    throw ApiException(
-      res.statusCode,
-      'Unexpected response for POST /reviews/seller/me',
-      body: res.body,
-    );
+    throw Exception('Unexpected response for POST /reviews');
   }
 
-  Future<List<ReviewModel>> listSellerReviews(ReviewsQuery query) async {
+  /// Get current user's reviews (authenticated)
+  Future<ReviewsPagedResponse> getMyReviewsPaged({
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async {
     final res = await _client.get(
       ReviewsHttp.uri(
-        ReviewsEndpoints.listSellerReviews(),
-        queryParams: query.toQueryMap(),
+        ReviewsEndpoints.me(),
+        queryParams: query.toQueryParams(),
       ),
       headers: await _headers(),
     );
-
     ReviewsHttp.ensureOk(res);
     final data = ReviewsHttp.decodeJson<dynamic>(res);
     final items = _extractListMaps(
       data,
       keys: const ['items', 'data', 'reviews', 'list'],
-    );
-    return items.map(ReviewModel.fromJson).toList();
+    ).map(ReviewModel.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: items.length);
+    return ReviewsPagedResponse(items: items, meta: meta);
   }
+
+  void dispose() => _client.close();
 }

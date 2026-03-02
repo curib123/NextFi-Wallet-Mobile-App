@@ -13,7 +13,6 @@ import 'package:next_fi/features/import_wallet/view/widgets/word_badge.dart';
 import 'package:next_fi/features/import_wallet/view_model/import_wallet_vm.dart';
 import 'package:next_fi/features/seed_phrases/view/widgets/confirm_tile.dart';
 import 'package:provider/provider.dart';
-import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
@@ -132,7 +131,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.surface,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) {
           final ready = ackPrivate && ackCorrect;
@@ -290,18 +289,18 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
   PreferredSizeWidget _buildAppBar(AppColor colors, ImportWalletVM vm) {
     return AppBar(
       elevation: 0,
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
+      backgroundColor: colors.surface,
+      surfaceTintColor: colors.surface,
       leading: Container(
         margin: const EdgeInsets.only(left: 8),
         child: IconButton(
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: colors.surface.withOpacity(0.9),
+              color: colors.surface.withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: colors.border.withOpacity(0.15),
+                color: colors.border.withValues(alpha: 0.15),
                 width: 1.5,
               ),
             ),
@@ -318,10 +317,10 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
       title: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: colors.surface.withOpacity(0.9),
+          color: colors.surface.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: colors.border.withOpacity(0.15),
+            color: colors.border.withValues(alpha: 0.15),
             width: 1.5,
           ),
         ),
@@ -356,13 +355,13 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    colors.primary.withOpacity(0.12),
-                    colors.primary.withOpacity(0.06),
+                    colors.primary.withValues(alpha: 0.12),
+                    colors.primary.withValues(alpha: 0.06),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: colors.primary.withOpacity(0.2),
+                  color: colors.primary.withValues(alpha: 0.2),
                   width: 1.5,
                 ),
               ),
@@ -389,13 +388,13 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [colors.surface, colors.surface.withOpacity(0.95)],
+          colors: [colors.surface, colors.surface.withValues(alpha: 0.95)],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border.withOpacity(0.15), width: 1.5),
+        border: Border.all(color: colors.border.withValues(alpha: 0.15), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: colors.textPrimary.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -434,9 +433,9 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  colors.border.withOpacity(0),
-                  colors.border.withOpacity(0.2),
-                  colors.border.withOpacity(0),
+                  colors.border.withValues(alpha: 0),
+                  colors.border.withValues(alpha: 0.2),
+                  colors.border.withValues(alpha: 0),
                 ],
               ),
             ),
@@ -457,7 +456,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
             decoration: InputDecoration(
               hintText: "Enter your 12 or 24 word recovery phrase...",
               hintStyle: TextStyle(
-                color: colors.textSecondary.withOpacity(0.5),
+                color: colors.textSecondary.withValues(alpha: 0.5),
                 fontWeight: FontWeight.w500,
               ),
               filled: false,
@@ -473,7 +472,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
                       icon: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: colors.background.withOpacity(0.5),
+                          color: colors.background.withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -547,13 +546,13 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              colors.primary.withOpacity(0.08),
-              colors.primary.withOpacity(0.04),
+              colors.primary.withValues(alpha: 0.08),
+              colors.primary.withValues(alpha: 0.04),
             ],
           ),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: colors.primary.withOpacity(0.15),
+            color: colors.primary.withValues(alpha: 0.15),
             width: 1.5,
           ),
         ),
@@ -585,12 +584,12 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.error.withOpacity(0.12),
-            colors.error.withOpacity(0.06),
+            colors.error.withValues(alpha: 0.12),
+            colors.error.withValues(alpha: 0.06),
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.error.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: colors.error.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Row(
         children: [
@@ -628,14 +627,14 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [colors.surface.withOpacity(0.95), colors.surface],
+          colors: [colors.surface.withValues(alpha: 0.95), colors.surface],
         ),
         border: Border(
-          top: BorderSide(color: colors.border.withOpacity(0.1), width: 1),
+          top: BorderSide(color: colors.border.withValues(alpha: 0.1), width: 1),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: colors.textPrimary.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, -4),
             spreadRadius: -2,
@@ -660,7 +659,7 @@ class _ImportWalletScreenState extends State<ImportWalletScreen>
               Icon(
                 LucideIcons.lightbulb,
                 size: 16,
-                color: colors.textSecondary.withOpacity(0.7),
+                color: colors.textSecondary.withValues(alpha: 0.7),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -717,20 +716,20 @@ class _SuggestionChipState extends State<_SuggestionChip> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: _isPressed
-              ? widget.colors.primary.withOpacity(0.15)
-              : widget.colors.background.withOpacity(0.6),
+              ? widget.colors.primary.withValues(alpha: 0.15)
+              : widget.colors.background.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: _isPressed
-                ? widget.colors.primary.withOpacity(0.3)
-                : widget.colors.border.withOpacity(0.2),
+                ? widget.colors.primary.withValues(alpha: 0.3)
+                : widget.colors.border.withValues(alpha: 0.2),
             width: 1.5,
           ),
           boxShadow: _isPressed
               ? []
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: widget.colors.textPrimary.withValues(alpha: 0.02),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -797,18 +796,18 @@ class _ModernImportButtonState extends State<_ModernImportButton> {
                   end: Alignment.bottomRight,
                   colors: _isPressed
                       ? [
-                          widget.colors.primary.withOpacity(0.9),
-                          widget.colors.primary.withOpacity(0.8),
+                          widget.colors.primary.withValues(alpha: 0.9),
+                          widget.colors.primary.withValues(alpha: 0.8),
                         ]
                       : [
                           widget.colors.primary,
-                          widget.colors.primary.withOpacity(0.9),
+                          widget.colors.primary.withValues(alpha: 0.9),
                         ],
                 )
               : LinearGradient(
                   colors: [
-                    widget.colors.primary.withOpacity(0.5),
-                    widget.colors.primary.withOpacity(0.45),
+                    widget.colors.primary.withValues(alpha: 0.5),
+                    widget.colors.primary.withValues(alpha: 0.45),
                   ],
                 ),
           borderRadius: BorderRadius.circular(14),
@@ -816,7 +815,7 @@ class _ModernImportButtonState extends State<_ModernImportButton> {
               ? []
               : [
                   BoxShadow(
-                    color: widget.colors.primary.withOpacity(0.3),
+                    color: widget.colors.primary.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -825,13 +824,13 @@ class _ModernImportButtonState extends State<_ModernImportButton> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.download, size: 18, color: Colors.white),
+            Icon(LucideIcons.download, size: 18, color: widget.colors.onPrimary),
             const SizedBox(width: 10),
             Text(
               widget.text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: widget.colors.onPrimary,
                 fontSize: 15,
                 letterSpacing: 0.2,
               ),
@@ -876,11 +875,11 @@ class _SecurityChecklistSheet extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [colors.surface, colors.surface.withOpacity(0.98)],
+            colors: [colors.surface, colors.surface.withValues(alpha: 0.98)],
           ),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(
-            color: colors.border.withOpacity(0.15),
+            color: colors.border.withValues(alpha: 0.15),
             width: 1.5,
           ),
         ),
@@ -901,8 +900,8 @@ class _SecurityChecklistSheet extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      colors.border.withOpacity(0.5),
-                      colors.border.withOpacity(0.3),
+                      colors.border.withValues(alpha: 0.5),
+                      colors.border.withValues(alpha: 0.3),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(2),
@@ -919,13 +918,13 @@ class _SecurityChecklistSheet extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          colors.warning.withOpacity(0.15),
-                          colors.warning.withOpacity(0.08),
+                          colors.warning.withValues(alpha: 0.15),
+                          colors.warning.withValues(alpha: 0.08),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: colors.warning.withOpacity(0.3),
+                        color: colors.warning.withValues(alpha: 0.3),
                         width: 1.5,
                       ),
                     ),
@@ -1022,16 +1021,16 @@ class _SheetButton extends StatelessWidget {
     return AppElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: isPrimary
-            ? (enabled ? colors.primary : colors.primary.withOpacity(0.5))
-            : colors.background.withOpacity(0.6),
-        foregroundColor: isPrimary ? Colors.white : colors.textPrimary,
+            ? (enabled ? colors.primary : colors.primary.withValues(alpha: 0.5))
+            : colors.background.withValues(alpha: 0.6),
+        foregroundColor: isPrimary ? colors.onPrimary : colors.textPrimary,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: isPrimary
               ? BorderSide.none
-              : BorderSide(color: colors.border.withOpacity(0.25), width: 1.5),
+              : BorderSide(color: colors.border.withValues(alpha: 0.25), width: 1.5),
         ),
       ),
       onPressed: enabled ? onPressed : null,

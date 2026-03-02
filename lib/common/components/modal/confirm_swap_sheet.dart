@@ -18,7 +18,7 @@ Future<double?> showConfirmMarketSheet(
   return showModalBottomSheet<double?>(
     context: context,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     isScrollControlled: true,
     builder: (_) => _ConfirmMarketSheet(fmt: fmt),
   );
@@ -33,7 +33,7 @@ Future<bool?> showConfirmLimitSheet(
     showModalBottomSheet<bool?>(
       context: context,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       isScrollControlled: true,
       builder: (_) => _ConfirmLimitSheet(fmt: fmt, price: price),
     );
@@ -48,7 +48,7 @@ Future<bool?> showConfirmScheduleSheet(
     showModalBottomSheet<bool?>(
       context: context,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       isScrollControlled: true,
       builder: (_) => _ConfirmScheduleSheet(fmt: fmt, start: start, end: end),
     );
@@ -333,7 +333,7 @@ class _SheetShell extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
             blurRadius: 24,
             offset: const Offset(0, -4),
           ),
@@ -351,7 +351,7 @@ class _SheetShell extends StatelessWidget {
                 width: 40, height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.5),
+                  color: c.border.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(100),
                 ),
               ),
@@ -386,12 +386,12 @@ class _Header extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: c.primary.withOpacity(0.3),
+                color: c.primary.withValues(alpha: 0.3),
                 blurRadius: 12, offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: Icon(icon, color: Colors.white, size: 22),
+          child: Icon(icon, color: AppColor.of(context).onPrimary, size: 22),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -427,7 +427,7 @@ class _SwapVisualization extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: c.primaryGradient,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.primary.withOpacity(0.2)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -438,7 +438,7 @@ class _SwapVisualization extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: c.primary.withOpacity(0.3), width: 2),
+              border: Border.all(color: c.primary.withValues(alpha: 0.3), width: 2),
             ),
             child: Icon(LucideIcons.arrowDown, size: 16, color: c.primary),
           ),
@@ -464,7 +464,7 @@ class _AmountBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accentColor.withOpacity(0.2)),
+        border: Border.all(color: accentColor.withValues(alpha: 0.2)),
       ),
       child: Text(
         text,
@@ -489,7 +489,7 @@ class _DetailsCard extends StatelessWidget {
     for (var i = 0; i < rows.length; i++) {
       divided.add(rows[i]);
       if (i < rows.length - 1) {
-        divided.add(Divider(color: c.border.withOpacity(0.2), height: 1));
+        divided.add(Divider(color: c.border.withValues(alpha: 0.2), height: 1));
       }
     }
     return Container(
@@ -497,7 +497,7 @@ class _DetailsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.3)),
+        border: Border.all(color: c.border.withValues(alpha: 0.3)),
       ),
       child: Column(children: divided),
     );
@@ -529,8 +529,8 @@ class _DetailRow extends StatelessWidget {
             width: 32, height: 32,
             decoration: BoxDecoration(
               color: highlight
-                  ? c.primary.withOpacity(0.1)
-                  : c.border.withOpacity(0.1),
+                  ? c.primary.withValues(alpha: 0.1)
+                  : c.border.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16,
@@ -548,7 +548,7 @@ class _DetailRow extends StatelessWidget {
                   Text(subtitle!,
                       style: TextStyle(
                           fontSize: 11,
-                          color: c.textSecondary.withOpacity(0.7))),
+                          color: c.textSecondary.withValues(alpha: 0.7))),
                 ],
               ],
             ),
@@ -575,9 +575,9 @@ class _OrderTypeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -607,7 +607,7 @@ class _TimeWindow extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: c.primaryGradient,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.primary.withOpacity(0.2)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [

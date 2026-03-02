@@ -1,2 +1,2 @@
 // ── Base ──────────────────────────────────────────────────────────
- const cetralized_baseUrl = 'https://nextfi-backend.onrender.com/api/v1';
+ const String centralized_baseUrl = 'https://nextfi-backend.onrender.com/api/v1'; 

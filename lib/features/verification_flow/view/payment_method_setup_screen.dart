@@ -1,29 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
+import 'package:next_fi/services/merchant_payment_account/merchant_payment_account_core_service.dart';
+import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_dtos.dart';
+import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_dtos.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 
-class PaymentMethodSetupScreen extends StatefulWidget {
-  const PaymentMethodSetupScreen({super.key});
+// ─────────────────────────────────────────────────────────────────────────────
+// SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
+
+class PaymentAccountSetupScreen extends StatefulWidget {
+  /// [isMerchant] = true  → uses MerchantPaymentAccountCoreService
+  /// [isMerchant] = false → uses PaymentMethodAndAccountsCoreService (default)
+  final bool isMerchant;
+
+  const PaymentAccountSetupScreen({super.key, this.isMerchant = false});
 
   @override
-  State<PaymentMethodSetupScreen> createState() =>
-      _PaymentMethodSetupScreenState();
+  State<PaymentAccountSetupScreen> createState() =>
+      _PaymentAccountSetupScreenState();
 }
 
-class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
+class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     with SingleTickerProviderStateMixin {
-  final _core = PaymentMethodAndAccountsCoreService.I;
+  final _merchantCore = MerchantPaymentAccountCoreService.I;
+  final _paymentCore = PaymentMethodAndAccountsCoreService.I;
 
   final _accountNameCtrl = TextEditingController();
   final _accountNoCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
-  final _instructionsCtrl = TextEditingController();
+  final _instructionsCtrl = TextEditingController(); // merchant only
 
   bool _loading = true;
   bool _saving = false;
@@ -31,12 +43,14 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
   bool _setAsActive = true;
 
   List<PaymentMethodModel> _methods = const [];
-  List<UserPaymentAccountModel> _accounts = const [];
+  List<_AccountItem> _accounts = const [];
   PaymentMethodModel? _selectedMethod;
   String? _activeAccountId;
 
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
+
+  bool get _isMerchant => widget.isMerchant;
 
   @override
   void initState() {
@@ -59,20 +73,28 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     super.dispose();
   }
 
+  // ── Data ──────────────────────────────────────────────────────────────────
+
   Future<void> _loadAll() async {
     setState(() => _loading = true);
     try {
-      final methods = await _core.listPaymentMethods(activeOnly: true);
-      final accounts = await _core.listMyPaymentAccounts();
+      final methods = await _paymentCore.listPaymentMethods(activeOnly: true);
+      final List<_AccountItem> accounts;
+
+      if (_isMerchant) {
+        final raw = await _merchantCore.listAll();
+        accounts = raw.map(_AccountItem.fromMerchant).toList();
+      } else {
+        final raw = await _paymentCore.listMyPaymentAccounts();
+        accounts = raw.map(_AccountItem.fromUser).toList();
+      }
+
       if (!mounted) return;
       setState(() {
         _methods = methods;
         _accounts = accounts;
         _selectedMethod = methods.isNotEmpty ? methods.first : null;
-        _activeAccountId = accounts
-            .where((a) => a.isActive)
-            .map((a) => a.id)
-            .firstOrNull;
+        _activeAccountId = accounts.firstWhereOrNull((a) => a.isActive)?.id;
         _loading = false;
       });
       _fadeCtrl.forward(from: 0);
@@ -98,19 +120,40 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     HapticFeedback.mediumImpact();
     setState(() => _saving = true);
     try {
-      final req = CreateUserPaymentAccountRequest(
-        paymentMethodId: method.id,
-        accountName: accountName,
-        accountNo: _accountNoCtrl.text.trim().isEmpty
-            ? null
-            : _accountNoCtrl.text.trim(),
-        label: _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim(),
-        instructions: _instructionsCtrl.text.trim().isEmpty
-            ? null
-            : _instructionsCtrl.text.trim(),
-        isActive: _setAsActive,
-      );
-      await _core.createMyPaymentAccount(req);
+      if (_isMerchant) {
+        await _merchantCore.create(
+          CreateMerchantPaymentAccountRequest(
+            paymentMethodId: method.id,
+            accountName: accountName,
+            accountNo: _accountNoCtrl.text.trim().isEmpty
+                ? null
+                : _accountNoCtrl.text.trim(),
+            label: _labelCtrl.text.trim().isEmpty
+                ? null
+                : _labelCtrl.text.trim(),
+            instructions: _instructionsCtrl.text.trim().isEmpty
+                ? null
+                : _instructionsCtrl.text.trim(),
+            isActive: _setAsActive,
+          ),
+        );
+      } else {
+        await _paymentCore.createMyPaymentAccount(
+          CreateUserPaymentAccountRequest(
+            paymentMethodId: method.id,
+            accountName: accountName,
+            accountNo: _accountNoCtrl.text.trim().isEmpty
+                ? null
+                : _accountNoCtrl.text.trim(),
+            label: _labelCtrl.text.trim().isEmpty
+                ? null
+                : _labelCtrl.text.trim(),
+            instructions: null,
+            isActive: _setAsActive,
+          ),
+        );
+      }
+
       _accountNameCtrl.clear();
       _accountNoCtrl.clear();
       _labelCtrl.clear();
@@ -120,9 +163,12 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
       if (!mounted) return;
       await showVerificationResultModal(
         context,
-        title: 'Payment Account Added',
-        message: 'Your payment account has been created.',
+        title: _isMerchant ? 'Merchant Account Added' : 'Payment Account Added',
+        message: _isMerchant
+            ? 'Your merchant payment account has been created.'
+            : 'Your payment account has been created.',
       );
+      if (_isMerchant && mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       await showVerificationResultModal(
@@ -136,15 +182,22 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     }
   }
 
-  Future<void> _setActiveAccount(UserPaymentAccountModel account) async {
+  Future<void> _setActiveAccount(_AccountItem account) async {
     if (_settingActive || account.isActive) return;
     HapticFeedback.lightImpact();
     setState(() => _settingActive = true);
     try {
-      await _core.updateMyPaymentAccount(
-        account.id,
-        const UpdateUserPaymentAccountRequest(isActive: true),
-      );
+      if (_isMerchant) {
+        await _merchantCore.update(
+          account.id,
+          const UpdateMerchantPaymentAccountRequest(isActive: true),
+        );
+      } else {
+        await _paymentCore.updateMyPaymentAccount(
+          account.id,
+          const UpdateUserPaymentAccountRequest(isActive: true),
+        );
+      }
       if (!mounted) return;
       await _loadAll();
     } catch (e) {
@@ -166,48 +219,48 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
     );
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     return Scaffold(
       backgroundColor: c.background,
-      appBar: _buildAppBar(c),
-      body: _loading ? _buildLoader() : _buildBody(c),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(AppColor c) {
-    return AppBar(
-      backgroundColor: c.background,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      titleSpacing: 20,
-      title: Text(
-        'Payment Setup',
-        style: TextStyle(
-          color: c.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
-        ),
-      ),
-      leading: Padding(
-        padding: const EdgeInsets.only(left: 8),
-        child: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new_rounded,
+      appBar: AppBar(
+        backgroundColor: c.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleSpacing: 20,
+        title: Text(
+          _isMerchant ? 'Merchant Payment Setup' : 'Payment Setup',
+          style: TextStyle(
             color: c.textPrimary,
-            size: 18,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
           ),
-          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: c.textPrimary,
+              size: 18,
+            ),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
         ),
       ),
+      body: _loading
+          ? PageLoader(
+              label: _isMerchant
+                  ? 'Loading merchant payment setup...'
+                  : 'Loading payment setup...',
+            )
+          : _buildBody(c),
     );
-  }
-
-  Widget _buildLoader() {
-    return const PageLoader(label: 'Loading payment setup...');
   }
 
   Widget _buildBody(AppColor c) {
@@ -221,50 +274,46 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
           children: [
-            _StepHero(c: c),
-            const SizedBox(height: 24),
-
-            _SectionLabel(label: 'SELECT METHOD', c: c),
-            const SizedBox(height: 10),
-            _methods.isEmpty
-                ? _EmptyCard(
-                    icon: Icons.payment_outlined,
-                    title: 'No Payment Methods',
-                    body: 'No active payment methods are available right now.',
-                    c: c,
-                  )
-                : _MethodGrid(
-                    methods: _methods,
-                    selected: _selectedMethod,
-                    onSelect: (m) => setState(() => _selectedMethod = m),
-                    c: c,
-                  ),
-
+            _StepHero(isMerchant: _isMerchant, c: c),
             const SizedBox(height: 28),
 
-            _SectionLabel(label: 'ADD NEW ACCOUNT', c: c),
+            _SectionLabel(
+              label: _isMerchant ? 'ADD MERCHANT ACCOUNT' : 'ADD NEW ACCOUNT',
+              c: c,
+            ),
             const SizedBox(height: 10),
+
             _AccountForm(
+              methods: _methods,
+              selectedMethod: _selectedMethod,
+              onMethodChanged: (m) => setState(() => _selectedMethod = m),
               accountNameCtrl: _accountNameCtrl,
               accountNoCtrl: _accountNoCtrl,
               labelCtrl: _labelCtrl,
-              instructionsCtrl: _instructionsCtrl,
+              instructionsCtrl: _isMerchant ? _instructionsCtrl : null,
               setAsActive: _setAsActive,
               saving: _saving,
               onSetAsActiveChanged: (v) => setState(() => _setAsActive = v),
               onSubmit: _createAccount,
+              isMerchant: _isMerchant,
               c: c,
             ),
 
             const SizedBox(height: 28),
 
-            _SectionLabel(label: 'YOUR ACCOUNTS', c: c),
+            _SectionLabel(
+              label: _isMerchant ? 'YOUR MERCHANT ACCOUNTS' : 'YOUR ACCOUNTS',
+              c: c,
+            ),
             const SizedBox(height: 10),
+
             _accounts.isEmpty
                 ? _EmptyCard(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'No Accounts Yet',
-                    body: 'Add your first payment account above.',
+                    body: _isMerchant
+                        ? 'Add your first merchant payment account above.'
+                        : 'Add your first payment account above.',
                     c: c,
                   )
                 : _AccountList(
@@ -282,11 +331,69 @@ class _PaymentMethodSetupScreenState extends State<PaymentMethodSetupScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// UNIFIED ACCOUNT ITEM
+// Thin wrapper so the UI doesn't care whether it's a user or merchant account.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AccountItem {
+  final String id;
+  final String accountName;
+  final String? accountNo;
+  final String? label;
+  final bool isActive;
+  final PaymentMethodModel? paymentMethod;
+
+  const _AccountItem({
+    required this.id,
+    required this.accountName,
+    this.accountNo,
+    this.label,
+    required this.isActive,
+    this.paymentMethod,
+  });
+
+  factory _AccountItem.fromUser(UserPaymentAccountModel m) => _AccountItem(
+    id: m.id,
+    accountName: m.accountName,
+    accountNo: m.accountNo,
+    label: m.label,
+    isActive: m.isActive,
+    paymentMethod: m.paymentMethod,
+  );
+
+  factory _AccountItem.fromMerchant(MerchantPaymentAccountModel m) =>
+      _AccountItem(
+        id: m.id,
+        accountName: m.accountName,
+        accountNo: m.accountNo,
+        label: m.label,
+        isActive: m.isActive,
+        // merchant stores paymentMethod as Map — resolve name for display
+        paymentMethod: null,
+        // pass raw name via label fallback below in tile
+      );
+
+  /// Display subtitle parts
+  String get subtitle {
+    final methodName = paymentMethod?.name ?? '';
+    final parts = [
+      if (label != null && label!.isNotEmpty)
+        label!
+      else if (methodName.isNotEmpty)
+        methodName,
+      if (accountNo != null && accountNo!.isNotEmpty) accountNo!,
+    ];
+    return parts.join(' · ');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP HERO
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StepHero extends StatelessWidget {
-  const _StepHero({required this.c});
+  const _StepHero({required this.isMerchant, required this.c});
+  final bool isMerchant;
   final AppColor c;
 
   @override
@@ -294,9 +401,9 @@ class _StepHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.05),
+        color: c.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.primary.withOpacity(0.12)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
@@ -304,9 +411,12 @@ class _StepHero extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
+              color: c.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
-              border: Border.all(color: c.primary.withOpacity(0.2), width: 1.5),
+              border: Border.all(
+                color: c.primary.withValues(alpha: 0.2),
+                width: 1.5,
+              ),
             ),
             child: Icon(
               Icons.account_balance_wallet_outlined,
@@ -320,7 +430,7 @@ class _StepHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Payment Account',
+                  isMerchant ? 'Merchant Payment Account' : 'Payment Account',
                   style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 15,
@@ -330,7 +440,9 @@ class _StepHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Step 2 of 3 · Link your preferred account',
+                  isMerchant
+                      ? 'Step 2 of 2 · Add your settlement account'
+                      : 'Step 2 of 3 · Link your preferred account',
                   style: TextStyle(color: c.textSecondary, fontSize: 12.5),
                 ),
               ],
@@ -358,7 +470,7 @@ class _SectionLabel extends StatelessWidget {
       style: TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w700,
-        color: c.textSecondary.withOpacity(0.6),
+        color: c.textSecondary.withValues(alpha: 0.6),
         letterSpacing: 1.0,
       ),
     );
@@ -388,7 +500,7 @@ class _EmptyCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.22)),
+        border: Border.all(color: c.border.withValues(alpha: 0.22)),
       ),
       child: Row(
         children: [
@@ -396,13 +508,13 @@ class _EmptyCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: c.border.withOpacity(0.07),
+              color: c.border.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               size: 17,
-              color: c.textSecondary.withOpacity(0.45),
+              color: c.textSecondary.withValues(alpha: 0.45),
             ),
           ),
           const SizedBox(width: 12),
@@ -437,110 +549,354 @@ class _EmptyCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// METHOD GRID
+// METHOD LOGO
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MethodGrid extends StatelessWidget {
-  const _MethodGrid({
-    required this.methods,
-    required this.selected,
-    required this.onSelect,
+class _MethodLogo extends StatelessWidget {
+  const _MethodLogo({
+    required this.method,
+    required this.size,
     required this.c,
   });
-  final List<PaymentMethodModel> methods;
-  final PaymentMethodModel? selected;
-  final ValueChanged<PaymentMethodModel> onSelect;
+  final PaymentMethodModel method;
+  final double size;
   final AppColor c;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      itemCount: methods.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.6,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+    final logo = method.logo;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: c.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(size * 0.28),
       ),
-      itemBuilder: (_, i) {
-        final m = methods[i];
-        final isSelected = selected?.id == m.id;
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => onSelect(m),
-            borderRadius: BorderRadius.circular(14),
-            splashColor: c.primary.withOpacity(0.07),
-            child: Ink(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: isSelected ? c.primary.withOpacity(0.06) : c.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isSelected ? c.primary : c.border.withOpacity(0.25),
-                  width: isSelected ? 1.5 : 1.2,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? c.primary.withOpacity(0.12)
-                              : c.border.withOpacity(0.07),
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Icon(
-                          Icons.account_balance_outlined,
-                          size: 14,
-                          color: isSelected ? c.primary : c.textSecondary,
+      child: logo != null && logo.isNotEmpty
+          ? Padding(
+              padding: EdgeInsets.all(size * 0.12),
+              child: Image.network(
+                logo,
+                width: size,
+                height: size,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _fallback(size),
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : Center(
+                        child: SizedBox(
+                          width: size * 0.38,
+                          height: size * 0.38,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: c.primary.withValues(alpha: 0.35),
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      if (isSelected)
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 16,
-                          color: c.primary,
-                        ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    m.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    m.code,
-                    style: TextStyle(
-                      color: isSelected
-                          ? c.primary.withOpacity(0.8)
-                          : c.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
               ),
+            )
+          : _fallback(size),
+    );
+  }
+
+  Widget _fallback(double size) => Center(
+    child: Icon(
+      Icons.account_balance_outlined,
+      size: size * 0.52,
+      color: c.primary,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METHOD INFO CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MethodInfoCard extends StatelessWidget {
+  const _MethodInfoCard({required this.method, required this.c});
+  final PaymentMethodModel method;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDescription =
+        method.description != null && method.description!.trim().isNotEmpty;
+    final hasInstructions =
+        method.instructions != null && method.instructions!.trim().isNotEmpty;
+    if (!hasDescription && !hasInstructions) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: c.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: c.primary.withValues(alpha: 0.14),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _MethodLogo(method: method, size: 32, c: c),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      method.name,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    Text(
+                      method.code,
+                      style: TextStyle(
+                        color: c.primary.withValues(alpha: 0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (hasDescription) ...[
+            const SizedBox(height: 10),
+            _Divider(c: c),
+            const SizedBox(height: 10),
+            _InfoRow(
+              icon: Icons.info_outline_rounded,
+              label: 'ABOUT',
+              text: method.description!,
+              c: c,
+            ),
+          ],
+          if (hasInstructions) ...[
+            const SizedBox(height: 10),
+            _Divider(c: c),
+            const SizedBox(height: 10),
+            _InfoRow(
+              icon: Icons.receipt_long_outlined,
+              label: 'INSTRUCTIONS',
+              text: method.instructions!,
+              c: c,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.text,
+    required this.c,
+  });
+  final IconData icon;
+  final String label;
+  final String text;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            icon,
+            size: 13.5,
+            color: c.primary.withValues(alpha: 0.55),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                text,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 12.5,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) => Divider(
+    height: 1,
+    thickness: 1,
+    color: c.primary.withValues(alpha: 0.08),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METHOD DROPDOWN
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MethodDropdown extends StatelessWidget {
+  const _MethodDropdown({
+    required this.methods,
+    required this.selected,
+    required this.onChanged,
+    required this.c,
+  });
+  final List<PaymentMethodModel> methods;
+  final PaymentMethodModel? selected;
+  final ValueChanged<PaymentMethodModel?> onChanged;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    if (methods.isEmpty) {
+      return _EmptyCard(
+        icon: Icons.payment_outlined,
+        title: 'No Payment Methods',
+        body: 'No active payment methods are available right now.',
+        c: c,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(
+              color: c.border.withValues(alpha: 0.28),
+              width: 1.2,
             ),
           ),
-        );
-      },
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<PaymentMethodModel>(
+              value: selected,
+              isExpanded: true,
+              icon: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: c.textSecondary,
+                size: 20,
+              ),
+              dropdownColor: c.surface,
+              borderRadius: BorderRadius.circular(13),
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w500,
+              ),
+              hint: Text(
+                'Select payment method',
+                style: TextStyle(
+                  color: c.textSecondary.withValues(alpha: 0.5),
+                  fontSize: 13.5,
+                ),
+              ),
+              items: methods.map((m) {
+                return DropdownMenuItem<PaymentMethodModel>(
+                  value: m,
+                  child: Row(
+                    children: [
+                      _MethodLogo(method: m, size: 28, c: c),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              m.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                            Text(
+                              m.code,
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: onChanged,
+              selectedItemBuilder: (context) => methods.map((m) {
+                return Row(
+                  children: [
+                    _MethodLogo(method: m, size: 26, c: c),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${m.name}  ·  ${m.code}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+          child: selected != null
+              ? _MethodInfoCard(method: selected!, c: c)
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }
@@ -551,30 +907,46 @@ class _MethodGrid extends StatelessWidget {
 
 class _AccountForm extends StatelessWidget {
   const _AccountForm({
+    required this.methods,
+    required this.selectedMethod,
+    required this.onMethodChanged,
     required this.accountNameCtrl,
     required this.accountNoCtrl,
     required this.labelCtrl,
-    required this.instructionsCtrl,
+    required this.instructionsCtrl, // null = hide field
     required this.setAsActive,
     required this.saving,
     required this.onSetAsActiveChanged,
     required this.onSubmit,
+    required this.isMerchant,
     required this.c,
   });
+  final List<PaymentMethodModel> methods;
+  final PaymentMethodModel? selectedMethod;
+  final ValueChanged<PaymentMethodModel?> onMethodChanged;
   final TextEditingController accountNameCtrl;
   final TextEditingController accountNoCtrl;
   final TextEditingController labelCtrl;
-  final TextEditingController instructionsCtrl;
+  final TextEditingController? instructionsCtrl;
   final bool setAsActive;
   final bool saving;
   final ValueChanged<bool> onSetAsActiveChanged;
   final VoidCallback onSubmit;
+  final bool isMerchant;
   final AppColor c;
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _MethodDropdown(
+          methods: methods,
+          selected: selectedMethod,
+          onChanged: onMethodChanged,
+          c: c,
+        ),
+        const SizedBox(height: 10),
         _FocusField(
           controller: accountNameCtrl,
           label: 'Account Name',
@@ -599,28 +971,30 @@ class _AccountForm extends StatelessWidget {
           label: 'Label',
           hint: 'e.g. My GCash',
           icon: Icons.label_outline_rounded,
-          action: TextInputAction.next,
+          action: instructionsCtrl != null
+              ? TextInputAction.next
+              : TextInputAction.done,
           c: c,
         ),
-        const SizedBox(height: 10),
-        _FocusField(
-          controller: instructionsCtrl,
-          label: 'Instructions',
-          hint: 'Optional payment notes',
-          icon: Icons.notes_rounded,
-          action: TextInputAction.done,
-          multiline: true,
-          c: c,
-        ),
+        if (instructionsCtrl != null) ...[
+          const SizedBox(height: 10),
+          _FocusField(
+            controller: instructionsCtrl!,
+            label: 'Instructions',
+            hint: 'Optional payment instructions for buyers',
+            icon: Icons.receipt_long_outlined,
+            action: TextInputAction.done,
+            multiline: true,
+            c: c,
+          ),
+        ],
         const SizedBox(height: 12),
-
-        // Toggle
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: c.border.withOpacity(0.22)),
+            border: Border.all(color: c.border.withValues(alpha: 0.22)),
           ),
           child: Row(
             children: [
@@ -651,9 +1025,13 @@ class _AccountForm extends StatelessWidget {
             ],
           ),
         ),
-
         const SizedBox(height: 14),
-        _CreateButton(saving: saving, onPressed: onSubmit, c: c),
+        _CreateButton(
+          saving: saving,
+          onPressed: onSubmit,
+          isMerchant: isMerchant,
+          c: c,
+        ),
       ],
     );
   }
@@ -671,10 +1049,10 @@ class _AccountList extends StatelessWidget {
     required this.onSetActive,
     required this.c,
   });
-  final List<UserPaymentAccountModel> accounts;
+  final List<_AccountItem> accounts;
   final String? activeId;
   final bool settingActive;
-  final void Function(UserPaymentAccountModel) onSetActive;
+  final void Function(_AccountItem) onSetActive;
   final AppColor c;
 
   @override
@@ -705,7 +1083,7 @@ class _AccountTile extends StatelessWidget {
     required this.onSetActive,
     required this.c,
   });
-  final UserPaymentAccountModel account;
+  final _AccountItem account;
   final bool isActive;
   final bool settingActive;
   final VoidCallback onSetActive;
@@ -713,42 +1091,76 @@ class _AccountTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final methodName = account.paymentMethod?.name ?? 'Unknown';
-    final parts = [
-      account.label ?? methodName,
-      if (account.accountNo != null) account.accountNo!,
-    ];
-
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       decoration: BoxDecoration(
-        color: isActive ? c.primary.withOpacity(0.04) : c.surface,
+        color: isActive ? c.primary.withValues(alpha: 0.04) : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isActive
-              ? c.primary.withOpacity(0.25)
-              : c.border.withOpacity(0.22),
+              ? c.primary.withValues(alpha: 0.25)
+              : c.border.withValues(alpha: 0.22),
           width: isActive ? 1.5 : 1.2,
         ),
       ),
       child: Row(
         children: [
-          Container(
+          // Logo if method is known, otherwise status icon
+          SizedBox(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? c.primary.withOpacity(0.1)
-                  : c.border.withOpacity(0.07),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isActive
-                  ? Icons.check_circle_outline_rounded
-                  : Icons.radio_button_unchecked_rounded,
-              size: 18,
-              color: isActive ? c.primary : c.textSecondary.withOpacity(0.35),
-            ),
+            child: account.paymentMethod != null
+                ? Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: _MethodLogo(
+                          method: account.paymentMethod!,
+                          size: 36,
+                          c: c,
+                        ),
+                      ),
+                      if (isActive)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 13,
+                            height: 13,
+                            decoration: BoxDecoration(
+                              color: c.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: c.background,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.check,
+                              size: 8,
+                              color: c.onPrimary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? c.primary.withValues(alpha: 0.1)
+                          : c.border.withValues(alpha: 0.07),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isActive
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 18,
+                      color: isActive
+                          ? c.primary
+                          : c.textSecondary.withValues(alpha: 0.35),
+                    ),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -768,7 +1180,7 @@ class _AccountTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  parts.join(' · '),
+                  account.subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: c.textSecondary, fontSize: 12),
@@ -781,7 +1193,7 @@ class _AccountTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.1),
+                color: c.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -799,15 +1211,15 @@ class _AccountTile extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.07),
+                  color: c.border.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.border.withOpacity(0.2)),
+                  border: Border.all(color: c.border.withValues(alpha: 0.2)),
                 ),
                 child: Text(
                   settingActive ? '…' : 'Set Active',
                   style: TextStyle(
                     color: settingActive
-                        ? c.textSecondary.withOpacity(0.3)
+                        ? c.textSecondary.withValues(alpha: 0.3)
                         : c.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -856,14 +1268,16 @@ class _FocusFieldState extends State<_FocusField> {
   Widget build(BuildContext context) {
     final c = widget.c;
     final active = _focused;
-
     final activeBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
       borderSide: BorderSide(color: c.primary, width: 1.5),
     );
     final idleBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(color: c.border.withOpacity(0.28), width: 1.2),
+      borderSide: BorderSide(
+        color: c.border.withValues(alpha: 0.28),
+        width: 1.2,
+      ),
     );
 
     return Focus(
@@ -882,7 +1296,7 @@ class _FocusFieldState extends State<_FocusField> {
           labelText: widget.required ? '${widget.label} *' : widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.4),
+            color: c.textSecondary.withValues(alpha: 0.4),
             fontSize: 13.5,
           ),
           labelStyle: TextStyle(
@@ -900,7 +1314,9 @@ class _FocusFieldState extends State<_FocusField> {
             child: Icon(
               widget.icon,
               size: 17,
-              color: active ? c.primary : c.textSecondary.withOpacity(0.5),
+              color: active
+                  ? c.primary
+                  : c.textSecondary.withValues(alpha: 0.5),
             ),
           ),
           prefixIconConstraints: const BoxConstraints(
@@ -909,8 +1325,8 @@ class _FocusFieldState extends State<_FocusField> {
           ),
           filled: true,
           fillColor: active
-              ? c.primary.withOpacity(0.03)
-              : c.border.withOpacity(0.05),
+              ? c.primary.withValues(alpha: 0.03)
+              : c.border.withValues(alpha: 0.05),
           contentPadding: EdgeInsets.symmetric(
             horizontal: 14,
             vertical: widget.multiline ? 14 : 0,
@@ -920,7 +1336,10 @@ class _FocusFieldState extends State<_FocusField> {
           focusedBorder: activeBorder,
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.error.withOpacity(0.6), width: 1.2),
+            borderSide: BorderSide(
+              color: c.error.withValues(alpha: 0.6),
+              width: 1.2,
+            ),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -940,10 +1359,12 @@ class _CreateButton extends StatelessWidget {
   const _CreateButton({
     required this.saving,
     required this.onPressed,
+    required this.isMerchant,
     required this.c,
   });
   final bool saving;
   final VoidCallback onPressed;
+  final bool isMerchant;
   final AppColor c;
 
   @override
@@ -957,7 +1378,7 @@ class _CreateButton extends StatelessWidget {
             ? null
             : [
                 BoxShadow(
-                  color: c.primary.withOpacity(0.28),
+                  color: c.primary.withValues(alpha: 0.28),
                   blurRadius: 14,
                   offset: const Offset(0, 5),
                 ),
@@ -967,11 +1388,11 @@ class _CreateButton extends StatelessWidget {
         onPressed: saving ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: c.primary.withOpacity(0.5),
-          disabledForegroundColor: Colors.white70,
+          foregroundColor: c.onPrimary,
+          disabledBackgroundColor: c.primary.withValues(alpha: 0.5),
+          disabledForegroundColor: c.onPrimary,
           elevation: 0,
-          shadowColor: Colors.transparent,
+          shadowColor: c.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -988,7 +1409,7 @@ class _CreateButton extends StatelessWidget {
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(Colors.white70),
+                        valueColor: AlwaysStoppedAnimation(c.onPrimary),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1005,12 +1426,14 @@ class _CreateButton extends StatelessWidget {
               : Row(
                   key: const ValueKey('idle'),
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.add_rounded, size: 18),
-                    SizedBox(width: 8),
+                  children: [
+                    const Icon(Icons.add_rounded, size: 18),
+                    const SizedBox(width: 8),
                     Text(
-                      'Create Payment Account',
-                      style: TextStyle(
+                      isMerchant
+                          ? 'Create Merchant Account'
+                          : 'Create Payment Account',
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         letterSpacing: -0.2,
@@ -1024,6 +1447,15 @@ class _CreateButton extends StatelessWidget {
   }
 }
 
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTENSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+extension _IterableX<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (final e in this) {
+      if (test(e)) return e;
+    }
+    return null;
+  }
 }

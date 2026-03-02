@@ -1,964 +1,537 @@
-import 'package:next_fi/services/offers/models/offers_models.dart';
-import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
-
-// ─── TradeStatus ─────────────────────────────────────────────────────────────
-
 enum TradeStatus {
-  // New vF1 SELL flow
-  awaitingFiat,
+  created,
+  cryptoLocked,
   fiatSent,
   fiatConfirmed,
-  deliveryCbCreated,
-  claimed,
-  // New vF1 BUY flow
-  awaitingCrypto,
-  cryptoConfirmed,
-  awaitingUserConfirm,
-  overdue,
-  // Shared terminal
   completed,
-  // Legacy statuses (kept for backward compat)
-  created,
-  awaitingPayment,
-  paid,
-  released,
   cancelled,
   disputed,
   expired,
-  refunded,
-  unknown,
-}
+  unknown;
 
-TradeStatus tradeStatusFromApi(dynamic raw) {
-  final value = raw?.toString().trim().toUpperCase();
-  switch (value) {
-    // New vF1 SELL
-    case 'AWAITING_FIAT':
-      return TradeStatus.awaitingFiat;
-    case 'FIAT_SENT':
-      return TradeStatus.fiatSent;
-    case 'FIAT_CONFIRMED':
-      return TradeStatus.fiatConfirmed;
-    case 'DELIVERY_CB_CREATED':
-      return TradeStatus.deliveryCbCreated;
-    case 'CLAIMED':
-      return TradeStatus.claimed;
-    // New vF1 BUY
-    case 'AWAITING_CRYPTO':
-      return TradeStatus.awaitingCrypto;
-    case 'CRYPTO_CONFIRMED':
-      return TradeStatus.cryptoConfirmed;
-    case 'AWAITING_USER_CONFIRM':
-      return TradeStatus.awaitingUserConfirm;
-    case 'OVERDUE':
-      return TradeStatus.overdue;
-    // Shared terminal
-    case 'COMPLETED':
-      return TradeStatus.completed;
-    // Legacy
-    case 'CREATED':
-    case 'PENDING':
-      return TradeStatus.created;
-    case 'OPEN':
-    case 'AWAITING_PAYMENT':
-    case 'PENDING_PAYMENT':
-    case 'FUNDED':
-      return TradeStatus.awaitingPayment;
-    case 'PAID':
-      return TradeStatus.paid;
-    case 'RELEASED':
-      return TradeStatus.released;
-    case 'CANCELLED':
-      return TradeStatus.cancelled;
-    case 'DISPUTED':
-    case 'UNDER_REVIEW':
-      return TradeStatus.disputed;
-    case 'EXPIRED':
-      return TradeStatus.expired;
-    case 'REFUNDED':
-      return TradeStatus.refunded;
-    default:
-      return TradeStatus.unknown;
-  }
-}
-
-String tradeStatusToApi(TradeStatus status) {
-  switch (status) {
-    case TradeStatus.awaitingFiat:
-      return 'AWAITING_FIAT';
-    case TradeStatus.fiatSent:
-      return 'FIAT_SENT';
-    case TradeStatus.fiatConfirmed:
-      return 'FIAT_CONFIRMED';
-    case TradeStatus.deliveryCbCreated:
-      return 'DELIVERY_CB_CREATED';
-    case TradeStatus.claimed:
-      return 'CLAIMED';
-    case TradeStatus.awaitingCrypto:
-      return 'AWAITING_CRYPTO';
-    case TradeStatus.cryptoConfirmed:
-      return 'CRYPTO_CONFIRMED';
-    case TradeStatus.awaitingUserConfirm:
-      return 'AWAITING_USER_CONFIRM';
-    case TradeStatus.overdue:
-      return 'OVERDUE';
-    case TradeStatus.completed:
-      return 'COMPLETED';
-    case TradeStatus.created:
-      return 'CREATED';
-    case TradeStatus.awaitingPayment:
-      return 'AWAITING_PAYMENT';
-    case TradeStatus.paid:
-      return 'PAID';
-    case TradeStatus.released:
-      return 'RELEASED';
-    case TradeStatus.cancelled:
-      return 'CANCELLED';
-    case TradeStatus.disputed:
-      return 'DISPUTED';
-    case TradeStatus.expired:
-      return 'EXPIRED';
-    case TradeStatus.refunded:
-      return 'REFUNDED';
-    case TradeStatus.unknown:
-      return 'UNKNOWN';
-  }
-}
-
-// ─── TradeEscrowState ─────────────────────────────────────────────────────────
-
-enum TradeEscrowState { unfunded, funded, released, refunded, unknown }
-
-TradeEscrowState tradeEscrowStateFromApi(dynamic raw) {
-  final value = raw?.toString().trim().toUpperCase();
-  switch (value) {
-    case 'UNFUNDED':
-      return TradeEscrowState.unfunded;
-    case 'FUNDED':
-      return TradeEscrowState.funded;
-    case 'RELEASED':
-      return TradeEscrowState.released;
-    case 'REFUNDED':
-      return TradeEscrowState.refunded;
-    default:
-      return TradeEscrowState.unknown;
-  }
-}
-
-// ─── TradeMessageType ─────────────────────────────────────────────────────────
-
-enum TradeMessageType { text, system }
-
-TradeMessageType tradeMessageTypeFromApi(dynamic raw) {
-  final value = raw?.toString().trim().toUpperCase();
-  if (value == 'SYSTEM') return TradeMessageType.system;
-  return TradeMessageType.text;
-}
-
-// ─── TradeWalletRef ───────────────────────────────────────────────────────────
-
-class TradeWalletRef {
-  final String id;
-  final String publicAddress;
-  final String network;
-  final String? label;
-
-  const TradeWalletRef({
-    required this.id,
-    required this.publicAddress,
-    required this.network,
-    this.label,
-  });
-
-  factory TradeWalletRef.fromJson(Map<String, dynamic> json) {
-    String readString(List<String> keys, {String fallback = ''}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return fallback;
+  static TradeStatus fromString(String? v) {
+    switch (v?.toUpperCase().replaceAll('_', '').replaceAll('-', '')) {
+      case 'CREATED':
+        return TradeStatus.created;
+      case 'CRYPTOLOCKED':
+      case 'ESCROWFUNDED':
+      case 'ACTIVE':
+      case 'FUNDED':
+        return TradeStatus.cryptoLocked;
+      case 'FIATSENT':
+      case 'PAYMENTPENDING':
+      case 'PAYMENTSENT':
+        return TradeStatus.fiatSent;
+      case 'FIATCONFIRMED':
+      case 'PAYMENTRECEIVED':
+        return TradeStatus.fiatConfirmed;
+      case 'COMPLETED':
+      case 'RELEASED':
+        return TradeStatus.completed;
+      case 'CANCELLED':
+      case 'CANCELED':
+        return TradeStatus.cancelled;
+      case 'DISPUTED':
+        return TradeStatus.disputed;
+      case 'EXPIRED':
+        return TradeStatus.expired;
+      default:
+        return TradeStatus.unknown;
     }
-
-    final label = readString(const ['label']);
-    return TradeWalletRef(
-      id: readString(const ['id', 'walletId', 'wallet_id']),
-      publicAddress: readString(const [
-        'publicAddress',
-        'public_address',
-        'address',
-      ]),
-      network: readString(const ['network'], fallback: 'stellar'),
-      label: label.isEmpty ? null : label,
-    );
   }
+
+  /// Returns a user-friendly label for this status
+  String get label {
+    switch (this) {
+      case TradeStatus.created:
+        return 'Waiting for Escrow';
+      case TradeStatus.cryptoLocked:
+        return 'Ready to Pay';
+      case TradeStatus.fiatSent:
+        return 'Payment Sent';
+      case TradeStatus.fiatConfirmed:
+        return 'Payment Confirmed';
+      case TradeStatus.completed:
+        return 'Trade Completed';
+      case TradeStatus.cancelled:
+        return 'Trade Cancelled';
+      case TradeStatus.disputed:
+        return 'Under Dispute';
+      case TradeStatus.expired:
+        return 'Trade Expired';
+      case TradeStatus.unknown:
+        return 'Unknown Status';
+    }
+  }
+
+  /// Returns the icon for this status
+  String get iconName {
+    switch (this) {
+      case TradeStatus.created:
+        return 'hourglass_empty';
+      case TradeStatus.cryptoLocked:
+        return 'lock_clock';
+      case TradeStatus.fiatSent:
+        return 'pending';
+      case TradeStatus.fiatConfirmed:
+        return 'check_circle';
+      case TradeStatus.completed:
+        return 'check_circle';
+      case TradeStatus.cancelled:
+        return 'cancel';
+      case TradeStatus.disputed:
+        return 'report';
+      case TradeStatus.expired:
+        return 'schedule';
+      case TradeStatus.unknown:
+        return 'help';
+    }
+  }
+
+  bool get isActive =>
+      this == TradeStatus.created ||
+      this == TradeStatus.cryptoLocked ||
+      this == TradeStatus.fiatSent ||
+      this == TradeStatus.fiatConfirmed ||
+      this == TradeStatus.disputed;
+
+  bool get isTerminal =>
+      this == TradeStatus.completed ||
+      this == TradeStatus.cancelled ||
+      this == TradeStatus.expired;
 }
 
-// ─── TradeMessageModel ────────────────────────────────────────────────────────
+/// Status of the Claimable Balance escrow
+enum EscrowStatus {
+  pending,
+  cbCreated,
+  cbClaimed,
+  cbRefunded,
+  failed,
+  unknown;
 
-class TradeMessageModel {
+  static EscrowStatus fromString(String? v) {
+    switch (v?.toUpperCase().replaceAll('_', '').replaceAll('-', '')) {
+      case 'PENDING':
+        return EscrowStatus.pending;
+      case 'CBCREATED':
+      case 'ESCROWFUNDED':
+      case 'FUNDED':
+      case 'ACTIVE':
+        return EscrowStatus.cbCreated;
+      case 'CBCLAIMED':
+      case 'RELEASED':
+        return EscrowStatus.cbClaimed;
+      case 'CBREFUNDED':
+      case 'REFUNDED':
+        return EscrowStatus.cbRefunded;
+      case 'FAILED':
+        return EscrowStatus.failed;
+      default:
+        return EscrowStatus.unknown;
+    }
+  }
+
+  bool get isActive => this == EscrowStatus.cbCreated;
+}
+
+class TradeEscrowModel {
   final String id;
-  final String tradeId;
-  final String? senderId; // null for SYSTEM messages
-  final String message;
-  final TradeMessageType type;
+  final String? claimableBalanceId;
+  final EscrowStatus? status;
+  final String? txHash;
+  final String? createTxHash;
+  final String? claimTxHash;
+  final String? refundTxHash;
   final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? expiresAt;
 
-  const TradeMessageModel({
+  const TradeEscrowModel({
     required this.id,
-    required this.tradeId,
-    this.senderId,
-    required this.message,
-    this.type = TradeMessageType.text,
+    this.claimableBalanceId,
+    this.status,
+    this.txHash,
+    this.createTxHash,
+    this.claimTxHash,
+    this.refundTxHash,
     this.createdAt,
+    this.updatedAt,
+    this.expiresAt,
   });
 
-  bool get isSystem => type == TradeMessageType.system || senderId == null;
-
-  factory TradeMessageModel.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) =>
-        value == null ? null : DateTime.tryParse(value.toString());
-
-    String readString(List<String> keys, {String fallback = ''}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return fallback;
-    }
-
-    String? readNullableString(List<String> keys) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return null;
-    }
-
-    final typeRaw = json['type'];
-    return TradeMessageModel(
-      id: readString(const ['id']),
-      tradeId: readString(const ['tradeId', 'trade_id']),
-      senderId: readNullableString(const ['senderId', 'sender_id']),
-      message: readString(const ['message']),
-      type: tradeMessageTypeFromApi(typeRaw),
-      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
+  factory TradeEscrowModel.fromJson(Map<String, dynamic> json) {
+    DateTime? readDate(dynamic v) =>
+        v == null ? null : DateTime.tryParse(v.toString());
+    return TradeEscrowModel(
+      id: json['id']?.toString() ?? '',
+      claimableBalanceId:
+          json['claimableBalanceId']?.toString() ??
+          json['claimable_balance_id']?.toString(),
+      status: EscrowStatus.fromString(json['status']?.toString()),
+      txHash: json['txHash']?.toString() ?? json['tx_hash']?.toString(),
+      createTxHash:
+          json['createTxHash']?.toString() ??
+          json['create_tx_hash']?.toString(),
+      claimTxHash:
+          json['claimTxHash']?.toString() ?? json['claim_tx_hash']?.toString(),
+      refundTxHash:
+          json['refundTxHash']?.toString() ??
+          json['refund_tx_hash']?.toString(),
+      createdAt: readDate(json['createdAt'] ?? json['created_at']),
+      updatedAt: readDate(json['updatedAt'] ?? json['updated_at']),
+      expiresAt: readDate(json['expiresAt'] ?? json['expires_at']),
     );
   }
-}
 
-// ─── TradePartyLite ───────────────────────────────────────────────────────────
-
-class TradePartyLite {
-  final String id;
-  final String email;
-  final String name;
-  final String? username;
-  final String? displayName;
-  final String? avatarUrl;
-
-  const TradePartyLite({
-    required this.id,
-    required this.email,
-    required this.name,
-    this.username,
-    this.displayName,
-    this.avatarUrl,
-  });
-
-  TradePartyLite copyWith({
-    String? id,
-    String? email,
-    String? name,
-    String? username,
-    String? displayName,
-    String? avatarUrl,
+  TradeEscrowModel copyWith({
+    String? claimableBalanceId,
+    EscrowStatus? status,
+    String? txHash,
+    String? createTxHash,
+    String? claimTxHash,
+    String? refundTxHash,
+    DateTime? expiresAt,
   }) {
-    return TradePartyLite(
-      id: id ?? this.id,
-      email: email ?? this.email,
-      name: name ?? this.name,
-      username: username ?? this.username,
-      displayName: displayName ?? this.displayName,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
-    );
-  }
-
-  factory TradePartyLite.fromJson(Map<String, dynamic> json) {
-    String readString(List<String> keys, {Map<String, dynamic>? from}) {
-      final src = from ?? json;
-      for (final key in keys) {
-        final value = src[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return '';
-    }
-
-    Map<String, dynamic>? readMap(List<String> keys) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value is Map<String, dynamic>) return value;
-        if (value is Map) {
-          return value.map((k, v) => MapEntry(k.toString(), v));
-        }
-      }
-      return null;
-    }
-
-    final profile = readMap(const ['profile', 'userProfile', 'user_profile']);
-    final resolvedDisplayName = (() {
-      final direct = readString(const ['displayName', 'display_name']);
-      if (direct.isNotEmpty) return direct;
-      if (profile != null) {
-        final fromProfile = readString(const [
-          'displayName',
-          'display_name',
-        ], from: profile);
-        if (fromProfile.isNotEmpty) return fromProfile;
-      }
-      return null;
-    })();
-
-    final resolvedUsername = (() {
-      final direct = readString(const ['username']);
-      if (direct.isNotEmpty) return direct;
-      if (profile != null) {
-        final fromProfile = readString(const ['username'], from: profile);
-        if (fromProfile.isNotEmpty) return fromProfile;
-      }
-      return null;
-    })();
-
-    final resolvedName = (() {
-      final direct = readString(const ['name', 'fullName', 'full_name']);
-      if (direct.isNotEmpty) return direct;
-      if (resolvedDisplayName != null &&
-          resolvedDisplayName.trim().isNotEmpty) {
-        return resolvedDisplayName.trim();
-      }
-      if (profile != null) {
-        final fullName = readString(const [
-          'name',
-          'fullName',
-          'full_name',
-        ], from: profile);
-        if (fullName.isNotEmpty) return fullName;
-
-        final parts = [
-          readString(const ['firstName', 'first_name'], from: profile),
-          readString(const ['middleName', 'middle_name'], from: profile),
-          readString(const ['lastName', 'last_name'], from: profile),
-        ].where((part) => part.isNotEmpty).toList();
-        if (parts.isNotEmpty) return parts.join(' ').trim();
-      }
-      return '';
-    })();
-
-    final avatar = readString(const ['avatarUrl', 'avatar_url', 'avatar']);
-
-    return TradePartyLite(
-      id: readString(const ['id', 'userId', 'user_id']),
-      email: readString(const ['email']),
-      name: resolvedName,
-      username: resolvedUsername,
-      displayName: resolvedDisplayName,
-      avatarUrl: avatar.isEmpty ? null : avatar,
+    return TradeEscrowModel(
+      id: id,
+      claimableBalanceId: claimableBalanceId ?? this.claimableBalanceId,
+      status: status ?? this.status,
+      txHash: txHash ?? this.txHash,
+      createTxHash: createTxHash ?? this.createTxHash,
+      claimTxHash: claimTxHash ?? this.claimTxHash,
+      refundTxHash: refundTxHash ?? this.refundTxHash,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
     );
   }
 }
 
-// ─── TradeProofModel ──────────────────────────────────────────────────────────
+/// Type of offer - determines trade flow
+enum TradeOfferType {
+  buy,
+  sell,
+  unknown;
 
-class TradeProofModel {
-  final String id;
-  final String? imageUrl;
-  final String? note;
-  final String? uploadedById;
-  final DateTime? createdAt;
-
-  const TradeProofModel({
-    required this.id,
-    this.imageUrl,
-    this.note,
-    this.uploadedById,
-    this.createdAt,
-  });
-
-  factory TradeProofModel.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) =>
-        value == null ? null : DateTime.tryParse(value.toString());
-
-    String? readNullableString(List<String> keys) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return null;
+  static TradeOfferType fromString(String? v) {
+    switch (v?.toUpperCase()) {
+      case 'BUY':
+        return TradeOfferType.buy;
+      case 'SELL':
+        return TradeOfferType.sell;
+      default:
+        return TradeOfferType.unknown;
     }
+  }
 
-    return TradeProofModel(
-      id: readNullableString(const ['id']) ?? '',
-      imageUrl: readNullableString(const ['imageUrl', 'image_url', 'url']),
-      note: readNullableString(const ['note']),
-      uploadedById: readNullableString(const [
-        'uploadedById',
-        'uploaded_by_id',
-      ]),
-      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
-    );
+  /// Whether the current user is the buyer in this trade
+  bool isUserBuyer(String currentUserId, String buyerId, String sellerId) {
+    return currentUserId == buyerId;
   }
 }
-
-// ─── TradeModel ───────────────────────────────────────────────────────────────
 
 class TradeModel {
   final String id;
   final String offerId;
+  final TradeStatus status;
+  final TradeOfferType offerType;
+  final String asset;
+  final String fiatCurrency;
+  final double cryptoAmount;
+  final double fiatAmount;
+  final double? priceSnapshot;
   final String buyerId;
   final String sellerId;
-  final TradePartyLite? buyer;
-  final TradePartyLite? seller;
-  final TradeStatus status;
-  final String statusRaw;
-  final OfferAsset asset;
-  final String fiatCurrency;
-  final double amount;
-  final double? price;
-  final double? fiatAmount;
-  final int paymentWindow;
-  final DateTime? expiresAt;
-  final String? note;
-  final String? cancelReason;
-
-  // Legacy escrow fields
-  final TradeEscrowState escrowState;
-  final String? claimableBalanceId;
-  final String? fundedTxHash;
-  final String? releasedTxHash;
-  final String? refundTxHash;
-  final DateTime? escrowFundedAt;
-  final DateTime? escrowReleasedAt;
-  final DateTime? escrowRefundedAt;
-  final DateTime? escrowExpiryAt;
-  final DateTime? paymentDueAt;
-  final DateTime? releaseDueAt;
-  final String? escrowTxHash;
-  final String? releaseTxHash;
-
-  // Wallet refs
-  final String? buyerWalletId;
-  final String? sellerWalletId;
-  final TradeWalletRef? buyerWallet;
-  final TradeWalletRef? sellerWallet;
-
-  // Payment accounts
-  final UserPaymentAccountModel? buyerPaymentAccount;
-  final UserPaymentAccountModel? sellerPaymentAccount;
-
-  // Messages & proofs
-  final List<TradeMessageModel> messages;
-  final List<TradeProofModel> proofs;
-
-  // Timestamps
+  final String cryptoReceiverAddress;
+  final String? cryptoReceiverMemo;
+  final String sellerPaymentAccountId;
+  final String? buyerPaymentAccountId;
+  final int? paymentWindowMinutes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-
-  // ── vF1 NEW SELL fields ───────────────────────────────────────────────────
-  final String? deliveryCbId; // claimable balance ID for delivery
-  final DateTime? fiatDeadlineAt; // user must click fiat-sent by this time
-  final DateTime? merchantSlaDeadlineAt; // merchant must create CB delivery
-  final DateTime? fiatSentAt; // when user clicked fiat-sent
-  final DateTime? fiatConfirmedAt; // when merchant confirmed fiat
-  final DateTime? claimedAt; // when user claimed CB
-
-  // ── vF1 NEW BUY fields ────────────────────────────────────────────────────
-  final String? depositAddress; // merchant wallet address for deposit
-  final String? requiredMemo; // unique memo for watcher matching
-  final DateTime? cryptoSendDeadlineAt; // user must send crypto by this time
-  final DateTime? merchantFiatDeadlineAt; // merchant must send fiat by this time
-  final DateTime? cryptoConfirmedAt; // when watcher confirmed deposit
-  final DateTime? fiatSentByMerchantAt; // when merchant marked fiat sent
-  final DateTime? overdueAt; // when trade went overdue
-  final String? depositTxHash; // confirmed deposit transaction hash
-  final String? depositOperationId; // confirmed deposit operation ID
+  final DateTime? expiresAt;
+  final DateTime? paymentDueAt;
+  final DateTime? fiatSentAt;
+  final DateTime? fiatConfirmDueAt;
+  final String? autoDisputeTrigger;
+  final TradeEscrowModel? escrow;
+  final Map<String, dynamic>? offer;
+  final Map<String, dynamic>? sellerPaymentAccount;
+  final Map<String, dynamic>? buyerPaymentAccount;
 
   const TradeModel({
     required this.id,
     required this.offerId,
-    required this.buyerId,
-    required this.sellerId,
-    this.buyer,
-    this.seller,
     required this.status,
-    required this.statusRaw,
+    required this.offerType,
     required this.asset,
     required this.fiatCurrency,
-    required this.amount,
-    this.price,
-    this.fiatAmount,
-    required this.paymentWindow,
-    this.expiresAt,
-    this.note,
-    this.cancelReason,
-    this.escrowState = TradeEscrowState.unknown,
-    this.claimableBalanceId,
-    this.fundedTxHash,
-    this.releasedTxHash,
-    this.refundTxHash,
-    this.escrowFundedAt,
-    this.escrowReleasedAt,
-    this.escrowRefundedAt,
-    this.escrowExpiryAt,
-    this.paymentDueAt,
-    this.releaseDueAt,
-    this.buyerWalletId,
-    this.sellerWalletId,
-    this.buyerWallet,
-    this.sellerWallet,
-    this.escrowTxHash,
-    this.releaseTxHash,
-    this.buyerPaymentAccount,
-    this.sellerPaymentAccount,
-    this.messages = const [],
-    this.proofs = const [],
+    required this.cryptoAmount,
+    required this.fiatAmount,
+    this.priceSnapshot,
+    required this.buyerId,
+    required this.sellerId,
+    required this.cryptoReceiverAddress,
+    this.cryptoReceiverMemo,
+    required this.sellerPaymentAccountId,
+    this.buyerPaymentAccountId,
+    this.paymentWindowMinutes,
     this.createdAt,
     this.updatedAt,
-    // vF1 SELL
-    this.deliveryCbId,
-    this.fiatDeadlineAt,
-    this.merchantSlaDeadlineAt,
+    this.expiresAt,
+    this.paymentDueAt,
     this.fiatSentAt,
-    this.fiatConfirmedAt,
-    this.claimedAt,
-    // vF1 BUY
-    this.depositAddress,
-    this.requiredMemo,
-    this.cryptoSendDeadlineAt,
-    this.merchantFiatDeadlineAt,
-    this.cryptoConfirmedAt,
-    this.fiatSentByMerchantAt,
-    this.overdueAt,
-    this.depositTxHash,
-    this.depositOperationId,
+    this.fiatConfirmDueAt,
+    this.autoDisputeTrigger,
+    this.escrow,
+    this.offer,
+    this.sellerPaymentAccount,
+    this.buyerPaymentAccount,
   });
 
+  /// Backend docs name this merchant payment account for SELL flow.
+  String get merchantPaymentAccountId => sellerPaymentAccountId;
+
+  /// Backend docs name this merchant payment account for SELL flow.
+  Map<String, dynamic>? get merchantPaymentAccount => sellerPaymentAccount;
+
   factory TradeModel.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) =>
-        value == null ? null : DateTime.tryParse(value.toString());
-
-    String readString(List<String> keys, {String fallback = ''}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return fallback;
-    }
-
-    String? readNullableString(List<String> keys) {
-      final value = readString(keys);
-      return value.isEmpty ? null : value;
-    }
-
-    double readDouble(List<String> keys, {double fallback = 0}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value is num) return value.toDouble();
-        if (value is String) {
-          final parsed = double.tryParse(value.trim());
-          if (parsed != null) return parsed;
+    double readDouble(List<String> keys) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v is num) return v.toDouble();
+        if (v is String) {
+          final p = double.tryParse(v.trim());
+          if (p != null) return p;
         }
       }
-      return fallback;
+      return 0.0;
     }
 
-    double? readNullableDouble(List<String> keys) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value is num) return value.toDouble();
-        if (value is String) {
-          final parsed = double.tryParse(value.trim());
-          if (parsed != null) return parsed;
+    double? readDoubleOrNull(List<String> keys) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v == null) continue;
+        if (v is num) return v.toDouble();
+        if (v is String) {
+          final p = double.tryParse(v.trim());
+          if (p != null) return p;
         }
       }
       return null;
     }
 
-    int readInt(List<String> keys, {int fallback = 0}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value is int) return value;
-        if (value is num) return value.toInt();
-        if (value is String) {
-          final parsed = int.tryParse(value.trim());
-          if (parsed != null) return parsed;
-        }
-      }
-      return fallback;
-    }
-
-    List<TradeMessageModel> readMessages() {
-      final candidates = [
-        json['messages'],
-        json['chatMessages'],
-        json['chat_messages'],
-      ];
-      for (final raw in candidates) {
-        if (raw is! List) continue;
-        final items = raw
-            .whereType<Map<String, dynamic>>()
-            .map(TradeMessageModel.fromJson)
-            .toList();
-        items.sort(
-          (a, b) => (a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-              .compareTo(b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
-        );
-        return items;
-      }
-      return const [];
-    }
-
-    List<TradeProofModel> readProofs() {
-      final candidates = [
-        json['proofs'],
-        json['paymentProofs'],
-        json['payment_proofs'],
-      ];
-      for (final raw in candidates) {
-        if (raw is! List) continue;
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map(TradeProofModel.fromJson)
-            .toList();
-      }
-      return const [];
-    }
-
-    UserPaymentAccountModel? readPaymentAccount(List<String> keys) {
-      for (final key in keys) {
-        final raw = json[key];
-        if (raw is Map<String, dynamic>) {
-          return UserPaymentAccountModel.fromJson(raw);
+    int? readInt(List<String> keys) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final p = int.tryParse(v.trim());
+          if (p != null) return p;
         }
       }
       return null;
     }
 
-    TradeWalletRef? readWallet(List<String> keys) {
-      for (final key in keys) {
-        final raw = json[key];
-        if (raw is! Map<String, dynamic>) continue;
-        final wallet = TradeWalletRef.fromJson(raw);
-        if (wallet.id.isNotEmpty || wallet.publicAddress.isNotEmpty) {
-          return wallet;
-        }
+    String readStr(List<String> keys) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v == null) continue;
+        final t = v.toString().trim();
+        if (t.isNotEmpty) return t;
+      }
+      return '';
+    }
+
+    DateTime? readDate(List<String> keys) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v == null) continue;
+        final d = DateTime.tryParse(v.toString());
+        if (d != null) return d;
       }
       return null;
     }
 
-    Map<String, dynamic>? asMap(dynamic raw) {
-      if (raw is Map<String, dynamic>) return raw;
-      if (raw is Map) {
-        return raw.map((k, v) => MapEntry(k.toString(), v));
-      }
-      return null;
-    }
+    final escrowRaw = json['escrow'] ?? json['tradeEscrow'];
+    final offerRaw = json['offer'];
+    final spaRaw =
+        json['sellerPaymentAccount'] ??
+        json['merchantPaymentAccount'] ??
+        json['seller_payment_account'] ??
+        json['merchant_payment_account'];
+    final bpaRaw =
+        json['buyerPaymentAccount'] ??
+        json['buyerPaymentAcc'] ??
+        json['buyer_payment_account'] ??
+        json['buyer_payment_acc'];
 
-    final statusRaw = readString(const ['status'], fallback: 'UNKNOWN');
-    final fundedTxHash = readNullableString(const [
-      'fundedTxHash',
-      'funded_tx_hash',
-      'escrowTxHash',
-      'escrow_tx_hash',
-    ]);
-    final releasedTxHash = readNullableString(const [
-      'releasedTxHash',
-      'released_tx_hash',
-      'releaseTxHash',
-      'release_tx_hash',
-    ]);
-    final buyerId = readString(const ['buyerId', 'buyer_id']);
-    final sellerId = readString(const ['sellerId', 'seller_id']);
-    final buyerRaw =
-        asMap(json['buyer']) ??
-        asMap(json['buyerUser']) ??
-        asMap(json['buyer_user']) ??
-        asMap(json['buyerAccount']) ??
-        asMap(json['buyer_account']);
-    final sellerRaw =
-        asMap(json['seller']) ??
-        asMap(json['sellerUser']) ??
-        asMap(json['seller_user']) ??
-        asMap(json['sellerAccount']) ??
-        asMap(json['seller_account']);
-    final buyerParty = (() {
-      if (buyerRaw == null) return null;
-      var party = TradePartyLite.fromJson(buyerRaw);
-      if (party.id.isEmpty && buyerId.isNotEmpty) {
-        party = party.copyWith(id: buyerId);
+    // Read offer type from the nested offer object or directly from trade
+    TradeOfferType readOfferType() {
+      final type = json['offerType']?.toString() ?? json['type']?.toString();
+      if (type != null && type.isNotEmpty) {
+        return TradeOfferType.fromString(type);
       }
-      final hasInfo =
-          party.id.isNotEmpty ||
-          party.email.isNotEmpty ||
-          party.name.isNotEmpty ||
-          (party.username?.trim().isNotEmpty ?? false) ||
-          (party.displayName?.trim().isNotEmpty ?? false);
-      return hasInfo ? party : null;
-    })();
-    final sellerParty = (() {
-      if (sellerRaw == null) return null;
-      var party = TradePartyLite.fromJson(sellerRaw);
-      if (party.id.isEmpty && sellerId.isNotEmpty) {
-        party = party.copyWith(id: sellerId);
+      // Try to get from offer object
+      if (offerRaw is Map<String, dynamic>) {
+        final offerType = offerRaw['type']?.toString();
+        return TradeOfferType.fromString(offerType);
       }
-      final hasInfo =
-          party.id.isNotEmpty ||
-          party.email.isNotEmpty ||
-          party.name.isNotEmpty ||
-          (party.username?.trim().isNotEmpty ?? false) ||
-          (party.displayName?.trim().isNotEmpty ?? false);
-      return hasInfo ? party : null;
-    })();
-    final buyerWallet = readWallet(const ['buyerWallet', 'buyer_wallet']);
-    final sellerWallet = readWallet(const ['sellerWallet', 'seller_wallet']);
-
-    // vF1: delivery sub-object
-    Map<String, dynamic>? deliveryJson;
-    final rawDelivery = json['delivery'] ?? json['tradeDelivery'];
-    if (rawDelivery is Map<String, dynamic>) deliveryJson = rawDelivery;
-
-    String? readDeliveryNullable(List<String> keys) {
-      // Check top-level first, then delivery sub-object
-      final top = readNullableString(keys);
-      if (top != null) return top;
-      if (deliveryJson == null) return null;
-      for (final key in keys) {
-        final value = deliveryJson![key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return null;
-    }
-
-    DateTime? readDeliveryDate(List<String> keys) {
-      final top = readNullableString(keys);
-      if (top != null) return DateTime.tryParse(top);
-      if (deliveryJson == null) return null;
-      for (final key in keys) {
-        final value = deliveryJson![key];
-        if (value == null) continue;
-        final parsed = DateTime.tryParse(value.toString());
-        if (parsed != null) return parsed;
-      }
-      return null;
+      return TradeOfferType.unknown;
     }
 
     return TradeModel(
-      id: readString(const ['id']),
-      offerId: readString(const ['offerId', 'offer_id']),
-      buyerId: buyerId,
-      sellerId: sellerId,
-      buyer: buyerParty,
-      seller: sellerParty,
-      status: tradeStatusFromApi(statusRaw),
-      statusRaw: statusRaw,
-      asset: offerAssetFromApi(json['asset']),
-      fiatCurrency: readString(const [
-        'fiatCurrency',
-        'fiat_currency',
-      ], fallback: 'PHP'),
-      amount: readDouble(const ['amount']),
-      price: readNullableDouble(const ['price', 'priceSnapshot', 'price_snapshot']),
-      fiatAmount: readNullableDouble(const ['fiatAmount', 'fiat_amount']),
-      paymentWindow: readInt(const [
-        'paymentWindow',
-        'payment_window',
-      ], fallback: 15),
-      expiresAt: parseDate(json['expiresAt'] ?? json['expires_at']),
-      note: readNullableString(const ['note']),
-      cancelReason: readNullableString(const ['cancelReason', 'cancel_reason']),
-      escrowState: tradeEscrowStateFromApi(
-        json['escrowState'] ?? json['escrow_state'],
-      ),
-      claimableBalanceId: readNullableString(const [
-        'claimableBalanceId',
-        'claimable_balance_id',
+      id: readStr(const ['id']),
+      offerId: readStr(const ['offerId', 'offer_id']),
+      status: TradeStatus.fromString(json['status']?.toString()),
+      offerType: readOfferType(),
+      asset: readStr(const ['asset']),
+      fiatCurrency: readStr(const ['fiatCurrency', 'fiat_currency']),
+      cryptoAmount: readDouble(const ['cryptoAmount', 'crypto_amount']),
+      fiatAmount: readDouble(const ['fiatAmount', 'fiat_amount']),
+      priceSnapshot: readDoubleOrNull(const [
+        'priceSnapshot',
+        'price_snapshot',
       ]),
-      fundedTxHash: fundedTxHash,
-      releasedTxHash: releasedTxHash,
-      refundTxHash: readNullableString(const [
-        'refundTxHash',
-        'refund_tx_hash',
+      buyerId: readStr(const ['buyerId', 'buyer_id']),
+      sellerId: readStr(const ['sellerId', 'seller_id']),
+      cryptoReceiverAddress: readStr(const [
+        'cryptoReceiverAddress',
+        'crypto_receiver_address',
       ]),
-      escrowFundedAt: parseDate(
-        json['escrowFundedAt'] ?? json['escrow_funded_at'],
-      ),
-      escrowReleasedAt: parseDate(
-        json['escrowReleasedAt'] ?? json['escrow_released_at'],
-      ),
-      escrowRefundedAt: parseDate(
-        json['escrowRefundedAt'] ?? json['escrow_refunded_at'],
-      ),
-      escrowExpiryAt: parseDate(
-        json['escrowExpiryAt'] ?? json['escrow_expiry_at'],
-      ),
-      paymentDueAt: parseDate(json['paymentDueAt'] ?? json['payment_due_at']),
-      releaseDueAt: parseDate(json['releaseDueAt'] ?? json['release_due_at']),
-      buyerWalletId: readNullableString(const [
-        'buyerWalletId',
-        'buyer_wallet_id',
+      cryptoReceiverMemo: (() {
+        final v = readStr(const ['cryptoReceiverMemo', 'crypto_receiver_memo']);
+        return v.isEmpty ? null : v;
+      })(),
+      sellerPaymentAccountId: readStr(const [
+        'sellerPaymentAccountId',
+        'seller_payment_account_id',
+        'merchantPaymentAccountId',
+        'merchant_payment_account_id',
       ]),
-      sellerWalletId: readNullableString(const [
-        'sellerWalletId',
-        'seller_wallet_id',
+      buyerPaymentAccountId: (() {
+        final v = readStr(const [
+          'buyerPaymentAccountId',
+          'buyer_payment_account_id',
+          'buyerPaymentAcc',
+          'buyer_payment_acc',
+        ]);
+        return v.isEmpty ? null : v;
+      })(),
+      paymentWindowMinutes: readInt(const [
+        'paymentWindowMinutes',
+        'payment_window_minutes',
       ]),
-      buyerWallet: buyerWallet,
-      sellerWallet: sellerWallet,
-      escrowTxHash: fundedTxHash,
-      releaseTxHash: releasedTxHash,
-      buyerPaymentAccount: readPaymentAccount(const [
-        'buyerPaymentAccount',
-        'buyer_payment_account',
+      createdAt: readDate(const ['createdAt', 'created_at']),
+      updatedAt: readDate(const ['updatedAt', 'updated_at']),
+      expiresAt: readDate(const [
+        'expiresAt',
+        'expires_at',
+        'paymentDeadline',
+        'payment_deadline',
       ]),
-      sellerPaymentAccount: readPaymentAccount(const [
-        'sellerPaymentAccount',
-        'seller_payment_account',
+      paymentDueAt: readDate(const ['paymentDueAt', 'payment_due_at']),
+      fiatSentAt: readDate(const ['fiatSentAt', 'fiat_sent_at']),
+      fiatConfirmDueAt: readDate(const [
+        'fiatConfirmDueAt',
+        'fiat_confirm_due_at',
       ]),
-      messages: readMessages(),
-      proofs: readProofs(),
-      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
-      updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
-      // vF1 SELL
-      deliveryCbId: readDeliveryNullable(const [
-        'deliveryCbId',
-        'delivery_cb_id',
-        'claimableBalanceId',
-        'claimable_balance_id',
-      ]),
-      fiatDeadlineAt: parseDate(
-        json['fiatDeadlineAt'] ?? json['fiat_deadline_at'],
-      ),
-      merchantSlaDeadlineAt: parseDate(
-        json['merchantSlaDeadlineAt'] ?? json['merchant_sla_deadline_at'],
-      ),
-      fiatSentAt: parseDate(json['fiatSentAt'] ?? json['fiat_sent_at']),
-      fiatConfirmedAt: parseDate(
-        json['fiatConfirmedAt'] ?? json['fiat_confirmed_at'],
-      ),
-      claimedAt: parseDate(json['claimedAt'] ?? json['claimed_at']),
-      // vF1 BUY
-      depositAddress: readNullableString(const [
-        'depositAddress',
-        'deposit_address',
-      ]),
-      requiredMemo: readNullableString(const [
-        'requiredMemo',
-        'required_memo',
-      ]),
-      cryptoSendDeadlineAt: parseDate(
-        json['cryptoSendDeadlineAt'] ?? json['crypto_send_deadline_at'],
-      ),
-      merchantFiatDeadlineAt: parseDate(
-        json['merchantFiatDeadlineAt'] ?? json['merchant_fiat_deadline_at'],
-      ),
-      cryptoConfirmedAt: parseDate(
-        json['cryptoConfirmedAt'] ?? json['crypto_confirmed_at'],
-      ),
-      fiatSentByMerchantAt: parseDate(
-        json['fiatSentByMerchantAt'] ?? json['fiat_sent_by_merchant_at'],
-      ),
-      overdueAt: parseDate(json['overdueAt'] ?? json['overdue_at']),
-      depositTxHash: readNullableString(const [
-        'depositTxHash',
-        'deposit_tx_hash',
-      ]),
-      depositOperationId: readNullableString(const [
-        'depositOperationId',
-        'deposit_operation_id',
-      ]),
+      autoDisputeTrigger: (() {
+        final v = readStr(const ['autoDisputeTrigger', 'auto_dispute_trigger']);
+        return v.isEmpty ? null : v;
+      })(),
+      escrow: escrowRaw is Map<String, dynamic>
+          ? TradeEscrowModel.fromJson(escrowRaw)
+          : null,
+      offer: offerRaw is Map<String, dynamic> ? offerRaw : null,
+      sellerPaymentAccount: spaRaw is Map<String, dynamic> ? spaRaw : null,
+      buyerPaymentAccount: bpaRaw is Map<String, dynamic> ? bpaRaw : null,
     );
   }
 
-  // ── Computed helpers ────────────────────────────────────────────────────────
-
-  /// Returns the most relevant deadline for the current status.
-  DateTime? get paymentDeadline {
-    // vF1 BUY deadlines
-    if (status == TradeStatus.awaitingCrypto && cryptoSendDeadlineAt != null) {
-      return cryptoSendDeadlineAt;
-    }
-    if ((status == TradeStatus.cryptoConfirmed ||
-            status == TradeStatus.awaitingUserConfirm ||
-            status == TradeStatus.overdue) &&
-        merchantFiatDeadlineAt != null) {
-      return merchantFiatDeadlineAt;
-    }
-    // vF1 SELL deadlines
-    if (status == TradeStatus.awaitingFiat && fiatDeadlineAt != null) {
-      return fiatDeadlineAt;
-    }
-    if (status == TradeStatus.fiatConfirmed && merchantSlaDeadlineAt != null) {
-      return merchantSlaDeadlineAt;
-    }
-    // Legacy / fallback
-    if (paymentDueAt != null) return paymentDueAt;
-    if (expiresAt != null) return expiresAt;
-    if (createdAt == null) return null;
-    return createdAt!.add(Duration(minutes: paymentWindow));
+  TradeModel copyWith({
+    TradeStatus? status,
+    TradeEscrowModel? escrow,
+    TradeOfferType? offerType,
+    double? priceSnapshot,
+    DateTime? paymentDueAt,
+    DateTime? fiatSentAt,
+    DateTime? fiatConfirmDueAt,
+    String? autoDisputeTrigger,
+  }) {
+    return TradeModel(
+      id: id,
+      offerId: offerId,
+      status: status ?? this.status,
+      offerType: offerType ?? this.offerType,
+      asset: asset,
+      fiatCurrency: fiatCurrency,
+      cryptoAmount: cryptoAmount,
+      fiatAmount: fiatAmount,
+      priceSnapshot: priceSnapshot ?? this.priceSnapshot,
+      buyerId: buyerId,
+      sellerId: sellerId,
+      cryptoReceiverAddress: cryptoReceiverAddress,
+      cryptoReceiverMemo: cryptoReceiverMemo,
+      sellerPaymentAccountId: sellerPaymentAccountId,
+      buyerPaymentAccountId: buyerPaymentAccountId,
+      paymentWindowMinutes: paymentWindowMinutes,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      expiresAt: expiresAt,
+      paymentDueAt: paymentDueAt ?? this.paymentDueAt,
+      fiatSentAt: fiatSentAt ?? this.fiatSentAt,
+      fiatConfirmDueAt: fiatConfirmDueAt ?? this.fiatConfirmDueAt,
+      autoDisputeTrigger: autoDisputeTrigger ?? this.autoDisputeTrigger,
+      escrow: escrow ?? this.escrow,
+      offer: offer,
+      sellerPaymentAccount: sellerPaymentAccount,
+      buyerPaymentAccount: buyerPaymentAccount,
+    );
   }
+}
 
-  /// True when the buyer (user) can act on a SELL offer (pay fiat).
-  bool get isOpenForBuyerPayment =>
-      status == TradeStatus.awaitingFiat ||
-      status == TradeStatus.awaitingPayment ||
-      status == TradeStatus.created;
+class TradesPagedMeta {
+  final int total;
+  final int page;
+  final int limit;
+  final int totalPages;
 
-  /// True when the user (seller in BUY offer) must send crypto.
-  bool get isAwaitingCrypto => status == TradeStatus.awaitingCrypto;
+  const TradesPagedMeta({
+    required this.total,
+    required this.page,
+    required this.limit,
+    required this.totalPages,
+  });
 
-  bool get isFinalStatus =>
-      status == TradeStatus.completed ||
-      status == TradeStatus.claimed ||
-      status == TradeStatus.released ||
-      status == TradeStatus.cancelled ||
-      status == TradeStatus.expired ||
-      status == TradeStatus.refunded;
-
-  bool get isDisputable =>
-      !isFinalStatus || status == TradeStatus.disputed;
-
-  TradePartyLite? partyForUserId(String? userId) {
-    final id = userId?.trim() ?? '';
-    if (id.isEmpty) return null;
-    if (buyer?.id == id || buyerId == id) {
-      return buyer ?? TradePartyLite(id: buyerId, email: '', name: '');
+  factory TradesPagedMeta.fromJson(Map<String, dynamic> json) {
+    int ri(List<String> keys, {int fallback = 0}) {
+      for (final k in keys) {
+        final v = json[k];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final p = int.tryParse(v.trim());
+          if (p != null) return p;
+        }
+      }
+      return fallback;
     }
-    if (seller?.id == id || sellerId == id) {
-      return seller ?? TradePartyLite(id: sellerId, email: '', name: '');
-    }
-    return null;
+
+    return TradesPagedMeta(
+      total: ri(const ['total', 'count']),
+      page: ri(const ['page'], fallback: 1),
+      limit: ri(const ['limit', 'pageSize'], fallback: 20),
+      totalPages: ri(const ['totalPages', 'total_pages'], fallback: 1),
+    );
   }
+}
 
-  TradePartyLite? counterpartyFor(String? currentUserId) {
-    final me = currentUserId?.trim() ?? '';
-    if (me.isEmpty) return null;
-    if (buyerId == me) {
-      return seller ?? TradePartyLite(id: sellerId, email: '', name: '');
-    }
-    if (sellerId == me) {
-      return buyer ?? TradePartyLite(id: buyerId, email: '', name: '');
-    }
-    return null;
-  }
+class TradesPagedResponse {
+  final List<TradeModel> items;
+  final TradesPagedMeta meta;
+
+  const TradesPagedResponse({required this.items, required this.meta});
 }

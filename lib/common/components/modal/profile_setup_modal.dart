@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/countries/country_service.dart';
+import 'package:next_fi/services/countries/models/country_model.dart';
 import 'package:next_fi/services/profile/models/profile_dtos.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
 
 Future<bool?> showProfileSetupModal(
-  BuildContext context, {
-  ProfileModel? initial,
-}) {
+    BuildContext context, {
+      ProfileModel? initial,
+    }) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _ProfileSetupModal(initial: initial),
   );
 }
@@ -33,17 +35,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
 
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _displayNameCtrl;
-  late final TextEditingController _firstNameCtrl;
-  late final TextEditingController _middleNameCtrl;
-  late final TextEditingController _lastNameCtrl;
-  late final TextEditingController _countryCtrl;
-  late final TextEditingController _addressCtrl;
-
-  ProfileAvailability _availability = ProfileAvailability.available;
-  bool _isActive = true;
-  bool _autoUnavailable = false;
-  DateTime? _availableFrom;
-  DateTime? _availableTo;
+  CountryModel? _selectedCountry;
 
   bool _saving = false;
   String? _error;
@@ -54,29 +46,34 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     final p = widget.initial;
     _usernameCtrl = TextEditingController(text: p?.username ?? '');
     _displayNameCtrl = TextEditingController(text: p?.displayName ?? '');
-    _firstNameCtrl = TextEditingController(text: p?.firstName ?? '');
-    _middleNameCtrl = TextEditingController(text: p?.middleName ?? '');
-    _lastNameCtrl = TextEditingController(text: p?.lastName ?? '');
-    _countryCtrl = TextEditingController(text: p?.country ?? '');
-    _addressCtrl = TextEditingController(text: p?.address ?? '');
-    _availability = p?.availability == ProfileAvailability.unknown
-        ? ProfileAvailability.available
-        : (p?.availability ?? ProfileAvailability.available);
-    _isActive = p?.isActive ?? true;
-    _autoUnavailable = p?.autoUnavailable ?? false;
-    _availableFrom = p?.availableFrom;
-    _availableTo = p?.availableTo;
+    if (p?.country != null && p!.country!.isNotEmpty) {
+      _tryPrefillCountry(p.country!);
+    }
+  }
+
+  Future<void> _tryPrefillCountry(String value) async {
+    try {
+      final countries = await CountryService.I.getAll();
+      final match = countries.firstWhere(
+        (c) =>
+            c.name.toLowerCase() == value.toLowerCase() ||
+            c.code.toLowerCase() == value.toLowerCase(),
+        orElse: () => CountryModel(name: value, code: '', flag: ''),
+      );
+      if (mounted) setState(() => _selectedCountry = match);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _selectedCountry = CountryModel(name: value, code: '', flag: ''),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _usernameCtrl.dispose();
     _displayNameCtrl.dispose();
-    _firstNameCtrl.dispose();
-    _middleNameCtrl.dispose();
-    _lastNameCtrl.dispose();
-    _countryCtrl.dispose();
-    _addressCtrl.dispose();
     super.dispose();
   }
 
@@ -91,16 +88,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       final req = UpsertProfileRequest(
         username: _usernameCtrl.text,
         displayName: _displayNameCtrl.text,
-        firstName: _firstNameCtrl.text,
-        middleName: _middleNameCtrl.text,
-        lastName: _lastNameCtrl.text,
-        country: _countryCtrl.text,
-        address: _addressCtrl.text,
-        availability: _availability,
-        isActive: _isActive,
-        autoUnavailable: _autoUnavailable,
-        availableFrom: _availableFrom,
-        availableTo: _availableTo,
+        country: _selectedCountry?.name,
         includeNulls: true,
       );
       await ProfileCoreService.I.upsertMe(req);
@@ -122,61 +110,6 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
       return '3-30 chars, letters/numbers/underscore/dot only';
     }
     return null;
-  }
-
-  String _formatDateTime(DateTime? dt) {
-    if (dt == null) return 'Not set';
-    final local = dt.toLocal();
-    final y = local.year.toString().padLeft(4, '0');
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
-  }
-
-  Future<void> _pickDateTime({required bool isFrom}) async {
-    final now = DateTime.now();
-    final seed = isFrom ? (_availableFrom ?? now) : (_availableTo ?? now);
-
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: seed,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 5),
-    );
-    if (pickedDate == null || !mounted) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(seed),
-    );
-    if (pickedTime == null || !mounted) return;
-
-    final next = DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      pickedTime.hour,
-      pickedTime.minute,
-    );
-    setState(() {
-      if (isFrom) {
-        _availableFrom = next.toUtc();
-      } else {
-        _availableTo = next.toUtc();
-      }
-    });
-  }
-
-  void _clearDateTime({required bool isFrom}) {
-    setState(() {
-      if (isFrom) {
-        _availableFrom = null;
-      } else {
-        _availableTo = null;
-      }
-    });
   }
 
   @override
@@ -202,7 +135,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: c.border.withOpacity(0.35),
+                  color: c.border.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -245,7 +178,7 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
               ),
 
               const SizedBox(height: 16),
-              Divider(height: 1, color: c.border.withOpacity(0.18)),
+              Divider(height: 1, color: c.border.withValues(alpha: 0.18)),
               const SizedBox(height: 4),
 
               // ── Form ───────────────────────────────────────────────
@@ -294,173 +227,24 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
 
                         const SizedBox(height: 20),
 
-                        // Legal name section
-                        _SectionHeader(label: 'LEGAL NAME', c: c),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _firstNameCtrl,
-                          label: 'First Name',
-                          hint: 'Optional',
-                          icon: Icons.person_outline_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _middleNameCtrl,
-                          label: 'Middle Name',
-                          hint: 'Optional',
-                          icon: Icons.person_outline_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _lastNameCtrl,
-                          label: 'Last Name',
-                          hint: 'Optional',
-                          icon: Icons.person_outline_rounded,
-                          action: TextInputAction.next,
-                          c: c,
-                        ),
-
-                        const SizedBox(height: 20),
-
                         // Location section
                         _SectionHeader(label: 'LOCATION', c: c),
                         const SizedBox(height: 10),
-                        _FormField(
-                          controller: _countryCtrl,
-                          label: 'Country',
-                          hint: 'e.g. Philippines',
-                          icon: Icons.public_rounded,
-                          action: TextInputAction.next,
+                        _CountryPickerField(
                           c: c,
-                        ),
-                        const SizedBox(height: 10),
-                        _FormField(
-                          controller: _addressCtrl,
-                          label: 'Address',
-                          hint: 'Street, city, province (optional)',
-                          icon: Icons.location_on_outlined,
-                          action: TextInputAction.done,
-                          multiline: true,
-                          c: c,
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        _SectionHeader(label: 'TRADING AVAILABILITY', c: c),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<ProfileAvailability>(
-                          value: _availability == ProfileAvailability.unknown
-                              ? ProfileAvailability.available
-                              : _availability,
-                          items:
-                              const [
-                                    ProfileAvailability.available,
-                                    ProfileAvailability.unavailable,
-                                    ProfileAvailability.onBreak,
-                                  ]
-                                  .map(
-                                    (v) => DropdownMenuItem(
-                                      value: v,
-                                      child: Text(v.name.toUpperCase()),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: _saving
-                              ? null
-                              : (v) {
-                                  if (v == null) return;
-                                  setState(() => _availability = v);
-                                },
-                          decoration: InputDecoration(
-                            labelText: 'Availability',
-                            prefixIcon: Icon(
-                              Icons.schedule_outlined,
-                              color: c.textSecondary.withOpacity(0.6),
-                            ),
-                            filled: true,
-                            fillColor: c.border.withOpacity(0.05),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
-                              borderSide: BorderSide(
-                                color: c.border.withOpacity(0.25),
-                                width: 1.2,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
-                              borderSide: BorderSide(
-                                color: c.border.withOpacity(0.25),
-                                width: 1.2,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: c.surface,
-                            borderRadius: BorderRadius.circular(13),
-                            border: Border.all(
-                              color: c.border.withOpacity(0.25),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              SwitchListTile.adaptive(
-                                value: _isActive,
-                                onChanged: _saving
-                                    ? null
-                                    : (v) => setState(() => _isActive = v),
-                                title: const Text('Profile active'),
-                                subtitle: const Text(
-                                  'Enable or disable profile',
-                                ),
-                              ),
-                              Divider(
-                                height: 1,
-                                color: c.border.withOpacity(0.22),
-                              ),
-                              SwitchListTile.adaptive(
-                                value: _autoUnavailable,
-                                onChanged: _saving
-                                    ? null
-                                    : (v) =>
-                                          setState(() => _autoUnavailable = v),
-                                title: const Text('Auto unavailable'),
-                                subtitle: const Text(
-                                  'Auto-set unavailable outside window',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _AvailabilityDateField(
-                          c: c,
-                          label: 'Available From',
-                          value: _formatDateTime(_availableFrom),
-                          onPick: _saving
-                              ? null
-                              : () => _pickDateTime(isFrom: true),
-                          onClear: _saving
-                              ? null
-                              : () => _clearDateTime(isFrom: true),
-                        ),
-                        const SizedBox(height: 10),
-                        _AvailabilityDateField(
-                          c: c,
-                          label: 'Available To',
-                          value: _formatDateTime(_availableTo),
-                          onPick: _saving
-                              ? null
-                              : () => _pickDateTime(isFrom: false),
-                          onClear: _saving
-                              ? null
-                              : () => _clearDateTime(isFrom: false),
+                          selected: _selectedCountry,
+                          onTap: () async {
+                            final picked =
+                                await showModalBottomSheet<CountryModel>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: AppColor.of(context).surface,
+                              builder: (_) => const _CountryPickerSheet(),
+                            );
+                            if (picked != null) {
+                              setState(() => _selectedCountry = picked);
+                            }
+                          },
                         ),
 
                         // Error banner
@@ -506,7 +290,7 @@ class _SectionHeader extends StatelessWidget {
       style: TextStyle(
         fontSize: 10.5,
         fontWeight: FontWeight.w700,
-        color: c.textSecondary.withOpacity(0.6),
+        color: c.textSecondary.withValues(alpha: 0.6),
         letterSpacing: 1.0,
       ),
     );
@@ -531,91 +315,8 @@ class _FieldRow extends StatelessWidget {
   }
 }
 
-class _AvailabilityDateField extends StatelessWidget {
-  const _AvailabilityDateField({
-    required this.c,
-    required this.label,
-    required this.value,
-    required this.onPick,
-    required this.onClear,
-  });
-
-  final AppColor c;
-  final String label;
-  final String value;
-  final VoidCallback? onPick;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: AppOutlinedButton(
-                  onPressed: onPick,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: c.primary,
-                    side: BorderSide(color: c.primary.withOpacity(0.45)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Set'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppTextButton(
-                  onPressed: onClear,
-                  style: TextButton.styleFrom(
-                    foregroundColor: c.textSecondary,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Clear'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// FORM FIELD  — flat, soft, modern
+// FORM FIELD — flat, soft, modern
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FormField extends StatefulWidget {
@@ -653,16 +354,16 @@ class _FormFieldState extends State<_FormField> {
     final c = widget.c;
     final border = _focused
         ? OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.primary, width: 1.5),
-          )
+      borderRadius: BorderRadius.circular(13),
+      borderSide: BorderSide(color: c.primary, width: 1.5),
+    )
         : OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(
-              color: c.border.withOpacity(0.3),
-              width: 1.2,
-            ),
-          );
+      borderRadius: BorderRadius.circular(13),
+      borderSide: BorderSide(
+        color: c.border.withValues(alpha: 0.3),
+        width: 1.2,
+      ),
+    );
 
     return Focus(
       onFocusChange: (v) => setState(() => _focused = v),
@@ -682,7 +383,7 @@ class _FormFieldState extends State<_FormField> {
           labelText: widget.label,
           hintText: widget.hint,
           hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.45),
+            color: c.textSecondary.withValues(alpha: 0.45),
             fontSize: 13.5,
           ),
           labelStyle: TextStyle(
@@ -700,7 +401,7 @@ class _FormFieldState extends State<_FormField> {
             child: Icon(
               widget.icon,
               size: 17,
-              color: _focused ? c.primary : c.textSecondary.withOpacity(0.5),
+              color: _focused ? c.primary : c.textSecondary.withValues(alpha: 0.5),
             ),
           ),
           prefixIconConstraints: const BoxConstraints(
@@ -709,8 +410,8 @@ class _FormFieldState extends State<_FormField> {
           ),
           filled: true,
           fillColor: _focused
-              ? c.primary.withOpacity(0.03)
-              : c.border.withOpacity(0.05),
+              ? c.primary.withValues(alpha: 0.03)
+              : c.border.withValues(alpha: 0.05),
           contentPadding: EdgeInsets.symmetric(
             horizontal: 14,
             vertical: widget.multiline ? 14 : 0,
@@ -719,14 +420,14 @@ class _FormFieldState extends State<_FormField> {
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
             borderSide: BorderSide(
-              color: c.border.withOpacity(0.25),
+              color: c.border.withValues(alpha: 0.25),
               width: 1.2,
             ),
           ),
           focusedBorder: border,
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.error.withOpacity(0.6), width: 1.2),
+            borderSide: BorderSide(color: c.error.withValues(alpha: 0.6), width: 1.2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -757,7 +458,7 @@ class _CloseButton extends StatelessWidget {
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: c.border.withOpacity(0.1),
+          color: c.border.withValues(alpha: 0.1),
           shape: BoxShape.circle,
         ),
         child: Icon(Icons.close_rounded, size: 17, color: c.textSecondary),
@@ -782,9 +483,9 @@ class _ErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: c.error.withOpacity(0.07),
+        color: c.error.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.error.withOpacity(0.2)),
+        border: Border.all(color: c.error.withValues(alpha: 0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -796,6 +497,262 @@ class _ErrorBanner extends StatelessWidget {
               error,
               style: TextStyle(color: c.error, fontSize: 12.5, height: 1.4),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER FIELD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerField extends StatelessWidget {
+  const _CountryPickerField({
+    required this.c,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppColor c;
+  final CountryModel? selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = selected != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: c.border.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: c.border.withValues(alpha: 0.25), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.public_rounded,
+                size: 17,
+                color: hasValue
+                    ? c.primary
+                    : c.textSecondary.withValues(alpha: 0.5)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Country',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: hasValue ? c.primary : c.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (hasValue) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      '${selected!.flag}  ${selected!.name}',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ] else
+                    Text(
+                      'Select your country',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        color: c.textSecondary.withValues(alpha: 0.45),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(
+              hasValue ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+              size: 18,
+              color: hasValue ? c.primary : c.textSecondary.withValues(alpha: 0.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerSheet extends StatefulWidget {
+  const _CountryPickerSheet();
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  List<CountryModel> _all = [];
+  List<CountryModel> _filtered = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(_onSearch);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final countries = await CountryService.I.getAll();
+      if (!mounted) return;
+      setState(() {
+        _all = countries;
+        _filtered = countries;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? _all
+          : _all
+              .where((c) =>
+                  c.name.toLowerCase().contains(q) ||
+                  c.code.toLowerCase().contains(q))
+              .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: c.border.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Select Country',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search countries…',
+                hintStyle: TextStyle(
+                    color: c.textSecondary.withValues(alpha: 0.5), fontSize: 14),
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 18, color: c.textSecondary.withValues(alpha: 0.5)),
+                filled: true,
+                fillColor: c.border.withValues(alpha: 0.07),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              style: TextStyle(color: c.textPrimary, fontSize: 14),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: _loading
+                ? Center(
+                    child: CircularProgressIndicator(color: c.primary))
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!,
+                                style: TextStyle(
+                                    color: c.error, fontSize: 13),
+                                textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            TextButton(
+                                onPressed: _load,
+                                child: const Text('Retry')),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _filtered.length,
+                        itemBuilder: (_, i) {
+                          final country = _filtered[i];
+                          return ListTile(
+                            leading: Text(country.flag,
+                                style: const TextStyle(fontSize: 22)),
+                            title: Text(
+                              country.name,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                            trailing: Text(
+                              country.code,
+                              style: TextStyle(
+                                  color: c.textSecondary, fontSize: 12),
+                            ),
+                            onTap: () =>
+                                Navigator.of(context).pop(country),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
@@ -828,22 +785,22 @@ class _SaveButton extends StatelessWidget {
         boxShadow: saving
             ? null
             : [
-                BoxShadow(
-                  color: c.primary.withOpacity(0.28),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+          BoxShadow(
+            color: c.primary.withValues(alpha: 0.28),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: AppElevatedButton(
         onPressed: saving ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: c.primary,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: c.primary.withOpacity(0.55),
-          disabledForegroundColor: Colors.white70,
+          foregroundColor: AppColor.of(context).onPrimary,
+          disabledBackgroundColor: c.primary.withValues(alpha: 0.55),
+          disabledForegroundColor: AppColor.of(context).onPrimary,
           elevation: 0,
-          shadowColor: Colors.transparent,
+          shadowColor: AppColor.of(context).surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -852,44 +809,44 @@ class _SaveButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: saving
               ? Row(
-                  key: const ValueKey('saving'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(Colors.white70),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Saving…',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  key: const ValueKey('save'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.check_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'Save Profile',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ],
+            key: const ValueKey('saving'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(AppColor.of(context).onPrimary),
                 ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Saving…',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          )
+              : Row(
+            key: const ValueKey('save'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.check_rounded, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Save Profile',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -4,10 +4,10 @@ import 'package:next_fi/services/fcm_notification/fcm_notification_service.dart'
 import 'package:next_fi/services/fcm_notification/models/fcm_models.dart';
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 
-import '../base_url/base_url.dart' show cetralized_baseUrl;
+import '../base_url/base_url.dart' show centralized_baseUrl;
 
 class FcmNotificationCore {
-  static const String _baseUrl = cetralized_baseUrl;
+  static const String _baseUrl = centralized_baseUrl;
 
   final TokenStorage _tokenStorage;
   late final FcmNotificationService svc;

@@ -1,3 +1,4 @@
+/// Request DTO for creating a review
 class CreateReviewRequest {
   final String tradeId;
   final int rating;
@@ -9,27 +10,38 @@ class CreateReviewRequest {
     this.comment,
   });
 
-  Map<String, dynamic> toJson() => {
-    'tradeId': tradeId.trim(),
-    'rating': rating,
-    if (comment != null && comment!.trim().isNotEmpty)
-      'comment': comment!.trim(),
-  };
+  Map<String, dynamic> toJson() {
+    if (rating < 1 || rating > 5) {
+      throw ArgumentError('rating must be between 1 and 5');
+    }
+    return {
+      'tradeId': tradeId,
+      'rating': rating,
+      if (comment != null && comment!.isNotEmpty) 'comment': comment,
+    };
+  }
 }
 
-class ReviewsQuery {
-  final String? tradeId;
-  final String? q;
-  final int? page;
-  final int? limit;
+/// Query parameters for listing reviews
+class ReviewsListQuery {
+  final String? userId;
+  final String? page;
+  final String? limit;
+  final String? search;
 
-  const ReviewsQuery({this.tradeId, this.q, this.page, this.limit});
+  const ReviewsListQuery({
+    this.userId,
+    this.page,
+    this.limit,
+    this.search,
+  });
 
-  Map<String, String> toQueryMap() => {
-    if (tradeId != null && tradeId!.trim().isNotEmpty)
-      'tradeId': tradeId!.trim(),
-    if (q != null && q!.trim().isNotEmpty) 'q': q!.trim(),
-    if (page != null && page! > 0) 'page': page!.toString(),
-    if (limit != null && limit! > 0) 'limit': limit!.toString(),
-  };
+  Map<String, String> toQueryParams() {
+    final params = <String, String>{};
+    if (userId != null && userId!.isNotEmpty) params['userId'] = userId!;
+    if (page != null && page!.isNotEmpty) params['page'] = page!;
+    if (limit != null && limit!.isNotEmpty) params['limit'] = limit!;
+    if (search != null && search!.isNotEmpty) params['q'] = search!;
+    return params;
+  }
 }

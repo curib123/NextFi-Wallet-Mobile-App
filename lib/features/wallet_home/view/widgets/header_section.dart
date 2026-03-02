@@ -19,8 +19,7 @@ class HeaderSection extends StatefulWidget {
     required this.livePulse,
     required this.incomingStrip,
     this.animateTotal = false,
-    this.onBuy,
-    this.onSell,
+    this.onP2P,
   });
 
   final AppColor colors;
@@ -33,15 +32,8 @@ class HeaderSection extends StatefulWidget {
   final VoidCallback onReceive;
   final AnimationController livePulse;
   final Widget incomingStrip;
-
-  /// If false, the total is shown immediately (no counting animation).
   final bool animateTotal;
-
-  /// Optional: Called when Buy is tapped (Buy XLM)
-  final VoidCallback? onBuy;
-
-  /// Optional: Called when Sell is tapped (Sell XLM)
-  final VoidCallback? onSell;
+  final VoidCallback? onP2P;
 
   @override
   State<HeaderSection> createState() => _HeaderSectionState();
@@ -50,24 +42,22 @@ class HeaderSection extends StatefulWidget {
 class _HeaderSectionState extends State<HeaderSection> {
   bool _hideBalance = false;
 
-  // Track last total & fiat delta
   double? _lastTotal;
   double? _deltaFiat;
   static const double _epsilon = 0.0001;
 
-  // Use your theme colors (as requested)
   Color get _upColor => widget.colors.success;
   Color get _downColor => widget.colors.error;
 
   void _onPulseStatus(AnimationStatus status) {
-    if (mounted) setState(() {}); // refresh when counting starts/stops
+    if (mounted) setState(() {});
   }
 
   @override
   void initState() {
     super.initState();
     _lastTotal = _safe(widget.totalFiat);
-    _deltaFiat = null; // first draw: no pill
+    _deltaFiat = null;
     widget.livePulse.addStatusListener(_onPulseStatus);
   }
 
@@ -75,7 +65,6 @@ class _HeaderSectionState extends State<HeaderSection> {
   void didUpdateWidget(covariant HeaderSection oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Rewire pulse listener if controller instance changed
     if (oldWidget.livePulse != widget.livePulse) {
       oldWidget.livePulse.removeStatusListener(_onPulseStatus);
       widget.livePulse.addStatusListener(_onPulseStatus);
@@ -102,7 +91,6 @@ class _HeaderSectionState extends State<HeaderSection> {
 
   double _safe(double v) => v.isFinite ? v : 0.0;
 
-  // Colorize whenever there's a real delta (and not hidden).
   bool _shouldColorize() {
     if (_hideBalance) return false;
     if (_deltaFiat == null || _deltaFiat!.abs() <= _epsilon) return false;
@@ -114,7 +102,6 @@ class _HeaderSectionState extends State<HeaderSection> {
     return _deltaFiat! >= 0 ? _upColor : _downColor;
   }
 
-  // Up/Down icon beside the balance text
   Widget _trendIconForDelta() {
     if (!_shouldColorize()) return const SizedBox.shrink();
     final up = _deltaFiat! >= 0;
@@ -128,177 +115,148 @@ class _HeaderSectionState extends State<HeaderSection> {
   @override
   Widget build(BuildContext context) {
     final total = _safe(widget.totalFiat);
+    final hasDelta = _deltaFiat != null && !_hideBalance;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Card
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.all(18),
-          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                widget.colors.surface.withOpacity(0.4),
-                widget.colors.surface.withOpacity(0.2),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: widget.colors.primary.withOpacity(0.08),
-              width: 1,
-            ),
+            color: widget.colors.surface,
+            borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-                spreadRadius: 0,
+                color: (Theme.of(context).brightness == Brightness.dark
+                        ? widget.colors.background
+                        : widget.colors.textPrimary)
+                    .withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.50
+                      : 0.08,
+                ),
+                blurRadius: 14,
+                spreadRadius: -2,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Left: Balance & meta
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Label + eye
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Total Balance',
+                          'TOTAL BALANCE',
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: widget.colors.textSecondary,
-                            letterSpacing: 0.3,
+                            letterSpacing: 1.1,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        InkResponse(
+                        InkWell(
+                          borderRadius: BorderRadius.circular(10),
                           onTap: () =>
                               setState(() => _hideBalance = !_hideBalance),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Icon(
-                            _hideBalance ? LucideIcons.eyeOff : LucideIcons.eye,
-                            color: widget.colors.textSecondary,
-                            size: 18,
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              _hideBalance
+                                  ? LucideIcons.eyeOff
+                                  : LucideIcons.eye,
+                              size: 16,
+                              color: widget.colors.textSecondary,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-
-                    // Balance row: our own ↑/↓ icon + the number
-                    TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOut,
-                      tween: Tween(
-                        begin: 1.0,
-                        end: (_deltaFiat == null) ? 1.0 : 1.02,
-                      ),
-                      builder: (context, scale, child) {
-                        return Transform.scale(
-                          scale: scale,
-                          alignment: Alignment.centerLeft,
-                          child: child,
-                        );
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _trendIconForDelta(),
-                          if (_shouldColorize()) const SizedBox(width: 6),
-                          // LiveCountingBalance with forced baseColor & no internal icon
-                          LiveCountingBalance(
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _trendIconForDelta(),
+                        if (_shouldColorize()) const SizedBox(width: 8),
+                        Expanded(
+                          child: LiveCountingBalance(
                             animate: widget.animateTotal,
                             hidden: _hideBalance,
                             targetValue: total,
                             fmt: widget.currencyFmt,
-                            baseColor: _balanceColor(), // ← driven by our delta
+                            baseColor: _balanceColor(),
                             upColor: _upColor,
                             downColor: _downColor,
                             loading: widget.loadingBalances,
                             pulse: widget.livePulse,
-                            showTrendIcon: false, // ← we show our own icon
-                            forceBaseColor: true, // ← lock color to baseColor
+                            showTrendIcon: false,
+                            forceBaseColor: true,
                           ),
-                        ],
-                      ),
+                        ),
+                      ], 
                     ),
-
-                    const SizedBox(height: 10),
-
-                    // Meta row: delta pill
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 6,
+                    if (hasDelta) ...[
+                      const SizedBox(height: 6),
+                      _DeltaChipFiat(
+                        key: ValueKey(
+                          '${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}',
+                        ),
+                        amount: _deltaFiat!,
+                        fmt: widget.currencyFmt,
+                        upColor: _upColor,
+                        downColor: _downColor,
+                        active: true,
+                        neutralColor: widget.colors.textSecondary,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeIn,
-                          transitionBuilder: (child, anim) => FadeTransition(
-                            opacity: anim,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0.12, 0.0),
-                                end: Offset.zero,
-                              ).animate(anim),
-                              child: child,
+                        Expanded(
+                          child: Text(
+                            widget.lastBalancesAt == null
+                                ? 'Not synced yet'
+                                : 'Updated ${DateFormat.Hm().format(widget.lastBalancesAt!.toLocal())}',
+                            style: TextStyle(
+                              color: widget.colors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
                             ),
                           ),
-                          child: (_deltaFiat != null && !_hideBalance)
-                              ? _DeltaChipFiat(
-                                  key: ValueKey(
-                                    '${_deltaFiat!.sign}_${_lastTotal?.toStringAsFixed(2)}',
-                                  ),
-                                  amount: _deltaFiat!,
-                                  fmt: widget.currencyFmt,
-                                  upColor: _upColor,
-                                  downColor: _downColor,
-                                  active:
-                                      true, // always colorize when we show it
-                                  neutralColor: widget.colors.textSecondary,
-                                )
-                              : const SizedBox.shrink(key: ValueKey('empty')),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-
-              const SizedBox(width: 10),
-
-              // Right: primary action
+              const SizedBox(width: 12),
               SizedBox(
                 height: 40,
                 child: AppFilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: widget.colors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    foregroundColor: AppColor.of(context).onPrimary,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    elevation: 1,
                   ),
                   onPressed: widget.onSwap,
-                  icon: const Icon(LucideIcons.scanLine, size: 20),
+                  icon: const Icon(LucideIcons.scanLine, size: 18),
                   label: const Text(
                     'Scanner',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
+                      fontSize: 13,
                       letterSpacing: 0.2,
                     ),
                   ),
@@ -307,41 +265,37 @@ class _HeaderSectionState extends State<HeaderSection> {
             ],
           ),
         ),
-
-        // Quick actions
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _ActionTile(
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionTile(
                 colors: widget.colors,
                 icon: LucideIcons.send,
                 label: 'Send',
                 onTap: widget.onSend,
               ),
-              _ActionTile(
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ActionTile(
                 colors: widget.colors,
                 icon: LucideIcons.download,
                 label: 'Receive',
                 onTap: widget.onReceive,
               ),
-              _ActionTile(
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ActionTile(
                 colors: widget.colors,
-                icon: LucideIcons.arrowDown,
-                label: 'Buy',
-                onTap: widget.onBuy ?? () => debugPrint('Buy'),
+                icon: LucideIcons.store,
+                label: 'P2P',
+                onTap: widget.onP2P ?? () => debugPrint('P2P'),
               ),
-              _ActionTile(
-                colors: widget.colors,
-                icon: LucideIcons.arrowUp,
-                label: 'Sell',
-                onTap: widget.onSell ?? () => debugPrint('Sell'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-
         const SizedBox(height: 12),
         widget.incomingStrip,
       ],
@@ -349,7 +303,6 @@ class _HeaderSectionState extends State<HeaderSection> {
   }
 }
 
-// ────────────────── Quick Action Tile ──────────────────
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
     required this.colors,
@@ -365,32 +318,34 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = colors.primary.withOpacity(0.05);
     return Column(
       children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(50),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(50),
+        Material(
+          color: colors.primary,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: colors.primary.withValues(alpha: 0.1),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: AppColor.of(context).onPrimary, size: 22),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            child: Icon(icon, color: colors.primary, size: 25),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           label,
           style: TextStyle(
             color: colors.textPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 12,
-            letterSpacing: 0.15,
+            letterSpacing: 0.1,
           ),
         ),
       ],
@@ -398,7 +353,6 @@ class _ActionTile extends StatelessWidget {
   }
 }
 
-// ────────────────── Delta pill (no words; symbols only) ──────────────────
 class _DeltaChipFiat extends StatelessWidget {
   const _DeltaChipFiat({
     super.key,
@@ -414,35 +368,23 @@ class _DeltaChipFiat extends StatelessWidget {
   final NumberFormat fmt;
   final Color upColor;
   final Color downColor;
-
-  /// If false, show neutral colors (no up/down tint).
   final bool active;
-
-  /// Neutral color to use when not active.
   final Color neutralColor;
 
   @override
   Widget build(BuildContext context) {
     final up = amount >= 0;
     final color = active ? (up ? upColor : downColor) : neutralColor;
-    final icon = up ? LucideIcons.trendingUp : LucideIcons.trendingDown;
-    final sign = up ? '+' : '−'; // true minus
+    final sign = up ? '+' : '-';
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 6),
-        Text(
-          '$sign${fmt.format(amount.abs())}',
-          style: TextStyle(
-            fontSize: 12,
-            color: color,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ],
+    return Text(
+      '$sign${fmt.format(amount.abs())}',
+      style: TextStyle(
+        fontSize: 12,
+        color: color,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.15,
+      ),
     );
   }
 }

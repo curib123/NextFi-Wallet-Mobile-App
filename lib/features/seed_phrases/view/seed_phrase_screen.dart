@@ -40,7 +40,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       final colors = AppColor.of(context);
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          statusBarColor: colors.surface,
           statusBarIconBrightness: Brightness.dark,
           systemNavigationBarColor: colors.surface,
           systemNavigationBarIconBrightness: Brightness.dark,
@@ -73,12 +73,12 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       SnackBar(
         content: Row(
           children: [
-            Icon(LucideIcons.checkCircle2, color: Colors.white, size: 18),
+            Icon(LucideIcons.checkCircle2, color: colors.onPrimary, size: 18),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               'Recovery phrase copied',
               style: TextStyle(
-                color: Colors.white,
+                color: colors.onPrimary,
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),
@@ -143,7 +143,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(
-          bottom: BorderSide(color: colors.border.withOpacity(0.1), width: 1),
+          bottom: BorderSide(color: colors.border.withValues(alpha: 0.1), width: 1),
         ),
       ),
       child: Row(
@@ -245,7 +245,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
             border: Border.all(
               color: isSelected
                   ? colors.primary
-                  : colors.border.withOpacity(0.15),
+                  : colors.border.withValues(alpha: 0.15),
               width: 1.5,
             ),
           ),
@@ -253,7 +253,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
             '$count words',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: isSelected ? Colors.white : colors.textPrimary,
+              color: isSelected ? colors.onPrimary : colors.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -326,7 +326,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: colors.border.withOpacity(0.15), width: 1),
+          border: Border.all(color: colors.border.withValues(alpha: 0.15), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -351,9 +351,9 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.warning.withOpacity(0.08),
+        color: colors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.warning.withOpacity(0.15), width: 1),
+        border: Border.all(color: colors.warning.withValues(alpha: 0.15), width: 1),
       ),
       child: Row(
         children: [
@@ -394,11 +394,11 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: colors.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: colors.border.withOpacity(0.2),
-              disabledForegroundColor: colors.textSecondary.withOpacity(0.5),
+              foregroundColor: colors.onPrimary,
+              disabledBackgroundColor: colors.border.withValues(alpha: 0.2),
+              disabledForegroundColor: colors.textSecondary.withValues(alpha: 0.5),
               elevation: 0,
-              shadowColor: Colors.transparent,
+              shadowColor: colors.surface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -409,7 +409,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: AlwaysStoppedAnimation<Color>(colors.onPrimary),
                     ),
                   )
                 : const Text(
@@ -526,7 +526,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   ) async {
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (context) => _buildBottomSheet(
         context,
         colors,
@@ -551,7 +551,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     final colors = AppColor.of(context);
     return showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.surface,
       isScrollControlled: true,
       builder: (context) => Container(
         padding: EdgeInsets.only(
@@ -573,7 +573,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.border.withOpacity(0.3),
+                  color: colors.border.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -585,7 +585,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.1),
+                    color: colors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -628,7 +628,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                     child: AppOutlinedButton(
                       onPressed: () => Navigator.pop(context, false),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: colors.border.withOpacity(0.2)),
+                        side: BorderSide(color: colors.border.withValues(alpha: 0.2)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -652,7 +652,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                       onPressed: () => Navigator.pop(context, true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colors.primary,
-                        foregroundColor: Colors.white,
+                        foregroundColor: colors.onPrimary,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -682,7 +682,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.border.withOpacity(0.1), width: 1),
+        border: Border.all(color: colors.border.withValues(alpha: 0.1), width: 1),
       ),
       child: Row(
         children: [
@@ -721,7 +721,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     final colors = AppColor.of(context);
     return showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.surface,
       builder: (context) => _buildBottomSheet(
         context,
         colors,
@@ -738,7 +738,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
   void _showInfoSheet(BuildContext context, AppColor colors) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.surface,
       isScrollControlled: true,
       builder: (context) => Container(
         padding: const EdgeInsets.all(20),
@@ -755,7 +755,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.border.withOpacity(0.3),
+                  color: colors.border.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -767,7 +767,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.1),
+                    color: colors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -815,7 +815,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colors.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: colors.onPrimary,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -881,7 +881,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: colors.border.withOpacity(0.3),
+              color: colors.border.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -890,7 +890,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: confirmColor.withOpacity(0.1),
+              color: confirmColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: confirmColor, size: 28),
@@ -923,7 +923,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                   child: AppOutlinedButton(
                     onPressed: () => Navigator.pop(context, false),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colors.border.withOpacity(0.2)),
+                      side: BorderSide(color: colors.border.withValues(alpha: 0.2)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -947,7 +947,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: confirmColor,
-                      foregroundColor: Colors.white,
+                      foregroundColor: colors.onPrimary,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -978,7 +978,7 @@ class _SeedPhraseScreenState extends State<SeedPhraseScreen>
     final colors = AppColor.of(context);
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: colors.surface,
       builder: (context) => _buildBottomSheet(
         context,
         colors,

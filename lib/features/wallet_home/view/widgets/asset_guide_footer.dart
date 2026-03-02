@@ -450,17 +450,18 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   // Accent color heuristic by tags
   Color _accentFor(GuideTip tip) {
     final tags = tip.tags;
-    if (tags.contains('warning') || tags.contains('security')) return Colors.orange;
-    if (tags.contains('success')) return Colors.green;
-    if (tags.contains('usdc')) return Colors.blue;
-    if (tags.contains('xlm')) return Colors.indigo;
-    return Colors.blueGrey;
+    final colors = widget.colors;
+    if (tags.contains('warning') || tags.contains('security')) return colors.warning;
+    if (tags.contains('success')) return colors.success;
+    if (tags.contains('usdc')) return colors.info;
+    if (tags.contains('xlm')) return colors.primaryDark;
+    return colors.textSecondary;
   }
 
   LinearGradient _bg(Color base) => LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
-    colors: [base.withOpacity(0.10), base.withOpacity(0.04)],
+    colors: [base.withValues(alpha: 0.10), base.withValues(alpha: 0.04)],
   );
 
   @override
@@ -498,10 +499,10 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
               height: iconBubble,
               margin: EdgeInsets.only(right: gap),
               decoration: BoxDecoration(
-                color: base.withOpacity(0.14),
+                color: base.withValues(alpha: 0.14),
                 shape: BoxShape.circle,
               ),
-              child: Icon(tip.icon, size: glyph, color: base.withOpacity(0.95)),
+              child: Icon(tip.icon, size: glyph, color: base.withValues(alpha: 0.95)),
             ),
             // Text (wraps up to maxLines)
             Expanded(

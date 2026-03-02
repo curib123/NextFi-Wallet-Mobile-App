@@ -262,15 +262,41 @@ class WalletManager {
   // SWITCH WALLET
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Switch active wallet
+  /// Switch active wallet (local + backend toggle)
   Future<bool> switchWallet({required String localId}) async {
-    return await SeedStorage.setActiveWallet(localId);
+    final localSuccess = await SeedStorage.setActiveWallet(localId);
+    if (!localSuccess) return false;
+
+    // Sync active state to backend (best effort)
+    try {
+      final wallets = await listWallets();
+      final wallet = wallets.firstWhereOrNull((w) => w.localId == localId);
+      if (wallet?.backendId != null) {
+        await _api.setActive(walletId: wallet!.backendId!);
+      }
+    } catch (e) {
+      print('[WalletManager] Backend setActive failed: $e');
+    }
+
+    return true;
   }
 
-  /// Get active wallet
+  /// Get active wallet info for use as escrow/receiver address
   Future<WalletViewModel?> getActiveWallet() async {
     final wallets = await listWallets();
     return wallets.firstWhereOrNull((w) => w.isActive);
+  }
+
+  /// Get the active wallet's public address (for escrow/receiver)
+  Future<String?> getActiveWalletAddress() async {
+    final active = await getActiveWallet();
+    return active?.publicAddress;
+  }
+
+  /// Get the active wallet's backend ID (for API calls)
+  Future<String?> getActiveWalletBackendId() async {
+    final active = await getActiveWallet();
+    return active?.backendId;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -448,6 +474,68 @@ class WalletManager {
   Future<bool> hasLocalSeed(String publicAddress) async {
     final localWallets = await SeedStorage.listWallets();
     return localWallets.any((w) => w.publicAddress == publicAddress);
+  }
+
+  /// Check whether this address is already saved in backend for the
+  /// authenticated user account.
+  Future<bool> hasAddressInBackend(
+    String publicAddress, {
+    String network = 'stellar',
+  }) async {
+    final normalized = publicAddress.trim();
+    if (normalized.isEmpty) return false;
+
+    final backendWallets = await _listBackendWallets(
+      q: normalized,
+      network: network,
+    );
+
+    return backendWallets.any(
+      (w) => w.publicAddress.trim().toLowerCase() == normalized.toLowerCase(),
+    );
+  }
+
+  /// Save this address to backend if missing (idempotent-ish).
+  /// Returns the backend wallet record that exists/was created.
+  Future<WalletAddress> saveAddressIfMissing({
+    required String publicAddress,
+    String? label,
+    String network = 'stellar',
+  }) async {
+    final normalized = publicAddress.trim();
+    if (normalized.isEmpty) {
+      throw WalletException('Public address is empty');
+    }
+
+    final existingList = await _listBackendWallets(
+      q: normalized,
+      network: network,
+    );
+    final existing = existingList.firstWhereOrNull(
+      (w) => w.publicAddress.trim().toLowerCase() == normalized.toLowerCase(),
+    );
+    if (existing != null) return existing;
+
+    try {
+      return await _api.create(
+        publicAddress: normalized,
+        label: (label == null || label.trim().isEmpty)
+            ? 'Wallet'
+            : label.trim(),
+        network: network,
+      );
+    } catch (_) {
+      // If backend created the record concurrently, re-read and return it.
+      final retryList = await _listBackendWallets(
+        q: normalized,
+        network: network,
+      );
+      final retryExisting = retryList.firstWhereOrNull(
+        (w) => w.publicAddress.trim().toLowerCase() == normalized.toLowerCase(),
+      );
+      if (retryExisting != null) return retryExisting;
+      rethrow;
+    }
   }
 }
 

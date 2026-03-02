@@ -15,9 +15,9 @@ class FiatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.08),
+        color: c.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.primary.withOpacity(0.25)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.25)),
       ),
       child: Text(
         fiat,

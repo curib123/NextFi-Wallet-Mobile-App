@@ -32,7 +32,7 @@ class LocalNotif {
   Future<void> init({void Function(String? payload)? onLocalTap}) async {
     if (_inited) return;
 
-    const androidInit = AndroidInitializationSettings('@drawable/ic_stat_notification');
+    const androidInit = AndroidInitializationSettings('@drawable/icon');
 
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: false,
@@ -85,7 +85,7 @@ class LocalNotif {
       channelDescription: _channel.description,
       importance: Importance.max,
       priority: Priority.high,
-      icon: '@drawable/ic_stat_notification',
+      icon: '@drawable/icon',
     );
 
 

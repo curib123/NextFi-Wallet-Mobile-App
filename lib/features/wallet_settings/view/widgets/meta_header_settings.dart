@@ -22,18 +22,18 @@ class MetaHeaderSettings extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                colors.primary.withOpacity(0.12),
-                colors.primary.withOpacity(0.06),
+                colors.primary.withValues(alpha: 0.12),
+                colors.primary.withValues(alpha: 0.06),
               ],
             ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: colors.primary.withOpacity(0.2),
+              color: colors.primary.withValues(alpha: 0.2),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: colors.primary.withOpacity(0.08),
+                color: colors.primary.withValues(alpha: 0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -70,8 +70,8 @@ class MetaHeaderSettings extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  colors.border.withOpacity(0.3),
-                  colors.border.withOpacity(0),
+                  colors.border.withValues(alpha: 0.3),
+                  colors.border.withValues(alpha: 0),
                 ],
               ),
             ),

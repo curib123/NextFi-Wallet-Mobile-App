@@ -67,17 +67,14 @@ class _FintechBackgroundPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Use full height for all elements - no clipping
-    final double topH = size.height;
-
     // 1) Base radial gradient - full screen
     final radialRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final radialGradient = RadialGradient(
       center: const Alignment(0.3, -0.4),
       radius: 1.2,
       colors: [
-        colors.primary.withOpacity(.06),
-        colors.surface.withOpacity(.0),
+        colors.primary.withValues(alpha: .06),
+        colors.surface.withValues(alpha: .0),
       ],
       stops: const [0.0, 1.0],
     );
@@ -90,7 +87,7 @@ class _FintechBackgroundPainter extends CustomPainter {
 
     if (hiDpi) {
       final dotPaint = Paint()
-        ..color = colors.primary.withOpacity(.02)
+        ..color = colors.primary.withValues(alpha: .02)
         ..style = PaintingStyle.fill;
 
       final dxDrift = drift;
@@ -102,15 +99,14 @@ class _FintechBackgroundPainter extends CustomPainter {
         }
       }
     } else {
-      final gridPaint = Paint()
-        ..color = colors.primary.withOpacity(.015)
-        ..strokeWidth = 1;
+      final dotPaint = Paint()
+        ..color = colors.primary.withValues(alpha: .018)
+        ..style = PaintingStyle.fill;
 
       for (double x = -step + drift; x <= size.width; x += step) {
-        canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-      }
-      for (double y = -step + drift; y <= size.height; y += step) {
-        canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+        for (double y = -step + (drift * .5); y <= size.height; y += step) {
+          canvas.drawCircle(Offset(x, y), 0.9, dotPaint);
+        }
       }
     }
 
@@ -121,9 +117,9 @@ class _FintechBackgroundPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          colors.primary.withOpacity(.08),
-          colors.primary.withOpacity(.03),
-          Colors.transparent
+          colors.primary.withValues(alpha: .06),
+          colors.primary.withValues(alpha: .025),
+          colors.primary.withValues(alpha: .0),
         ],
         stops: const [0.0, 0.5, 1.0],
       ).createShader(fullRect);
@@ -156,37 +152,13 @@ class _FintechBackgroundPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          colors.primary.withOpacity(.06),
-          colors.primary.withOpacity(.02),
-          Colors.transparent
+          colors.primary.withValues(alpha: .05),
+          colors.primary.withValues(alpha: .018),
+          colors.primary.withValues(alpha: .0),
         ],
         stops: const [0.0, 0.5, 1.0],
       ).createShader(waveRect);
     canvas.drawPath(wave1Area, area1Paint);
-
-    // Wave 1 stroke
-    final wave1Stroke = Paint()
-      ..color = colors.primary.withOpacity(.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    canvas.drawPath(wave1Path, wave1Stroke);
-
-    // Wave 2 (secondary, offset)
-    final wave2Path = _createWavePath(
-      size: size,
-      topH: waveTopArea,
-      base: base + waveTopArea * .08,
-      phase: ph * 1.3,
-      amp1: waveTopArea * .10,
-      amp2: waveTopArea * .05,
-      wavelength: size.width * 1.1,
-    );
-
-    final wave2Stroke = Paint()
-      ..color = colors.primary.withOpacity(.08)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawPath(wave2Path, wave2Stroke);
 
     // 5) Animated nodes on main wave
     final wave1Points = _getWavePoints(
@@ -200,11 +172,11 @@ class _FintechBackgroundPainter extends CustomPainter {
     );
 
     final nodePaint = Paint()
-      ..color = colors.primary.withOpacity(.2)
+      ..color = colors.primary.withValues(alpha: .2)
       ..style = PaintingStyle.fill;
 
     final nodeGlowPaint = Paint()
-      ..color = colors.primary.withOpacity(.04)
+      ..color = colors.primary.withValues(alpha: .04)
       ..style = PaintingStyle.fill;
 
     for (var i = 0; i < wave1Points.length; i += 45) {
@@ -222,20 +194,18 @@ class _FintechBackgroundPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: isDark
             ? [
-          // Black with blue undertone
-          Colors.transparent,
-          Color(0xFF000814).withOpacity(.15),
-          Color(0xFF000814).withOpacity(.35),
-          Color(0xFF000814).withOpacity(.50),
-
-
+          // Dark mode: subtle blue depth, avoid bright/white veil.
+          colors.background.withValues(alpha: .0),
+          colors.primary.withValues(alpha: .03),
+          colors.primary.withValues(alpha: .06),
+          colors.background.withValues(alpha: .22),
         ]
             : [
-          // Light mode - use subtle primary color overlay
-          Colors.transparent,
-          colors.primary.withOpacity(.03),
-          colors.primary.withOpacity(.06),
-          colors.primary.withOpacity(.10),
+          // Light mode: soft tint without fogging the content.
+          colors.background.withValues(alpha: .0),
+          colors.primary.withValues(alpha: .03),
+          colors.primary.withValues(alpha: .05),
+          colors.primary.withValues(alpha: .09),
         ],
         stops: const [0.0, 0.3, 0.6, 1.0],
       ).createShader(bottomRect);
@@ -259,8 +229,8 @@ class _FintechBackgroundPainter extends CustomPainter {
       path.lineTo(x, yy);
     }
     return path;
-  }
-
+  } 
+ 
   List<Offset> _getWavePoints({
     required Size size,
     required double topH,
@@ -278,7 +248,7 @@ class _FintechBackgroundPainter extends CustomPainter {
       points.add(Offset(x, yy));
     }
     return points;
-  }
+  } 
 
   @override
   bool shouldRepaint(covariant _FintechBackgroundPainter old) =>
@@ -362,7 +332,7 @@ class _CryptoElementsPainter extends CustomPainter {
 
     // Glow
     final glowPaint = Paint()
-      ..color = colors.primary.withOpacity(.025)
+      ..color = colors.primary.withValues(alpha: .025)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 8
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
@@ -370,21 +340,21 @@ class _CryptoElementsPainter extends CustomPainter {
 
     // Stroke
     final strokePaint = Paint()
-      ..color = colors.primary.withOpacity(.08)
+      ..color = colors.primary.withValues(alpha: .08)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawPath(path, strokePaint);
 
     // Inner glow
     final innerGlowPaint = Paint()
-      ..color = colors.primary.withOpacity(.015)
+      ..color = colors.primary.withValues(alpha: .015)
       ..style = PaintingStyle.fill;
     canvas.drawPath(path, innerGlowPaint);
   }
 
   void _drawConnectionLines(Canvas canvas, Size size, double phase) {
     final dashedPaint = Paint()
-      ..color = colors.primary.withOpacity(.06)
+      ..color = colors.primary.withValues(alpha: .06)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
@@ -435,11 +405,11 @@ class _CryptoElementsPainter extends CustomPainter {
 
   void _drawBlockchainNodes(Canvas canvas, Size size, double phase) {
     final nodePaint = Paint()
-      ..color = colors.primary.withOpacity(.12)
+      ..color = colors.primary.withValues(alpha: .12)
       ..style = PaintingStyle.fill;
 
     final nodeGlowPaint = Paint()
-      ..color = colors.primary.withOpacity(.025)
+      ..color = colors.primary.withValues(alpha: .025)
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
@@ -457,7 +427,7 @@ class _CryptoElementsPainter extends CustomPainter {
       canvas.drawCircle(node, 12, nodeGlowPaint);
       // Inner ring
       final ringPaint = Paint()
-        ..color = colors.primary.withOpacity(.08)
+        ..color = colors.primary.withValues(alpha: .08)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5;
       canvas.drawCircle(node, 6, ringPaint);

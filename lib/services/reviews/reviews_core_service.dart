@@ -1,19 +1,14 @@
-import 'dart:async';
-
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 
 import 'api/reviews_service.dart';
 import 'models/reviews_dtos.dart';
 import 'models/reviews_models.dart';
 
+/// Reviews core service - main entry point for reviews functionality
 class ReviewsCoreService {
   ReviewsCoreService._();
 
   static final ReviewsCoreService I = ReviewsCoreService._();
-  static final StreamController<void> _changesCtrl =
-      StreamController<void>.broadcast();
-
-  static Stream<void> get changes => _changesCtrl.stream;
 
   late final ReviewsService _api = ReviewsService(
     tokenProvider: _safeTokenProvider,
@@ -28,27 +23,35 @@ class ReviewsCoreService {
     }
   }
 
-  Future<ReviewModel> createReviewAsBuyer(CreateReviewRequest req) async {
-    final review = await _api.createReviewAsBuyer(req);
-    _emitChanged();
-    return review;
-  }
+  /// Get public reviews for a user (paginated)
+  Future<ReviewsPagedResponse> getUserReviewsPaged({
+    required String userId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async =>
+      _api.getUserReviewsPaged(userId: userId, query: query);
 
-  Future<List<ReviewModel>> listMyReviews(ReviewsQuery query) async =>
-      _api.listMyReviews(query);
+  /// Get public reviews for a user (non-paginated)
+  Future<List<ReviewModel>> getUserReviews({
+    required String userId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async =>
+      _api.getUserReviews(userId: userId, query: query);
 
-  Future<ReviewModel> createReviewAsSeller(CreateReviewRequest req) async {
-    final review = await _api.createReviewAsSeller(req);
-    _emitChanged();
-    return review;
-  }
+  /// Get average rating for a user
+  Future<double?> getUserAverageRating(String userId) async =>
+      _api.getUserAverageRating(userId);
 
-  Future<List<ReviewModel>> listSellerReviews(ReviewsQuery query) async =>
-      _api.listSellerReviews(query);
+  /// Get review count for a user
+  Future<int> getUserReviewCount(String userId) async =>
+      _api.getUserReviewCount(userId);
 
-  void _emitChanged() {
-    if (!_changesCtrl.isClosed) {
-      _changesCtrl.add(null);
-    }
-  }
+  /// Create a new review (requires authentication)
+  Future<ReviewModel> create(CreateReviewRequest req) async =>
+      _api.create(req);
+
+  /// Get current user's reviews (requires authentication)
+  Future<ReviewsPagedResponse> getMyReviewsPaged({
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async =>
+      _api.getMyReviewsPaged(query: query);
 }

@@ -71,21 +71,24 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      colors.surface.withOpacity(0.92),
-                      colors.surface.withOpacity(0.98),
+                      colors.surface.withValues(alpha: 0.92),
+                      colors.surface.withValues(alpha: 0.98),
                       colors.surface,
                     ],
                   )
                 : LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.white.withOpacity(0.95), Colors.white],
+                    colors: [
+                      colors.onPrimary.withValues(alpha: 0.95),
+                      colors.onPrimary,
+                    ],
                   ),
             boxShadow: [
               BoxShadow(
                 color: isDark
-                    ? Colors.black.withOpacity(0.3)
-                    : Colors.black.withOpacity(0.06),
+                    ? colors.background.withValues(alpha: 0.50)
+                    : colors.textPrimary.withValues(alpha: 0.06),
                 blurRadius: 20,
                 spreadRadius: 0,
                 offset: const Offset(0, -4),
@@ -100,8 +103,8 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                   border: Border(
                     top: BorderSide(
                       color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.black.withOpacity(0.08),
+                          ? colors.onPrimary.withValues(alpha: 0.1)
+                          : colors.textPrimary.withValues(alpha: 0.08),
                       width: 0.5,
                     ),
                   ),
@@ -158,8 +161,8 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                           colors: colors,
                           badgeCount: totalClaimableCount,
                           badgeColor: claimableReadyCount > 0
-                              ? Colors.red
-                              : Colors.orange,
+                              ? colors.error
+                              : colors.warning,
                           onTap: () => tabVM.setTab(3),
                         ),
                         _buildNavItem(
@@ -224,7 +227,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                           icon,
                           size: 24,
                           color: Color.lerp(
-                            colors.textSecondary.withOpacity(0.6),
+                            colors.textSecondary.withValues(alpha: 0.6),
                             colors.primary,
                             value,
                           ),
@@ -239,10 +242,11 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                       top: -8,
                       right: -8,
                       child: showDot
-                          ? _buildPulsingDot()
+                          ? _buildPulsingDot(context)
                           : _buildLiquidBadge(
+                              context,
                               badgeCount!,
-                              badgeColor ?? Colors.red,
+                              badgeColor ?? colors.error,
                             ),
                     ),
                 ],
@@ -267,7 +271,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                           : FontWeight.w500,
                       color: isSelected
                           ? colors.primary
-                          : colors.textSecondary.withOpacity(0.6),
+                          : colors.textSecondary.withValues(alpha: 0.6),
                       letterSpacing: 0.3,
                       height: 1.2,
                     ),
@@ -300,6 +304,7 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
           curve: Curves.easeOutCubic,
           tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
           builder: (context, value, child) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Transform.translate(
               offset: Offset(0, -4 * value),
               child: Container(
@@ -307,20 +312,21 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                 height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [colors.primary, colors.primary.withOpacity(0.8)],
+                    colors: [colors.primary, colors.primary.withValues(alpha: 0.8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: colors.primary.withOpacity(0.2 + (0.1 * value)),
+                      color: colors.primary.withValues(alpha: 0.2 + (0.1 * value)),
                       blurRadius: 12 + (4 * value),
                       spreadRadius: 0,
                       offset: Offset(0, 4 + (2 * value)),
                     ),
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: (isDark ? colors.background : colors.textPrimary)
+                          .withValues(alpha: isDark ? 0.35 : 0.10),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -328,10 +334,10 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                 ),
                 child: Transform.rotate(
                   angle: (math.pi / 6) * value,
-                  child: const Icon(
+                  child: Icon(
                     LucideIcons.arrowLeftRight,
                     size: 28,
-                    color: Colors.white,
+                    color: colors.onPrimary,
                   ),
                 ),
               ),
@@ -343,7 +349,8 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
   }
 
   /// Clean drawer with subtle shadow
-  Widget _buildLiquidBadge(int count, Color color) {
+  Widget _buildLiquidBadge(BuildContext context, int count, Color color) {
+    final colors = AppColor.of(context);
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 500),
       curve: Curves.elasticOut,
@@ -356,10 +363,10 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(color: colors.onPrimary, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.3),
+                  color: color.withValues(alpha: 0.3),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
@@ -368,8 +375,8 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
             constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
             child: Text(
               count > 99 ? '99+' : count.toString(),
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: colors.onPrimary,
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
                 height: 1.2,
@@ -384,7 +391,8 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
   }
 
   /// Subtle pulsing dot indicator
-  Widget _buildPulsingDot() {
+  Widget _buildPulsingDot(BuildContext context) {
+    final colors = AppColor.of(context);
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
@@ -395,12 +403,12 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
             width: 10,
             height: 10,
             decoration: BoxDecoration(
-              color: Colors.orange,
+              color: colors.warning,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(color: colors.onPrimary, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.orange.withOpacity(
+                  color: colors.warning.withValues(alpha:
                     0.3 * _pulseController.value,
                   ),
                   blurRadius: 4 * _pulseController.value,

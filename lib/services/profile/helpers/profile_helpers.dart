@@ -6,7 +6,7 @@ import 'package:next_fi/services/base_url/base_url.dart';
 import 'profile_exceptions.dart';
 
 class ProfileHttp {
-  static Uri uri(String path) => Uri.parse('$cetralized_baseUrl$path');
+  static Uri uri(String path) => Uri.parse('$centralized_baseUrl$path');
 
   static T decodeJson<T>(http.Response res) {
     if (res.body.isEmpty) return {} as T;

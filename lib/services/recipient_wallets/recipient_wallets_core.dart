@@ -7,10 +7,10 @@
 //
 // Usage:
 //   final recipientCore = RecipientWalletsCore();
-//   await recipientCore.addRecipient(name: "Mom", address: "GCFH...");
+//   await recipientCore.addRecipient(label: "Mom", address: "GCFH...");
 //   final recipients = await recipientCore.getAllRecipients();
 //   await recipientCore.searchRecipients(query: "mom");
-//   await recipientCore.updateRecipient(id: "...", name: "Mother");
+//   await recipientCore.updateRecipient(id: "...", label: "Mother");
 //   await recipientCore.toggleRecipient(id: "...");
 //   await recipientCore.deleteRecipient(id: "...");
 
@@ -19,16 +19,16 @@ import 'package:next_fi/services/recipient_wallets/models/recipient_wallet_model
 
 import 'package:next_fi/services/secure_storage/token_storage.dart';
 
-import '../base_url/base_url.dart' show cetralized_baseUrl;
+import '../base_url/base_url.dart' show centralized_baseUrl;
 
 class RecipientWalletsCore {
-  static const String _baseUrl = cetralized_baseUrl;
+  static const String _baseUrl = centralized_baseUrl;
 
   final TokenStorage _tokenStorage;
   late final RecipientWalletsService svc;
 
   RecipientWalletsCore({TokenStorage? tokenStorage})
-      : _tokenStorage = tokenStorage ?? TokenStorage() {
+    : _tokenStorage = tokenStorage ?? TokenStorage() {
     svc = RecipientWalletsService(
       baseUrl: _baseUrl,
       tokenProvider: () async => await _tokenStorage.accessToken,
@@ -41,19 +41,32 @@ class RecipientWalletsCore {
 
   /// Add a new recipient wallet address (JWT required).
   Future<RecipientWallet> addRecipient({
-    required String name,
+    String? name,
+    String? label,
     required String address,
+    String? publicAddress,
     String? network,
+    String? colorTag,
+    String? color, // legacy alias
+    bool? isActive,
     String? memo,
-    bool isActive = true,
+    String? memoType,
   }) {
+    final resolvedName = (name ?? label)?.trim();
+    final resolvedAddress = (publicAddress ?? address).trim();
     return svc.recipientWallets.create(
       CreateRecipientWalletRequest(
-        name: name,
-        publicAddress: address,
+        name: (resolvedName == null || resolvedName.isEmpty)
+            ? resolvedAddress
+            : resolvedName,
+        publicAddress: resolvedAddress,
         network: network ?? 'stellar',
-        memo: memo,
+        colorTag: (colorTag ?? color)?.trim().isEmpty == true
+            ? null
+            : (colorTag ?? color)?.trim(),
         isActive: isActive,
+        memo: memo,
+        memoType: memoType,
       ),
     );
   }
@@ -91,18 +104,25 @@ class RecipientWalletsCore {
   Future<RecipientWallet> updateRecipient({
     required String id,
     String? name,
+    String? label,
     String? address,
+    String? publicAddress,
     String? network,
-    String? memo,
+    String? colorTag,
+    String? color, // legacy alias
     bool? isActive,
+    String? memo,
+    String? memoType,
   }) {
     return svc.recipientWallets.update(
       id: id,
-      name: name,
-      publicAddress: address,
+      name: name ?? label,
+      publicAddress: publicAddress ?? address,
       network: network,
-      memo: memo,
+      colorTag: colorTag ?? color,
       isActive: isActive,
+      memo: memo,
+      memoType: memoType,
     );
   }
 
@@ -122,7 +142,10 @@ class RecipientWalletsCore {
   }
 
   /// Get recipients for a specific network.
-  Future<List<RecipientWallet>> getRecipientsByNetwork(String network, {bool activeOnly = false}) {
+  Future<List<RecipientWallet>> getRecipientsByNetwork(
+    String network, {
+    bool activeOnly = false,
+  }) {
     return getAllRecipients(network: network, activeOnly: activeOnly);
   }
 

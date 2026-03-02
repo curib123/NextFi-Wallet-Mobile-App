@@ -31,23 +31,23 @@ class HeaderCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             colors.surface,
-            colors.surface.withOpacity(0.8),
+            colors.surface.withValues(alpha: 0.8),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: colors.border.withOpacity(0.15),
+          color: colors.border.withValues(alpha: 0.15),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: colors.primary.withOpacity(0.04),
+            color: colors.primary.withValues(alpha: 0.04),
             blurRadius: 24,
             offset: const Offset(0, 8),
             spreadRadius: -4,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: AppColor.of(context).textPrimary.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -67,13 +67,13 @@ class HeaderCard extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      colors.primary.withOpacity(0.12),
-                      colors.primary.withOpacity(0.06),
+                      colors.primary.withValues(alpha: 0.12),
+                      colors.primary.withValues(alpha: 0.06),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: colors.primary.withOpacity(0.15),
+                    color: colors.primary.withValues(alpha: 0.15),
                     width: 1.5,
                   ),
                 ),
@@ -104,7 +104,7 @@ class HeaderCard extends StatelessWidget {
                     Text(
                       'Active Wallet',
                       style: TextStyle(
-                        color: colors.textSecondary.withOpacity(0.7),
+                        color: colors.textSecondary.withValues(alpha: 0.7),
                         fontWeight: FontWeight.w500,
                         fontSize: 13,
                         letterSpacing: 0.1,
@@ -131,9 +131,9 @@ class HeaderCard extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  colors.border.withOpacity(0),
-                  colors.border.withOpacity(0.3),
-                  colors.border.withOpacity(0),
+                  colors.border.withValues(alpha: 0),
+                  colors.border.withValues(alpha: 0.3),
+                  colors.border.withValues(alpha: 0),
                 ],
               ),
             ),
@@ -213,20 +213,20 @@ class _ModernQuickActionState extends State<_ModernQuickAction> {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           color: _isPressed
-              ? widget.colors.primary.withOpacity(0.08)
-              : widget.colors.background.withOpacity(0.5),
+              ? widget.colors.primary.withValues(alpha: 0.08)
+              : widget.colors.background.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _isPressed
-                ? widget.colors.primary.withOpacity(0.3)
-                : widget.colors.border.withOpacity(0.2),
+                ? widget.colors.primary.withValues(alpha: 0.3)
+                : widget.colors.border.withValues(alpha: 0.2),
             width: 1.5,
           ),
           boxShadow: _isPressed
               ? []
               : [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: AppColor.of(context).textPrimary.withValues(alpha: 0.02),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -279,18 +279,18 @@ class _AnimatedStatusPill extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            color.withOpacity(0.15),
-            color.withOpacity(0.08),
+            color.withValues(alpha: 0.15),
+            color.withValues(alpha: 0.08),
           ],
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

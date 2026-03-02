@@ -8,6 +8,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 import 'package:stellar_flutter_sdk/src/sep/0005/word_list.dart';
 
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:next_fi/features/import_wallet/model/import_wallet_state.dart';
 
 class ImportWalletVM extends ChangeNotifier {
@@ -110,7 +111,14 @@ class ImportWalletVM extends ChangeNotifier {
         return false;
       }
 
-      final newId = await SeedStorage.addWallet(phrase, name: 'Imported Wallet');
+      final wallet = await Wallet.from(phrase);
+      final publicAddress = await wallet.getAccountId(index: 0);
+
+      final newId = await SeedStorage.addWallet(
+        phrase,
+        name: 'Imported Wallet',
+        publicAddress: publicAddress,
+      );
       await SeedStorage.setActiveWallet(newId);
 
       // Verify round-trip.
@@ -121,6 +129,15 @@ class ImportWalletVM extends ChangeNotifier {
           error: 'Could not verify saved phrase. Please try again.',
         ));
         return false;
+      }
+
+      try {
+        await WalletManager.I.saveAddressIfMissing(
+          publicAddress: publicAddress,
+          label: 'Imported Wallet',
+        );
+      } catch (_) {
+        // Best effort: wallet_home_screen will retry auto-save later.
       }
 
       _set(_state.copyWith(importing: false));

@@ -195,21 +195,36 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
+    if (res.body.isEmpty) {
+      return ChatEncryptionKeyModel(
+        userId: '',
+        keyId: req.keyId,
+        algorithm: req.algorithm,
+        publicKey: req.publicKey,
+        signaturePublicKey: req.signaturePublicKey,
+        isActive: req.isActive,
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'key']);
-    if (map != null) return ChatEncryptionKeyModel.fromJson(map);
-
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for POST /chat/keys/me',
-      body: res.body,
+    if (map != null && map.isNotEmpty) {
+      return ChatEncryptionKeyModel.fromJson(map);
+    }
+    return ChatEncryptionKeyModel(
+      userId: '',
+      keyId: req.keyId,
+      algorithm: req.algorithm,
+      publicKey: req.publicKey,
+      signaturePublicKey: req.signaturePublicKey,
+      isActive: req.isActive,
     );
   }
 
   Future<bool> deactivateMyKey(String keyId) async {
-    final res = await _client.patch(
+    final res = await _client.post(
       ChatHttp.uri(ChatEndpoints.deactivateMyKey(keyId)),
       headers: await _headers(),
+      body: jsonEncode(const <String, dynamic>{}),
     );
     ChatHttp.ensureOk(res);
     final data = ChatHttp.decodeJson<dynamic>(res);
@@ -254,33 +269,35 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
-    // Try to parse the returned friend request model from the response body.
-    // Some backends return a simple {"success": true} without embedding the
-    // full model — in that case we return a placeholder so callers don't
-    // fail (the result is not used by the UI).
-    if (res.body.isNotEmpty) {
-      try {
-        final data = ChatHttp.decodeJson<dynamic>(res);
-        final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-        if (map != null) return ChatFriendRequestModel.fromJson(map);
-      } catch (_) {
-        // Parsing failed — fall through to placeholder below.
-      }
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      return ChatFriendRequestModel(
+        id: '',
+        senderId: '',
+        receiverId: req.receiverUsername,
+        status: ChatFriendRequestStatus.pending,
+      );
     }
+    final data = ChatHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'request']);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
+
+    // Return placeholder on empty response
     return ChatFriendRequestModel(
       id: '',
       senderId: '',
-      receiverId: '',
+      receiverId: req.receiverUsername,
       status: ChatFriendRequestStatus.pending,
     );
   }
 
-  Future<ChatPaged<ChatFriendRequestModel>> listIncomingFriendRequests(
+  Future<ChatPaged<ChatFriendRequestModel>> listFriendRequests(
     ChatListQuery query,
   ) async {
     final res = await _client.get(
       ChatHttp.uri(
-        ChatEndpoints.listIncomingFriendRequests(),
+        ChatEndpoints.listFriendRequests(),
         queryParams: query.toQueryMap(),
       ),
       headers: await _headers(),
@@ -295,12 +312,12 @@ class ChatService {
     );
   }
 
-  Future<ChatPaged<ChatFriendRequestModel>> listOutgoingFriendRequests(
+  Future<ChatPaged<ChatFriendRequestModel>> listSentFriendRequests(
     ChatListQuery query,
   ) async {
     final res = await _client.get(
       ChatHttp.uri(
-        ChatEndpoints.listOutgoingFriendRequests(),
+        ChatEndpoints.listSentFriendRequests(),
         queryParams: query.toQueryMap(),
       ),
       headers: await _headers(),
@@ -315,57 +332,100 @@ class ChatService {
     );
   }
 
-  Future<ChatFriendRequestModel> acceptFriendRequest(String requestId) async {
-    final res = await _client.patch(
-      ChatHttp.uri(ChatEndpoints.acceptFriendRequest(requestId)),
+  Future<ChatFriendRequestModel> getFriendRequest(String requestId) async {
+    final res = await _client.get(
+      ChatHttp.uri(ChatEndpoints.getFriendRequest(requestId)),
       headers: await _headers(),
     );
 
     ChatHttp.ensureOk(res);
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      return ChatFriendRequestModel(
+        id: requestId,
+        senderId: '',
+        receiverId: '',
+        status: ChatFriendRequestStatus.unknown,
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for PATCH /chat/friends/requests/$requestId/accept',
-      body: res.body,
+    return ChatFriendRequestModel(
+      id: requestId,
+      senderId: '',
+      receiverId: '',
+      status: ChatFriendRequestStatus.unknown,
     );
   }
 
-  Future<ChatFriendRequestModel> rejectFriendRequest(String requestId) async {
-    final res = await _client.patch(
-      ChatHttp.uri(ChatEndpoints.rejectFriendRequest(requestId)),
+  Future<ChatFriendRequestModel> respondFriendRequest(
+    String requestId,
+    RespondFriendRequestRequest req,
+  ) async {
+    final res = await _client.post(
+      ChatHttp.uri(ChatEndpoints.respondFriendRequest(requestId)),
       headers: await _headers(),
+      body: jsonEncode(req.toJson()),
     );
 
     ChatHttp.ensureOk(res);
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      final status = req.action == 'ACCEPTED'
+          ? ChatFriendRequestStatus.accepted
+          : ChatFriendRequestStatus.rejected;
+      return ChatFriendRequestModel(
+        id: requestId,
+        senderId: '',
+        receiverId: '',
+        status: status,
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for PATCH /chat/friends/requests/$requestId/reject',
-      body: res.body,
+    final status = req.action == 'ACCEPTED'
+        ? ChatFriendRequestStatus.accepted
+        : ChatFriendRequestStatus.rejected;
+    return ChatFriendRequestModel(
+      id: requestId,
+      senderId: '',
+      receiverId: '',
+      status: status,
     );
   }
 
   Future<ChatFriendRequestModel> cancelFriendRequest(String requestId) async {
-    final res = await _client.patch(
+    final res = await _client.delete(
       ChatHttp.uri(ChatEndpoints.cancelFriendRequest(requestId)),
       headers: await _headers(),
     );
 
     ChatHttp.ensureOk(res);
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      return ChatFriendRequestModel(
+        id: requestId,
+        senderId: '',
+        receiverId: '',
+        status: ChatFriendRequestStatus.canceled,
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'request']);
-    if (map != null) return ChatFriendRequestModel.fromJson(map);
+    if (map != null && map.isNotEmpty)
+      return ChatFriendRequestModel.fromJson(map);
 
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for PATCH /chat/friends/requests/$requestId/cancel',
-      body: res.body,
+    return ChatFriendRequestModel(
+      id: requestId,
+      senderId: '',
+      receiverId: '',
+      status: ChatFriendRequestStatus.canceled,
     );
   }
 
@@ -387,9 +447,9 @@ class ChatService {
     );
   }
 
-  Future<bool> removeFriend(String friendUserId) async {
+  Future<bool> removeFriendship(String friendshipId) async {
     final res = await _client.delete(
-      ChatHttp.uri(ChatEndpoints.removeFriend(friendUserId)),
+      ChatHttp.uri(ChatEndpoints.removeFriendship(friendshipId)),
       headers: await _headers(),
     );
 
@@ -408,7 +468,7 @@ class ChatService {
   Future<ChatDirectThreadModel> openThreadWithFriend(
     String friendUserId,
   ) async {
-    final res = await _client.post(
+    final res = await _client.get(
       ChatHttp.uri(ChatEndpoints.openThreadWithFriend(friendUserId)),
       headers: await _headers(),
     );
@@ -420,7 +480,7 @@ class ChatService {
 
     throw ChatApiException(
       res.statusCode,
-      'Unexpected response for POST /chat/threads/with/$friendUserId/open',
+      'Unexpected response for GET /direct-messages/threads/with/$friendUserId',
       body: res.body,
     );
   }
@@ -477,14 +537,147 @@ class ChatService {
     );
 
     ChatHttp.ensureOk(res);
+    if (res.body.isEmpty) {
+      return ChatDirectMessageModel(
+        id: req.clientMessageId,
+        threadId: threadId,
+        senderId: '',
+        clientMessageId: req.clientMessageId,
+        kind: req.kind,
+        algorithm: req.algorithm,
+        senderKeyId: req.senderKeyId,
+        nonce: req.nonce,
+        ciphertext: req.ciphertext,
+        signature: req.signature,
+        metadata: req.metadata,
+        createdAt: DateTime.now().toUtc(),
+      );
+    }
     final data = ChatHttp.decodeJson<dynamic>(res);
     final map = _extractMap(data, keys: const ['data', 'item', 'message']);
-    if (map != null) return ChatDirectMessageModel.fromJson(map);
+    if (map != null && map.isNotEmpty) {
+      return ChatDirectMessageModel.fromJson(map);
+    }
 
-    throw ChatApiException(
-      res.statusCode,
-      'Unexpected response for POST /chat/threads/$threadId/messages',
-      body: res.body,
+    // Fallback for APIs returning success envelopes without message payload.
+    return ChatDirectMessageModel(
+      id: req.clientMessageId,
+      threadId: threadId,
+      senderId: '',
+      clientMessageId: req.clientMessageId,
+      kind: req.kind,
+      algorithm: req.algorithm,
+      senderKeyId: req.senderKeyId,
+      nonce: req.nonce,
+      ciphertext: req.ciphertext,
+      signature: req.signature,
+      metadata: req.metadata,
+      createdAt: DateTime.now().toUtc(),
+    );
+  }
+
+  Future<ChatDirectThreadModel> createThread(CreateThreadRequest req) async {
+    final res = await _client.post(
+      ChatHttp.uri(ChatEndpoints.createThread()),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+
+    ChatHttp.ensureOk(res);
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      return ChatDirectThreadModel(
+        id: req.friendId,
+        friendUserId: req.friendId,
+        isActive: true,
+        unreadCount: 0,
+      );
+    }
+    final data = ChatHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'thread']);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectThreadModel.fromJson(map);
+
+    // Return fallback thread on empty response
+    return ChatDirectThreadModel(
+      id: req.friendId,
+      friendUserId: req.friendId,
+      isActive: true,
+      unreadCount: 0,
+    );
+  }
+
+  Future<ChatDirectThreadModel> getThread(String threadId) async {
+    final res = await _client.get(
+      ChatHttp.uri(ChatEndpoints.getThread(threadId)),
+      headers: await _headers(),
+    );
+
+    ChatHttp.ensureOk(res);
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      return ChatDirectThreadModel(
+        id: threadId,
+        friendUserId: '',
+        isActive: false,
+        unreadCount: 0,
+      );
+    }
+    final data = ChatHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'thread']);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectThreadModel.fromJson(map);
+
+    // Return fallback thread on empty response
+    return ChatDirectThreadModel(
+      id: threadId,
+      friendUserId: '',
+      isActive: false,
+      unreadCount: 0,
+    );
+  }
+
+  Future<ChatDirectThreadModel> getThreadWithFriend(String friendId) async {
+    // Keep backward compatibility while preventing invalid empty-thread
+    // objects from reaching UI. This endpoint currently opens or returns.
+    return openThreadWithFriend(friendId);
+  }
+
+  Future<ChatDirectMessageModel> getMessage(String messageId) async {
+    final res = await _client.get(
+      ChatHttp.uri(ChatEndpoints.getMessage(messageId)),
+      headers: await _headers(),
+    );
+
+    ChatHttp.ensureOk(res);
+    // Social layering: Handle empty or null responses gracefully
+    if (res.body.isEmpty) {
+      return ChatDirectMessageModel(
+        id: messageId,
+        threadId: '',
+        senderId: '',
+        kind: ChatMessageKind.unknown,
+        algorithm: '',
+        senderKeyId: '',
+        nonce: '',
+        ciphertext: '',
+      );
+    }
+    final data = ChatHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'item', 'message']);
+    if (map != null && map.isNotEmpty)
+      return ChatDirectMessageModel.fromJson(map);
+
+    // Return fallback message on empty response
+    return ChatDirectMessageModel(
+      id: messageId,
+      threadId: '',
+      senderId: '',
+      kind: ChatMessageKind.unknown,
+      algorithm: '',
+      senderKeyId: '',
+      nonce: '',
+      ciphertext: '',
     );
   }
 }

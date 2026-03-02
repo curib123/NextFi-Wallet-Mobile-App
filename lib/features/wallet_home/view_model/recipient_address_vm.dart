@@ -20,7 +20,7 @@ class RecipientAddressVM with ChangeNotifier {
   Object? _lastError;
 
   RecipientAddressVM([RecipientWalletsCore? api])
-      : _api = api ?? RecipientWalletsCore() {
+    : _api = api ?? RecipientWalletsCore() {
     _ready = _init();
   }
 
@@ -45,9 +45,7 @@ class RecipientAddressVM with ChangeNotifier {
   /// Lookup by address (case-insensitive, trimmed).
   RecipientAddressModel? byAddress(String address) {
     final key = address.trim().toLowerCase();
-    final idx = _items.indexWhere(
-          (e) => e.address.trim().toLowerCase() == key,
-    );
+    final idx = _items.indexWhere((e) => e.address.trim().toLowerCase() == key);
     return idx < 0 ? null : _items[idx];
   }
 
@@ -62,9 +60,14 @@ class RecipientAddressVM with ChangeNotifier {
       _items = [];
 
       // Check if error is authentication-related
-      if (e.toString().contains('Not authenticated') ||
-          e.toString().contains('401')) {
+      final authError =
+          e.toString().contains('Not authenticated') ||
+          e.toString().contains('401');
+      if (authError) {
         _isAuthenticated = false;
+      } else {
+        // Keep UI in authenticated mode for non-auth API failures.
+        _isAuthenticated = true;
       }
 
       if (kDebugMode) {
@@ -78,24 +81,49 @@ class RecipientAddressVM with ChangeNotifier {
 
   /// Convert API RecipientWallet to local RecipientAddressModel
   RecipientAddressModel _toLocal(RecipientWallet wallet) {
+    final displayName = wallet.displayName.isEmpty
+        ? wallet.effectiveAddress
+        : wallet.displayName;
     return RecipientAddressModel(
       id: wallet.id,
-      name: wallet.name,
-      address: wallet.publicAddress,
-      color: _extractColorFromMemo(wallet.memo) ?? 0xFF7B16FF,
+      name: displayName,
+      address: wallet.effectiveAddress,
+      color:
+          _parseColorTag(wallet.colorTag) ??
+          _extractColorFromMemo(wallet.memo) ??
+          0xFF7B16FF,
       createdAt: wallet.createdAt,
       updatedAt: wallet.updatedAt,
     );
+  }
+
+  int? _parseColorTag(String? colorTag) {
+    if (colorTag == null) return null;
+    final raw = colorTag.trim();
+    if (raw.isEmpty) return null;
+    if (raw.startsWith('#') && raw.length == 7) {
+      final rgb = raw.substring(1);
+      final parsed = int.tryParse('FF$rgb', radix: 16);
+      return parsed;
+    }
+    if (raw.startsWith('0x')) {
+      return int.tryParse(raw.substring(2), radix: 16);
+    }
+    return int.tryParse(raw);
+  }
+
+  String _toColorTag(int color) {
+    final rgb = color & 0x00FFFFFF;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
   /// Extract color from memo field (format: "color:0xFF7B16FF;memo text")
   int? _extractColorFromMemo(String? memo) {
     if (memo == null || !memo.contains('color:')) return null;
     try {
-      final colorPart = memo.split(';').firstWhere(
-            (part) => part.startsWith('color:'),
-        orElse: () => '',
-      );
+      final colorPart = memo
+          .split(';')
+          .firstWhere((part) => part.startsWith('color:'), orElse: () => '');
       if (colorPart.isEmpty) return null;
       final colorStr = colorPart.replaceFirst('color:', '').trim();
       return int.tryParse(colorStr);
@@ -104,32 +132,26 @@ class RecipientAddressVM with ChangeNotifier {
     }
   }
 
-  /// Create memo with embedded color (format: "color:0xFF7B16FF;actual memo")
-  String _createMemoWithColor(int color, String? userMemo) {
-    final colorPart = 'color:$color';
-    if (userMemo == null || userMemo.trim().isEmpty) {
-      return colorPart;
-    }
-    return '$colorPart;${userMemo.trim()}';
-  }
-
   /// Refresh data from API
   Future<void> refresh() async {
-    if (!_isAuthenticated) return;
-
     _loading = true;
     notifyListeners();
 
     try {
       final recipients = await _api.getAllRecipients(activeOnly: false);
       _items = recipients.map(_toLocal).toList();
+      _isAuthenticated = true;
       _lastError = null;
     } catch (e, st) {
       _lastError = e;
-      if (e.toString().contains('Not authenticated') ||
-          e.toString().contains('401')) {
+      final authError =
+          e.toString().contains('Not authenticated') ||
+          e.toString().contains('401');
+      if (authError) {
         _isAuthenticated = false;
         _items = [];
+      } else {
+        _isAuthenticated = true;
       }
       if (kDebugMode) {
         debugPrint('RecipientAddressVM refresh error: $e\n$st');
@@ -157,14 +179,14 @@ class RecipientAddressVM with ChangeNotifier {
         name: name.trim(),
         address: address.trim(),
         network: 'stellar',
-        memo: _createMemoWithColor(color, null),
+        colorTag: _toColorTag(color),
       );
 
       final local = _toLocal(wallet);
 
       // Update local cache
       final existingIndex = _items.indexWhere(
-            (e) => e.address.trim().toLowerCase() == address.trim().toLowerCase(),
+        (e) => e.address.trim().toLowerCase() == address.trim().toLowerCase(),
       );
 
       if (existingIndex >= 0) {
@@ -187,11 +209,11 @@ class RecipientAddressVM with ChangeNotifier {
 
   /// Update recipient via API
   Future<RecipientAddressModel?> update(
-      String id, {
-        String? name,
-        String? address,
-        int? color,
-      }) async {
+    String id, {
+    String? name,
+    String? address,
+    int? color,
+  }) async {
     if (!_isAuthenticated) {
       throw Exception('Not authenticated. Please login first.');
     }
@@ -203,16 +225,11 @@ class RecipientAddressVM with ChangeNotifier {
       if (current == null) return null;
 
       // Prepare memo with color
-      String? newMemo;
-      if (color != null) {
-        newMemo = _createMemoWithColor(color, null);
-      }
-
       final wallet = await _api.updateRecipient(
         id: id,
         name: name?.trim(),
         address: address?.trim(),
-        memo: newMemo,
+        colorTag: color == null ? null : _toColorTag(color),
       );
 
       final local = _toLocal(wallet);

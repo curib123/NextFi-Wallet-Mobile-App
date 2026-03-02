@@ -22,31 +22,56 @@ class RecipientBadge extends StatelessWidget {
     return '${addr.substring(0, 6)}…${addr.substring(addr.length - 6)}';
   }
 
+  /// Returns a solid, non-opacity tinted background color derived from the
+  /// brand color but mixed toward the surface so it stays readable.
+  Color _solidTint(Color brand, bool isDark, AppColor c) {
+    // Blend brand toward white (light) or dark surface
+    final base = isDark ? c.textPrimary : c.surface;
+    return Color.lerp(base, brand, isDark ? 0.14 : 0.10)!;
+  }
+
+  Color _solidBorder(Color brand, bool isDark, AppColor c) {
+    final base = isDark ? c.textPrimary : c.surface;
+    return Color.lerp(base, brand, isDark ? 0.26 : 0.22)!;
+  }
+
+  Color _solidAvatarBg(Color brand, bool isDark, AppColor c) {
+    final base = isDark ? c.textPrimary : c.onPrimary;
+    return Color.lerp(base, brand, isDark ? 0.22 : 0.15)!;
+  }
+
+  Color _solidEditBg(Color brand, bool isDark, AppColor c) {
+    final base = isDark ? c.textPrimary : c.onPrimary;
+    return Color.lerp(base, brand, isDark ? 0.20 : 0.13)!;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final color = Color(colorValue);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final bgColor = _solidTint(color, isDark, c);
+    final borderColor = _solidBorder(color, isDark, c);
+    final avatarBg = _solidAvatarBg(color, isDark, c);
+    final editBg = _solidEditBg(color, isDark, c);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withOpacity(isDark ? 0.2 : 0.15),
-          width: 1.5,
-        ),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
       child: Row(
         children: [
-          // Avatar
+          // ── Avatar ────────────────────────────────────────────────────
           Container(
-            width: 38,
-            height: 38,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              color: avatarBg,
+              borderRadius: BorderRadius.circular(13),
             ),
             child: Center(
               child: Text(
@@ -54,17 +79,19 @@ class RecipientBadge extends StatelessWidget {
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
-                  fontSize: 16,
+                  fontSize: 17,
+                  letterSpacing: -0.5,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 13),
 
-          // Name + address
+          // ── Name + address ────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   name,
@@ -72,38 +99,44 @@ class RecipientBadge extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     fontSize: 15,
-                    letterSpacing: -0.3,
+                    letterSpacing: -0.4,
+                    height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   _shortenAddress(address),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.6),
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    letterSpacing: 0,
+                    color: c.textSecondary,
+                    fontSize: 11.5,
+                    letterSpacing: 0.3,
+                    height: 1.3,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
-          // Edit button
+          // ── Edit button ───────────────────────────────────────────────
           GestureDetector(
             onTap: onEdit,
+            behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
+                color: editBg,
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: borderColor, width: 1),
               ),
-              child: Icon(LucideIcons.pencil, size: 16, color: color),
+              child: Center(
+                child: Icon(LucideIcons.pencil, size: 15, color: color),
+              ),
             ),
           ),
         ],

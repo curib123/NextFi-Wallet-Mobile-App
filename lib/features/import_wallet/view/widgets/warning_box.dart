@@ -13,10 +13,10 @@ class WarningBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.primary.withOpacity(0.08),
+        color: colors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: colors.primary.withOpacity(0.15),
+          color: colors.primary.withValues(alpha: 0.15),
           width: 1,
         ),
       ),

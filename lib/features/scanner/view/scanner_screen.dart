@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -19,9 +20,44 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
+  final ImagePicker _imagePicker = ImagePicker();
+
+  Future<void> _pickQrFromGallery(ScannerVM vm) async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+      );
+      if (image == null) return;
+
+      final BarcodeCapture? capture = await vm.controller.analyzeImage(
+        image.path,
+      );
+      if (!mounted) return;
+
+      final raw = (capture?.barcodes.isNotEmpty ?? false)
+          ? capture!.barcodes.first.rawValue?.trim()
+          : null;
+
+      if (raw == null || raw.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No QR code found in selected image')),
+        );
+        return;
+      }
+
+      vm.consumeResult(raw);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to read QR image: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return ChangeNotifierProvider(
       create: (_) => ScannerVM(
@@ -36,7 +72,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
           final state = vm.state;
 
           return Scaffold(
-            backgroundColor: Colors.black,
+            backgroundColor: colors.background,
             body: Stack(
               fit: StackFit.expand,
               children: [
@@ -63,6 +99,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     facing: state.facing,
                     onToggleTorch: vm.toggleTorch,
                     onSwitchCamera: vm.switchCamera,
+                    onPickFromGallery: () => _pickQrFromGallery(vm),
                     onClose: () {
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
@@ -88,10 +125,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                                color: colors.onPrimary,
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withOpacity(0.5),
+                                    color: colors.background.withValues(
+                                      alpha: 0.55,
+                                    ),
                                     blurRadius: 8,
                                   ),
                                 ],
@@ -102,10 +141,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               'Position the QR code within the frame',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.white.withOpacity(0.9),
+                                color: colors.onPrimary.withValues(alpha: 0.9),
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withOpacity(0.5),
+                                    color: colors.background.withValues(
+                                      alpha: 0.55,
+                                    ),
                                     blurRadius: 4,
                                   ),
                                 ],
@@ -129,10 +170,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         margin: const EdgeInsets.all(16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.8),
+                          color: colors.surface.withValues(alpha: 0.94),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: colors.primary.withOpacity(0.3),
+                            color: colors.border.withValues(alpha: 0.45),
                             width: 1,
                           ),
                         ),
@@ -148,10 +189,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
-                                const Text(
+                                Text(
                                   'Code Detected',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: colors.textPrimary,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
                                   ),
@@ -163,15 +204,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
+                                color: colors.background,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 state.lastRawValue!,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: colors.textPrimary,
                                   fontSize: 13,
-                                  fontFamily: 'monospace',
                                 ),
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
@@ -191,7 +231,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                                 label: const Text('Scan Another'),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: colors.primary,
-                                  foregroundColor: Colors.white,
+                                  foregroundColor: colors.onPrimary,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12,
                                   ),
@@ -216,21 +256,19 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       margin: const EdgeInsets.all(24),
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF1C1C1E).withOpacity(0.95)
-                            : Colors.white.withOpacity(0.95),
+                        color: colors.surface.withValues(alpha: 0.97),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.error.withOpacity(0.3),
+                          color: colors.error.withValues(alpha: 0.35),
                           width: 1,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.42 : 0.12,
+                            ),
+                            blurRadius: isDark ? 26 : 20,
+                            offset: const Offset(0, 10),
                           ),
                         ],
                       ),
@@ -241,15 +279,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             width: 64,
                             height: 64,
                             decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.error.withOpacity(0.12),
+                              color: colors.error.withValues(alpha: 0.12),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               LucideIcons.alertTriangle,
                               size: 32,
-                              color: Theme.of(context).colorScheme.error,
+                              color: colors.error,
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -258,11 +294,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.white
-                                  : const Color(0xFF1C1C1E),
+                              color: colors.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -272,11 +304,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.white.withOpacity(0.7)
-                                  : Colors.black.withOpacity(0.6),
+                              color: colors.textSecondary,
                               height: 1.5,
                             ),
                           ),
@@ -303,8 +331,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   ),
 
                 if (state.status == ScannerStatus.initializing)
-                  const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+                  Center(
+                    child: CircularProgressIndicator(color: colors.primary),
                   ),
               ],
             ),

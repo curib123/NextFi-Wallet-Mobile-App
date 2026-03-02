@@ -7,7 +7,7 @@ import 'payment_method_and_accounts_exceptions.dart';
 
 class PaymentMethodAndAccountsHttp {
   static Uri uri(String path, {Map<String, String>? queryParams}) {
-    final uri = Uri.parse('$cetralized_baseUrl$path');
+    final uri = Uri.parse('$centralized_baseUrl$path');
     if (queryParams == null || queryParams.isEmpty) return uri;
     return uri.replace(queryParameters: queryParams);
   }

@@ -22,7 +22,7 @@ class SectionCard extends StatelessWidget {
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: c.border.withOpacity(0.1),
+          color: c.border.withValues(alpha: 0.1),
           width: 1,
         ),
       ),

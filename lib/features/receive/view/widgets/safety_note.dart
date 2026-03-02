@@ -11,7 +11,7 @@ class SafetyNote extends StatelessWidget {
     final c = AppColor.of(context);
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: c.primary.withOpacity(0.06), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: c.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)),
       child: Text(text, style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.3)),
     );
   }

@@ -10,10 +10,9 @@ import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
-import 'widgets/glass_card.dart';
-import 'widgets/conic_ring_avatar.dart';
 import 'widgets/shimmer_text.dart';
 import 'widgets/fintech_background.dart';
+import 'widgets/conic_ring_avatar.dart';
 
 class WalletCreationScreen extends StatefulWidget {
   const WalletCreationScreen({super.key, this.isSplash = false});
@@ -28,7 +27,7 @@ class _WalletCreationScreenState
     extends State<WalletCreationScreen>
     with SingleTickerProviderStateMixin {
 
-  static const _logoAsset = 'assets/icon/ic_stat_notification.png';
+  static const _logoAsset = 'assets/icon/icon.png';
 
   /// ✅ REAL APP INFO
   String _appName = '';
@@ -120,52 +119,40 @@ class _WalletCreationScreenState
                             offset: Offset(0, dy),
                             child: Transform.rotate(
                               angle: tilt,
-                              child: GlassCard(
-                                colors: colors,
-                                child: Padding(
-                                  padding:
-                                  const EdgeInsets
-                                      .fromLTRB(
-                                      18,
-                                      22,
-                                      18,
-                                      18),
-                                  child: Column(
-                                    mainAxisSize:
-                                    MainAxisSize.min,
-                                    children: [
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    /// Logo
+                                    ConicRingAvatar(
+                                      size: 114,
+                                      ringWidth: 5,
+                                      asset: _logoAsset,
+                                      imageSize: 86,
+                                      baseColor: colors.primary,
+                                      fillColor: colors.surface,
+                                      imagePadding: 11,
+                                      rotationTurns: _bgCtrl.value,
+                                    ),
 
-                                      /// Logo
-                                      ConicRingAvatar(
-                                        size: 112,
-                                        ringWidth: 3,
-                                        asset: _logoAsset,
-                                        imageSize: 96,
-                                        baseColor:
-                                        colors.primary,
-                                        rotationTurns:
-                                        _bgCtrl.value,
+                                    const SizedBox(height: 16),
+
+                                    /// ✅ REAL APP NAME
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: ShimmerText(
+                                          _appName.isEmpty ? "Loading..." : _appName,
+                                          baseColor: colors.textPrimary,
+                                          highlightColor: colors.primary,
+                                        ),
                                       ),
+                                    ),
 
-                                      const SizedBox(
-                                          height: 16),
-
-                                      /// ✅ REAL APP NAME
-                                      ShimmerText(
-                                        _appName
-                                            .isEmpty
-                                            ? "Loading..."
-                                            : _appName,
-                                        baseColor: colors
-                                            .textPrimary,
-                                        highlightColor:
-                                        colors.primary,
-                                      ),
-
-                                      const SizedBox(
-                                          height: 6),
-                                    ],
-                                  ),
+                                    const SizedBox(height: 6),
+                                  ],
                                 ),
                               ),
                             ),
@@ -231,33 +218,30 @@ class _WalletCreationScreenState
           ),
 
           /// 🏷 Footer Tagline + Version
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 20,
-            child: FadeInUp(
-              duration:
-              const Duration(milliseconds: 500),
-              child: Column(
-                children: [
-                  Text(
-                    'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-                    textAlign:
-                    TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight:
-                      FontWeight.w600,
-                      color:
-                      colors.textSecondary,
-                      height: 1.4,
-                      letterSpacing: .2,
+          if (widget.isSplash)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 20,
+              child: FadeInUp(
+                duration: const Duration(milliseconds: 500),
+                child: Column(
+                  children: [
+                    Text(
+                      'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textSecondary,
+                        height: 1.4,
+                        letterSpacing: .2,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

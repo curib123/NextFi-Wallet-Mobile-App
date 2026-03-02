@@ -1,20 +1,14 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:next_fi/services/secure_storage/token_storage.dart';
-
-import 'api/trades_service.dart';
-import 'models/trades_dtos.dart';
-import 'models/trades_models.dart';
+import 'package:next_fi/services/trades/api/trades_service.dart';
+import 'package:next_fi/services/trades/models/trades_dtos.dart';
+import 'package:next_fi/services/trades/models/trades_models.dart';
 
 class TradesCoreService {
   TradesCoreService._();
 
   static final TradesCoreService I = TradesCoreService._();
-  static final StreamController<void> _changesCtrl =
-      StreamController<void>.broadcast();
-
-  static Stream<void> get changes => _changesCtrl.stream;
 
   late final TradesService _api = TradesService(
     tokenProvider: _safeTokenProvider,
@@ -22,181 +16,118 @@ class TradesCoreService {
 
   static Future<String?> _safeTokenProvider() async {
     try {
-      final storage = TokenStorage();
-      return await storage.accessToken;
+      return await TokenStorage().accessToken;
     } catch (_) {
       return null;
     }
   }
 
-  // ── Trade CRUD ─────────────────────────────────────────────────────────────
+  Future<TradeModel> create(CreateTradeRequest req) => _api.create(req);
 
-  Future<TradeModel> createTrade(CreateTradeRequest req) async {
-    final trade = await _api.createTrade(req);
-    _emitChanged();
-    return trade;
+  Future<TradesPagedResponse> listPaged({
+    TradesListQuery query = const TradesListQuery(),
+  }) => _api.listPaged(query: query);
+
+  Future<List<TradeModel>> list([
+    TradesListQuery query = const TradesListQuery(),
+  ]) async {
+    final page = await _api.listPaged(query: query);
+    return page.items;
   }
 
-  Future<List<TradeModel>> listMyTrades(TradesQuery query) async =>
-      _api.listMyTrades(query);
+  Future<TradeModel> getOne(String id) => _api.getOne(id);
 
-  Future<TradeModel> getMyTradeById(String id) async =>
-      _api.getMyTradeById(id);
+  Future<TradeModel> markFiatSent(String id) => _api.markFiatSent(id);
 
-  // ── vF1 Action methods ─────────────────────────────────────────────────────
+  Future<TradeModel> confirmFiat(String id, {String? fiatRefNo}) =>
+      _api.confirmFiat(id, fiatRefNo: fiatRefNo);
 
-  /// SELL: user marks fiat as sent → status: FIAT_SENT
-  Future<TradeModel> fiatSent(String tradeId, {String? note}) async {
-    final trade = await _api.fiatSent(tradeId, note: note);
-    _emitChanged();
-    return trade;
-  }
+  Future<TradeModel> cancelTrade(String id, {String? reason}) =>
+      _api.cancelTrade(id, reason: reason);
 
-  /// SELL: merchant confirms fiat received → status: FIAT_CONFIRMED
-  Future<TradeModel> fiatReceived(String tradeId) async {
-    final trade = await _api.fiatReceived(tradeId);
-    _emitChanged();
-    return trade;
-  }
+  // Crypto escrow operations (Step B and E in both flows)
+  /// Lock crypto into escrow - called by the party who needs to lock:
+  /// - SELL offer: merchant locks crypto
+  /// - BUY offer: buyer locks crypto
+  Future<TradeModel> lockCrypto(
+    String id, {
+    required String claimableBalanceId,
+    required String createTxHash,
+  }) => _api.lockCrypto(
+    id,
+    claimableBalanceId: claimableBalanceId,
+    createTxHash: createTxHash,
+  );
 
-  /// BUY: merchant marks fiat as sent to user → status: AWAITING_USER_CONFIRM
-  Future<TradeModel> fiatSentMerchant(String tradeId, {String? note}) async {
-    final trade = await _api.fiatSentMerchant(tradeId, note: note);
-    _emitChanged();
-    return trade;
-  }
+  /// Claim crypto from escrow - called by the party receiving crypto:
+  /// - SELL offer: buyer claims crypto
+  /// - BUY offer: merchant claims crypto
+  Future<TradeModel> claimCrypto(String id, {required String claimTxHash}) =>
+      _api.claimCrypto(id, claimTxHash: claimTxHash);
 
-  /// BUY: user confirms fiat received from merchant → status: COMPLETED
-  Future<TradeModel> confirmReceived(String tradeId) async {
-    final trade = await _api.confirmReceived(tradeId);
-    _emitChanged();
-    return trade;
-  }
+  /// Refund crypto from expired escrow - only original locker can call
+  Future<TradeModel> refundCrypto(String id, {required String refundTxHash}) =>
+      _api.refundCrypto(id, refundTxHash: refundTxHash);
 
-  /// Either party cancels the trade.
-  Future<TradeModel> cancelTradeAction(String tradeId, {String? reason}) async {
-    final trade = await _api.cancelTradeAction(tradeId, reason: reason);
-    _emitChanged();
-    return trade;
-  }
-
-  /// Either party opens a dispute.
-  Future<TradeModel> openDisputeAction(
-    String tradeId, {
-    required String reason,
-  }) async {
-    final trade = await _api.openDisputeAction(tradeId, reason: reason);
-    _emitChanged();
-    return trade;
-  }
-
-  // ── Trade chat ─────────────────────────────────────────────────────────────
-
-  Future<List<TradeMessageModel>> getTradeMessages(String tradeId) async =>
-      _api.getTradeChat(tradeId);
-
-  Future<TradeMessageModel> sendTradeMessage(
-    String tradeId,
-    String message,
-  ) async {
-    final msg = await _api.sendTradeChatMessage(tradeId, message);
-    _emitChanged();
-    return msg;
-  }
-
-  // ── Upload proof ───────────────────────────────────────────────────────────
-
-  Future<TradeModel> uploadPaymentProof(
-    String tradeId, {
-    required File image,
+  // Mark fiat sent with proof
+  Future<TradeModel> markFiatSentWithProof(
+    String id, {
     String? note,
-  }) async {
-    final trade = await _api.uploadPaymentProof(
-      tradeId,
-      image: image,
-      note: note,
-    );
-    _emitChanged();
-    return trade;
-  }
+    List<String>? proofUrls,
+  }) => _api.markFiatSentWithProof(id, note: note, proofUrls: proofUrls);
 
-  // ── Seller (merchant) routes ───────────────────────────────────────────────
-
-  Future<List<TradeModel>> listSellerTrades(TradesQuery query) async =>
-      _api.listSellerTrades(query);
-
-  Future<TradeModel> getSellerTradeById(String id) async =>
-      _api.getSellerTradeById(id);
-
-  // ── Legacy methods (kept for backward compat) ──────────────────────────────
-
-  Future<TradeModel> markPaid(
+  // Dispute
+  Future<TradeModel> openDispute(
     String id, {
-    required String idempotencyKey,
-  }) async {
-    final trade = await _api.markPaid(id, idempotencyKey: idempotencyKey);
-    _emitChanged();
-    return trade;
-  }
+    required String reason,
+    String? description,
+    List<String>? evidenceUrls,
+  }) => _api.openDispute(
+    id,
+    reason: reason,
+    description: description,
+    evidenceUrls: evidenceUrls,
+  );
 
-  Future<TradeModel> cancelMyTrade(
+  // Payment proof upload
+  Future<String?> uploadProof(
     String id, {
-    required String idempotencyKey,
+    required File file,
+    String type = 'FIAT',
+    String? note,
+    String? referenceNo,
     String? txHash,
-    String? reason,
-  }) async {
-    final trade = await _api.cancelMyTrade(
-      id,
-      idempotencyKey: idempotencyKey,
-      txHash: txHash,
-      reason: reason,
-    );
-    _emitChanged();
-    return trade;
-  }
+  }) => _api.uploadPaymentProof(
+    id,
+    file: file,
+    type: type,
+    note: note,
+    referenceNo: referenceNo,
+    txHash: txHash,
+  );
 
-  Future<TradeMessageModel> sendMyMessage(
-    String tradeId,
-    String message,
-  ) async {
-    final msg = await _api.sendMyMessage(tradeId, message);
-    _emitChanged();
-    return msg;
-  }
+  Future<List<Map<String, dynamic>>> getTradeProofs(String id) =>
+      _api.getTradeProofs(id);
 
-  Future<TradeModel> releaseSellerTrade(
+  // Trade messages
+  Future<List<Map<String, dynamic>>> getTradeMessages(String id) =>
+      _api.getTradeMessages(id);
+
+  Future<void> sendTradeMessage(
     String id, {
-    required String idempotencyKey,
-    String? txHash,
-  }) async {
-    final trade = await _api.releaseSellerTrade(
-      id,
-      idempotencyKey: idempotencyKey,
-      txHash: txHash,
-    );
-    _emitChanged();
-    return trade;
-  }
+    required String ciphertext,
+    required String algorithm,
+    required String senderKeyId,
+    required String nonce,
+    String kind = 'TEXT',
+  }) => _api.sendTradeMessage(
+    id,
+    ciphertext: ciphertext,
+    algorithm: algorithm,
+    senderKeyId: senderKeyId,
+    nonce: nonce,
+    kind: kind,
+  );
 
-  Future<TradeModel> cancelSellerTrade(
-    String id, {
-    required String idempotencyKey,
-    String? txHash,
-    String? reason,
-  }) async {
-    final trade = await _api.cancelSellerTrade(
-      id,
-      idempotencyKey: idempotencyKey,
-      txHash: txHash,
-      reason: reason,
-    );
-    _emitChanged();
-    return trade;
-  }
-
-  void _emitChanged() {
-    if (!_changesCtrl.isClosed) {
-      _changesCtrl.add(null);
-    }
-  }
+  void dispose() => _api.dispose();
 }

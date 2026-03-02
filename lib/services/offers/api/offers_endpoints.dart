@@ -1,12 +1,18 @@
 class OffersEndpoints {
   static const String base = '/offers';
 
+  // Public
   static String publicList() => base;
-  static String recommendedFeed() => '$base/me/recommended/feed';
-  static String publicById(String id) => '$base/$id';
+  static String publicGetOne(String id) => '$base/$id';
 
-  static String myList() => '$base/me/list';
-  static String createMyOffer() => '$base/me';
-  static String patchMyOffer(String id) => '$base/me/$id';
-  static String deleteMyOffer(String id) => '$base/me/$id';
+  // Merchant
+  static String create() => base;
+  static String update(String id) => '$base/$id';
+  static String pause(String id) => '$base/$id/pause';
+  static String resume(String id) => '$base/$id/resume';
+  static String cancel(String id) => '$base/$id';
+  static String mine() => '$base/me';
+
+  // Admin
+  static String adminList() => '$base/admin/list';
 }

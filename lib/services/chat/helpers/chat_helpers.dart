@@ -7,7 +7,7 @@ import 'chat_exceptions.dart';
 
 class ChatHttp {
   static Uri uri(String path, {Map<String, String>? queryParams}) {
-    final base = Uri.parse('$cetralized_baseUrl$path');
+    final base = Uri.parse('$centralized_baseUrl$path');
     if (queryParams == null || queryParams.isEmpty) return base;
     return base.replace(queryParameters: queryParams);
   }

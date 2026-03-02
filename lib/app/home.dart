@@ -18,7 +18,7 @@ class Home extends StatefulWidget {
 
   @override
   State<Home> createState() => _HomeState();
-}
+} 
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
   Timer? _splashTimer;
@@ -67,7 +67,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Future<void> _boot() async {
     final splashCompleter = Completer<void>();
     _splashTimer?.cancel();
-    _splashTimer = Timer(const Duration(seconds: 5), splashCompleter.complete);
+    _splashTimer = Timer(const Duration(seconds: 2), splashCompleter.complete);
 
     final check = _checkMnemonic();
     await Future.wait([splashCompleter.future, check]);

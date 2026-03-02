@@ -6,12 +6,12 @@ import 'package:next_fi/services/base_url/base_url.dart';
 import 'federation_address_exceptions.dart';
 
 class FederationAddressHttp {
-  static final Uri _baseUri = Uri.parse(cetralized_baseUrl);
+  static final Uri _baseUri = Uri.parse(centralized_baseUrl);
   static final String _publicBase =
       '${_baseUri.scheme}://${_baseUri.authority}';
 
   static Uri uri(String path, {Map<String, String>? queryParams}) {
-    return Uri.parse('$cetralized_baseUrl$path').replace(
+    return Uri.parse('$centralized_baseUrl$path').replace(
       queryParameters: queryParams?.isEmpty == true ? null : queryParams,
     );
   }

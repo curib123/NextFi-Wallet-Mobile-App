@@ -194,11 +194,25 @@ class AssetWidget extends StatelessWidget {
     final window = homeVM?.state.selectedWindow ?? PriceWindow.h24;
 
     if (loading) {
-      return ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: 5,
-        separatorBuilder: (_, __) => const SizedBox(height: 16),
-        itemBuilder: (ctx, __) => _shimmerTile(ctx),
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final shimmerBase = isDark
+          ? colors.surface.withValues(alpha: 0.92)
+          : colors.surface.withValues(alpha: 0.72);
+      final shimmerHighlight = isDark
+          ? colors.border.withValues(alpha: 0.96)
+          : colors.background.withValues(alpha: 0.98);
+
+      return Shimmer.fromColors(
+        baseColor: shimmerBase,
+        highlightColor: shimmerHighlight,
+        direction: ShimmerDirection.ltr,
+        period: const Duration(milliseconds: 1500),
+        child: ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          itemCount: 5,
+          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          itemBuilder: (ctx, __) => _shimmerTile(ctx),
+        ),
       );
     }
 
@@ -259,7 +273,7 @@ class AssetWidget extends StatelessWidget {
               priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
               money: money,
               onTap: () => _openReceive(context, a),
-              formatTokenAmount: formatTokenAmount, 
+              formatTokenAmount: formatTokenAmount,
               formatSignedMoney: _formatSignedMoney,
             ),
           );
@@ -288,11 +302,8 @@ class AssetWidget extends StatelessWidget {
   }
 
   Widget _shimmerTile(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    Color blockColor = isDark
-        ? const Color(0xFF1C1C1E)
-        : const Color(0xFFE5E7EB);
+    final palette = AppColor.of(context);
+    final blockColor = palette.border.withValues(alpha: 0.9);
 
     Widget block(double w, double h, {double r = 6}) => Container(
       width: w,
@@ -303,50 +314,43 @@ class AssetWidget extends StatelessWidget {
       ),
     );
 
-    return Shimmer.fromColors(
-      baseColor: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFE6E8EB),
-      highlightColor: isDark
-          ? const Color(0xFF242424)
-          : const Color(0xFFF2F3F5),
-      period: const Duration(milliseconds: 2000),
-
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: palette.surface.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.border.withValues(alpha: 0.7)),
+        ),
         child: Row(
           children: [
-            /// Leading circle
             Container(
               width: 44,
               height: 44,
               decoration: BoxDecoration(
                 color: blockColor,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(11),
               ),
             ),
-
             const SizedBox(width: 14),
-
-            /// Text skeletons
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   block(140, 14),
                   const SizedBox(height: 8),
-                  block(100, 12),
+                  block(110, 12),
                 ],
               ),
             ),
-
             const SizedBox(width: 12),
-
-            /// Right meta
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                block(60, 14),
+                block(72, 14),
                 const SizedBox(height: 8),
-                block(40, 12, r: 12),
+                block(44, 12, r: 12),
               ],
             ),
           ],
@@ -423,14 +427,14 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _isHovered
-                  ? widget.colors.primary.withOpacity(0.3)
-                  : widget.colors.border.withOpacity(isDark ? 0.1 : 0.08),
+                  ? widget.colors.primary.withValues(alpha: 0.3)
+                  : widget.colors.border.withValues(alpha: isDark ? 0.1 : 0.08),
               width: 1,
             ),
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: widget.colors.primary.withOpacity(0.1),
+                      color: widget.colors.primary.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -452,11 +456,11 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                             colors: [
-                              Colors.transparent,
-                              widget.colors.primary.withOpacity(
-                                _isHovered ? 0.2 : 0.12,
+                              AppColor.of(context).surface,
+                              widget.colors.primary.withValues(
+                                alpha: _isHovered ? 0.2 : 0.12,
                               ),
-                              Colors.transparent,
+                              AppColor.of(context).surface,
                             ],
                             stops: [
                               (_shimmerPosition.value - 0.3).clamp(0.0, 1.0),
@@ -570,14 +574,14 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _isHovered
-                  ? widget.colors.primary.withOpacity(0.3)
-                  : widget.colors.border.withOpacity(isDark ? 0.1 : 0.08),
+                  ? widget.colors.primary.withValues(alpha: 0.3)
+                  : widget.colors.border.withValues(alpha: isDark ? 0.1 : 0.08),
               width: 1,
             ),
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: widget.colors.primary.withOpacity(0.1),
+                      color: widget.colors.primary.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -599,11 +603,11 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                             colors: [
-                              Colors.transparent,
-                              widget.colors.textSecondary.withOpacity(
-                                _isHovered ? 0.15 : 0.08,
+                              AppColor.of(context).surface,
+                              widget.colors.textSecondary.withValues(
+                                alpha: _isHovered ? 0.15 : 0.08,
                               ),
-                              Colors.transparent,
+                              AppColor.of(context).surface,
                             ],
                             stops: [
                               (_shimmerPosition.value - 0.3).clamp(0.0, 1.0),

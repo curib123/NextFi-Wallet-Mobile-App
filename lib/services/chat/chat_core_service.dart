@@ -40,19 +40,21 @@ class ChatCoreService {
     SendChatFriendRequestRequest req,
   ) async => _api.sendFriendRequest(req);
 
-  Future<ChatPaged<ChatFriendRequestModel>> listIncomingFriendRequests(
+  Future<ChatPaged<ChatFriendRequestModel>> listFriendRequests(
     ChatListQuery query,
-  ) async => _api.listIncomingFriendRequests(query);
+  ) async => _api.listFriendRequests(query);
 
-  Future<ChatPaged<ChatFriendRequestModel>> listOutgoingFriendRequests(
+  Future<ChatPaged<ChatFriendRequestModel>> listSentFriendRequests(
     ChatListQuery query,
-  ) async => _api.listOutgoingFriendRequests(query);
+  ) async => _api.listSentFriendRequests(query);
 
-  Future<ChatFriendRequestModel> acceptFriendRequest(String requestId) async =>
-      _api.acceptFriendRequest(requestId);
+  Future<ChatFriendRequestModel> getFriendRequest(String requestId) async =>
+      _api.getFriendRequest(requestId);
 
-  Future<ChatFriendRequestModel> rejectFriendRequest(String requestId) async =>
-      _api.rejectFriendRequest(requestId);
+  Future<ChatFriendRequestModel> respondFriendRequest(
+    String requestId,
+    RespondFriendRequestRequest req,
+  ) async => _api.respondFriendRequest(requestId, req);
 
   Future<ChatFriendRequestModel> cancelFriendRequest(String requestId) async =>
       _api.cancelFriendRequest(requestId);
@@ -60,8 +62,29 @@ class ChatCoreService {
   Future<ChatPaged<ChatFriendModel>> listFriends(ChatListQuery query) async =>
       _api.listFriends(query);
 
-  Future<bool> removeFriend(String friendUserId) async =>
-      _api.removeFriend(friendUserId);
+  Future<bool> removeFriendship(String friendshipId) async =>
+      _api.removeFriendship(friendshipId);
+
+  // Backward compatibility aliases
+  Future<ChatPaged<ChatFriendRequestModel>> listIncomingFriendRequests(
+    ChatListQuery query,
+  ) async => _api.listFriendRequests(query);
+
+  Future<ChatPaged<ChatFriendRequestModel>> listOutgoingFriendRequests(
+    ChatListQuery query,
+  ) async => _api.listSentFriendRequests(query);
+
+  Future<ChatFriendRequestModel> acceptFriendRequest(String requestId) async =>
+      _api.respondFriendRequest(
+        requestId,
+        RespondFriendRequestRequest(action: 'ACCEPTED'),
+      );
+
+  Future<ChatFriendRequestModel> rejectFriendRequest(String requestId) async =>
+      _api.respondFriendRequest(
+        requestId,
+        RespondFriendRequestRequest(action: 'REJECTED'),
+      );
 
   Future<ChatDirectThreadModel> openThreadWithFriend(
     String friendUserId,
@@ -80,4 +103,17 @@ class ChatCoreService {
     String threadId,
     SendEncryptedChatMessageRequest req,
   ) async => _api.sendThreadMessage(threadId, req);
+
+  Future<ChatDirectThreadModel> createThread(
+    CreateThreadRequest req,
+  ) async => _api.createThread(req);
+
+  Future<ChatDirectThreadModel> getThread(String threadId) async =>
+      _api.getThread(threadId);
+
+  Future<ChatDirectThreadModel> getThreadWithFriend(String friendId) async =>
+      _api.getThreadWithFriend(friendId);
+
+  Future<ChatDirectMessageModel> getMessage(String messageId) async =>
+      _api.getMessage(messageId);
 }

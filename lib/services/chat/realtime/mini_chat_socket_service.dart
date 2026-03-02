@@ -7,6 +7,7 @@ import '../models/chat_dtos.dart';
 import '../models/chat_models.dart';
 
 typedef MiniChatTokenProvider = Future<String?> Function();
+typedef MiniChatUserIdProvider = Future<String?> Function();
 
 class MiniChatSocketStatus {
   final bool connecting;
@@ -23,10 +24,15 @@ class MiniChatSocketStatus {
 }
 
 class MiniChatSocketService {
-  MiniChatSocketService({required this.threadId, required this.tokenProvider});
+  MiniChatSocketService({
+    required this.threadId,
+    required this.tokenProvider,
+    this.userIdProvider,
+  });
 
   final String threadId;
   final MiniChatTokenProvider tokenProvider;
+  final MiniChatUserIdProvider? userIdProvider;
 
   final _statusCtrl = StreamController<MiniChatSocketStatus>.broadcast();
   final _messagesCtrl = StreamController<ChatDirectMessageModel>.broadcast();
@@ -70,15 +76,20 @@ class MiniChatSocketService {
       );
       return;
     }
+    final userId = (await userIdProvider?.call())?.trim();
 
-    final socketUrl = _miniChatSocketUrl();
+    final socketUrl = _realtimeSocketUrl();
     final socket = io.io(
       socketUrl,
       io.OptionBuilder()
           .setTransports(const ['websocket'])
           .disableAutoConnect()
           .enableReconnection()
-          .setAuth({'token': token})
+          .setAuth({
+            'token': token,
+            if (userId != null && userId.isNotEmpty) 'userId': userId,
+          })
+          .setQuery({if (userId != null && userId.isNotEmpty) 'userId': userId})
           .setExtraHeaders({'Authorization': 'Bearer $token'})
           .build(),
     );
@@ -120,37 +131,6 @@ class MiniChatSocketService {
       _emitError(_humanizeError(error, fallback: 'Mini chat socket error.'));
     });
 
-    socket.on('joined_thread', (dynamic payload) {
-      final payloadThreadId = _readStringFromPayload(payload, const [
-        'threadId',
-        'thread_id',
-      ]);
-      if (payloadThreadId.isNotEmpty && payloadThreadId != threadId) return;
-      _updateStatus(
-        const MiniChatSocketStatus(
-          connecting: false,
-          connected: true,
-          joined: true,
-        ),
-      );
-    });
-
-    socket.on('join_denied', (dynamic payload) {
-      final reason = _readStringFromPayload(payload, const ['reason']);
-      _updateStatus(
-        const MiniChatSocketStatus(
-          connecting: false,
-          connected: true,
-          joined: false,
-        ),
-      );
-      _emitError(
-        reason.isEmpty
-            ? 'Chat room access denied.'
-            : 'Chat room denied: $reason',
-      );
-    });
-
     socket.on('message_error', (dynamic payload) {
       final reason = _readStringFromPayload(payload, const [
         'reason',
@@ -163,11 +143,7 @@ class MiniChatSocketService {
       );
     });
 
-    socket.on('chat_message', (dynamic payload) {
-      _emitMessageFromPayload(payload);
-    });
-
-    socket.on('new_message', (dynamic payload) {
+    socket.on('dm:message', (dynamic payload) {
       _emitMessageFromPayload(payload);
     });
 
@@ -204,7 +180,26 @@ class MiniChatSocketService {
   void _emitJoinThread() {
     final socket = _socket;
     if (socket == null || !socket.connected) return;
-    socket.emit('join_thread', {'threadId': threadId});
+    socket.emitWithAck(
+      'join:thread',
+      {'threadId': threadId},
+      ack: (dynamic data) {
+        if (_disposed) return;
+        final map = _asStringKeyMap(data);
+        final ok = map != null && map['ok'] == true;
+        if (ok) {
+          _updateStatus(
+            const MiniChatSocketStatus(
+              connecting: false,
+              connected: true,
+              joined: true,
+            ),
+          );
+        } else {
+          _emitError('Could not join chat room.');
+        }
+      },
+    );
   }
 
   void _emitLeaveThread() {
@@ -269,10 +264,10 @@ class MiniChatSocketService {
     _errorsCtrl.add(error);
   }
 
-  String _miniChatSocketUrl() {
-    final base = Uri.parse(cetralized_baseUrl);
+  String _realtimeSocketUrl() {
+    final base = Uri.parse(centralized_baseUrl);
     final socketUri = base.replace(
-      path: '/mini-chat',
+      path: '/realtime',
       query: null,
       fragment: null,
     );
@@ -314,11 +309,8 @@ class MiniChatSocketService {
     final socket = _socket;
     _socket = null;
     if (socket != null) {
-      socket.off('joined_thread');
-      socket.off('join_denied');
       socket.off('message_error');
-      socket.off('chat_message');
-      socket.off('new_message');
+      socket.off('dm:message');
       socket.off('message_ack');
       socket.disconnect();
       socket.close();

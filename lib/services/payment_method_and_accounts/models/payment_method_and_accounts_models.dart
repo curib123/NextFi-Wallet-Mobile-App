@@ -2,6 +2,7 @@
   final String id;
   final String code;
   final String name;
+  final String? logo;
   final String? description;
   final String? instructions;
   final bool isActive;
@@ -12,6 +13,7 @@
     required this.id,
     required this.code,
     required this.name,
+    this.logo,
     this.description,
     this.instructions,
     required this.isActive,
@@ -27,6 +29,7 @@
       id: json['id']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      logo: json['logo']?.toString(),
       description: json['description']?.toString(),
       instructions: json['instructions']?.toString(),
       isActive: json['isActive'] == true,

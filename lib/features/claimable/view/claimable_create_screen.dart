@@ -305,15 +305,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     if (_mode == ClaimableMode.timeLocked) {
       final dt = _combinedUnlockDateTime;
       if (dt == null) return 'Pick an unlock date';
-      if (dt.isBefore(DateTime.now()))
+      if (dt.isBefore(DateTime.now())) {
         return 'Unlock time must be in the future';
+      }
     }
 
     if (_hasExpiry) {
       final dt = _combinedExpiryDateTime;
       if (dt == null) return 'Pick an expiry date';
-      if (dt.isBefore(DateTime.now()))
+      if (dt.isBefore(DateTime.now())) {
         return 'Expiry time must be in the future';
+      }
 
       if (_mode == ClaimableMode.timeLocked) {
         final unlock = _combinedUnlockDateTime;
@@ -449,8 +451,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
 
   String _shortenAddress(String addr) {
     if (addr.length <= 16) return addr;
-    return '${addr.substring(0, 6)}â€¦${addr.substring(addr.length - 6)}';
+    return '${addr.substring(0, 6)}...${addr.substring(addr.length - 6)}';
   }
+
+  Color _blend(Color base, Color accent, double amount) =>
+      Color.lerp(base, accent, amount) ?? base;
 
   @override
   Widget build(BuildContext context) {
@@ -468,22 +473,22 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               child: Form(
                 key: _form,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
                   children: [
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     _buildModeCard(c),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     _buildAmountCard(c, currentBal),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     _buildRecipientCard(c),
                     if (_mode == ClaimableMode.timeLocked) ...[
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       _buildUnlockCard(c),
                     ],
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     _buildExpirationCard(c),
                     if (_mode == ClaimableMode.timeLocked || _hasExpiry) ...[
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       _buildInfoCard(c),
                     ],
                     const SizedBox(height: 100),
@@ -503,12 +508,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildModernHeader(AppColor c) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 20, 12),
+      padding: const EdgeInsets.fromLTRB(14, 10, 24, 14),
       decoration: BoxDecoration(
         color: c.background,
-        border: Border(
-          bottom: BorderSide(color: c.border.withOpacity(0.06), width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: c.border, width: 1)),
       ),
       child: Row(
         children: [
@@ -526,17 +529,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   'Claimable Balance',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.6,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   'Send crypto with conditions',
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.6),
-                    fontSize: 12,
+                    color: c.textSecondary,
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
                     letterSpacing: -0.1,
                   ),
@@ -557,24 +560,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
+        color: isDark ? c.surface : c.onPrimary,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: c.border, width: 1),
       ),
       child: Row(
         children: [
@@ -588,7 +578,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               onTap: () => setState(() => _mode = ClaimableMode.unconditional),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Expanded(
             child: _buildModeOption(
               c,
@@ -621,26 +611,12 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    c.primary.withOpacity(0.12),
-                    c.primary.withOpacity(0.06),
-                  ],
-                )
-              : null,
-          color: isSelected
-              ? null
-              : (isDark ? c.background : c.surface.withOpacity(0.3)),
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? c.primary : (isDark ? c.background : c.surface),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected
-                ? c.primary.withOpacity(0.3)
-                : c.border.withOpacity(isDark ? 0.08 : 0.1),
+            color: isSelected ? c.primary : c.border,
             width: 1.5,
           ),
         ),
@@ -650,25 +626,23 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? c.primary.withOpacity(0.15)
-                    : c.textSecondary.withOpacity(0.08),
+                    ? _blend(c.primary, c.surface, 0.22)
+                    : _blend(c.surface, c.textSecondary, 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
                 size: 20,
-                color: isSelected
-                    ? c.primary
-                    : c.textSecondary.withOpacity(0.6),
+                color: isSelected ? c.onPrimary : c.textSecondary,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 11),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? c.primary : c.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
+                color: isSelected ? c.onPrimary : c.textPrimary,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
                 letterSpacing: -0.3,
               ),
             ),
@@ -676,8 +650,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             Text(
               subtitle,
               style: TextStyle(
-                color: c.textSecondary.withOpacity(isSelected ? 0.7 : 0.5),
-                fontSize: 11,
+                color: isSelected ? c.onPrimary : c.textSecondary,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w500,
                 letterSpacing: -0.1,
               ),
@@ -697,22 +671,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
+        border: Border.all(color: c.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -722,24 +683,20 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Text(
                 'Amount',
                 style: TextStyle(
-                  color: c.textSecondary.withOpacity(0.7),
-                  fontSize: 13,
+                  color: c.textSecondary,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.3,
                   height: 1,
                 ),
               ),
               const Spacer(),
-              Icon(
-                LucideIcons.wallet,
-                size: 14,
-                color: c.textSecondary.withOpacity(0.5),
-              ),
+              Icon(LucideIcons.wallet, size: 14, color: c.textSecondary),
               const SizedBox(width: 6),
               Text(
                 '${currentBal.toStringAsFixed(2)} $_selectedAsset',
                 style: TextStyle(
-                  color: c.textSecondary.withOpacity(0.7),
+                  color: c.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,
@@ -772,7 +729,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   decoration: InputDecoration(
                     hintText: '0',
                     hintStyle: TextStyle(
-                      color: c.textSecondary.withOpacity(0.2),
+                      color: c.border,
                       fontSize: 40,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -1.5,
@@ -791,7 +748,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   Text(
                     _selectedAsset,
                     style: TextStyle(
-                      color: c.textSecondary.withOpacity(0.6),
+                      color: c.textSecondary,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
@@ -816,12 +773,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: c.primary.withOpacity(0.1),
+                        color: _blend(c.surface, c.primary, 0.16),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: c.primary.withOpacity(0.2),
-                          width: 1,
-                        ),
+                        border: Border.all(color: c.primary, width: 1),
                       ),
                       child: Text(
                         'MAX',
@@ -864,22 +818,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
+        border: Border.all(color: c.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,8 +830,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Text(
                 'Recipient',
                 style: TextStyle(
-                  color: c.textSecondary.withOpacity(0.7),
-                  fontSize: 13,
+                  color: c.textSecondary,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.3,
                 ),
@@ -943,14 +884,11 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isDark ? c.background : c.surface.withOpacity(0.5),
+          color: isDark ? c.background : c.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: c.border.withOpacity(isDark ? 0.1 : 0.15),
-            width: 1,
-          ),
+          border: Border.all(color: c.border, width: 1),
         ),
-        child: Icon(icon, size: 18, color: c.primary.withOpacity(0.8)),
+        child: Icon(icon, size: 18, color: c.primary),
       ),
     );
   }
@@ -959,18 +897,15 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.05),
+        color: _blend(c.surface, c.primary, 0.14),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.primary.withOpacity(0.1), width: 1),
+        border: Border.all(color: c.primary, width: 1.2),
       ),
       child: Center(
         child: SizedBox(
           height: 20,
           width: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.5,
-            color: c.primary.withOpacity(0.5),
-          ),
+          child: CircularProgressIndicator(strokeWidth: 2.5, color: c.primary),
         ),
       ),
     );
@@ -983,12 +918,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.12 : 0.08),
+        color: _blend(isDark ? c.background : c.surface, color, 0.16),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withOpacity(isDark ? 0.2 : 0.15),
-          width: 1.5,
-        ),
+        border: Border.all(color: _blend(c.border, color, 0.7), width: 1.5),
       ),
       child: Row(
         children: [
@@ -996,7 +928,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: _blend(c.surface, color, 0.22),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
@@ -1032,8 +964,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 Text(
                   _shortenAddress(recipient.address),
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.6),
-                    fontFamily: 'monospace',
+                    color: c.textSecondary,
                     fontSize: 12,
                     letterSpacing: 0,
                   ),
@@ -1047,7 +978,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: _blend(c.surface, color, 0.22),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(LucideIcons.pencil, size: 16, color: color),
@@ -1064,12 +995,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        color: isDark ? c.background : c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
-          width: 1.5,
-        ),
+        border: Border.all(color: c.border, width: 1.5),
       ),
       child: Row(
         children: [
@@ -1077,14 +1005,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
+              color: _blend(c.surface, c.primary, 0.18),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              LucideIcons.userPlus,
-              size: 18,
-              color: c.primary.withOpacity(0.7),
-            ),
+            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1104,8 +1028,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 Text(
                   _shortenAddress(addr),
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.6),
-                    fontFamily: 'monospace',
+                    color: c.textSecondary,
                     fontSize: 12,
                     letterSpacing: 0,
                   ),
@@ -1125,13 +1048,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
+                color: c.primary,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 'Save',
                 style: TextStyle(
-                  color: c.primary,
+                  color: c.onPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                   letterSpacing: -0.2,
@@ -1147,12 +1070,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
   Widget _buildRecipientInputField(AppColor c, String addr, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? c.background : c.surface.withOpacity(0.5),
+        color: isDark ? c.background : c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
-          width: 1.5,
-        ),
+        border: Border.all(color: c.border, width: 1.5),
       ),
       child: TextField(
         controller: _recipientCtl,
@@ -1170,17 +1090,13 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
         decoration: InputDecoration(
           hintText: 'Paste G... or alias*$_federationDomain',
           hintStyle: TextStyle(
-            color: c.textSecondary.withOpacity(0.4),
+            color: c.textSecondary,
             fontSize: 14,
             letterSpacing: -0.2,
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 16, right: 12),
-            child: Icon(
-              LucideIcons.wallet,
-              color: c.textSecondary.withOpacity(0.5),
-              size: 18,
-            ),
+            child: Icon(LucideIcons.wallet, color: c.textSecondary, size: 18),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           suffixIcon: addr.isNotEmpty
@@ -1197,11 +1113,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                         _federationSuggestions = const [];
                       });
                     },
-                    icon: Icon(
-                      LucideIcons.x,
-                      size: 18,
-                      color: c.textSecondary.withOpacity(0.5),
-                    ),
+                    icon: Icon(LucideIcons.x, size: 18, color: c.textSecondary),
                     splashRadius: 20,
                   ),
                 )
@@ -1232,8 +1144,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
-              side: BorderSide(color: c.primary.withOpacity(0.35)),
-              backgroundColor: c.primary.withOpacity(0.08),
+              side: BorderSide(color: c.primary),
+              backgroundColor: _blend(c.surface, c.primary, 0.12),
               onPressed: () => _applyFederationSuggestion(s),
             ),
           )
@@ -1287,9 +1199,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: _blend(c.surface, color, 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.18), width: 1),
+        border: Border.all(color: _blend(c.border, color, 0.65), width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1298,13 +1210,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             SizedBox(
               height: 16,
               width: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: color.withOpacity(0.85),
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           else if (icon != null)
-            Icon(icon, size: 16, color: color.withOpacity(0.9)),
+            Icon(icon, size: 16, color: color),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1313,7 +1222,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: color.withOpacity(0.95),
+                    color: c.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 12.5,
                   ),
@@ -1323,7 +1232,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   Text(
                     subtitle.trim(),
                     style: TextStyle(
-                      color: c.textSecondary.withOpacity(0.9),
+                      color: c.textSecondary,
                       fontSize: 11.5,
                       height: 1.35,
                     ),
@@ -1346,22 +1255,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
+        border: Border.all(color: c.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1371,7 +1267,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: c.primary.withOpacity(0.12),
+                  color: _blend(c.surface, c.primary, 0.18),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(LucideIcons.clock, size: 16, color: c.primary),
@@ -1380,8 +1276,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Text(
                 'Unlock schedule',
                 style: TextStyle(
-                  color: c.textSecondary.withOpacity(0.7),
-                  fontSize: 13,
+                  color: c.textSecondary,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.3,
                 ),
@@ -1405,26 +1301,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.08),
+                color: _blend(c.surface, c.primary, 0.14),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: c.primary.withOpacity(0.15),
-                  width: 1,
-                ),
+                border: Border.all(color: c.primary, width: 1),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    LucideIcons.checkCircle2,
-                    size: 16,
-                    color: c.primary.withOpacity(0.7),
-                  ),
+                  Icon(LucideIcons.checkCircle2, size: 16, color: c.primary),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Unlocks ${_dateFmt.format(_combinedUnlockDateTime!)} at ${_unlockTime?.format(context) ?? '12:00 AM'}',
                       style: TextStyle(
-                        color: c.textPrimary.withOpacity(0.85),
+                        color: c.textPrimary,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                         letterSpacing: -0.2,
@@ -1449,22 +1338,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-            spreadRadius: 0,
-          ),
-        ],
+        border: Border.all(color: c.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1474,7 +1350,7 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: c.warning.withOpacity(0.12),
+                  color: _blend(c.surface, c.warning, 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(LucideIcons.timerOff, size: 16, color: c.warning),
@@ -1484,8 +1360,8 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                 child: Text(
                   'Add expiration',
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.7),
-                    fontSize: 13,
+                    color: c.textSecondary,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.3,
                   ),
@@ -1532,26 +1408,19 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: c.warning.withOpacity(0.08),
+                  color: _blend(c.surface, c.warning, 0.16),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: c.warning.withOpacity(0.2),
-                    width: 1,
-                  ),
+                  border: Border.all(color: c.warning, width: 1),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      LucideIcons.alertTriangle,
-                      size: 16,
-                      color: c.warning.withOpacity(0.7),
-                    ),
+                    Icon(LucideIcons.alertTriangle, size: 16, color: c.warning),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Reclaimable after ${_dateFmt.format(_combinedExpiryDateTime!)} at ${_expiryTime?.format(context) ?? '11:59 PM'}',
                         style: TextStyle(
-                          color: c.textPrimary.withOpacity(0.85),
+                          color: c.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                           letterSpacing: -0.2,
@@ -1597,12 +1466,10 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? c.background : c.surface.withOpacity(0.5),
+          color: isDark ? c.background : c.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: value != null
-                ? color.withOpacity(isDark ? 0.25 : 0.2)
-                : c.border.withOpacity(isDark ? 0.12 : 0.2),
+            color: value != null ? color : c.border,
             width: 1.5,
           ),
         ),
@@ -1611,18 +1478,14 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             Icon(
               icon,
               size: 16,
-              color: value != null
-                  ? color.withOpacity(0.8)
-                  : c.textSecondary.withOpacity(0.5),
+              color: value != null ? color : c.textSecondary,
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
-                  color: value != null
-                      ? c.textPrimary
-                      : c.textSecondary.withOpacity(0.5),
+                  color: value != null ? c.textPrimary : c.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,
@@ -1661,22 +1524,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.08 : 0.06),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.15)
-                : Colors.black.withOpacity(0.03),
-            blurRadius: 16,
-            offset: const Offset(0, 3),
-            spreadRadius: 0,
-          ),
-        ],
+        border: Border.all(color: c.border, width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1684,21 +1534,17 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
+              color: _blend(c.surface, c.primary, 0.16),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              LucideIcons.info,
-              size: 16,
-              color: c.primary.withOpacity(0.8),
-            ),
+            child: Icon(LucideIcons.info, size: 16, color: c.primary),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
               message,
               style: TextStyle(
-                color: c.textSecondary.withOpacity(0.8),
+                color: c.textSecondary,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 height: 1.5,
@@ -1721,22 +1567,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? c.surface : Colors.white,
+        color: isDark ? c.surface : c.onPrimary,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.1 : 0.08),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.4)
-                : Colors.black.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-            spreadRadius: 0,
-          ),
-        ],
+        border: Border.all(color: c.border, width: 1),
       ),
       child: SafeArea(
         top: false,
@@ -1749,9 +1582,9 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: c.primary,
-              foregroundColor: Colors.white,
+              foregroundColor: c.onPrimary,
               elevation: 0,
-              shadowColor: Colors.transparent,
+              shadowColor: c.surface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -1779,3 +1612,4 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
     );
   }
 }
+

@@ -257,8 +257,8 @@ class _MenuButtonState extends State<_MenuButton>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: _isPressed
-                ? widget.colors.border.withOpacity(isDark ? 0.15 : 0.12)
-                : widget.colors.border.withOpacity(isDark ? 0.08 : 0.05),
+                ? widget.colors.border.withValues(alpha: isDark ? 0.15 : 0.12)
+                : widget.colors.border.withValues(alpha: isDark ? 0.08 : 0.05),
           ),
           child: Icon(
             LucideIcons.menu,
@@ -286,7 +286,7 @@ class _WalletSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = walletName.trim().isEmpty ? 'My Wallet' : walletName.trim();
     return Material(
-      color: Colors.transparent,
+      color: AppColor.of(context).surface,
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
@@ -296,18 +296,18 @@ class _WalletSwitcher extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: colors.border.withOpacity(0.35)),
+              border: Border.all(color: colors.border.withValues(alpha: 0.35)),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  colors.primary.withOpacity(0.12),
-                  colors.surface.withOpacity(0.55),
+                  colors.primary.withValues(alpha: 0.12),
+                  colors.surface.withValues(alpha: 0.55),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -320,7 +320,7 @@ class _WalletSwitcher extends StatelessWidget {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.16),
+                    color: colors.primary.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   alignment: Alignment.center,
@@ -336,17 +336,6 @@ class _WalletSwitcher extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Wallet',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 10.2,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
                       Text(
                         title,
                         maxLines: 1,
@@ -401,24 +390,24 @@ class _ProfileActionButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: colors.border.withOpacity(0.08),
+          color: colors.border.withValues(alpha: 0.08),
         ),
         child: isLoading
             ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colors.primary,
-                ),
-              )
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: colors.primary,
+          ),
+        )
             : (isLoggedIn && user != null)
             ? UserAvatarMedium(user: user!, colors: colors)
             : Icon(
-                LucideIcons.userCircle2,
-                color: colors.textPrimary,
-                size: 22,
-              ),
+          LucideIcons.userCircle2,
+          color: colors.textPrimary,
+          size: 22,
+        ),
       ),
     );
   }

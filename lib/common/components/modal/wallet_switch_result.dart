@@ -31,7 +31,7 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _WalletSwitchSheet(
       colors: colors,
       activeId: currentActiveId,
@@ -67,6 +67,7 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
   bool _loading = true;
   bool _working = false;
   String? _error;
+  String? _togglingId;
 
   @override
   void initState() {
@@ -122,6 +123,40 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
         _loading = false;
         _error = e.toString();
       });
+    }
+  }
+
+  Future<void> _toggleActiveWallet(WalletViewModel wallet) async {
+    if (wallet.isActive || _togglingId != null) return;
+    setState(() => _togglingId = wallet.localId);
+    try {
+      final success = await WalletManager.I.switchWallet(localId: wallet.localId);
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Failed to switch wallet'),
+              backgroundColor: widget.colors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+      await _loadWallets();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to switch wallet'),
+            backgroundColor: widget.colors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _togglingId = null);
     }
   }
 
@@ -238,8 +273,6 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final topRadius = BorderRadius.circular(26);
-
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -253,15 +286,7 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
             ),
             decoration: BoxDecoration(
               color: widget.colors.surface,
-              borderRadius: BorderRadius.vertical(top: topRadius.topLeft),
-              border: Border.all(color: widget.colors.border.withOpacity(0.16)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
-                  blurRadius: 28,
-                  offset: const Offset(0, -8),
-                ),
-              ],
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               children: [
@@ -283,7 +308,7 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(
-                  color: Colors.black.withOpacity(0.16),
+                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.16),
                   child: const Center(child: CircularProgressIndicator()),
                 ),
               ),
@@ -365,7 +390,7 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: widget.colors.primary.withOpacity(0.1),
+                  color: widget.colors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 alignment: Alignment.center,
@@ -409,13 +434,15 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
               _WalletCard(
                 colors: widget.colors,
                 wallet: wallet,
-                isCurrent: wallet.localId == widget.activeId || wallet.isActive,
-                canDelete: wallet.localId != widget.activeId,
+                isCurrent: wallet.isActive,
+                isToggling: _togglingId == wallet.localId,
+                canDelete: !wallet.isActive,
+                onToggleActive: () => _toggleActiveWallet(wallet),
                 onTap: () => Navigator.pop(
                   context,
                   WalletSwitchResult(chosenWalletId: wallet.localId),
                 ),
-                onDelete: wallet.localId == widget.activeId
+                onDelete: wallet.isActive
                     ? null
                     : () => _deleteLocalWallet(wallet),
               ),
@@ -449,78 +476,49 @@ class _SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(18, 12, 12, 10),
       child: Column(
         children: [
-          Container(
-            width: 44,
-            height: 4,
-            decoration: BoxDecoration(
-              color: colors.border.withOpacity(0.65),
-              borderRadius: BorderRadius.circular(4),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colors.border.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colors.primary.withOpacity(0.2),
-                      colors.primary.withOpacity(0.08),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  LucideIcons.wallet,
-                  color: colors.primary,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Switch Wallet',
+                      'Wallets',
                       style: TextStyle(
                         color: colors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        letterSpacing: -0.2,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      '$totalCount wallet${totalCount == 1 ? '' : 's'} available',
+                      '$totalCount available',
                       style: TextStyle(
                         color: colors.textSecondary,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
                       ),
                     ),
                   ],
                 ),
               ),
-              AppTextButton(
+              IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(36, 36),
-                  padding: EdgeInsets.zero,
-                  shape: const CircleBorder(),
-                ),
-                child: Icon(
-                  LucideIcons.x,
-                  size: 18,
-                  color: colors.textSecondary,
-                ),
+                icon: Icon(LucideIcons.x, size: 18, color: colors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
             ],
           ),
@@ -555,7 +553,9 @@ class _WalletCard extends StatelessWidget {
     required this.colors,
     required this.wallet,
     required this.isCurrent,
+    this.isToggling = false,
     required this.canDelete,
+    required this.onToggleActive,
     required this.onTap,
     this.onDelete,
   });
@@ -563,125 +563,112 @@ class _WalletCard extends StatelessWidget {
   final AppColor colors;
   final WalletViewModel wallet;
   final bool isCurrent;
+  final bool isToggling;
   final bool canDelete;
+  final VoidCallback onToggleActive;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final bgColors = isCurrent
-        ? [colors.primary.withOpacity(0.16), colors.primary.withOpacity(0.07)]
-        : [
-            colors.background.withOpacity(0.5),
-            colors.surface.withOpacity(0.88),
-          ];
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: bgColors,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isCurrent
-                  ? colors.primary.withOpacity(0.4)
-                  : colors.border.withOpacity(0.22),
-              width: 1.2,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: colors.primary.withOpacity(isCurrent ? 0.22 : 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  LucideIcons.wallet2,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isCurrent
+              ? colors.primary.withValues(alpha: 0.04)
+              : colors.background.withValues(alpha: 0.52),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: colors.primary.withValues(alpha: isCurrent ? 0.1 : 0.06),
+              child: Text(
+                wallet.name.isNotEmpty ? wallet.name[0].toUpperCase() : 'W',
+                style: TextStyle(
                   color: colors.primary,
-                  size: 18,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      wallet.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _shortAddress(wallet.publicAddress ?? ''),
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _Tag(
-                          colors: colors,
-                          label: isCurrent ? 'Current' : 'Tap to switch',
-                          color: isCurrent ? colors.success : colors.info,
-                        ),
-                        if (wallet.syncedToBackend)
-                          _Tag(
-                            colors: colors,
-                            label: 'Synced',
-                            color: colors.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          wallet.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13.5,
                           ),
+                        ),
+                      ),
+                      if (isCurrent) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: colors.success.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Active',
+                            style: TextStyle(
+                              color: colors.success,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _shortAddress(wallet.publicAddress ?? ''),
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 11.5,
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            if (isToggling)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              SizedBox(
+                height: 26,
+                child: Switch.adaptive(
+                  value: isCurrent,
+                  activeColor: colors.primary,
+                  onChanged: isCurrent ? null : (_) => onToggleActive(),
                 ),
               ),
-              if (canDelete && onDelete != null)
-                AppTextButton(
-                  onPressed: onDelete,
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(36, 36),
-                    padding: EdgeInsets.zero,
-                    shape: const CircleBorder(),
-                  ),
-                  child: Icon(
-                    LucideIcons.trash2,
-                    size: 16,
-                    color: colors.error,
-                  ),
-                )
-              else
-                Icon(
-                  isCurrent
-                      ? LucideIcons.checkCircle2
-                      : LucideIcons.chevronRight,
-                  size: 18,
-                  color: isCurrent ? colors.success : colors.textSecondary,
-                ),
-            ],
-          ),
+            if (canDelete && onDelete != null)
+              IconButton(
+                onPressed: onDelete,
+                icon: Icon(LucideIcons.trash2, size: 14, color: colors.error.withValues(alpha: 0.5)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              ),
+          ],
         ),
       ),
     );
@@ -711,24 +698,18 @@ class _CloudWalletCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colors.warning.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.warning.withOpacity(0.24)),
+        color: colors.warning.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: colors.warning.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: Icon(LucideIcons.cloud, size: 18, color: colors.warning),
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: colors.warning.withValues(alpha: 0.1),
+                child: Icon(LucideIcons.cloud, size: 15, color: colors.warning),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -773,7 +754,8 @@ class _CloudWalletCard extends StatelessWidget {
               onPressed: onRemove,
               style: OutlinedButton.styleFrom(
                 foregroundColor: colors.error,
-                side: BorderSide(color: colors.error.withOpacity(0.32)),
+                side: BorderSide.none,
+                backgroundColor: colors.error.withValues(alpha: 0.08),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 10,
@@ -812,9 +794,8 @@ class _Tag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.28)),
       ),
       child: Text(
         label,
@@ -843,59 +824,56 @@ class _SheetFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(top: BorderSide(color: colors.border.withOpacity(0.16))),
-      ),
-      child: Row(
-        children: [
-          if (allowGenerate)
-            Expanded(
-              child: AppFilledButton.icon(
-                onPressed: () => Navigator.pop(
-                  context,
-                  const WalletSwitchResult(createNew: true),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Row(
+          children: [
+            if (allowGenerate)
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(
+                      context,
+                      const WalletSwitchResult(createNew: true),
+                    ),
+                    icon: const Icon(LucideIcons.plus, size: 15),
+                    label: Text(generateLabel),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      foregroundColor: AppColor.of(context).onPrimary,
+                      elevation: 0,
+                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-                icon: const Icon(LucideIcons.plus, size: 16),
-                label: Text(
-                  generateLabel,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            if (allowGenerate) const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(
+                    context,
+                    const WalletSwitchResult(importRequested: true),
+                  ),
+                  icon: const Icon(LucideIcons.download, size: 15),
+                  label: Text(importLabel),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.textPrimary,
+                    side: BorderSide.none,
+                    backgroundColor: colors.background.withValues(alpha: 0.45),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ),
             ),
-          if (allowGenerate) const SizedBox(width: 10),
-          Expanded(
-            child: AppOutlinedButton.icon(
-              onPressed: () => Navigator.pop(
-                context,
-                const WalletSwitchResult(importRequested: true),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colors.textPrimary,
-                side: BorderSide(color: colors.border.withOpacity(0.34)),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(LucideIcons.download, size: 16),
-              label: Text(
-                importLabel,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

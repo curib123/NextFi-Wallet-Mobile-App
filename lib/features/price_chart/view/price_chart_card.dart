@@ -125,7 +125,7 @@ class _PriceChartView extends StatelessWidget {
                             child: Text(
                               displayTitle,
                               style: TextStyle(
-                                color: c.onSurface.withOpacity(0.8),
+                                color: c.onSurface.withValues(alpha: 0.8),
                                 fontWeight: FontWeight.w600,
                                 fontSize: compact ? 12 : 13,
                               ),

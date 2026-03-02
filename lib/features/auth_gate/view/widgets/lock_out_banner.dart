@@ -12,10 +12,10 @@ class LockoutBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.error.withOpacity(0.08),
+        color: colors.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: colors.error.withOpacity(0.15),
+          color: colors.error.withValues(alpha: 0.15),
           width: 1,
         ),
       ),

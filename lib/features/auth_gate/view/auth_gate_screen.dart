@@ -366,13 +366,13 @@ class _LockIcon extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                (unlocked ? Colors.green : colors.primary).withOpacity(.15),
-                (unlocked ? Colors.green : colors.primary).withOpacity(.05),
+                (unlocked ? colors.success : colors.primary).withValues(alpha: .15),
+                (unlocked ? colors.success : colors.primary).withValues(alpha: .05),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: (unlocked ? Colors.green : colors.primary).withOpacity(.2),
+                color: (unlocked ? colors.success : colors.primary).withValues(alpha: .2),
                 blurRadius: 30,
                 spreadRadius: 5,
               ),
@@ -382,7 +382,7 @@ class _LockIcon extends StatelessWidget {
             child: Icon(
               unlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
               size: 36,
-              color: unlocked ? Colors.green : colors.primary,
+              color: unlocked ? colors.success : colors.primary,
             ),
           ),
         );
@@ -420,17 +420,17 @@ class _PinDotsDisplay extends StatelessWidget {
               shape: BoxShape.circle,
               color: isFilled
                   ? colors.primary
-                  : colors.primary.withOpacity(.15),
+                  : colors.primary.withValues(alpha: .15),
               border: Border.all(
                 color: isFilled
                     ? colors.primary
-                    : colors.primary.withOpacity(.3),
+                    : colors.primary.withValues(alpha: .3),
                 width: isFilled ? 0 : 2,
               ),
               boxShadow: isFilled
                   ? [
                 BoxShadow(
-                  color: colors.primary.withOpacity(.4),
+                  color: colors.primary.withValues(alpha: .4),
                   blurRadius: 8,
                   spreadRadius: 1,
                 ),
@@ -579,7 +579,7 @@ class _KeyButtonState extends State<_KeyButton>
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.colors.primary.withOpacity(_controller.value * 0.15),
+                color: widget.colors.primary.withValues(alpha: _controller.value * 0.15),
               ),
               child: Center(
                 child: isBackspace
@@ -588,7 +588,7 @@ class _KeyButtonState extends State<_KeyButton>
                   size: 24,
                   color: widget.enabled
                       ? widget.colors.textPrimary
-                      : widget.colors.textSecondary.withOpacity(.5),
+                      : widget.colors.textSecondary.withValues(alpha: .5),
                 )
                     : Text(
                   widget.label,
@@ -597,7 +597,7 @@ class _KeyButtonState extends State<_KeyButton>
                     fontWeight: FontWeight.w600,
                     color: widget.enabled
                         ? widget.colors.textPrimary
-                        : widget.colors.textSecondary.withOpacity(.5),
+                        : widget.colors.textSecondary.withValues(alpha: .5),
                   ),
                 ),
               ),
@@ -657,7 +657,7 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.colors.primary.withOpacity(_controller.value * 0.15),
+                color: widget.colors.primary.withValues(alpha: _controller.value * 0.15),
               ),
               child: Center(
                 child: Icon(
@@ -665,7 +665,7 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
                   size: 28,
                   color: widget.enabled
                       ? widget.colors.primary
-                      : widget.colors.primary.withOpacity(.5),
+                      : widget.colors.primary.withValues(alpha: .5),
                 ),
               ),
             ),
@@ -694,9 +694,9 @@ class _BiometricButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(30),
-          color: colors.surface.withOpacity(.5),
+          color: colors.surface.withValues(alpha: .5),
           border: Border.all(
-            color: colors.primary.withOpacity(.2),
+            color: colors.primary.withValues(alpha: .2),
             width: 1,
           ),
         ),

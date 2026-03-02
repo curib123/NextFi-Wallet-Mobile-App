@@ -11,7 +11,7 @@ Future<String?> showFiatPickerBottomSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    backgroundColor: AppColor.of(context).surface,
     builder: (_) => const _FiatPickerSheet(),
   );
 }
@@ -99,7 +99,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
                 blurRadius: 24,
                 offset: const Offset(0, -4),
               ),
@@ -114,7 +114,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                 height: 4,
                 margin: const EdgeInsets.only(top: 12, bottom: 20),
                 decoration: BoxDecoration(
-                  color: colors.border.withOpacity(0.5),
+                  color: colors.border.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(100),
                 ),
               ),
@@ -132,15 +132,15 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: colors.primary.withOpacity(0.25),
+                            color: colors.primary.withValues(alpha: 0.25),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: const Icon(
+                      child: Icon(
                         LucideIcons.badgeDollarSign,
-                        color: Colors.white,
+                        color: AppColor.of(context).onPrimary,
                         size: 20,
                       ),
                     ),
@@ -170,7 +170,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                       ),
                     ),
                     Material(
-                      color: Colors.transparent,
+                      color: AppColor.of(context).surface,
                       child: InkWell(
                         onTap: () => _close(null),
                         borderRadius: BorderRadius.circular(12),
@@ -200,7 +200,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                     color: colors.surface,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: colors.border.withOpacity(0.3),
+                      color: colors.border.withValues(alpha: 0.3),
                     ),
                   ),
                   child: TextField(
@@ -214,7 +214,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                       hintText: 'Search currencies...',
                       hintStyle: TextStyle(
                         fontSize: 14,
-                        color: colors.textSecondary.withOpacity(0.5),
+                        color: colors.textSecondary.withValues(alpha: 0.5),
                       ),
                       prefixIcon: Icon(
                         LucideIcons.search,
@@ -254,10 +254,10 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: colors.primary.withOpacity(0.1),
+                      color: colors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: colors.primary.withOpacity(0.3),
+                        color: colors.primary.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
@@ -293,7 +293,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                       Icon(
                         LucideIcons.searchX,
                         size: 48,
-                        color: colors.textSecondary.withOpacity(0.3),
+                        color: colors.textSecondary.withValues(alpha: 0.3),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -309,7 +309,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                         'Try a different search term',
                         style: TextStyle(
                           fontSize: 13,
-                          color: colors.textSecondary.withOpacity(0.7),
+                          color: colors.textSecondary.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -374,21 +374,21 @@ class _CurrencyTileState extends State<_CurrencyTile> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: widget.isSelected
-              ? widget.colors.primary.withOpacity(0.08)
+              ? widget.colors.primary.withValues(alpha: 0.08)
               : widget.colors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: widget.isSelected
-                ? widget.colors.primary.withOpacity(0.4)
+                ? widget.colors.primary.withValues(alpha: 0.4)
                 : _isPressed
-                ? widget.colors.primary.withOpacity(0.3)
-                : widget.colors.border.withOpacity(0.2),
+                ? widget.colors.primary.withValues(alpha: 0.3)
+                : widget.colors.border.withValues(alpha: 0.2),
             width: widget.isSelected ? 2 : 1,
           ),
           boxShadow: widget.isSelected
               ? [
             BoxShadow(
-              color: widget.colors.primary.withOpacity(0.15),
+              color: widget.colors.primary.withValues(alpha: 0.15),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -396,7 +396,7 @@ class _CurrencyTileState extends State<_CurrencyTile> {
               : _isPressed
               ? [
             BoxShadow(
-              color: widget.colors.primary.withOpacity(0.1),
+              color: widget.colors.primary.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -410,7 +410,7 @@ class _CurrencyTileState extends State<_CurrencyTile> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: widget.colors.border.withOpacity(0.1),
+                color: widget.colors.border.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
@@ -450,12 +450,12 @@ class _CurrencyTileState extends State<_CurrencyTile> {
                             gradient: widget.colors.primaryGradient,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Active',
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: AppColor.of(context).onPrimary,
                             ),
                           ),
                         ),
@@ -482,14 +482,14 @@ class _CurrencyTileState extends State<_CurrencyTile> {
               decoration: BoxDecoration(
                 color: widget.isSelected
                     ? widget.colors.primary
-                    : widget.colors.border.withOpacity(0.2),
+                    : widget.colors.border.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: widget.isSelected
-                  ? const Icon(
+                  ? Icon(
                 LucideIcons.check,
                 size: 16,
-                color: Colors.white,
+                color: AppColor.of(context).onPrimary,
               )
                   : null,
             ),

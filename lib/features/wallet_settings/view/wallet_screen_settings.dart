@@ -46,7 +46,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       final colors = AppColor.of(context);
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          statusBarColor: AppColor.of(context).surface,
           statusBarIconBrightness: colors == AppColor.dark
               ? Brightness.light
               : Brightness.dark,
@@ -151,7 +151,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
       builder: (ctx) => _RenameBottomSheet(controller: ctrl, colors: colors),
     );
 
@@ -318,18 +318,18 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
   PreferredSizeWidget _buildAppBar(AppColor colors, state) {
     return AppBar(
       elevation: 0,
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
+      backgroundColor: AppColor.of(context).surface,
+      surfaceTintColor: AppColor.of(context).surface,
       leading: Container(
         margin: const EdgeInsets.only(left: 8),
         child: IconButton(
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: colors.surface.withOpacity(0.9),
+              color: colors.surface.withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: colors.border.withOpacity(0.15),
+                color: colors.border.withValues(alpha: 0.15),
                 width: 1.5,
               ),
             ),
@@ -346,10 +346,10 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
       title: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: colors.surface.withOpacity(0.9),
+          color: colors.surface.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: colors.border.withOpacity(0.15),
+            color: colors.border.withValues(alpha: 0.15),
             width: 1.5,
           ),
         ),
@@ -370,7 +370,7 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
               state.walletName,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: colors.textSecondary.withOpacity(0.7),
+                color: colors.textSecondary.withValues(alpha: 0.7),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.1,
@@ -395,12 +395,12 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.primary.withOpacity(0.06),
-            colors.primary.withOpacity(0.03),
+            colors.primary.withValues(alpha: 0.06),
+            colors.primary.withValues(alpha: 0.03),
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.primary.withOpacity(0.12), width: 1.5),
+        border: Border.all(color: colors.primary.withValues(alpha: 0.12), width: 1.5),
       ),
       child: Row(
         children: [
@@ -427,9 +427,9 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colors.error.withOpacity(0.1),
+        color: colors.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.error.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: colors.error.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Row(
         children: [
@@ -465,22 +465,22 @@ class _WalletScreenSettingsState extends State<WalletScreenSettings>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [colors.surface, colors.surface.withOpacity(0.95)],
+            colors: [colors.surface, colors.surface.withValues(alpha: 0.95)],
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: colors.border.withOpacity(0.15),
+            color: colors.border.withValues(alpha: 0.15),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: AppColor.of(context).textPrimary.withValues(alpha: 0.08),
               blurRadius: 24,
               offset: const Offset(0, 8),
               spreadRadius: -4,
             ),
             BoxShadow(
-              color: colors.primary.withOpacity(0.04),
+              color: colors.primary.withValues(alpha: 0.04),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -558,24 +558,24 @@ class _ModernActionButtonState extends State<_ModernActionButton> {
                   end: Alignment.bottomRight,
                   colors: _isPressed
                       ? [
-                          widget.colors.primary.withOpacity(0.9),
-                          widget.colors.primary.withOpacity(0.8),
+                          widget.colors.primary.withValues(alpha: 0.9),
+                          widget.colors.primary.withValues(alpha: 0.8),
                         ]
                       : [
                           widget.colors.primary,
-                          widget.colors.primary.withOpacity(0.9),
+                          widget.colors.primary.withValues(alpha: 0.9),
                         ],
                 )
               : null,
           color: !widget.isPrimary
               ? (_isPressed
-                    ? widget.colors.background.withOpacity(0.8)
-                    : widget.colors.background.withOpacity(0.5))
+                    ? widget.colors.background.withValues(alpha: 0.8)
+                    : widget.colors.background.withValues(alpha: 0.5))
               : null,
           borderRadius: BorderRadius.circular(14),
           border: !widget.isPrimary
               ? Border.all(
-                  color: widget.colors.border.withOpacity(0.25),
+                  color: widget.colors.border.withValues(alpha: 0.25),
                   width: 1.5,
                 )
               : null,
@@ -584,7 +584,7 @@ class _ModernActionButtonState extends State<_ModernActionButton> {
               : [
                   if (widget.isPrimary)
                     BoxShadow(
-                      color: widget.colors.primary.withOpacity(0.3),
+                      color: widget.colors.primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -597,7 +597,7 @@ class _ModernActionButtonState extends State<_ModernActionButton> {
               widget.icon,
               size: 18,
               color: widget.isPrimary
-                  ? Colors.white
+                  ? AppColor.of(context).onPrimary
                   : widget.colors.textPrimary,
             ),
             const SizedBox(width: 10),
@@ -606,7 +606,7 @@ class _ModernActionButtonState extends State<_ModernActionButton> {
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: widget.isPrimary
-                    ? Colors.white
+                    ? AppColor.of(context).onPrimary
                     : widget.colors.textPrimary,
                 fontSize: 14,
                 letterSpacing: 0.2,
@@ -632,10 +632,10 @@ class _RenameBottomSheet extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [colors.surface, colors.surface.withOpacity(0.98)],
+          colors: [colors.surface, colors.surface.withValues(alpha: 0.98)],
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: colors.border.withOpacity(0.15), width: 1.5),
+        border: Border.all(color: colors.border.withValues(alpha: 0.15), width: 1.5),
       ),
       child: Padding(
         padding: EdgeInsets.only(
@@ -653,7 +653,7 @@ class _RenameBottomSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: colors.border.withOpacity(0.3),
+                  color: colors.border.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -682,10 +682,10 @@ class _RenameBottomSheet extends StatelessWidget {
                 counterText: "",
                 hintText: "Enter wallet name",
                 hintStyle: TextStyle(
-                  color: colors.textSecondary.withOpacity(0.5),
+                  color: colors.textSecondary.withValues(alpha: 0.5),
                 ),
                 filled: true,
-                fillColor: colors.background.withOpacity(0.6),
+                fillColor: colors.background.withValues(alpha: 0.6),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 16,
@@ -693,14 +693,14 @@ class _RenameBottomSheet extends StatelessWidget {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: colors.border.withOpacity(0.25),
+                    color: colors.border.withValues(alpha: 0.25),
                     width: 1.5,
                   ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide(
-                    color: colors.border.withOpacity(0.25),
+                    color: colors.border.withValues(alpha: 0.25),
                     width: 1.5,
                   ),
                 ),
@@ -767,15 +767,15 @@ class _SheetButton extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: isPrimary
             ? colors.primary
-            : colors.background.withOpacity(0.6),
-        foregroundColor: isPrimary ? Colors.white : colors.textPrimary,
+            : colors.background.withValues(alpha: 0.6),
+        foregroundColor: isPrimary ? AppColor.of(context).onPrimary : colors.textPrimary,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: isPrimary
               ? BorderSide.none
-              : BorderSide(color: colors.border.withOpacity(0.25), width: 1.5),
+              : BorderSide(color: colors.border.withValues(alpha: 0.25), width: 1.5),
         ),
       ),
       onPressed: onPressed,

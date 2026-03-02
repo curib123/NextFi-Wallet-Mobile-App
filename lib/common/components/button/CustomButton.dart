@@ -32,19 +32,19 @@ class CustomButton extends StatelessWidget {
 
     switch (type) {
       case ButtonType.filled:
-        fgColor = Colors.white;
+        fgColor = colors.onPrimary;
         bgColor = colors.primary;
-        borderColor = Colors.transparent;
+        borderColor = colors.surface;
         break;
       case ButtonType.outlined:
         fgColor = colors.primary;
-        bgColor = Colors.transparent;
+        bgColor = colors.surface;
         borderColor = colors.primary;
         break;
       case ButtonType.disabled:
-        fgColor = colors.textSecondary.withOpacity(0.75);
+        fgColor = colors.textSecondary.withValues(alpha: 0.75);
         bgColor = colors.background; // subtle filled look
-        borderColor = colors.border.withOpacity(0.6);
+        borderColor = colors.border.withValues(alpha: 0.6);
         break;
     }
 
@@ -90,14 +90,14 @@ class CustomButton extends StatelessWidget {
       final style = ButtonStyle(
         backgroundColor: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.disabled)) {
-            return colors.primary.withOpacity(0.45);
+            return colors.primary.withValues(alpha: 0.45);
           }
           return bgColor!;
         }),
         foregroundColor: MaterialStatePropertyAll(fgColor),
         overlayColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.disabled)) return Colors.transparent;
-          return Colors.white.withOpacity(0.08);
+          if (states.contains(MaterialState.disabled)) return colors.surface;
+          return colors.onPrimary.withValues(alpha: 0.08);
         }),
         padding: MaterialStatePropertyAll(padding),
         shape: MaterialStatePropertyAll(
@@ -119,24 +119,24 @@ class CustomButton extends StatelessWidget {
       final style = ButtonStyle(
         backgroundColor: MaterialStateProperty.resolveWith((states) {
           if (type == ButtonType.disabled) return bgColor!;
-          return Colors.transparent;
+          return colors.surface;
         }),
         foregroundColor: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.disabled)) {
-            return colors.textSecondary.withOpacity(0.75);
+            return colors.textSecondary.withValues(alpha: 0.75);
           }
           return fgColor;
         }),
         overlayColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.disabled)) return Colors.transparent;
-          return colors.primary.withOpacity(0.06);
+          if (states.contains(MaterialState.disabled)) return colors.surface;
+          return colors.primary.withValues(alpha: 0.06);
         }),
         side: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.disabled)) {
             return BorderSide(color: borderColor, width: 1.3);
           }
           return BorderSide(
-            color: type == ButtonType.outlined ? borderColor : Colors.transparent,
+            color: type == ButtonType.outlined ? borderColor : colors.surface,
             width: 1.3,
           );
         }),
@@ -160,3 +160,4 @@ class CustomButton extends StatelessWidget {
     );
   }
 }
+

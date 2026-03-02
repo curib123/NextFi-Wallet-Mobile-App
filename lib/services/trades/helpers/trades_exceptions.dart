@@ -1,11 +1,11 @@
-class ApiException implements Exception {
+class TradeApiException implements Exception {
   final int statusCode;
   final String message;
   final String? body;
 
-  ApiException(this.statusCode, this.message, {this.body});
+  TradeApiException(this.statusCode, this.message, {this.body});
 
   @override
   String toString() =>
-      'ApiException($statusCode): $message${body == null ? '' : ' | $body'}';
+      'TradeApiException($statusCode): $message${body == null ? '' : ' | $body'}';
 }

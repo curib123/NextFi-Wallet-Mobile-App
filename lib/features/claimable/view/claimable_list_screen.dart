@@ -146,7 +146,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       decoration: BoxDecoration(
         color: c.background,
         border: Border(
-          bottom: BorderSide(color: c.border.withOpacity(0.1), width: 1),
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.1), width: 1),
         ),
       ),
       child: Row(
@@ -179,7 +179,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     return Container(
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: c.border.withOpacity(0.1), width: 1),
+          bottom: BorderSide(color: c.border.withValues(alpha: 0.1), width: 1),
         ),
       ),
       child: TabBar(
@@ -209,7 +209,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: c.primary.withOpacity(0.1),
+                      color: c.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -240,7 +240,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: c.primary.withOpacity(0.1),
+                      color: c.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -323,7 +323,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
             Icon(
               LucideIcons.alertTriangle,
               size: 32,
-              color: c.error.withOpacity(0.6),
+              color: c.error.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 12),
             Text(
@@ -336,7 +336,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
               onPressed: _refresh,
               style: OutlinedButton.styleFrom(
                 foregroundColor: c.primary,
-                side: BorderSide(color: c.border.withOpacity(0.2)),
+                side: BorderSide(color: c.border.withValues(alpha: 0.2)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -415,9 +415,9 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.15), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -446,7 +446,7 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       onPressed: _openCreate,
       backgroundColor: c.primary,
       elevation: 2,
-      child: const Icon(LucideIcons.plus, color: Colors.white, size: 22),
+      child: Icon(LucideIcons.plus, color: c.onPrimary, size: 22),
     );
   }
 }

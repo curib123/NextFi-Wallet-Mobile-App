@@ -38,7 +38,7 @@ class PhraseCard extends StatelessWidget {
           color: colors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: colors.border.withOpacity(0.15),
+            color: colors.border.withValues(alpha: 0.15),
             width: 1,
           ),
         ),
@@ -49,7 +49,7 @@ class PhraseCard extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: colors.primary.withOpacity(0.1),
+                color: colors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -89,7 +89,7 @@ class PhraseCard extends StatelessWidget {
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: colors.border.withOpacity(0.15),
+          color: colors.border.withValues(alpha: 0.15),
           width: 1,
         ),
       ),
@@ -110,7 +110,7 @@ class PhraseCard extends StatelessWidget {
               color: colors.background,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: colors.border.withOpacity(0.12),
+                color: colors.border.withValues(alpha: 0.12),
                 width: 1,
               ),
             ),
@@ -120,7 +120,7 @@ class PhraseCard extends StatelessWidget {
                   width: 26,
                   height: 26,
                   decoration: BoxDecoration(
-                    color: colors.primary.withOpacity(0.08),
+                    color: colors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   alignment: Alignment.center,

@@ -1,19 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/common/components/button/app_buttons.dart';
-import 'package:next_fi/features/merchant_request/view/merchant_request_screen.dart';
-import 'package:next_fi/features/trades/view/trade_order_screen.dart';
-import 'package:next_fi/features/trades/view/trade_template_screen.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
+import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:next_fi/features/offers/view/trade_order_screen.dart';
+import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
-import 'package:next_fi/services/oath2.0/auth_service.dart';
-import 'package:next_fi/services/profile/profile_core_service.dart';
-import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/models/trades_models.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MERCHANT TRADES SCREEN  —  seller/merchant perspective
+// Redesigned: Stripe-grade fintech UI — precise typography, clean density
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MerchantTradesScreen extends StatefulWidget {
   const MerchantTradesScreen({super.key});
@@ -22,454 +22,841 @@ class MerchantTradesScreen extends StatefulWidget {
   State<MerchantTradesScreen> createState() => _MerchantTradesScreenState();
 }
 
-class _MerchantTradesScreenState extends State<MerchantTradesScreen> {
-  final _auth = AuthService();
-  final _profile = ProfileCoreService.I;
-  final _trades = TradesCoreService.I;
-  final _searchCtrl = TextEditingController();
-  final _money = NumberFormat.currency(symbol: '', decimalDigits: 2);
+class _MerchantTradesScreenState extends State<MerchantTradesScreen>
+    with WidgetsBindingObserver {
+  final _tradesCore = TradesCoreService.I;
 
   bool _loading = true;
-  bool _isMerchant = false;
   String? _error;
-  String? _currentUserId;
-  String? _statusFilter;
-  List<TradeModel> _items = const [];
-  Timer? _refreshTimer;
+  List<TradeModel> _trades = const [];
+  bool? _activeFilter;
 
   @override
   void initState() {
     super.initState();
-    _bootstrap();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      _loadTrades(showLoader: false);
-    });
+    WidgetsBinding.instance.addObserver(this);
+    _load();
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
-    _searchCtrl.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      try {
-        _currentUserId = (await _auth.currentUser).id;
-      } catch (_) {
-        _currentUserId = null;
-      }
-      final me = await _profile.getMe();
-      final isMerchant = me?.isMerchant == true;
-      if (!mounted) return;
-      if (!isMerchant) {
-        setState(() {
-          _isMerchant = false;
-          _loading = false;
-          _items = const [];
-        });
-        return;
-      }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
+  }
 
-      setState(() => _isMerchant = true);
-      await _loadTrades(showLoader: false);
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() { _loading = true; _error = null; });
+    try {
+      final trades = await _tradesCore.list();
+      if (!mounted) return;
+      setState(() { _trades = trades; _loading = false; });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
+      setState(() { _error = e.toString(); _loading = false; });
+      if (!silent) {
+        showFloatingSnackBar(context,
+            message: 'Failed to load trades.', type: SnackBarType.error);
+      }
     }
   }
 
-  Future<void> _loadTrades({required bool showLoader}) async {
-    if (!_isMerchant && !showLoader) return;
-
-    if (showLoader) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-
-    try {
-      final query = TradesQuery(
-        status: _statusFilter,
-        q: _searchCtrl.text.trim().isEmpty ? null : _searchCtrl.text.trim(),
-        page: 1,
-        limit: 100,
-      );
-      final items = await _trades.listSellerTrades(query);
-      if (!mounted) return;
-      items.sort(
-        (a, b) => (b.updatedAt ?? b.createdAt ?? DateTime(1970)).compareTo(
-          a.updatedAt ?? a.createdAt ?? DateTime(1970),
-        ),
-      );
-      setState(() {
-        _items = items;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
-    }
+  List<TradeModel> get _filtered {
+    if (_activeFilter == null) return _trades;
+    if (_activeFilter == true) return _trades.where((t) => t.status.isActive).toList();
+    return _trades.where((t) => t.status.isTerminal).toList();
   }
 
-  Future<void> _openTrade(TradeModel trade) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TradeOrderScreen(
-          tradeId: trade.id,
-          asSeller: true,
-          mode: TradeTemplateMode.sell,
-        ),
-      ),
+  void _openTrade(TradeModel trade) {
+    final offerMap = trade.offer;
+    final offer = offerMap != null
+        ? OfferModel.fromJson(offerMap)
+        : OfferModel(
+      id: trade.offerId,
+      asset: trade.asset,
+      fiatCurrency: trade.fiatCurrency,
+      type: OfferType.sell,
     );
-    if (mounted) {
-      await _loadTrades(showLoader: false);
-    }
-  }
-
-  String _statusLabel(TradeStatus status, String raw) {
-    switch (status) {
-      case TradeStatus.created:
-        return 'Created';
-      case TradeStatus.awaitingPayment:
-        return 'Awaiting Payment';
-      case TradeStatus.paid:
-        return 'Paid';
-      case TradeStatus.released:
-        return 'Released';
-      case TradeStatus.cancelled:
-        return 'Cancelled';
-      case TradeStatus.disputed:
-        return 'Disputed';
-      case TradeStatus.expired:
-        return 'Expired';
-      case TradeStatus.refunded:
-        return 'Refunded';
-      case TradeStatus.unknown:
-        return raw;
-      case TradeStatus.awaitingFiat:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.fiatSent:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.fiatConfirmed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.deliveryCbCreated:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.claimed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.awaitingCrypto:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.cryptoConfirmed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.awaitingUserConfirm:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.overdue:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.completed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-    }
-  }
-
-  Color _statusColor(AppColor c, TradeStatus status) {
-    switch (status) {
-      case TradeStatus.created:
-      case TradeStatus.awaitingPayment:
-        return c.warning;
-      case TradeStatus.paid:
-      case TradeStatus.released:
-        return c.success;
-      case TradeStatus.disputed:
-        return c.error;
-      case TradeStatus.cancelled:
-      case TradeStatus.expired:
-      case TradeStatus.refunded:
-      case TradeStatus.unknown:
-        return c.textSecondary;
-      case TradeStatus.awaitingFiat:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.fiatSent:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.fiatConfirmed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.deliveryCbCreated:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.claimed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.awaitingCrypto:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.cryptoConfirmed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.awaitingUserConfirm:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.overdue:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-      case TradeStatus.completed:
-        // TODO: Handle this case.
-        throw UnimplementedError();
-    }
-  }
-
-  int get _openCount => _items.where((e) => !e.isFinalStatus).length;
-  int get _paidCount =>
-      _items.where((e) => e.status == TradeStatus.paid).length;
-  int get _disputedCount =>
-      _items.where((e) => e.status == TradeStatus.disputed).length;
-  int get _pendingChatCount {
-    final me = _currentUserId?.trim() ?? '';
-    if (me.isEmpty) return 0;
-    var count = 0;
-    for (final trade in _items) {
-      if (trade.isFinalStatus || trade.messages.isEmpty) continue;
-      final last = trade.messages.last;
-      if (last.senderId!.trim().isNotEmpty && last.senderId != me) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  String _counterpartyTitle(TradeModel trade) {
-    final party = trade.counterpartyFor(_currentUserId);
-    if (party != null) {
-      final display = party.displayName?.trim() ?? '';
-      if (display.isNotEmpty) return display;
-      final name = party.name.trim();
-      if (name.isNotEmpty) return name;
-      final username = party.username?.trim() ?? '';
-      if (username.isNotEmpty) return '@$username';
-      final email = party.email.trim();
-      if (email.isNotEmpty) return email;
-    }
-
-    final isSeller = trade.sellerId == (_currentUserId?.trim() ?? '');
-    final fallbackId = isSeller ? trade.buyerId : trade.sellerId;
-    if (fallbackId.isNotEmpty) return fallbackId;
-    return 'Counterparty';
-  }
-
-  String _counterpartySubtitle(TradeModel trade) {
-    final party = trade.counterpartyFor(_currentUserId);
-    if (party == null) return '';
-    final username = party.username?.trim() ?? '';
-    final email = party.email.trim();
-    if (username.isNotEmpty && email.isNotEmpty) return '@$username | $email';
-    if (username.isNotEmpty) return '@$username';
-    if (email.isNotEmpty) return email;
-    return '';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TradeOrderScreen(trade: trade, offer: offer),
+      ),
+    ).then((_) => _load(silent: true));
   }
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final filteredTrades = _filtered;
 
     return Scaffold(
       backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleSpacing: 20,
-        title: Text(
-          'Merchant Trades',
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.4,
-          ),
-        ),
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: IconButton(
-            icon: Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: c.textPrimary,
-              size: 18,
-            ),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loading ? null : _bootstrap,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : !_isMerchant
-          ? _NotMerchantView(
-              c: c,
-              onOpenRequest: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MerchantRequestScreen(),
-                  ),
-                );
-              },
-            )
-          : RefreshIndicator(
-              onRefresh: () => _loadTrades(showLoader: false),
-              color: c.primary,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-                children: [
-                  _HeroCard(
-                    c: c,
-                    openCount: _openCount,
-                    paidCount: _paidCount,
-                    disputedCount: _disputedCount,
-                    pendingChatCount: _pendingChatCount,
-                  ),
-                  const SizedBox(height: 18),
-                  _SectionLabel(c: c, label: 'FILTERS'),
-                  const SizedBox(height: 8),
-                  _FilterCard(
-                    c: c,
-                    searchCtrl: _searchCtrl,
-                    statusFilter: _statusFilter,
-                    onSearch: () => _loadTrades(showLoader: true),
-                    onStatusChanged: (value) {
-                      setState(() => _statusFilter = value);
-                      _loadTrades(showLoader: true);
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  _SectionLabel(c: c, label: 'INCOMING TRADES'),
-                  const SizedBox(height: 8),
-                  if (_error != null)
-                    _ErrorCard(c: c, message: _error!, onRetry: _bootstrap)
-                  else if (_items.isEmpty)
-                    _EmptyCard(c: c)
-                  else
-                    ..._items.map(
-                      (trade) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _TradeCard(
-                          c: c,
-                          trade: trade,
-                          priceLabel: _money.format(trade.price ?? 0),
-                          statusLabel: _statusLabel(
-                            trade.status,
-                            trade.statusRaw,
-                          ),
-                          statusColor: _statusColor(c, trade.status),
-                          counterpartyTitle: _counterpartyTitle(trade),
-                          counterpartySubtitle: _counterpartySubtitle(trade),
-                          hasUnread:
-                              !trade.isFinalStatus &&
-                              trade.messages.isNotEmpty &&
-                              trade.messages.last.senderId !=
-                                  (_currentUserId ?? ''),
-                          onOpen: () => _openTrade(trade),
-                        ),
-                      ),
-                    ),
-                ],
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──────────────────────────────────────────────────────
+            _Header(c: c, onRefresh: _load),
+
+            // ── Summary Strip (only when loaded with data) ──────────────────
+            if (!_loading && _error == null && _trades.isNotEmpty)
+              _SummaryStrip(c: c, trades: _trades),
+
+            // ── Filter Tabs ──────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: _FilterRow(
+                c: c,
+                selected: _activeFilter,
+                counts: {
+                  null: _trades.length,
+                  true: _trades.where((t) => t.status.isActive).length,
+                  false: _trades.where((t) => t.status.isTerminal).length,
+                },
+                onChanged: (v) => setState(() => _activeFilter = v),
               ),
             ),
+
+            // ── Section Label ─────────────────────────────────────────────
+            if (!_loading && _error == null && filteredTrades.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Row(
+                  children: [
+                    Text(
+                      '${filteredTrades.length} trade${filteredTrades.length == 1 ? '' : 's'}',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── Body ─────────────────────────────────────────────────────────
+            Expanded(
+              child: _loading
+                  ? const PageLoader(label: 'Loading trades…')
+                  : _error != null
+                  ? _ErrorState(c: c, error: _error!, onRetry: _load)
+                  : RefreshIndicator(
+                color: c.primary,
+                onRefresh: _load,
+                child: filteredTrades.isEmpty
+                    ? _EmptyState(c: c, filter: _activeFilter)
+                    : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                  itemCount: filteredTrades.length,
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _TradeTile(
+                      c: c,
+                      trade: filteredTrades[i],
+                      onTap: () => _openTrade(filteredTrades[i]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _NotMerchantView extends StatelessWidget {
-  const _NotMerchantView({required this.c, required this.onOpenRequest});
+// ─── Header ───────────────────────────────────────────────────────────────────
 
+class _Header extends StatelessWidget {
+  const _Header({required this.c, required this.onRefresh});
   final AppColor c;
-  final VoidCallback onOpenRequest;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: c.border.withOpacity(0.25)),
+    final canPop = Navigator.of(context).canPop();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+      child: Row(
+        children: [
+          // Back button — only shown when there's a route to pop
+          if (canPop) ...[
+            _IconBtn(
+              c: c,
+              icon: Icons.arrow_back_ios_new_rounded,
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(width: 10),
+          ],
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Trades',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    letterSpacing: -0.8,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Your merchant activity',
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
+          _IconBtn(
+            c: c,
+            icon: Icons.refresh_rounded,
+            onTap: onRefresh,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  const _IconBtn({required this.c, required this.icon, required this.onTap});
+  final AppColor c;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.border.withValues(alpha: 0.25)),
+      ),
+      child: Icon(icon, size: 17, color: c.textSecondary),
+    ),
+  );
+}
+
+// ─── Summary Strip ────────────────────────────────────────────────────────────
+
+class _SummaryStrip extends StatelessWidget {
+  const _SummaryStrip({required this.c, required this.trades});
+  final AppColor c;
+  final List<TradeModel> trades;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = trades.where((t) => t.status.isActive).length;
+    final completed = trades.where((t) => t.status == TradeStatus.completed).length;
+    final totalFiat = trades
+        .where((t) => t.status == TradeStatus.completed)
+        .fold(0.0, (sum, t) => sum + t.fiatAmount);
+
+    final currency = trades.isNotEmpty ? trades.first.fiatCurrency : '';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: c.border.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            _StatCell(c: c, label: 'Active', value: '$active', accent: c.warning),
+            _VSep(c: c),
+            _StatCell(c: c, label: 'Done', value: '$completed', accent: c.success),
+            _VSep(c: c),
+            _StatCell(
+              c: c,
+              label: 'Volume',
+              value: totalFiat >= 1000
+                  ? '$currency ${(totalFiat / 1000).toStringAsFixed(1)}K'
+                  : '$currency ${totalFiat.toStringAsFixed(0)}',
+              accent: c.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  const _StatCell({required this.c, required this.label, required this.value, required this.accent});
+  final AppColor c;
+  final String label;
+  final String value;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: accent,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _VSep extends StatelessWidget {
+  const _VSep({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 1, height: 28, color: c.border.withValues(alpha: 0.2),
+  );
+}
+
+// ─── Filter Row ───────────────────────────────────────────────────────────────
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.c,
+    required this.selected,
+    required this.counts,
+    required this.onChanged,
+  });
+  final AppColor c;
+  final bool? selected;
+  final Map<bool?, int> counts;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: c.border.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          _FilterChip(c: c, label: 'All', count: counts[null] ?? 0,
+              active: selected == null, onTap: () => onChanged(null)),
+          const SizedBox(width: 3),
+          _FilterChip(c: c, label: 'Active', count: counts[true] ?? 0,
+              active: selected == true, onTap: () => onChanged(true)),
+          const SizedBox(width: 3),
+          _FilterChip(c: c, label: 'Completed', count: counts[false] ?? 0,
+              active: selected == false, onTap: () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.c,
+    required this.label,
+    required this.count,
+    required this.active,
+    required this.onTap,
+  });
+  final AppColor c;
+  final String label;
+  final int count;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? c.primary : c.surface,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: active
+              ? [BoxShadow(color: c.primary.withValues(alpha: 0.2), blurRadius: 6, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? c.onPrimary : c.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                letterSpacing: -0.2,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 5),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: c.warning.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(12),
+                  color: active
+                      ? c.onPrimary.withValues(alpha: 0.25)
+                      : c.textSecondary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(5),
                 ),
-                child: Icon(Icons.storefront_outlined, color: c.warning),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Merchant access required',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Only merchant accounts can access seller trade routes.',
-                style: TextStyle(color: c.textSecondary, fontSize: 12.8),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: AppElevatedButton.icon(
-                  onPressed: onOpenRequest,
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 17),
-                  label: const Text('Open Merchant Request'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: c.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: active ? c.onPrimary : c.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// ─── Trade Tile ───────────────────────────────────────────────────────────────
+
+class _TradeTile extends StatelessWidget {
+  const _TradeTile({required this.c, required this.trade, required this.onTap});
+  final AppColor c;
+  final TradeModel trade;
+  final VoidCallback onTap;
+
+  _StatusMeta _meta(TradeStatus s) => switch (s) {
+    TradeStatus.created        => _StatusMeta('Pending', c.textSecondary),
+    TradeStatus.cryptoLocked   => _StatusMeta('Locked', c.warning),
+    TradeStatus.fiatSent       => _StatusMeta('Fiat Sent', c.warning),
+    TradeStatus.fiatConfirmed  => _StatusMeta('Confirming', c.primary),
+    TradeStatus.completed      => _StatusMeta('Completed', c.success),
+    TradeStatus.cancelled      => _StatusMeta('Cancelled', c.error),
+    TradeStatus.disputed       => _StatusMeta('Disputed', c.error),
+    TradeStatus.expired        => _StatusMeta('Expired', c.textSecondary),
+    TradeStatus.unknown        => _StatusMeta('Unknown', c.textSecondary),
+  };
+
+  String _timeAgo(DateTime? d) {
+    if (d == null) return '';
+    final diff = DateTime.now().difference(d);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = _meta(trade.status);
+    final isActive = trade.status.isActive;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isActive
+                ? meta.color.withValues(alpha: 0.3)
+                : c.border.withValues(alpha: 0.18),
+            width: isActive ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Top Row ─────────────────────────────────────────────────────
+            Row(
+              children: [
+                // Asset pill
+                _AssetBadge(c: c, asset: trade.asset),
+                const SizedBox(width: 12),
+
+                // Pair + time
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${trade.asset} / ${trade.fiatCurrency}',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          letterSpacing: -0.4,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _timeAgo(trade.createdAt),
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Status badge
+                _StatusBadge(c: c, meta: meta),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // ── Amounts Row ─────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: c.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: c.border.withValues(alpha: 0.12)),
+              ),
+              child: Row(
+                children: [
+                  // Crypto amount
+                  Expanded(
+                    child: _AmountBlock(
+                      c: c,
+                      label: 'You receive',
+                      value: trade.cryptoAmount.toStringAsFixed(4),
+                      unit: trade.asset,
+                      valueColor: c.primary,
+                    ),
+                  ),
+
+                  // Arrow
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Icon(
+                      Icons.swap_horiz_rounded,
+                      size: 16,
+                      color: c.textSecondary.withValues(alpha: 0.4),
+                    ),
+                  ),
+
+                  // Fiat amount
+                  Expanded(
+                    child: _AmountBlock(
+                      c: c,
+                      label: 'Buyer pays',
+                      value: _formatFiat(trade.fiatAmount),
+                      unit: trade.fiatCurrency,
+                      valueColor: c.success,
+                      alignRight: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // ── Footer Row ──────────────────────────────────────────────────
+            Row(
+              children: [
+                Text(
+                  _shortId(trade.id),
+                  style: TextStyle(
+                    color: c.textSecondary.withValues(alpha: 0.45),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.3,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'View details',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_forward_rounded, size: 12, color: c.primary),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _shortId(String id) {
+    if (id.length <= 8) return '#$id';
+    return '#${id.substring(0, 8).toUpperCase()}';
+  }
+
+  String _formatFiat(double amount) {
+    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(2)}M';
+    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(1)}K';
+    return amount.toStringAsFixed(2);
+  }
+}
+
+class _StatusMeta {
+  const _StatusMeta(this.label, this.color);
+  final String label;
+  final Color color;
+}
+
+class _AssetBadge extends StatelessWidget {
+  const _AssetBadge({required this.c, required this.asset});
+  final AppColor c;
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = asset.length > 4 ? asset.substring(0, 4) : asset;
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            c.primary.withValues(alpha: 0.15),
+            c.primary.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.primary.withValues(alpha: 0.15)),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: c.primary,
+            fontWeight: FontWeight.w800,
+            fontSize: label.length > 3 ? 9.5 : 11,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.c, required this.meta});
+  final AppColor c;
+  final _StatusMeta meta;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: meta.color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: meta.color.withValues(alpha: 0.2)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(color: meta.color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          meta.label,
+          style: TextStyle(
+            color: meta.color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AmountBlock extends StatelessWidget {
+  const _AmountBlock({
+    required this.c,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.valueColor,
+    this.alignRight = false,
+  });
+  final AppColor c;
+  final String label;
+  final String value;
+  final String unit;
+  final Color valueColor;
+  final bool alignRight;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          color: c.textSecondary,
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.3,
+        ),
+      ),
+      const SizedBox(height: 3),
+      RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                color: valueColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            TextSpan(
+              text: '  $unit',
+              style: TextStyle(
+                color: valueColor.withValues(alpha: 0.6),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    ],
+  );
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.c, required this.filter});
+  final AppColor c;
+  final bool? filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final headline = filter == true
+        ? 'No active trades'
+        : filter == false
+        ? 'No completed trades'
+        : 'No trades yet';
+    final sub = filter == true
+        ? 'Incoming buyer orders will appear here once they initiate a trade.'
+        : filter == false
+        ? 'Completed trades will be archived here.'
+        : 'Once buyers place orders against your offers, trades will appear here.';
+
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.border.withValues(alpha: 0.18)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: c.textSecondary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.receipt_long_outlined,
+                      color: c.textSecondary.withValues(alpha: 0.5), size: 24),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  headline,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  sub,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 13,
+                    height: 1.5,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -477,577 +864,68 @@ class _NotMerchantView extends StatelessWidget {
   }
 }
 
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({
-    required this.c,
-    required this.openCount,
-    required this.paidCount,
-    required this.disputedCount,
-    required this.pendingChatCount,
-  });
+// ─── Error State ──────────────────────────────────────────────────────────────
 
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.c, required this.error, required this.onRetry});
   final AppColor c;
-  final int openCount;
-  final int paidCount;
-  final int disputedCount;
-  final int pendingChatCount;
+  final String error;
+  final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
+              color: c.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Text(
-              'TRADE INBOX',
-              style: TextStyle(
-                color: c.primary,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-              ),
-            ),
+            child: Icon(Icons.cloud_off_rounded, color: c.error, size: 24),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           Text(
-            'Respond quickly to protect completion rate',
+            'Couldn\'t load trades',
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Open a trade to chat in realtime, verify proof, and release escrow safely.',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.7,
-              height: 1.42,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricPill(c: c, label: 'Open', value: '$openCount'),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MetricPill(c: c, label: 'Paid', value: '$paidCount'),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MetricPill(
-                  c: c,
-                  label: 'Disputed',
-                  value: '$disputedCount',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MetricPill(
-                  c: c,
-                  label: 'Chat',
-                  value: '$pendingChatCount',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricPill extends StatelessWidget {
-  const _MetricPill({
-    required this.c,
-    required this.label,
-    required this.value,
-  });
-
-  final AppColor c;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: c.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 12.8,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.c, required this.label});
-
-  final AppColor c;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        color: c.textSecondary,
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
-class _FilterCard extends StatelessWidget {
-  const _FilterCard({
-    required this.c,
-    required this.searchCtrl,
-    required this.statusFilter,
-    required this.onSearch,
-    required this.onStatusChanged,
-  });
-
-  final AppColor c;
-  final TextEditingController searchCtrl;
-  final String? statusFilter;
-  final VoidCallback onSearch;
-  final ValueChanged<String?> onStatusChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    OutlineInputBorder fieldBorder() => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(color: c.border.withOpacity(0.24)),
-    );
-    OutlineInputBorder fieldFocused() => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(color: c.primary.withOpacity(0.42), width: 1.2),
-    );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Column(
-        children: [
-          TextField(
-            controller: searchCtrl,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => onSearch(),
-            decoration: InputDecoration(
-              hintText: 'Search by trade id, asset, reason',
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                color: c.textSecondary.withOpacity(0.7),
-              ),
-              filled: true,
-              fillColor: c.background,
-              border: fieldBorder(),
-              enabledBorder: fieldBorder(),
-              focusedBorder: fieldFocused(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _StatusChip(
-                c: c,
-                selected: statusFilter == null,
-                label: 'ALL',
-                onTap: () => onStatusChanged(null),
-              ),
-              _StatusChip(
-                c: c,
-                selected: statusFilter == 'AWAITING_PAYMENT',
-                label: 'Awaiting',
-                onTap: () => onStatusChanged('AWAITING_PAYMENT'),
-              ),
-              _StatusChip(
-                c: c,
-                selected: statusFilter == 'PAID',
-                label: 'Paid',
-                onTap: () => onStatusChanged('PAID'),
-              ),
-              _StatusChip(
-                c: c,
-                selected: statusFilter == 'DISPUTED',
-                label: 'Disputed',
-                onTap: () => onStatusChanged('DISPUTED'),
-              ),
-              _StatusChip(
-                c: c,
-                selected: statusFilter == 'RELEASED',
-                label: 'Released',
-                onTap: () => onStatusChanged('RELEASED'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.c,
-    required this.selected,
-    required this.label,
-    required this.onTap,
-  });
-
-  final AppColor c;
-  final bool selected;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? c.primary.withOpacity(0.1) : c.background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? c.primary.withOpacity(0.4)
-                : c.border.withOpacity(0.25),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? c.primary : c.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TradeCard extends StatelessWidget {
-  const _TradeCard({
-    required this.c,
-    required this.trade,
-    required this.priceLabel,
-    required this.statusLabel,
-    required this.statusColor,
-    required this.counterpartyTitle,
-    required this.counterpartySubtitle,
-    required this.hasUnread,
-    required this.onOpen,
-  });
-
-  final AppColor c;
-  final TradeModel trade;
-  final String priceLabel;
-  final String statusLabel;
-  final Color statusColor;
-  final String counterpartyTitle;
-  final String counterpartySubtitle;
-  final bool hasUnread;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final latestMessage = trade.messages.isNotEmpty
-        ? trade.messages.last
-        : null;
-    final shortTrade = trade.id.length > 10
-        ? trade.id.substring(0, 10)
-        : trade.id;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11.3,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (hasUnread)
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: c.error.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: c.error.withOpacity(0.25)),
-                  ),
-                  child: Text(
-                    'New',
-                    style: TextStyle(
-                      color: c.error,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              Text(
-                '#$shortTrade',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 11.8,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${offerAssetToApi(trade.asset)} / ${trade.fiatCurrency}',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.2,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            counterpartyTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 13.2,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (counterpartySubtitle.trim().isNotEmpty) ...[
-            const SizedBox(height: 1),
-            Text(
-              counterpartySubtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: c.textSecondary, fontSize: 11.7),
-            ),
-          ],
-          const SizedBox(height: 2),
-          Text(
-            '${trade.amount.toStringAsFixed(2)} ${trade.fiatCurrency}',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 6),
           Text(
-            'Price: $priceLabel ${trade.fiatCurrency}',
-            style: TextStyle(color: c.textSecondary, fontSize: 12.2),
+            error,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.5),
           ),
-          if (latestMessage != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: onRetry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
               decoration: BoxDecoration(
-                color: c.background,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: c.border.withOpacity(0.22)),
+                color: c.primary,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '${hasUnread ? '$counterpartyTitle: ' : ''}${latestMessage.message}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                'Try again',
                 style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 12.2,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: AppElevatedButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-              label: const Text('Open Trade'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: c.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  color: c.onPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                  letterSpacing: -0.2,
                 ),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({
-    required this.c,
-    required this.message,
-    required this.onRetry,
-  });
-
-  final AppColor c;
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.error.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.error.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Failed to load trades.',
-            style: TextStyle(
-              color: c.error,
-              fontSize: 13.1,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(message, style: TextStyle(color: c.textPrimary, fontSize: 12.4)),
-          const SizedBox(height: 10),
-          AppOutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Retry'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: c.textPrimary,
-              side: BorderSide(color: c.border.withOpacity(0.4)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({required this.c});
-
-  final AppColor c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(LucideIcons.inbox, size: 18, color: c.textSecondary),
-          const SizedBox(height: 8),
-          Text(
-            'No trades yet',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 14.8,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Trades from buyers will appear here when they open your offers.',
-            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
 }

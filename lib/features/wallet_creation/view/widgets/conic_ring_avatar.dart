@@ -10,6 +10,9 @@ class ConicRingAvatar extends StatelessWidget {
     required this.asset,
     required this.imageSize,
     required this.baseColor,
+    this.fillColor,
+    this.imagePadding = 10,
+    this.showInnerBorder = true,
     this.rotationTurns = 0.0,
   });
 
@@ -18,6 +21,9 @@ class ConicRingAvatar extends StatelessWidget {
   final String asset;
   final double imageSize;
   final Color baseColor;
+  final Color? fillColor;
+  final double imagePadding;
+  final bool showInnerBorder;
   final double rotationTurns;
 
   @override
@@ -36,13 +42,28 @@ class ConicRingAvatar extends StatelessWidget {
               rotationTurns: rotationTurns,
             ),
           ),
-          ClipOval(
-            child: Image.asset(
-              asset,
-              width: imageSize,
-              height: imageSize,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.high,
+          Container(
+            width: imageSize,
+            height: imageSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: fillColor ?? baseColor.withValues(alpha: .08),
+              border: showInnerBorder
+                  ? Border.all(
+                      color: baseColor.withValues(alpha: .22),
+                      width: 1.2,
+                    )
+                  : null,
+            ),
+            padding: EdgeInsets.all(imagePadding),
+            child: ClipOval(
+              child: Image.asset(
+                asset,
+                width: imageSize,
+                height: imageSize,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
         ],
@@ -72,9 +93,9 @@ class _ConicRingPainter extends CustomPainter {
       startAngle: 0,
       endAngle: math.pi * 2,
       colors: [
-        color.withOpacity(.95),
-        color.withOpacity(.25),
-        color.withOpacity(.95),
+        color.withValues(alpha: .95),
+        color.withValues(alpha: .25),
+        color.withValues(alpha: .95),
       ],
       stops: const [0.0, 0.5, 1.0],
       transform: GradientRotation(rotationTurns * math.pi * 2),
@@ -90,7 +111,7 @@ class _ConicRingPainter extends CustomPainter {
     final inner = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = color.withOpacity(.15);
+      ..color = color.withValues(alpha: .15);
 
     canvas.drawCircle(center, radius - strokeWidth / 2 - 1, inner);
   }

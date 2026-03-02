@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class ScanControls extends StatelessWidget {
   const ScanControls({
@@ -9,6 +10,7 @@ class ScanControls extends StatelessWidget {
     required this.facing,
     required this.onToggleTorch,
     required this.onSwitchCamera,
+    this.onPickFromGallery,
     this.onClose,
   });
 
@@ -16,10 +18,13 @@ class ScanControls extends StatelessWidget {
   final CameraFacing facing;
   final VoidCallback onToggleTorch;
   final VoidCallback onSwitchCamera;
+  final VoidCallback? onPickFromGallery;
   final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -28,18 +33,33 @@ class ScanControls extends StatelessWidget {
           children: [
             if (onClose != null)
               _buildControl(
+                colors: colors,
+                isDark: isDark,
                 icon: LucideIcons.x,
                 onTap: onClose!,
               ),
             if (onClose == null) const SizedBox(width: 48),
             const Spacer(),
             _buildControl(
+              colors: colors,
+              isDark: isDark,
               icon: torchOn ? LucideIcons.zap : LucideIcons.zapOff,
               onTap: onToggleTorch,
               isActive: torchOn,
             ),
             const SizedBox(width: 12),
+            if (onPickFromGallery != null) ...[
+              _buildControl(
+                colors: colors,
+                isDark: isDark,
+                icon: LucideIcons.image,
+                onTap: onPickFromGallery!,
+              ),
+              const SizedBox(width: 12),
+            ],
             _buildControl(
+              colors: colors,
+              isDark: isDark,
               icon: LucideIcons.flipHorizontal2,
               onTap: onSwitchCamera,
             ),
@@ -50,10 +70,19 @@ class ScanControls extends StatelessWidget {
   }
 
   Widget _buildControl({
+    required AppColor colors,
+    required bool isDark,
     required IconData icon,
     required VoidCallback onTap,
     bool isActive = false,
   }) {
+    final backgroundColor = isActive
+        ? colors.primary.withValues(alpha: isDark ? 0.5 : 0.42)
+        : colors.background.withValues(alpha: isDark ? 0.7 : 0.58);
+    final borderColor = isActive
+        ? colors.primary.withValues(alpha: isDark ? 0.75 : 0.62)
+        : colors.border.withValues(alpha: isDark ? 0.5 : 0.7);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -63,22 +92,11 @@ class ScanControls extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: isActive
-                ? Colors.white.withOpacity(0.25)
-                : Colors.black.withOpacity(0.3),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isActive
-                  ? Colors.white.withOpacity(0.4)
-                  : Colors.white.withOpacity(0.15),
-              width: 1,
-            ),
+            border: Border.all(color: borderColor, width: 1),
           ),
-          child: Icon(
-            icon,
-            size: 22,
-            color: Colors.white,
-          ),
+          child: Icon(icon, size: 22, color: colors.onPrimary),
         ),
       ),
     );

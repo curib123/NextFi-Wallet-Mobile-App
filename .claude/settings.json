@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(dart analyze:*)",
+      "Read(//c/Users/Aikoiyota/.claude/projects/c--Users-Aikoiyota-StudioProjects-NextFI-Wallet/f5710dc0-7cf2-485c-a695-2a8125eb735a/tool-results/**)"
+    ]
+  }
+}

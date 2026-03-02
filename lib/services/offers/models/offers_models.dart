@@ -1,203 +1,78 @@
-import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
+import 'offers_dtos.dart';
 
-enum OfferType { buy, sell, unknown }
+OfferType? _readOfferType(dynamic value) {
+  final v = value?.toString().trim().toUpperCase();
+  if (v == 'BUY') return OfferType.buy;
+  if (v == 'SELL') return OfferType.sell;
+  return null;
+}
 
-enum OfferAsset { xlm, usdc, unknown }
-
-enum OfferPriceType { fixed, floating, unknown }
-
-OfferType offerTypeFromApi(dynamic raw) {
-  final v = raw?.toString().trim().toUpperCase();
+OfferStatus? _readOfferStatus(dynamic value) {
+  final v = value?.toString().trim().toUpperCase();
   switch (v) {
-    case 'BUY':
-      return OfferType.buy;
-    case 'SELL':
-      return OfferType.sell;
+    case 'ACTIVE':
+      return OfferStatus.active;
+    case 'PAUSED':
+      return OfferStatus.paused;
+    case 'COMPLETED':
+      return OfferStatus.completed;
+    case 'CANCELLED':
+      return OfferStatus.cancelled;
     default:
-      return OfferType.unknown;
-  }
-}
-
-String offerTypeToApi(OfferType type) {
-  switch (type) {
-    case OfferType.buy:
-      return 'BUY';
-    case OfferType.sell:
-      return 'SELL';
-    case OfferType.unknown:
-      return 'SELL';
-  }
-}
-
-OfferAsset offerAssetFromApi(dynamic raw) {
-  final v = raw?.toString().trim().toUpperCase();
-  switch (v) {
-    case 'XLM':
-      return OfferAsset.xlm;
-    case 'USDC':
-      return OfferAsset.usdc;
-    default:
-      return OfferAsset.unknown;
-  }
-}
-
-String offerAssetToApi(OfferAsset asset) {
-  switch (asset) {
-    case OfferAsset.xlm:
-      return 'XLM';
-    case OfferAsset.usdc:
-      return 'USDC';
-    case OfferAsset.unknown:
-      return 'USDC';
-  }
-}
-
-OfferPriceType offerPriceTypeFromApi(dynamic raw) {
-  final v = raw?.toString().trim().toUpperCase();
-  switch (v) {
-    case 'FIXED':
-      return OfferPriceType.fixed;
-    case 'FLOATING':
-      return OfferPriceType.floating;
-    default:
-      return OfferPriceType.unknown;
-  }
-}
-
-String offerPriceTypeToApi(OfferPriceType type) {
-  switch (type) {
-    case OfferPriceType.fixed:
-      return 'FIXED';
-    case OfferPriceType.floating:
-      return 'FLOATING';
-    case OfferPriceType.unknown:
-      return 'FIXED';
-  }
-}
-
-class OfferPaymentMethodRef {
-  final String id;
-  final String code;
-  final String name;
-
-  const OfferPaymentMethodRef({
-    required this.id,
-    required this.code,
-    required this.name,
-  });
-
-  factory OfferPaymentMethodRef.fromJson(Map<String, dynamic> json) {
-    String readString(List<String> keys) {
-      for (final k in keys) {
-        final value = json[k];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return '';
-    }
-
-    return OfferPaymentMethodRef(
-      id: readString(const ['id', 'paymentMethodId', 'payment_method_id']),
-      code: readString(const ['code']),
-      name: readString(const ['name']),
-    );
-  }
-}
-
-class OfferWalletRef {
-  final String id;
-  final String publicAddress;
-  final String network;
-  final String? label;
-
-  const OfferWalletRef({
-    required this.id,
-    required this.publicAddress,
-    required this.network,
-    this.label,
-  });
-
-  factory OfferWalletRef.fromJson(Map<String, dynamic> json) {
-    String readString(List<String> keys, {String fallback = ''}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isNotEmpty) return text;
-      }
-      return fallback;
-    }
-
-    return OfferWalletRef(
-      id: readString(const ['id', 'walletId', 'wallet_id']),
-      publicAddress: readString(const [
-        'publicAddress',
-        'public_address',
-        'address',
-      ]),
-      network: readString(const ['network'], fallback: 'stellar'),
-      label: (() {
-        final text = readString(const ['label']);
-        return text.isEmpty ? null : text;
-      })(),
-    );
+      return null;
   }
 }
 
 class OfferModel {
   final String id;
-  final String? merchantUserId;
-  final String? sellerWalletId;
-  final OfferWalletRef? sellerWallet;
-  final OfferType type;
-  final OfferAsset asset;
+  final OfferType? type;
+  final OfferStatus? status;
+  final String asset;
   final String fiatCurrency;
-  final OfferPriceType priceType;
-  final double? fixedPrice;
+  final String? receiverStellarAddress;
   final double? marginPercent;
-  final double minAmount;
-  final double maxAmount;
+  final double? successRate;
+  final double? marketPrice; // Price in fiat per unit of crypto (e.g., PHP 1.00 per XLM)
+  final double? minAmount;
+  final double? maxAmount;
   final double? totalQty;
-  final double? remainingQty;
-  final int paymentWindow;
-  final bool requiredReady;
-  final bool isActive;
+  final double? availableQty;
+  final int? paymentWindowMinutes;
   final String? autoReply;
-  final List<OfferPaymentMethodRef> paymentMethods;
-  final List<UserPaymentAccountModel> sellerPaymentAccounts;
+  final bool isVisible;
+  final String? sellerId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final List<String> paymentMethodIds;
+  final List<Map<String, dynamic>> paymentMethods;
+  final Map<String, dynamic>? seller;
 
   const OfferModel({
     required this.id,
-    this.merchantUserId,
-    this.sellerWalletId,
-    this.sellerWallet,
-    this.type = OfferType.unknown,
-    this.asset = OfferAsset.unknown,
-    this.fiatCurrency = '',
-    this.priceType = OfferPriceType.unknown,
-    this.fixedPrice,
+    this.type,
+    this.status,
+    required this.asset,
+    required this.fiatCurrency,
+    this.receiverStellarAddress,
     this.marginPercent,
-    this.minAmount = 0,
-    this.maxAmount = 0,
+    this.successRate,
+    this.marketPrice,
+    this.minAmount,
+    this.maxAmount,
     this.totalQty,
-    this.remainingQty,
-    this.paymentWindow = 15,
-    this.requiredReady = true,
-    this.isActive = true,
+    this.availableQty,
+    this.paymentWindowMinutes,
     this.autoReply,
-    this.paymentMethods = const [],
-    this.sellerPaymentAccounts = const [],
+    this.isVisible = false,
+    this.sellerId,
     this.createdAt,
     this.updatedAt,
+    this.paymentMethodIds = const [],
+    this.paymentMethods = const [],
+    this.seller,
   });
 
   factory OfferModel.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic value) =>
-        value == null ? null : DateTime.tryParse(value.toString());
-
     String readString(List<String> keys, {String fallback = ''}) {
       for (final key in keys) {
         final value = json[key];
@@ -208,33 +83,7 @@ class OfferModel {
       return fallback;
     }
 
-    bool readBool(List<String> keys, {bool fallback = false}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value is bool) return value;
-        if (value is num) return value != 0;
-        if (value is String) {
-          final normalized = value.trim().toLowerCase();
-          if (normalized == 'true' || normalized == '1') return true;
-          if (normalized == 'false' || normalized == '0') return false;
-        }
-      }
-      return fallback;
-    }
-
-    double readDouble(List<String> keys, {double fallback = 0}) {
-      for (final key in keys) {
-        final value = json[key];
-        if (value is num) return value.toDouble();
-        if (value is String) {
-          final parsed = double.tryParse(value.trim());
-          if (parsed != null) return parsed;
-        }
-      }
-      return fallback;
-    }
-
-    double? readNullableDouble(List<String> keys) {
+    double? readDouble(List<String> keys) {
       for (final key in keys) {
         final value = json[key];
         if (value is num) return value.toDouble();
@@ -246,7 +95,7 @@ class OfferModel {
       return null;
     }
 
-    int readInt(List<String> keys, {int fallback = 0}) {
+    int? readInt(List<String> keys) {
       for (final key in keys) {
         final value = json[key];
         if (value is int) return value;
@@ -256,119 +105,146 @@ class OfferModel {
           if (parsed != null) return parsed;
         }
       }
+      return null;
+    }
+
+    bool readBool(List<String> keys, {bool fallback = false}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) {
+          final v = value.trim().toLowerCase();
+          if (v == 'true' || v == '1') return true;
+          if (v == 'false' || v == '0') return false;
+        }
+      }
       return fallback;
     }
 
-    List<OfferPaymentMethodRef> readPaymentMethods() {
-      final candidates = [
-        json['paymentMethods'],
-        json['payment_methods'],
-        json['methods'],
-      ];
-
-      for (final raw in candidates) {
-        if (raw is! List) continue;
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map(OfferPaymentMethodRef.fromJson)
-            .toList();
-      }
-
-      return const [];
-    }
-
-    List<UserPaymentAccountModel> readSellerAccounts() {
-      final candidates = [
-        json['sellerPaymentAccounts'],
-        json['seller_payment_accounts'],
-        json['paymentAccounts'],
-        json['payment_accounts'],
-        json['accounts'],
-      ];
-      for (final raw in candidates) {
-        if (raw is! List) continue;
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map(UserPaymentAccountModel.fromJson)
-            .toList();
-      }
-      return const [];
-    }
-
-    OfferWalletRef? readSellerWallet() {
-      final candidates = [
-        json['sellerWallet'],
-        json['seller_wallet'],
-        json['wallet'],
-      ];
-      for (final raw in candidates) {
-        if (raw is! Map<String, dynamic>) continue;
-        final wallet = OfferWalletRef.fromJson(raw);
-        if (wallet.id.isNotEmpty || wallet.publicAddress.isNotEmpty) {
-          return wallet;
-        }
+    DateTime? readDate(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value == null) continue;
+        final parsed = DateTime.tryParse(value.toString());
+        if (parsed != null) return parsed;
       }
       return null;
     }
 
-    final sellerWallet = readSellerWallet();
+    List<String> readPaymentMethodIds() {
+      final raw = json['paymentMethodIds'];
+      if (raw is List) {
+        return raw.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+      }
+
+      final links = json['offerPaymentMethods'];
+      if (links is List) {
+        final ids = <String>[];
+        for (final link in links) {
+          if (link is! Map<String, dynamic>) continue;
+          final id = (link['paymentMethodId'] ?? link['payment_method_id'])
+              ?.toString()
+              .trim();
+          if (id != null && id.isNotEmpty) ids.add(id);
+        }
+        return ids;
+      }
+
+      return const [];
+    }
+
+    List<Map<String, dynamic>> readPaymentMethods() {
+      final raw = json['paymentMethods'];
+      if (raw is List) {
+        return raw.whereType<Map<String, dynamic>>().toList();
+      }
+      return const [];
+    }
+
+    final sellerRaw = json['seller'];
 
     return OfferModel(
       id: readString(const ['id']),
-      merchantUserId: (() {
-        final userId = readString(const [
-          'merchantUserId',
-          'merchant_user_id',
-          'userId',
-          'user_id',
+      type: _readOfferType(json['type'] ?? json['offerType'] ?? json['offer_type']),
+      status: _readOfferStatus(json['status']),
+      asset: readString(const ['asset']),
+      fiatCurrency: readString(const ['fiatCurrency', 'fiat_currency']),
+      receiverStellarAddress: (() {
+        final text = readString(const [
+          'receiverStellarAddress',
+          'receiver_stellar_address',
         ]);
-        return userId.isEmpty ? null : userId;
+        return text.isEmpty ? null : text;
       })(),
-      sellerWalletId: (() {
-        final walletId = readString(const [
-          'sellerWalletId',
-          'seller_wallet_id',
-          'walletId',
-          'wallet_id',
-        ]);
-        if (walletId.isNotEmpty) return walletId;
-        final nested = sellerWallet?.id.trim() ?? '';
-        return nested.isEmpty ? null : nested;
-      })(),
-      sellerWallet: sellerWallet,
-      type: offerTypeFromApi(json['type']),
-      asset: offerAssetFromApi(json['asset']),
-      fiatCurrency: readString(const [
-        'fiatCurrency',
-        'fiat_currency',
-      ], fallback: 'PHP'),
-      priceType: offerPriceTypeFromApi(json['priceType'] ?? json['price_type']),
-      fixedPrice: readNullableDouble(const ['fixedPrice', 'fixed_price']),
-      marginPercent: readNullableDouble(const [
-        'marginPercent',
-        'margin_percent',
-      ]),
+      marginPercent: readDouble(const ['marginPercent', 'margin_percent']),
+      successRate: readDouble(const ['successRate', 'success_rate']),
+      marketPrice: readDouble(const ['marketPrice', 'market_price', 'price']),
       minAmount: readDouble(const ['minAmount', 'min_amount']),
       maxAmount: readDouble(const ['maxAmount', 'max_amount']),
-      totalQty: readNullableDouble(const ['totalQty', 'total_qty']),
-      remainingQty: readNullableDouble(const ['remainingQty', 'remaining_qty']),
-      paymentWindow: readInt(const [
-        'paymentWindow',
-        'payment_window',
-      ], fallback: 15),
-      requiredReady: readBool(const [
-        'requiredReady',
-        'required_ready',
-      ], fallback: true),
-      isActive: readBool(const ['isActive', 'is_active'], fallback: true),
+      totalQty: readDouble(const ['totalQty', 'total_qty']),
+      availableQty: readDouble(const ['availableQty', 'available_qty']),
+      paymentWindowMinutes: readInt(const [
+        'paymentWindowMinutes',
+        'payment_window_minutes',
+      ]),
       autoReply: (() {
         final text = readString(const ['autoReply', 'auto_reply']);
         return text.isEmpty ? null : text;
       })(),
+      isVisible: readBool(const ['isVisible', 'is_visible']),
+      sellerId: (() {
+        final text = readString(const ['sellerId', 'seller_id']);
+        return text.isEmpty ? null : text;
+      })(),
+      createdAt: readDate(const ['createdAt', 'created_at']),
+      updatedAt: readDate(const ['updatedAt', 'updated_at']),
+      paymentMethodIds: readPaymentMethodIds(),
       paymentMethods: readPaymentMethods(),
-      sellerPaymentAccounts: readSellerAccounts(),
-      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
-      updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
+      seller: sellerRaw is Map<String, dynamic> ? sellerRaw : null,
     );
   }
+}
+
+class OffersMeta {
+  final int total;
+  final int page;
+  final int limit;
+  final int totalPages;
+
+  const OffersMeta({
+    required this.total,
+    required this.page,
+    required this.limit,
+    required this.totalPages,
+  });
+
+  factory OffersMeta.fromJson(Map<String, dynamic> json) {
+    int readInt(List<String> keys, {int fallback = 0}) {
+      for (final key in keys) {
+        final v = json[key];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final p = int.tryParse(v.trim());
+          if (p != null) return p;
+        }
+      }
+      return fallback;
+    }
+
+    return OffersMeta(
+      total: readInt(const ['total', 'count']),
+      page: readInt(const ['page'], fallback: 1),
+      limit: readInt(const ['limit', 'pageSize', 'page_size'], fallback: 20),
+      totalPages: readInt(const ['totalPages', 'total_pages'], fallback: 1),
+    );
+  }
+}
+
+class OffersPagedResponse {
+  final List<OfferModel> items;
+  final OffersMeta meta;
+
+  const OffersPagedResponse({required this.items, required this.meta});
 }

@@ -22,14 +22,6 @@ packages:
     description: dart
     source: sdk
     version: "0.3.3"
-  ai_barcode_scanner:
-    dependency: "direct main"
-    description:
-      name: ai_barcode_scanner
-      sha256: "63c2bcc295296cb2ce03a2b7bfd22bfa315eabcbabadcb11a4ace1ffd0270b32"
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.1.0"
   analyzer:
     dependency: transitive
     description:
@@ -254,14 +246,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: ba631d1c7f7bef6b729a622b7b752645a2d076dba9976925b8f25725a30e1ee6
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.8"
   dart_style:
     dependency: transitive
     description:
@@ -318,30 +302,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.1"
-  eip1559:
-    dependency: transitive
-    description:
-      name: eip1559
-      sha256: c2b81ac85f3e0e71aaf558201dd9a4600f051ece7ebacd0c5d70065c9b458004
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.2"
-  eip55:
-    dependency: transitive
-    description:
-      name: eip55
-      sha256: a81d6afe386ec965e584541fe8f19719bed8a7ae23a5f5061112e96c50e6521b
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.3"
-  equatable:
-    dependency: transitive
-    description:
-      name: equatable
-      sha256: "3e0141505477fd8ad55d6eb4e7776d3fe8430be8e497ccb1521370c3f21a3e2b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.8"
   facebook_auth_desktop:
     dependency: transitive
     description:
@@ -462,14 +422,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
-  fl_chart:
-    dependency: "direct main"
-    description:
-      name: fl_chart
-      sha256: d3f82f4a38e33ba23d05a08ff304d7d8b22d2a59a5503f20bd802966e915db89
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -661,6 +613,38 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.3+1"
+  google_mlkit_commons:
+    dependency: transitive
+    description:
+      name: google_mlkit_commons
+      sha256: "3e69fea4211727732cc385104e675ad1e40b29f12edd492ee52fa108423a6124"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.11.1"
+  google_mlkit_face_detection:
+    dependency: "direct main"
+    description:
+      name: google_mlkit_face_detection
+      sha256: "7b6ddcc69dbd6fbfa313fb2d974ad0f0c3a0d1657560f0da6be465baf1889687"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.13.2"
+  google_mlkit_object_detection:
+    dependency: "direct main"
+    description:
+      name: google_mlkit_object_detection
+      sha256: "9dd35886972e18747e22098f8ebee78d30716a99a789bb2e3a65a24229e031e7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.15.1"
+  google_mlkit_text_recognition:
+    dependency: "direct main"
+    description:
+      name: google_mlkit_text_recognition
+      sha256: "10a8d1a64fa21efda89514f6df88bbb7885be3ae1bfb7a6d229132d802a20d22"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.15.1"
   google_sign_in:
     dependency: "direct main"
     description:
@@ -726,7 +710,7 @@ packages:
     source: hosted
     version: "2.0.1"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -750,7 +734,7 @@ packages:
     source: hosted
     version: "4.1.2"
   image:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image
       sha256: f31d52537dc417fdcde36088fdf11d191026fd5e4fae742491ebd40e5a8bea7d
@@ -853,14 +837,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.9.0"
-  json_rpc_2:
-    dependency: transitive
-    description:
-      name: json_rpc_2
-      sha256: "3c46c2633aec07810c3d6a2eb08d575b5b4072980db08f1344e66aeb53d6e4a7"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.0.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -1205,14 +1181,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.28.0"
-  sec:
-    dependency: transitive
-    description:
-      name: sec
-      sha256: "52a93800943642e0b5225408d0973a1837e2452b9aa8a501fdfbc8e76b6ac135"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.1"
   shelf:
     dependency: transitive
     description:
@@ -1386,16 +1354,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.4"
-  timeago:
-    dependency: "direct main"
-    description:
-      name: timeago
-      sha256: b05159406a97e1cbb2b9ee4faa9fb096fe0e2dfcd8b08fcd2a00553450d3422e
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.7.1"
   timezone:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: timezone
       sha256: dd14a3b83cfd7cb19e7888f1cbc20f258b8d71b54c06f79ac585f14093a287d1
@@ -1426,14 +1386,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
-  universal_platform:
-    dependency: transitive
-    description:
-      name: universal_platform
-      sha256: "64e16458a0ea9b99260ceb5467a214c1f298d647c659af1bff6d3bf82536b1ec"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
   unorm_dart:
     dependency: transitive
     description:
@@ -1507,7 +1459,7 @@ packages:
     source: hosted
     version: "3.1.5"
   uuid:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: uuid
       sha256: a11b666489b1954e01d992f3d601b1804a33937b5a8fe677bd26b8a9f96f96e8
@@ -1530,14 +1482,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "15.0.0"
-  wallet:
-    dependency: transitive
-    description:
-      name: wallet
-      sha256: "20b6d8440039726841bd23b2bac64f888ec1ce1509edcc3ed2ad1753f613521e"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.18"
   watcher:
     dependency: transitive
     description:
@@ -1554,14 +1498,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
-  web3dart:
-    dependency: "direct main"
-    description:
-      name: web3dart
-      sha256: b7401f8c57833fbde08aaaa8c56e020c5cbdef6bab7f946f69bcc342c9c492b2
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.2"
   web_socket:
     dependency: transitive
     description:

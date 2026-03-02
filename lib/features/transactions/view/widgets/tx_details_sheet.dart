@@ -71,7 +71,7 @@ Future<void> showTxDetailsBottomSheet({
                     width: 42,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: colors.primary.withOpacity(0.25),
+                      color: colors.primary.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -105,11 +105,11 @@ Future<void> showTxDetailsBottomSheet({
                       ),
                       decoration: BoxDecoration(
                         color: (isIncoming ? colors.success : colors.error)
-                            .withOpacity(0.12),
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
                           color: (isIncoming ? colors.success : colors.error)
-                              .withOpacity(0.3),
+                              .withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
@@ -154,10 +154,10 @@ Future<void> showTxDetailsBottomSheet({
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Color(existing.color).withOpacity(0.14),
+                          color: Color(existing.color).withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: Color(existing.color).withOpacity(0.35),
+                            color: Color(existing.color).withValues(alpha: 0.35),
                           ),
                         ),
                         child: Text(

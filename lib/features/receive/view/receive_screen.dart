@@ -106,7 +106,7 @@ class ReceiveScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border.withOpacity(0.25)),
+          border: Border.all(color: c.border.withValues(alpha: 0.25)),
         ),
         child: Row(
           children: [
@@ -142,7 +142,7 @@ class ReceiveScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border.withOpacity(0.25)),
+          border: Border.all(color: c.border.withValues(alpha: 0.25)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,7 +208,7 @@ class ReceiveScreen extends StatelessWidget {
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: c.primary,
-                  side: BorderSide(color: c.primary.withOpacity(0.35)),
+                  side: BorderSide(color: c.primary.withValues(alpha: 0.35)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -259,12 +259,12 @@ class ReceiveScreen extends StatelessWidget {
                       }
                     : null,
                 icon: vm.generatingFederation
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 16,
                         width: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: c.onPrimary,
                         ),
                       )
                     : const Icon(LucideIcons.sparkles, size: 16),
@@ -275,7 +275,7 @@ class ReceiveScreen extends StatelessWidget {
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: c.onPrimary,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
@@ -293,7 +293,7 @@ class ReceiveScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.border.withOpacity(0.25)),
+        border: Border.all(color: c.border.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

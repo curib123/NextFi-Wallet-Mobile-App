@@ -23,74 +23,85 @@ class RecipientAddTemplate extends StatelessWidget {
     final c = AppColor.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Explicit solid colors — no runtime opacity mixing
+    final bgColor     = isDark ? c.textPrimary : c.background;
+    final borderColor = isDark ? c.textPrimary : c.border;
+    final iconBg      = isDark ? c.textPrimary : c.background;
+    final iconColor   = isDark ? c.info : c.primary;
+    final saveBg      = isDark ? c.textPrimary : c.surface;
+    final saveColor   = isDark ? c.info : c.primaryDark;
+    final addressColor = isDark ? c.textSecondary : c.accent;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: isDark ? c.background : c.surface.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.border.withOpacity(isDark ? 0.12 : 0.2),
-          width: 1.5,
-        ),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
       child: Row(
         children: [
-          // Icon
+          // ── Icon ──────────────────────────────────────────────────────
           Container(
-            width: 38,
-            height: 38,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: c.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: iconBg,
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(LucideIcons.userPlus, size: 18, color: c.primary.withOpacity(0.7)),
+            child: Center(
+              child: Icon(LucideIcons.userPlus, size: 18, color: iconColor),
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 13),
 
-          // Text
+          // ── Text ──────────────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'New address',
+                  'Save to contacts',
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    letterSpacing: -0.2,
+                    letterSpacing: -0.3,
+                    height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   _shortenAddress(address),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: c.textSecondary.withOpacity(0.6),
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    letterSpacing: 0,
+                    color: addressColor,
+                    fontSize: 11.5,
+                    letterSpacing: 0.3,
+                    height: 1.3,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
 
-          // Save CTA
+          // ── Save CTA ──────────────────────────────────────────────────
           GestureDetector(
             onTap: onAdd,
+            behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
               decoration: BoxDecoration(
-                color: c.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10),
+                color: saveBg,
+                borderRadius: BorderRadius.circular(11),
               ),
               child: Text(
                 'Save',
                 style: TextStyle(
-                  color: c.primary,
+                  color: saveColor,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                   letterSpacing: -0.2,

@@ -50,7 +50,7 @@ class WordCountPicker extends StatelessWidget {
             border: Border.all(
               color: isSelected
                   ? colors.primary
-                  : colors.border.withOpacity(0.15),
+                  : colors.border.withValues(alpha: 0.15),
               width: 1.5,
             ),
           ),
@@ -58,7 +58,7 @@ class WordCountPicker extends StatelessWidget {
             '$count words',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: isSelected ? Colors.white : colors.textPrimary,
+              color: isSelected ? colors.onPrimary : colors.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

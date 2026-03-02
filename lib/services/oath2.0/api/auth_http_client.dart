@@ -13,7 +13,7 @@ import '../../base_url/base_url.dart';
 
 /// HTTP client that auto-attaches Bearer tokens and handles 401 refresh.
 class AuthHttpClient {
-  static const _baseUrl = cetralized_baseUrl;
+  static const _baseUrl = centralized_baseUrl;
 
   final http.Client _client;
   final TokenStorage _tokenStorage;

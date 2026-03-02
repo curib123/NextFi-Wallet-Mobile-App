@@ -65,7 +65,7 @@ AppAlertController showAppAlert(
     context: context,
     barrierLabel: 'Alert',
     barrierDismissible: barrierDismissible,
-    barrierColor: Colors.transparent,
+    barrierColor: AppColor.of(context).surface,
     transitionDuration: const Duration(milliseconds: 420),
     pageBuilder: (_, __, ___) => _ModalScaffold(notifier: notifier),
     transitionBuilder: (ctx, anim, _, child) {
@@ -146,7 +146,7 @@ class _ModalScaffold extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
             child: Container(
-              color: colors.background.withOpacity(0.45),
+              color: colors.background.withValues(alpha: 0.45),
             ),
           ),
         ),
@@ -202,18 +202,18 @@ class _AlertSheet extends StatelessWidget {
                   color: colors.surface,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: colors.border.withOpacity(0.12),
+                    color: colors.border.withValues(alpha: 0.12),
                     width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: colors.background.withOpacity(0.18),
+                      color: colors.background.withValues(alpha: 0.18),
                       blurRadius: 64,
                       spreadRadius: -8,
                       offset: const Offset(0, 20),
                     ),
                     BoxShadow(
-                      color: v.color.withOpacity(0.06),
+                      color: v.color.withValues(alpha: 0.06),
                       blurRadius: 40,
                       offset: const Offset(0, 8),
                     ),
@@ -262,7 +262,7 @@ class _AlertSheet extends StatelessWidget {
                                     fontSize: 14,
                                     height: 1.55,
                                     color:
-                                    colors.textSecondary.withOpacity(0.75),
+                                    colors.textSecondary.withValues(alpha: 0.75),
                                     decoration: TextDecoration.none,
                                   ),
                                 ),
@@ -314,7 +314,7 @@ class _DragHandle extends StatelessWidget {
           width: 36,
           height: 4,
           decoration: BoxDecoration(
-            color: colors.border.withOpacity(0.25),
+            color: colors.border.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -345,10 +345,10 @@ class _AlertIcon extends StatelessWidget {
         width: 68,
         height: 68,
         decoration: BoxDecoration(
-          color: visual.color.withOpacity(0.06),
+          color: visual.color.withValues(alpha: 0.06),
           shape: BoxShape.circle,
           border: Border.all(
-            color: visual.color.withOpacity(0.08),
+            color: visual.color.withValues(alpha: 0.08),
             width: 1,
           ),
         ),
@@ -357,7 +357,7 @@ class _AlertIcon extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: visual.color.withOpacity(0.10),
+              color: visual.color.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -477,7 +477,7 @@ class _SoftButtonState extends State<_SoftButton>
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: widget.color.withOpacity(0.20),
+                  color: widget.color.withValues(alpha: 0.20),
                   blurRadius: 24,
                   spreadRadius: -4,
                   offset: const Offset(0, 10),
@@ -487,8 +487,8 @@ class _SoftButtonState extends State<_SoftButton>
             alignment: Alignment.center,
             child: Text(
               widget.label,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: widget.textColor,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.1,

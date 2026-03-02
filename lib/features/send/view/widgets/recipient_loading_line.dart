@@ -8,26 +8,42 @@ class RecipientLoadingLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Solid surface tint — no opacity
+    final bgColor = isDark ? c.textPrimary : c.surface;
+    final borderColor = isDark ? c.textPrimary : c.border;
+    final spinnerColor = isDark ? c.primary : c.primary;
 
     return Container(
-      height: 56,
+      height: 60,
       decoration: BoxDecoration(
-        color: c.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: c.primary.withOpacity(0.1),
-          width: 1,
-        ),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
-      child: Center(
-        child: SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.5,
-            color: c.primary.withOpacity(0.5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            height: 18,
+            width: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: spinnerColor,
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          Text(
+            'Looking up address…',
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
       ),
     );
   }

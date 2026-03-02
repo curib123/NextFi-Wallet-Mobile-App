@@ -17,8 +17,11 @@ import 'package:provider/single_child_widget.dart';
 // ─────────────────────────── App core ─────────────────────────
 import 'package:next_fi/app/home.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart' hide ThemeBridge;
+import 'package:next_fi/common/services/internet_loss_guard.dart';
 import 'package:next_fi/common/services/network_monitor.dart';
+import 'package:next_fi/common/services/inactivity_guard.dart';
 import 'package:next_fi/common/components/network_status_overlay.dart';
+import 'package:next_fi/common/components/modal/global_announcement_host.dart';
 
 // ─────────────────────────── Services ─────────────────────────
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
@@ -259,6 +262,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  static const TextScaler _kClampedTextScaler = TextScaler.linear(1.0);
+
   bool get _isRunningWidgetTest {
     final bindingName = WidgetsBinding.instance.runtimeType.toString();
     return bindingName.contains('TestWidgetsFlutterBinding');
@@ -363,9 +368,21 @@ class _MyAppState extends State<MyApp> {
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),
-          builder: (context, child) => NetworkStatusOverlay(
-            child: child ?? const SizedBox.shrink(),
-          ),
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(textScaler: _kClampedTextScaler),
+              child: GlobalAnnouncementHost(
+                child: InactivityGuard(
+                  child: InternetLossGuard(
+                    child: NetworkStatusOverlay(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -375,10 +392,12 @@ class _MyAppState extends State<MyApp> {
 // ───────────────────────────── Themes ─────────────────────────────
 final ThemeData _lightTheme = ThemeData(
   useMaterial3: true,
+  fontFamily: GoogleFonts.sora().fontFamily,
   scaffoldBackgroundColor: AppColor.light.background,
   canvasColor: AppColor.light.surface,
   dialogBackgroundColor: AppColor.light.surface,
-  textTheme: GoogleFonts.workSansTextTheme(),
+  textTheme: GoogleFonts.soraTextTheme(),
+  primaryTextTheme: GoogleFonts.soraTextTheme(),
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColor.light.primary,
     surface: AppColor.light.surface,
@@ -388,10 +407,12 @@ final ThemeData _lightTheme = ThemeData(
 
 final ThemeData _darkTheme = ThemeData(
   useMaterial3: true,
+  fontFamily: GoogleFonts.sora().fontFamily,
   scaffoldBackgroundColor: AppColor.dark.background,
   canvasColor: AppColor.dark.surface,
   dialogBackgroundColor: AppColor.dark.surface,
-  textTheme: GoogleFonts.workSansTextTheme(ThemeData.dark().textTheme),
+  textTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme),
+  primaryTextTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme),
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColor.dark.primary,
     surface: AppColor.dark.surface,

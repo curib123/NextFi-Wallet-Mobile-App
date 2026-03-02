@@ -9,14 +9,14 @@ class EmptyChart extends StatelessWidget {
     final c = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: c.surfaceContainerHighest.withOpacity(0.35),
+        color: c.surfaceContainerHighest.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.outlineVariant.withOpacity(0.4)),
+        border: Border.all(color: c.outlineVariant.withValues(alpha: 0.4)),
       ),
       alignment: Alignment.center,
       child: Text(
         'No data',
-        style: TextStyle(color: c.onSurface.withOpacity(0.6), fontWeight: FontWeight.w600),
+        style: TextStyle(color: c.onSurface.withValues(alpha: 0.6), fontWeight: FontWeight.w600),
       ),
     );
   }

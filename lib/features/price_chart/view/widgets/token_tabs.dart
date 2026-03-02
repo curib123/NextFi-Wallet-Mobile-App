@@ -1,5 +1,6 @@
 // lib/features/price_chart/view/widgets/token_tabs.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class TokenTabs extends StatelessWidget {
   const TokenTabs({super.key, required this.token, required this.onChanged});
@@ -13,9 +14,9 @@ class TokenTabs extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: c.surfaceContainerHighest.withOpacity(0.5),
+        color: c.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.outlineVariant.withOpacity(0.4)),
+        border: Border.all(color: c.outlineVariant.withValues(alpha: 0.4)),
       ),
       padding: const EdgeInsets.all(3),
       child: Row(
@@ -31,7 +32,7 @@ class TokenTabs extends StatelessWidget {
                 duration: const Duration(milliseconds: 160),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: selected ? c.primary.withOpacity(0.14) : Colors.transparent,
+                  color: selected ? c.primary.withValues(alpha: 0.14) : c.surface,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -40,7 +41,7 @@ class TokenTabs extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     fontSize: 11,
                     letterSpacing: 0.2,
-                    color: selected ? c.primary : c.onSurface.withOpacity(0.7),
+                    color: selected ? c.primary : c.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ),

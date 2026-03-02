@@ -39,10 +39,10 @@ class MetaHeader extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: canCopy ? colors.surface : colors.surface.withOpacity(0.5),
+              color: canCopy ? colors.surface : colors.surface.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: colors.border.withOpacity(0.15),
+                color: colors.border.withValues(alpha: 0.15),
                 width: 1,
               ),
             ),
@@ -78,7 +78,7 @@ class MetaHeader extends StatelessWidget {
                 color: colors.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: colors.border.withOpacity(0.15),
+                  color: colors.border.withValues(alpha: 0.15),
                   width: 1,
                 ),
               ),

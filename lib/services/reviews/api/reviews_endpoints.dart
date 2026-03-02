@@ -1,8 +1,19 @@
+/// Reviews API endpoints
 class ReviewsEndpoints {
   static const String base = '/reviews';
 
-  static String createBuyerReview() => base;
-  static String listMyReviews() => '$base/me';
-  static String createSellerReview() => '$base/seller/me';
-  static String listSellerReviews() => '$base/seller/me';
+  /// Get reviews for a specific user (public)
+  static String userReviews(String userId) => '$base/user/$userId';
+
+  /// Get current user's reviews (authenticated)
+  static String me() => '$base/me';
+
+  /// Create a new review (authenticated)
+  static String create() => base;
+
+  /// Admin: List all reviews
+  static String adminList() => '$base/admin/list';
+
+  /// Admin: Get single review detail
+  static String adminDetail(String id) => '$base/admin/$id';
 }

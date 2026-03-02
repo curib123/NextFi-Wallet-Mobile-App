@@ -1,6 +1,6 @@
 enum ChatFriendRequestStatus { pending, accepted, rejected, canceled, unknown }
 
-enum ChatMessageKind { text, unknown }
+enum ChatMessageKind { text, binary, system, unknown }
 
 ChatFriendRequestStatus chatFriendRequestStatusFromApi(dynamic raw) {
   final v = raw?.toString().trim().toUpperCase();
@@ -38,6 +38,10 @@ ChatMessageKind chatMessageKindFromApi(dynamic raw) {
   switch (v) {
     case 'TEXT':
       return ChatMessageKind.text;
+    case 'BINARY':
+      return ChatMessageKind.binary;
+    case 'SYSTEM':
+      return ChatMessageKind.system;
     default:
       return ChatMessageKind.unknown;
   }
@@ -47,6 +51,10 @@ String chatMessageKindToApi(ChatMessageKind kind) {
   switch (kind) {
     case ChatMessageKind.text:
       return 'TEXT';
+    case ChatMessageKind.binary:
+      return 'BINARY';
+    case ChatMessageKind.system:
+      return 'SYSTEM';
     case ChatMessageKind.unknown:
       return 'TEXT';
   }
@@ -210,6 +218,29 @@ class ChatUserLite {
       return fromProfile.isEmpty ? null : fromProfile;
     })();
 
+    final parsedAvatarUrl = (() {
+      final direct = _readString(json, const [
+        'avatarUrl',
+        'avatar_url',
+        'avatar',
+        'profileImage',
+        'profile_image',
+        'photoUrl',
+        'photo_url',
+      ]);
+      if (direct.isNotEmpty) return direct;
+      final fromProfile = readFromProfile(const [
+        'avatarUrl',
+        'avatar_url',
+        'avatar',
+        'profileImage',
+        'profile_image',
+        'photoUrl',
+        'photo_url',
+      ]);
+      return fromProfile.isEmpty ? null : fromProfile;
+    })();
+
     final parsedName = (() {
       final direct = _readString(json, const ['name', 'fullName', 'full_name']);
       if (direct.isNotEmpty) return direct;
@@ -224,14 +255,7 @@ class ChatUserLite {
       id: _readString(json, const ['id', 'userId', 'user_id']),
       email: _readString(json, const ['email']),
       name: parsedName,
-      avatarUrl: (() {
-        final value = _readString(json, const [
-          'avatarUrl',
-          'avatar_url',
-          'avatar',
-        ]);
-        return value.isEmpty ? null : value;
-      })(),
+      avatarUrl: parsedAvatarUrl,
       username: parsedUsername,
       displayName: parsedDisplayName,
     );
@@ -334,12 +358,20 @@ class ChatFriendModel {
   final String friendshipId;
   final String friendUserId;
   final ChatUserLite friend;
+  final String friendStatus;
+  final DateTime? friendLastSeenAt;
+  final bool friendIsOnline;
+  final int newUnreadMessageCount;
   final DateTime? createdAt;
 
   const ChatFriendModel({
     required this.friendshipId,
     required this.friendUserId,
     required this.friend,
+    this.friendStatus = '',
+    this.friendLastSeenAt,
+    this.friendIsOnline = false,
+    this.newUnreadMessageCount = 0,
     this.createdAt,
   });
 
@@ -352,7 +384,23 @@ class ChatFriendModel {
     final friendUserId = _readString(json, const [
       'friendUserId',
       'friend_user_id',
+      'userId',
+      'user_id',
     ], fallback: friendUser.id);
+    final friendStatus = _readString(json, const [
+      'friendStatus',
+      'friend_status',
+      'presence',
+      'presenceStatus',
+      'presence_status',
+    ]);
+    final friendIsOnline = _readBool(json, const [
+      'friendIsOnline',
+      'friend_is_online',
+      'isOnline',
+      'is_online',
+      'online',
+    ], fallback: friendStatus.toUpperCase() == 'ONLINE');
 
     return ChatFriendModel(
       friendshipId: _readString(json, const [
@@ -362,6 +410,20 @@ class ChatFriendModel {
       ]),
       friendUserId: friendUserId,
       friend: friendUser,
+      friendStatus: friendStatus,
+      friendLastSeenAt: _readDate(json, const [
+        'friendLastSeenAt',
+        'friend_last_seen_at',
+        'lastSeenAt',
+        'last_seen_at',
+        'friendLastActiveAt',
+        'friend_last_active_at',
+      ]),
+      friendIsOnline: friendIsOnline,
+      newUnreadMessageCount: _readInt(json, const [
+        'newUnreadMessageCount',
+        'new_unread_message_count',
+      ]),
       createdAt: _readDate(json, const ['createdAt', 'created_at']),
     );
   }
@@ -458,6 +520,9 @@ class ChatDirectThreadModel {
       'friend',
       'counterparty',
       'otherUser',
+      'user',
+      'participant',
+      'participantUser',
     ]);
     final lastMessageMap = _readMap(json, const [
       'lastMessage',
@@ -473,6 +538,10 @@ class ChatDirectThreadModel {
       'friend_user_id',
       'otherUserId',
       'other_user_id',
+      'counterpartyUserId',
+      'counterparty_user_id',
+      'participantUserId',
+      'participant_user_id',
     ], fallback: friendUser?.id ?? '');
 
     return ChatDirectThreadModel(

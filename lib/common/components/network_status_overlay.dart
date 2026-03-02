@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/common/services/network_monitor.dart';
 import 'package:provider/provider.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 /// App-level overlay that wraps the entire widget tree and shows an animated
 /// bottom banner when the device goes offline, then auto-closes on reconnect.
@@ -46,15 +47,16 @@ class _NetworkBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
     final isConnected = isOnline && justReconnected;
     final bgColor = isConnected
-        ? const Color(0xFF22C55E)
-        : const Color(0xFF1E1E2E);
-    final textColor = Colors.white;
-    final iconColor = Colors.white;
+        ? colors.success
+        : colors.textPrimary;
+    final textColor = colors.onPrimary;
+    final iconColor = colors.onPrimary;
 
     return Material(
-      color: Colors.transparent,
+      color: colors.surface,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
@@ -62,7 +64,7 @@ class _NetworkBanner extends StatelessWidget {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(51),
+              color: colors.textPrimary.withValues(alpha: ((51) / 255.0)),
               blurRadius: 16,
               offset: const Offset(0, -4),
             ),
@@ -98,7 +100,7 @@ class _NetworkBanner extends StatelessWidget {
                         Text(
                           'Connection restored. Closing automatically...',
                           style: TextStyle(
-                            color: textColor.withAlpha(204),
+                            color: textColor.withValues(alpha: ((204) / 255.0)),
                             fontSize: 11.5,
                           ),
                         ),
@@ -106,7 +108,7 @@ class _NetworkBanner extends StatelessWidget {
                     ),
                   ),
                 ] else ...[
-                  _PulsingDot(color: const Color(0xFFEF4444)),
+                  _PulsingDot(color: colors.error),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -124,7 +126,7 @@ class _NetworkBanner extends StatelessWidget {
                         Text(
                           'Waiting to reconnect... Retrying automatically.',
                           style: TextStyle(
-                            color: textColor.withAlpha(178),
+                            color: textColor.withValues(alpha: ((178) / 255.0)),
                             fontSize: 11.5,
                           ),
                         ),

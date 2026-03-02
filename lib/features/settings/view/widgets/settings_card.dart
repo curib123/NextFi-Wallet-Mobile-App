@@ -24,10 +24,10 @@ class SettingsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.primary.withOpacity(0.10)),
+        border: Border.all(color: c.primary.withValues(alpha: 0.10)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: c.textPrimary.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -39,7 +39,7 @@ class SettingsCard extends StatelessWidget {
         itemCount: items.length,
         separatorBuilder: (_, __) => Divider(
           height: 1,
-          color: c.primary.withOpacity(0.08),
+          color: c.primary.withValues(alpha: 0.08),
           indent: 16,
           endIndent: 16,
         ),
