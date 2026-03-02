@@ -10,6 +10,9 @@ class ConicRingAvatar extends StatelessWidget {
     required this.asset,
     required this.imageSize,
     required this.baseColor,
+    this.fillColor,
+    this.imagePadding = 10,
+    this.showInnerBorder = true,
     this.rotationTurns = 0.0,
   });
 
@@ -18,6 +21,9 @@ class ConicRingAvatar extends StatelessWidget {
   final String asset;
   final double imageSize;
   final Color baseColor;
+  final Color? fillColor;
+  final double imagePadding;
+  final bool showInnerBorder;
   final double rotationTurns;
 
   @override
@@ -36,13 +42,28 @@ class ConicRingAvatar extends StatelessWidget {
               rotationTurns: rotationTurns,
             ),
           ),
-          ClipOval(
-            child: Image.asset(
-              asset,
-              width: imageSize,
-              height: imageSize,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.high,
+          Container(
+            width: imageSize,
+            height: imageSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: fillColor ?? baseColor.withValues(alpha: .08),
+              border: showInnerBorder
+                  ? Border.all(
+                      color: baseColor.withValues(alpha: .22),
+                      width: 1.2,
+                    )
+                  : null,
+            ),
+            padding: EdgeInsets.all(imagePadding),
+            child: ClipOval(
+              child: Image.asset(
+                asset,
+                width: imageSize,
+                height: imageSize,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
             ),
           ),
         ],

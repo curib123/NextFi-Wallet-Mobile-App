@@ -21,6 +21,7 @@ import 'package:next_fi/common/services/internet_loss_guard.dart';
 import 'package:next_fi/common/services/network_monitor.dart';
 import 'package:next_fi/common/services/inactivity_guard.dart';
 import 'package:next_fi/common/components/network_status_overlay.dart';
+import 'package:next_fi/common/components/modal/global_announcement_host.dart';
 
 // ─────────────────────────── Services ─────────────────────────
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
@@ -371,10 +372,12 @@ class _MyAppState extends State<MyApp> {
             final mq = MediaQuery.of(context);
             return MediaQuery(
               data: mq.copyWith(textScaler: _kClampedTextScaler),
-              child: InactivityGuard(
-                child: InternetLossGuard(
-                  child: NetworkStatusOverlay(
-                    child: child ?? const SizedBox.shrink(),
+              child: GlobalAnnouncementHost(
+                child: InactivityGuard(
+                  child: InternetLossGuard(
+                    child: NetworkStatusOverlay(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),

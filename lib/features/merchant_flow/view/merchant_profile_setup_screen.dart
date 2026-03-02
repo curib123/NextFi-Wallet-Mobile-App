@@ -21,6 +21,13 @@ class MerchantProfileSetupScreen extends StatefulWidget {
 
 class _MerchantProfileSetupScreenState
     extends State<MerchantProfileSetupScreen> {
+  static final RegExp _emailPattern = RegExp(
+    r"^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$",
+    caseSensitive: false,
+  );
+  static final RegExp _phonePattern = RegExp(r'^\+?[0-9][0-9\s\-\(\)]{7,17}$');
+  static final RegExp _registrationPattern = RegExp(r'^[A-Z0-9\-\/]{4,30}$');
+
   final _displayNameCtrl = TextEditingController();
   final _requestNoteCtrl = TextEditingController();
   CountryModel? _selectedCountry;
@@ -94,11 +101,13 @@ class _MerchantProfileSetupScreenState
   }
 
   Future<void> _submit() async {
-    final displayName = _displayNameCtrl.text.trim();
-    if (displayName.isEmpty) {
-      _showSnack('Display name is required.');
+    final error = _validateBeforeSubmit();
+    if (error != null) {
+      _showSnack(error);
       return;
     }
+
+    final displayName = _displayNameCtrl.text.trim();
 
     HapticFeedback.mediumImpact();
     setState(() => _saving = true);
@@ -137,6 +146,60 @@ class _MerchantProfileSetupScreenState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String? _validateBeforeSubmit() {
+    final displayName = _displayNameCtrl.text.trim();
+    final requestNote = _requestNoteCtrl.text.trim();
+    final location = _locationCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final businessName = _businessNameCtrl.text.trim();
+    final registrationNo = _registrationNoCtrl.text.trim().toUpperCase();
+    final businessAddress = _businessAddressCtrl.text.trim();
+    final authorizedRep = _authorizedRepCtrl.text.trim();
+    final authorizedPosition = _authorizedPositionCtrl.text.trim();
+    final business = _type == MerchantType.business;
+
+    if (displayName.isEmpty) return 'Display name is required.';
+    if (displayName.length < 2) return 'Display name must be at least 2 characters.';
+    if (displayName.length > 80) return 'Display name must be at most 80 characters.';
+
+    if (requestNote.isNotEmpty && requestNote.length > 500) {
+      return 'Request note must be at most 500 characters.';
+    }
+
+    if (_selectedCountry == null) return 'Country is required.';
+    if (location.isEmpty) return 'Location is required.';
+    if (location.length < 2) return 'Location must be at least 2 characters.';
+
+    if (email.isEmpty && phone.isEmpty) {
+      return 'Provide at least one contact: email or phone.';
+    }
+    if (email.isNotEmpty && !_emailPattern.hasMatch(email)) {
+      return 'Enter a valid contact email.';
+    }
+    if (phone.isNotEmpty && !_phonePattern.hasMatch(phone)) {
+      return 'Enter a valid contact phone number.';
+    }
+
+    if (business) {
+      if (businessName.isEmpty) return 'Business name is required.';
+      if (businessName.length < 2) {
+        return 'Business name must be at least 2 characters.';
+      }
+      if (registrationNo.isEmpty) return 'Registration number is required.';
+      if (!_registrationPattern.hasMatch(registrationNo)) {
+        return 'Registration number is invalid.';
+      }
+      if (businessAddress.isEmpty) return 'Business address is required.';
+      if (authorizedRep.isEmpty) return 'Authorized representative is required.';
+      if (authorizedPosition.isEmpty) {
+        return 'Representative position is required.';
+      }
+    }
+
+    return null;
   }
 
   void _showSnack(String msg) {

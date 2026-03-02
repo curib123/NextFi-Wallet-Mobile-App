@@ -46,6 +46,9 @@ class _SelfieVerificationStepScreenState
   static const double _selfieMinFaceCoverage = 0.10;
   static const double _selfieMinIdCoverage = 0.04;
   static const double _idMinObjectCoverage = 0.16;
+  static final RegExp _phonePattern = RegExp(r'^\+?[0-9][0-9\s\-\(\)]{7,17}$');
+  static final RegExp _idNoPattern = RegExp(r'^[A-Z0-9\-]{4,32}$');
+  static final RegExp _postalPattern = RegExp(r'^[A-Z0-9\-\s]{3,12}$');
 
   final ImagePicker _picker = ImagePicker();
   final FaceDetector _faceDetector = FaceDetector(
@@ -414,7 +417,56 @@ class _SelfieVerificationStepScreenState
   }
 
   String? _validateBeforeSubmit() {
-    if (_phoneCtrl.text.trim().isEmpty) return 'Phone number is required.';
+    final phone = _phoneCtrl.text.trim();
+    final fullName = _fullLegalNameCtrl.text.trim();
+    final nationality = _nationalityCtrl.text.trim();
+    final address1 = _addressLine1Ctrl.text.trim();
+    final city = _cityCtrl.text.trim();
+    final state = _stateOrProvinceCtrl.text.trim();
+    final postal = _postalCodeCtrl.text.trim().toUpperCase();
+    final idNumber = _governmentIdNumberCtrl.text.trim().toUpperCase();
+    final now = DateTime.now();
+
+    if (phone.isEmpty) return 'Phone number is required.';
+    if (!_phonePattern.hasMatch(phone)) {
+      return 'Enter a valid phone number (e.g. +639171234567).';
+    }
+
+    if (fullName.isEmpty || fullName.length < 2) {
+      return 'Full legal name is required.';
+    }
+    if (_dateOfBirth == null) return 'Date of birth is required.';
+    final age = now.difference(_dateOfBirth!).inDays ~/ 365;
+    if (age < 18) return 'You must be at least 18 years old.';
+
+    if (nationality.isEmpty || nationality.length < 2) {
+      return 'Nationality is required.';
+    }
+    if (_selectedCountryOfResidence == null) {
+      return 'Country of residence is required.';
+    }
+
+    if (address1.isEmpty) return 'Address line 1 is required.';
+    if (city.isEmpty) return 'City is required.';
+    if (state.isEmpty) return 'State / Province is required.';
+    if (postal.isEmpty) return 'Postal code is required.';
+    if (!_postalPattern.hasMatch(postal)) {
+      return 'Enter a valid postal code.';
+    }
+
+    if (_selectedIssuingCountry == null) return 'Issuing country is required.';
+    if (_governmentIdType == null || _governmentIdType == GovernmentIdType.unknown) {
+      return 'ID type is required.';
+    }
+    if (idNumber.isEmpty) return 'ID number is required.';
+    if (!_idNoPattern.hasMatch(idNumber)) {
+      return 'Enter a valid ID number (A-Z, 0-9, dash).';
+    }
+    if (_governmentIdExpiry == null) return 'ID expiry date is required.';
+    if (_governmentIdExpiry!.isBefore(DateTime(now.year, now.month, now.day))) {
+      return 'ID expiry date must be today or later.';
+    }
+
     if (_selfie == null) return 'Selfie image is required.';
     if (_idFront == null) return 'Government ID front image is required.';
     if (_idBack == null) return 'Government ID back image is required.';
