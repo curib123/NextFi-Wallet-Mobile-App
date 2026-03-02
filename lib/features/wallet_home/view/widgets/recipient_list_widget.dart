@@ -261,49 +261,6 @@ class _NotAuthenticatedView extends StatelessWidget {
                       letterSpacing: -0.1,
                     ),
                   ),
-                  const SizedBox(height: _S.s28),
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.mediumImpact();
-                      onLoginPressed != null
-                          ? onLoginPressed!()
-                          : Navigator.pushNamed(context, '/login');
-                    },
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: colors.primaryGradient,
-                        borderRadius: BorderRadius.circular(_S.r16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colors.primary.withValues(alpha: 0.28),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            LucideIcons.logIn,
-                            color: AppColor.of(context).onPrimary,
-                            size: 18,
-                          ),
-                          const SizedBox(width: _S.s10),
-                          Text(
-                            'Login to Continue',
-                            style: TextStyle(
-                              color: AppColor.of(context).onPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -628,7 +585,6 @@ class _RecipientTileState extends State<RecipientTile> {
                             style: TextStyle(
                               color: colors.textSecondary,
                               fontSize: c ? 11 : 12,
-                              fontFamily: 'monospace',
                               fontWeight: FontWeight.w500,
                               letterSpacing: 0.2,
                             ),
@@ -870,7 +826,6 @@ class _ActionSheet extends StatelessWidget {
                           style: TextStyle(
                             color: colors.textSecondary,
                             fontSize: 12,
-                            fontFamily: 'monospace',
                             fontWeight: FontWeight.w500,
                             letterSpacing: 0.2,
                           ),

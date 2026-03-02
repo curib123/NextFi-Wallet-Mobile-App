@@ -212,7 +212,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
                                 style: TextStyle(
                                   color: colors.textPrimary,
                                   fontSize: 13,
-                                  fontFamily: 'monospace',
                                 ),
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,

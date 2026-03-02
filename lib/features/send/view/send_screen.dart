@@ -1551,7 +1551,6 @@ class _RecipientBadge extends StatelessWidget {
                   softWrap: false,
                   style: TextStyle(
                     color: t.monoColor,
-                    fontFamily: 'monospace',
                     fontSize: 11.5,
                     letterSpacing: 0.3,
                     height: 1.3,
@@ -1650,7 +1649,6 @@ class _RecipientAddTemplate extends StatelessWidget {
                   softWrap: false,
                   style: TextStyle(
                     color: t.monoColor,
-                    fontFamily: 'monospace',
                     fontSize: 11.5,
                     letterSpacing: 0.3,
                     height: 1.3,

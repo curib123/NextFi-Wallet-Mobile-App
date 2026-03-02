@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
@@ -22,9 +26,40 @@ class SelfieVerificationStepScreen extends StatefulWidget {
 
 enum _ImageSlot { selfie, idFront, idBack }
 
+class _ImageMetrics {
+  const _ImageMetrics({
+    required this.width,
+    required this.height,
+    required this.sharpness,
+  });
+
+  final double width;
+  final double height;
+  final double sharpness;
+}
+
 class _SelfieVerificationStepScreenState
     extends State<SelfieVerificationStepScreen> {
+  static const int _maxAutoRetryPerCapture = 1;
+  static const double _selfieMinSharpness = 45;
+  static const double _idMinSharpness = 60;
+  static const double _selfieMinFaceCoverage = 0.10;
+  static const double _selfieMinIdCoverage = 0.04;
+  static const double _idMinObjectCoverage = 0.16;
+
   final ImagePicker _picker = ImagePicker();
+  final FaceDetector _faceDetector = FaceDetector(
+    options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
+  );
+  final ObjectDetector _objectDetector = ObjectDetector(
+    options: ObjectDetectorOptions(
+      mode: DetectionMode.single,
+      classifyObjects: true,
+      multipleObjects: true,
+    ),
+  );
+  final TextRecognizer _textRecognizer =
+      TextRecognizer(script: TextRecognitionScript.latin);
 
   // ── Contact ──────────────────────────────────────────────
   final TextEditingController _phoneCtrl = TextEditingController();
@@ -73,6 +108,9 @@ class _SelfieVerificationStepScreenState
 
   @override
   void dispose() {
+    _faceDetector.close();
+    _objectDetector.close();
+    _textRecognizer.close();
     _phoneCtrl.dispose();
     _fullLegalNameCtrl.dispose();
     _nationalityCtrl.dispose();
@@ -154,13 +192,148 @@ class _SelfieVerificationStepScreenState
     });
   }
 
-  Future<void> _pickForSlot(_ImageSlot slot, ImageSource source) async {
+  Future<_ImageMetrics?> _analyzeImageMetrics(String imagePath) async {
+    final bytes = await File(imagePath).readAsBytes();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return null;
+
+    final working = decoded.width > 1400
+        ? img.copyResize(decoded, width: 1400)
+        : decoded;
+
+    final width = working.width;
+    final height = working.height;
+    if (width < 120 || height < 120) return null;
+
+    double sum = 0;
+    double sumSq = 0;
+    int count = 0;
+
+    for (int y = 1; y < height - 1; y += 2) {
+      for (int x = 1; x < width - 1; x += 2) {
+        final c = working.getPixel(x, y);
+        final l = (0.299 * c.r) + (0.587 * c.g) + (0.114 * c.b);
+
+        final lN = _luma(working.getPixel(x, y - 1));
+        final lS = _luma(working.getPixel(x, y + 1));
+        final lW = _luma(working.getPixel(x - 1, y));
+        final lE = _luma(working.getPixel(x + 1, y));
+
+        final lap = (lN + lS + lW + lE - (4 * l)).abs();
+        sum += lap;
+        sumSq += lap * lap;
+        count++;
+      }
+    }
+
+    if (count == 0) return null;
+    final mean = sum / count;
+    final variance = (sumSq / count) - (mean * mean);
+    return _ImageMetrics(
+      width: width.toDouble(),
+      height: height.toDouble(),
+      sharpness: variance,
+    );
+  }
+
+  double _luma(img.Pixel pixel) {
+    return (0.299 * pixel.r) + (0.587 * pixel.g) + (0.114 * pixel.b);
+  }
+
+  Future<String> _applyMirrorIfNeeded(_ImageSlot slot, String imagePath) async {
+    if (slot != _ImageSlot.selfie) return imagePath;
+
+    try {
+      final file = File(imagePath);
+      final bytes = await file.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return imagePath;
+
+      final mirrored = img.flipHorizontal(decoded);
+      final lower = imagePath.toLowerCase();
+      final encoded = lower.endsWith('.png')
+          ? img.encodePng(mirrored)
+          : img.encodeJpg(mirrored, quality: 92);
+
+      await file.writeAsBytes(encoded, flush: true);
+      return imagePath;
+    } catch (_) {
+      return imagePath;
+    }
+  }
+
+  Future<String?> _runMlKitValidation(_ImageSlot slot, String imagePath) async {
+    final inputImage = InputImage.fromFilePath(imagePath);
+    final metrics = await _analyzeImageMetrics(imagePath);
+    if (metrics == null) {
+      return 'Unable to analyze image quality. Retake in better lighting.';
+    }
+    final minSharpness = slot == _ImageSlot.selfie
+        ? _selfieMinSharpness
+        : _idMinSharpness;
+    if (metrics.sharpness < minSharpness) {
+      return 'Image is too blurry. Keep steady and retake a clearer photo.';
+    }
+
+    final objects = await _objectDetector.processImage(inputImage);
+    final imageArea = metrics.width * metrics.height;
+
+    if (slot == _ImageSlot.selfie) {
+      final faces = await _faceDetector.processImage(inputImage);
+      if (faces.isEmpty) {
+        return 'No face detected. Retake the selfie with your face clearly visible.';
+      }
+      if (faces.length > 1) {
+        return 'Multiple faces detected. Capture only your face with your ID.';
+      }
+      final face = faces.first;
+      final faceArea = face.boundingBox.width * face.boundingBox.height;
+      final imageArea = metrics.width * metrics.height;
+      final coverage = faceArea / imageArea;
+      if (coverage < _selfieMinFaceCoverage) {
+        return 'Move closer to camera. Your face must be clearly present.';
+      }
+
+      final hasIdInSelfie = objects.any((obj) {
+        final box = obj.boundingBox;
+        final objCoverage = (box.width * box.height) / imageArea;
+        final ratio = box.width / box.height;
+        return objCoverage >= _selfieMinIdCoverage &&
+            ratio >= 1.2 &&
+            ratio <= 2.3;
+      });
+      if (!hasIdInSelfie) {
+        return 'Selfie with ID is invalid. Hold your ID beside your face and keep the full card visible.';
+      }
+      return null;
+    }
+
+    final hasCardLikeObject = objects.any((obj) {
+      final box = obj.boundingBox;
+      final coverage = (box.width * box.height) / imageArea;
+      final ratio = box.width / box.height;
+      return coverage >= _idMinObjectCoverage && ratio >= 1.2 && ratio <= 2.3;
+    });
+    if (!hasCardLikeObject) {
+      return 'ID card not detected. Place the full ID inside frame and retake.';
+    }
+
+    final recognized = await _textRecognizer.processImage(inputImage);
+    final compactText = recognized.text.replaceAll(RegExp(r'\s+'), '').trim();
+    if (compactText.length < 18) {
+      return 'ID looks unclear. Retake with better lighting and keep all text readable.';
+    }
+
+    return null;
+  }
+
+  Future<void> _pickForSlot(_ImageSlot slot, {int attempt = 0}) async {
     if (_picking || _submitting) return;
     HapticFeedback.lightImpact();
     setState(() => _picking = true);
     try {
       final xFile = await _picker.pickImage(
-        source: source,
+        source: ImageSource.camera,
         imageQuality: 90,
         preferredCameraDevice: slot == _ImageSlot.selfie
             ? CameraDevice.front
@@ -176,7 +349,24 @@ class _SelfieVerificationStepScreenState
         _showSnack('Unsupported image type. Use JPG, PNG, or WEBP.');
         return;
       }
-      _assignSlot(slot, File(xFile.path));
+
+      final processedPath = await _applyMirrorIfNeeded(slot, xFile.path);
+      final mlKitError = await _runMlKitValidation(slot, processedPath);
+      if (!mounted) return;
+      if (mlKitError != null) {
+        setState(() => _picking = false);
+        if (attempt < _maxAutoRetryPerCapture) {
+          _showSnack('$mlKitError Auto-retake started...');
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+          if (!mounted) return;
+          await _pickForSlot(slot, attempt: attempt + 1);
+          return;
+        }
+        _showSnack(mlKitError);
+        return;
+      }
+
+      _assignSlot(slot, File(processedPath));
       setState(() => _picking = false);
     } catch (e) {
       if (!mounted) return;
@@ -620,10 +810,7 @@ class _SelfieVerificationStepScreenState
             icon: Icons.credit_card_outlined,
             file: _idFront,
             busy: _picking || _submitting,
-            onCamera: () =>
-                _pickForSlot(_ImageSlot.idFront, ImageSource.camera),
-            onGallery: () =>
-                _pickForSlot(_ImageSlot.idFront, ImageSource.gallery),
+            onCamera: () => _pickForSlot(_ImageSlot.idFront),
             onClear: () => _clearSlot(_ImageSlot.idFront),
           ),
           const SizedBox(height: 10),
@@ -634,9 +821,7 @@ class _SelfieVerificationStepScreenState
             icon: Icons.flip_outlined,
             file: _idBack,
             busy: _picking || _submitting,
-            onCamera: () => _pickForSlot(_ImageSlot.idBack, ImageSource.camera),
-            onGallery: () =>
-                _pickForSlot(_ImageSlot.idBack, ImageSource.gallery),
+            onCamera: () => _pickForSlot(_ImageSlot.idBack),
             onClear: () => _clearSlot(_ImageSlot.idBack),
           ),
           const SizedBox(height: 10),
@@ -648,7 +833,7 @@ class _SelfieVerificationStepScreenState
             icon: Icons.face_retouching_natural_outlined,
             file: _selfie,
             busy: _picking || _submitting,
-            onCamera: () => _pickForSlot(_ImageSlot.selfie, ImageSource.camera),
+            onCamera: () => _pickForSlot(_ImageSlot.selfie),
             onClear: () => _clearSlot(_ImageSlot.selfie),
           ),
 
@@ -1000,7 +1185,6 @@ class _UploadCard extends StatelessWidget {
     required this.file,
     required this.busy,
     required this.onCamera,
-    this.onGallery,
     required this.onClear,
   });
 
@@ -1011,7 +1195,6 @@ class _UploadCard extends StatelessWidget {
   final File? file;
   final bool busy;
   final VoidCallback onCamera;
-  final VoidCallback? onGallery;
   final VoidCallback onClear;
 
   @override
@@ -1155,45 +1338,6 @@ class _UploadCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onGallery != null) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 38,
-                    child: AppOutlinedButton(
-                      onPressed: busy ? null : onGallery,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: c.textPrimary,
-                        side: BorderSide(
-                          color: c.border.withValues(alpha: 0.3),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.photo_library_outlined,
-                            size: 14,
-                            color: c.textSecondary,
-                          ),
-                          const SizedBox(width: 5),
-                          const Flexible(
-                            child: Text(
-                              'Gallery',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
               if (hasFile) ...[
                 const SizedBox(width: 8),
                 SizedBox(

@@ -965,7 +965,6 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   _shortenAddress(recipient.address),
                   style: TextStyle(
                     color: c.textSecondary,
-                    fontFamily: 'monospace',
                     fontSize: 12,
                     letterSpacing: 0,
                   ),
@@ -1030,7 +1029,6 @@ class _ClaimableCreateScreenState extends State<ClaimableCreateScreen> {
                   _shortenAddress(addr),
                   style: TextStyle(
                     color: c.textSecondary,
-                    fontFamily: 'monospace',
                     fontSize: 12,
                     letterSpacing: 0,
                   ),

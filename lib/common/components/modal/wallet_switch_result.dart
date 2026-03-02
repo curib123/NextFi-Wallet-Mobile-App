@@ -640,7 +640,6 @@ class _WalletCard extends StatelessWidget {
                     style: TextStyle(
                       color: colors.textSecondary,
                       fontSize: 11.5,
-                      fontFamily: 'monospace',
                     ),
                   ),
                 ],

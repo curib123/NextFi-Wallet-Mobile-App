@@ -669,7 +669,6 @@ class _FacebookIcon extends StatelessWidget {
             fontWeight: FontWeight.w800,
             color: colors.onPrimary,
             height: 1.2,
-            fontFamily: 'Georgia',
           ),
         ),
       ),

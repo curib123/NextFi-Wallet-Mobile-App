@@ -78,7 +78,6 @@ class RecipientAddTemplate extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: addressColor,
-                    fontFamily: 'monospace',
                     fontSize: 11.5,
                     letterSpacing: 0.3,
                     height: 1.3,

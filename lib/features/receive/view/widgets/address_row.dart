@@ -22,7 +22,7 @@ class AddressRow extends StatelessWidget {
           Expanded(
             child: SelectableText(
               address,
-              style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 13.5, fontWeight: FontWeight.w600),
+              style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w600),
             ),
           ),
           IconButton(

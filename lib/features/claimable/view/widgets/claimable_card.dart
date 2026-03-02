@@ -189,7 +189,6 @@ class _ClaimableCardState extends State<ClaimableCard> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: c.textSecondary,
-                            fontFamily: 'monospace',
                             fontSize: 11,
                           ),
                         ),

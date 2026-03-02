@@ -424,7 +424,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             widget.trade.id.length > 16
                 ? '${widget.trade.id.substring(0, 12)}…'
                 : widget.trade.id,
-            style: GoogleFonts.jetBrainsMono(
+            style: GoogleFonts.sora(
               fontSize: 10,
               color: colors.textSecondary,
             ),

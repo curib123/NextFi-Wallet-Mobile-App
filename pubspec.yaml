@@ -56,6 +56,10 @@ dependencies:
   connectivity_plus: ^6.1.4
   firebase_core: ^4.4.0
   image_picker: ^1.1.2
+  image: ^4.3.0
+  google_mlkit_face_detection: ^0.13.1
+  google_mlkit_object_detection: ^0.15.0
+  google_mlkit_text_recognition: ^0.15.0
   socket_io_client: ^3.1.2
   http: ^1.2.0
   uuid: ^4.4.0

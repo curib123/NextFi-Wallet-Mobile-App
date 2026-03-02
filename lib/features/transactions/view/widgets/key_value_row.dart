@@ -37,8 +37,8 @@ class KeyValueRow extends StatelessWidget {
             style: TextStyle(
               color: colors.textPrimary,
               fontWeight: FontWeight.w700,
-              fontFamily: mono ? 'monospace' : null,
               fontSize: 13.5,
+              letterSpacing: mono ? 0.15 : 0,
             ),
           ),
         ),

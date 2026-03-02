@@ -851,7 +851,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
             _trade.id.length > 16
                 ? '${_trade.id.substring(0, 12)}…${_trade.id.substring(_trade.id.length - 4)}'
                 : _trade.id,
-            style: GoogleFonts.jetBrainsMono(
+            style: GoogleFonts.sora(
               fontSize: 10,
               color: colors.textSecondary,
             ),
@@ -1067,7 +1067,7 @@ class _HeroCard extends StatelessWidget {
                               trade.id.length > 14
                                   ? '${trade.id.substring(0, 10)}…'
                                   : trade.id,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: GoogleFonts.sora(
                                 fontSize: 10,
                                 color: colors.textSecondary,
                               ),
@@ -1134,7 +1134,7 @@ class _HeroCard extends StatelessWidget {
                         children: [
                           Text(
                             trade.cryptoAmount.toStringAsFixed(4),
-                            style: GoogleFonts.jetBrainsMono(
+                            style: GoogleFonts.sora(
                               fontSize: 28,
                               fontWeight: FontWeight.w700,
                               color: colors.textPrimary,
@@ -1146,7 +1146,7 @@ class _HeroCard extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Text(
                               trade.asset,
-                              style: GoogleFonts.jetBrainsMono(
+                              style: GoogleFonts.sora(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: colors.textSecondary,
@@ -1279,7 +1279,7 @@ class _CountdownCard extends StatelessWidget {
             ),
             child: Text(
               _fmt(timeLeft),
-              style: GoogleFonts.jetBrainsMono(
+              style: GoogleFonts.sora(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: accent,
@@ -2682,7 +2682,7 @@ class _DataRowState extends State<_DataRow> {
                       widget.value,
                       textAlign: TextAlign.right,
                       style: widget.mono
-                          ? GoogleFonts.jetBrainsMono(
+                          ? GoogleFonts.sora(
                               fontSize: 12,
                               color: widget.colors.textPrimary,
                               fontWeight: FontWeight.w500,
