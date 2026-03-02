@@ -41,18 +41,21 @@ class _ImageMetrics {
 class _SelfieVerificationStepScreenState
     extends State<SelfieVerificationStepScreen> {
   static const int _maxAutoRetryPerCapture = 1;
-  static const double _selfieMinSharpness = 45;
-  static const double _idMinSharpness = 60;
-  static const double _selfieMinFaceCoverage = 0.10;
-  static const double _selfieMinIdCoverage = 0.04;
-  static const double _idMinObjectCoverage = 0.16;
+  static const double _selfieMinSharpness = 30;
+  static const double _idMinSharpness = 45;
+  static const double _selfieMinFaceCoverage = 0.075;
+  static const double _selfieMinIdCoverage = 0.03;
+  static const double _idMinObjectCoverage = 0.12;
   static final RegExp _phonePattern = RegExp(r'^\+?[0-9][0-9\s\-\(\)]{7,17}$');
   static final RegExp _idNoPattern = RegExp(r'^[A-Z0-9\-]{4,32}$');
   static final RegExp _postalPattern = RegExp(r'^[A-Z0-9\-\s]{3,12}$');
 
   final ImagePicker _picker = ImagePicker();
   final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
+    options: FaceDetectorOptions(
+      performanceMode: FaceDetectorMode.accurate,
+      minFaceSize: 0.06,
+    ),
   );
   final ObjectDetector _objectDetector = ObjectDetector(
     options: ObjectDetectorOptions(
@@ -302,8 +305,8 @@ class _SelfieVerificationStepScreenState
         final objCoverage = (box.width * box.height) / imageArea;
         final ratio = box.width / box.height;
         return objCoverage >= _selfieMinIdCoverage &&
-            ratio >= 1.2 &&
-            ratio <= 2.3;
+            ratio >= 1.1 &&
+            ratio <= 2.5;
       });
       if (!hasIdInSelfie) {
         return 'Selfie with ID is invalid. Hold your ID beside your face and keep the full card visible.';
@@ -315,10 +318,17 @@ class _SelfieVerificationStepScreenState
       final box = obj.boundingBox;
       final coverage = (box.width * box.height) / imageArea;
       final ratio = box.width / box.height;
-      return coverage >= _idMinObjectCoverage && ratio >= 1.2 && ratio <= 2.3;
+      return coverage >= _idMinObjectCoverage && ratio >= 1.1 && ratio <= 2.5;
     });
     if (!hasCardLikeObject) {
       return 'ID card not detected. Place the full ID inside frame and retake.';
+    }
+
+    if (slot == _ImageSlot.idFront) {
+      final faces = await _faceDetector.processImage(inputImage);
+      if (faces.isEmpty) {
+        return 'No face photo detected on the front ID. Capture the front side clearly.';
+      }
     }
 
     final recognized = await _textRecognizer.processImage(inputImage);
@@ -860,6 +870,7 @@ class _SelfieVerificationStepScreenState
             title: 'Government ID — Front',
             subtitle: 'Capture the front side of your ID',
             icon: Icons.credit_card_outlined,
+            guide: _UploadGuide.idCard,
             file: _idFront,
             busy: _picking || _submitting,
             onCamera: () => _pickForSlot(_ImageSlot.idFront),
@@ -871,6 +882,7 @@ class _SelfieVerificationStepScreenState
             title: 'Government ID — Back',
             subtitle: 'Capture the back side of your ID',
             icon: Icons.flip_outlined,
+            guide: _UploadGuide.idCard,
             file: _idBack,
             busy: _picking || _submitting,
             onCamera: () => _pickForSlot(_ImageSlot.idBack),
@@ -883,6 +895,7 @@ class _SelfieVerificationStepScreenState
             subtitle:
                 'Take a photo of yourself clearly holding your ID next to your face',
             icon: Icons.face_retouching_natural_outlined,
+            guide: _UploadGuide.selfieWithId,
             file: _selfie,
             busy: _picking || _submitting,
             onCamera: () => _pickForSlot(_ImageSlot.selfie),
@@ -1234,6 +1247,7 @@ class _UploadCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.icon,
+    required this.guide,
     required this.file,
     required this.busy,
     required this.onCamera,
@@ -1244,6 +1258,7 @@ class _UploadCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
+  final _UploadGuide guide;
   final File? file;
   final bool busy;
   final VoidCallback onCamera;
@@ -1334,14 +1349,18 @@ class _UploadCard extends StatelessWidget {
             height: 148,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: hasFile
-                  ? Image.file(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasFile)
+                    Image.file(
                       file!,
                       width: double.infinity,
                       height: 148,
                       fit: BoxFit.cover,
                     )
-                  : Container(
+                  else
+                    Container(
                       color: c.border.withValues(alpha: 0.08),
                       child: Center(
                         child: Icon(
@@ -1351,6 +1370,9 @@ class _UploadCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  _CaptureGuideOverlay(c: c, guide: guide),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -1420,6 +1442,69 @@ class _UploadCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // COUNTRY PICKER FIELD  (tap-to-open, matches _DatePickerField style)
 // ─────────────────────────────────────────────────────────────────────────────
+
+enum _UploadGuide { idCard, selfieWithId }
+
+class _CaptureGuideOverlay extends StatelessWidget {
+  const _CaptureGuideOverlay({required this.c, required this.guide});
+
+  final AppColor c;
+  final _UploadGuide guide;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = c.primary.withValues(alpha: 0.65);
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          if (guide == _UploadGuide.idCard) {
+            return Center(
+              child: Container(
+                width: w * 0.72,
+                height: h * 0.58,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor, width: 2),
+                ),
+              ),
+            );
+          }
+
+          return Stack(
+            children: [
+              Positioned(
+                left: w * 0.12,
+                top: h * 0.12,
+                child: Container(
+                  width: w * 0.34,
+                  height: h * 0.66,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: borderColor, width: 2),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: w * 0.09,
+                top: h * 0.30,
+                child: Container(
+                  width: w * 0.37,
+                  height: h * 0.44,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: borderColor, width: 2),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
 
 class _CountryPickerField extends StatelessWidget {
   const _CountryPickerField({
