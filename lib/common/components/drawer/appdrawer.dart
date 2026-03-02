@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
+import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
@@ -17,8 +19,10 @@ import 'package:next_fi/features/verification_flow/view/payment_method_setup_scr
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
+import 'package:next_fi/helper/link_opener/link_opener.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
 import 'package:next_fi/services/chat/chat_core_service.dart';
@@ -54,6 +58,7 @@ class _DrawerCache {
   static const _verificationTtl = Duration(seconds: 5);
   static const _chatTtl = Duration(seconds: 1);
   static const _appInfoTtl = Duration(days: 1);
+  static const _legalLinksTtl = Duration(hours: 6);
 
   static _CacheEntry<User>? user;
   static _CacheEntry<PackageInfo>? appInfo;
@@ -62,6 +67,8 @@ class _DrawerCache {
   static _CacheEntry<MerchantTierProgressModel?>? tierProgress;
   static _CacheEntry<TrustStatus>? trustStatus;
   static _CacheEntry<int>? unreadCount;
+  static _CacheEntry<String>? termsUrl;
+  static _CacheEntry<String>? privacyUrl;
 
   static bool get hasUser => user != null && user!.isFresh(_userTtl);
   static bool get hasAppInfo =>
@@ -76,11 +83,19 @@ class _DrawerCache {
       trustStatus != null && trustStatus!.isFresh(_verificationTtl);
   static bool get hasUnreadCount =>
       unreadCount != null && unreadCount!.isFresh(_chatTtl);
+  static bool get hasLegalLinks =>
+      termsUrl != null &&
+      termsUrl!.isFresh(_legalLinksTtl) &&
+      privacyUrl != null &&
+      privacyUrl!.isFresh(_legalLinksTtl);
 
   static void invalidateAll() {
     user = merchantProfile = profile = null;
     tierProgress = null;
-    trustStatus = unreadCount = null;
+    trustStatus = null;
+    unreadCount = null;
+    termsUrl = null;
+    privacyUrl = null;
   }
 
   static void invalidateProfile() {
@@ -126,6 +141,8 @@ class _AppDrawerState extends State<AppDrawer>
   TrustStatus get _trustStatus =>
       _DrawerCache.trustStatus?.value ?? TrustStatus.unknown;
   int get _unreadChatCount => _DrawerCache.unreadCount?.value ?? 0;
+  String get _termsAndConditionsUrl => _DrawerCache.termsUrl?.value ?? '';
+  String get _privacyPolicyUrl => _DrawerCache.privacyUrl?.value ?? '';
 
   @override
   void initState() {
@@ -141,7 +158,7 @@ class _AppDrawerState extends State<AppDrawer>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
 
-    _itemAnims = List.generate(16, (i) {
+    _itemAnims = List.generate(20, (i) {
       final start = 0.1 + i * 0.06;
       final end = (start + 0.35).clamp(0.0, 1.0);
       return CurvedAnimation(
@@ -172,6 +189,7 @@ class _AppDrawerState extends State<AppDrawer>
 
     final futures = <Future<void>>[
       if (!_DrawerCache.hasAppInfo) _fetchAppInfo(),
+      if (!_DrawerCache.hasLegalLinks) _fetchLegalLinks(),
       if (isAuth && !_DrawerCache.hasUser) _fetchUser(),
       if (isAuth && !_DrawerCache.hasProfile) _fetchProfile(),
       if (isAuth && !_DrawerCache.hasMerchantProfile)
@@ -232,6 +250,43 @@ class _AppDrawerState extends State<AppDrawer>
     } catch (_) {
       _DrawerCache.unreadCount = _CacheEntry(0);
     }
+  }
+
+  Future<void> _fetchLegalLinks() async {
+    String publicBase = centralized_baseUrl.replaceFirst(
+      RegExp(r'/api/v1/?$'),
+      '',
+    );
+    publicBase = publicBase.replaceFirst(RegExp(r'/$'), '');
+    final fallbackDownloadUrl = '$publicBase/download';
+
+    try {
+      final uri = Uri.parse('$publicBase/download/meta');
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map<String, dynamic>) {
+          final termsRaw = decoded['termsAndConditionsUrl']?.toString() ?? '';
+          final privacyRaw = decoded['privacyPolicyUrl']?.toString() ?? '';
+
+          final terms = termsRaw.trim().isNotEmpty
+              ? termsRaw.trim()
+              : fallbackDownloadUrl;
+          final privacy = privacyRaw.trim().isNotEmpty
+              ? privacyRaw.trim()
+              : fallbackDownloadUrl;
+
+          _DrawerCache.termsUrl = _CacheEntry(terms);
+          _DrawerCache.privacyUrl = _CacheEntry(privacy);
+          if (mounted) setState(() {});
+          return;
+        }
+      }
+    } catch (_) {}
+
+    _DrawerCache.termsUrl = _CacheEntry(fallbackDownloadUrl);
+    _DrawerCache.privacyUrl = _CacheEntry(fallbackDownloadUrl);
+    if (mounted) setState(() {});
   }
 
   Future<void> _fetchMerchantProfileData() async {
@@ -376,9 +431,34 @@ class _AppDrawerState extends State<AppDrawer>
     _push(const TradeHistoryScreen());
   }
 
-  bool get _isVerifiedForTradeAccess =>
-      _trustStatus == TrustStatus.ready ||
-      (_cachedProfile?.isVerificationIdentityComplete ?? false);
+  Future<void> _openLegalLink({
+    required String url,
+    required String fallbackLabel,
+  }) async {
+    await LinkOpener.open(
+      context,
+      url,
+      fallbackLabel: fallbackLabel,
+    );
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  Future<void> _handleTermsTap() async {
+    await _openLegalLink(
+      url: _termsAndConditionsUrl,
+      fallbackLabel: 'Terms link',
+    );
+  }
+
+  Future<void> _handlePrivacyTap() async {
+    await _openLegalLink(
+      url: _privacyPolicyUrl,
+      fallbackLabel: 'Privacy link',
+    );
+  }
+
+  bool get _isVerifiedForTradeAccess => _trustStatus == TrustStatus.ready;
 
   void _push(Widget screen) {
     Navigator.pop(context);
@@ -611,6 +691,28 @@ class _AppDrawerState extends State<AppDrawer>
                         colors: c,
                         accentColor: c.textSecondary, // slate
                         onTap: () => _push(const SettingsScreen()),
+                      ),
+                    ),
+                    _staggered(
+                      15,
+                      _NavTile(
+                        icon: LucideIcons.fileText,
+                        label: 'Terms & Conditions',
+                        description: 'Read legal terms',
+                        colors: c,
+                        accentColor: c.info,
+                        onTap: _handleTermsTap,
+                      ),
+                    ),
+                    _staggered(
+                      16,
+                      _NavTile(
+                        icon: LucideIcons.shield,
+                        label: 'Privacy Policy',
+                        description: 'Read privacy policy',
+                        colors: c,
+                        accentColor: c.accent,
+                        onTap: _handlePrivacyTap,
                       ),
                     ),
 
