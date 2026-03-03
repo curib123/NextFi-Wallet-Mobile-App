@@ -70,7 +70,7 @@ class VersionCheckResult {
     this.requiredMinVersion,
     this.updates = const [],
   });
-
+ 
   final bool requiresUpdate;
   final bool requiresForceUpdate;
   final String? requiredMinVersion;
