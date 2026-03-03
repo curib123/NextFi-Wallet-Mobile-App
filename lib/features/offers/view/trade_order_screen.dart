@@ -84,11 +84,9 @@ class TradeOrderScreen extends StatefulWidget {
     super.key,
     required this.trade,
     this.offer,
-    this.fallbackMerchantPaymentAccount,
   });
   final TradeModel trade;
   final OfferModel? offer;
-  final Map<String, dynamic>? fallbackMerchantPaymentAccount;
 
   @override
   State<TradeOrderScreen> createState() => _TradeOrderScreenState();
@@ -110,7 +108,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   double? _activeAssetBalance;
   bool _balanceLoading = false;
   String? _balanceError;
-  Map<String, dynamic>? _fallbackMerchantPaymentAccount;
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
 
   Timer? _countdownTimer;
@@ -153,7 +150,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   void initState() {
     super.initState();
     _trade = widget.trade;
-    _fallbackMerchantPaymentAccount = widget.fallbackMerchantPaymentAccount;
     WidgetsBinding.instance.addObserver(this);
     _startConnectivityMonitor();
     _startCountdown();
@@ -326,9 +322,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       if (!mounted) return;
       setState(() {
         _trade = updated;
-        if (updated.merchantPaymentAccount != null) {
-          _fallbackMerchantPaymentAccount = null;
-        }
         _refreshing = false;
         final hasEscrowId =
             (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
@@ -814,8 +807,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 _PaymentInstructionsCard(
                   trade: _trade,
                   colors: colors,
-                  fallbackMerchantPaymentAccount:
-                      _fallbackMerchantPaymentAccount,
                 ),
                 const SizedBox(height: 12),
               ],
@@ -1844,17 +1835,15 @@ class _PaymentInstructionsCard extends StatelessWidget {
   const _PaymentInstructionsCard({
     required this.trade,
     required this.colors,
-    this.fallbackMerchantPaymentAccount,
   });
   final TradeModel trade;
   final AppColor colors;
-  final Map<String, dynamic>? fallbackMerchantPaymentAccount;
 
   @override
   Widget build(BuildContext context) {
     final blue = AppColor.of(context).primary;
     final payeeAccount = trade.offerType == TradeOfferType.sell
-        ? (trade.merchantPaymentAccount ?? fallbackMerchantPaymentAccount)
+        ? trade.sellerPaymentAccount
         : trade.buyerPaymentAccount;
     final payeeLabel = trade.offerType == TradeOfferType.sell
         ? 'merchant'

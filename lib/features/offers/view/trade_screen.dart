@@ -409,23 +409,11 @@ class _TradeScreenState extends State<TradeScreen> {
         ),
       );
       if (!mounted) return;
-      final merchantFallback = _selectedMerchantAccount == null
-          ? null
-          : <String, dynamic>{
-              'id': _selectedMerchantAccount!.id,
-              'paymentMethodId': _selectedMerchantAccount!.paymentMethodId,
-              'accountName': _selectedMerchantAccount!.accountName,
-              'accountNo': _selectedMerchantAccount!.accountNo,
-              'label': _selectedMerchantAccount!.label,
-              'instructions': _selectedMerchantAccount!.instructions,
-              'isActive': _selectedMerchantAccount!.isActive,
-            };
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => TradeOrderScreen(
             trade: trade,
             offer: offer,
-            fallbackMerchantPaymentAccount: merchantFallback,
           ),
         ),
       );
