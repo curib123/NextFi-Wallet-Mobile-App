@@ -19,6 +19,7 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
   final AnnouncementsService _service = AnnouncementsService();
   final TokenStorage _tokenStorage = TokenStorage();
   final Set<String> _shownIds = <String>{};
+  static const Duration _minCheckGap = Duration(seconds: 30);
   bool _running = false;
   DateTime? _lastCheckAt;
 
@@ -47,7 +48,7 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
     if (!mounted || _running) return;
 
     final now = DateTime.now();
-    if (_lastCheckAt != null && now.difference(_lastCheckAt!) < const Duration(minutes: 3)) {
+    if (_lastCheckAt != null && now.difference(_lastCheckAt!) < _minCheckGap) {
       return;
     }
 
@@ -60,14 +61,16 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
       VersionCheckResult? version;
       try {
         version = await _service.versionCheck(appVersion: appVersion);
-      } catch (_) {
+      } catch (e) {
+        debugPrint('[announcements] version-check failed: $e');
         version = null;
       }
 
       List<AnnouncementItem> active = const [];
       try {
         active = await _service.getActiveForCurrentUser(appVersion: appVersion);
-      } catch (_) {
+      } catch (e) {
+        debugPrint('[announcements] active fetch failed: $e');
         active = const [];
       }
 
@@ -78,6 +81,27 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
         queue.addAll(version.updates);
       }
       queue.addAll(active);
+      if (version?.requiresForceUpdate == true) {
+        final hasForceUpdateItem = queue.any(
+          (e) => e.type == AnnouncementType.update && (e.isForceUpdate || e.isCompulsory),
+        );
+        if (!hasForceUpdateItem) {
+          queue.insert(
+            0,
+            AnnouncementItem(
+              id: '__local_force_update__${version?.requiredMinVersion ?? appVersion}',
+              type: AnnouncementType.update,
+              title: 'Update Required',
+              message:
+                  'A newer app version is required to continue. '
+                  'Please update the app to at least ${version?.requiredMinVersion ?? appVersion}.',
+              isCompulsory: true,
+              requiresUpdate: true,
+              isForceUpdate: true,
+            ),
+          );
+        }
+      }
 
       queue.sort((a, b) {
         final aScore = (a.isForceUpdate || a.isCompulsory) ? 1 : 0;
@@ -108,10 +132,12 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
         if (result == null || !result.dismissed) continue;
 
         final hasToken = await _tokenStorage.accessToken != null;
-        if (hasToken) {
+        final isLocalSynthetic = item.id.startsWith('__local_');
+        if (hasToken && !isLocalSynthetic) {
           try {
             await _service.acknowledge(item.id);
-          } catch (_) {
+          } catch (e) {
+            debugPrint('[announcements] acknowledge failed for ${item.id}: $e');
             // Best-effort ack to avoid blocking UX on API failure.
           }
         }

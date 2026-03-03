@@ -207,6 +207,19 @@ class _AnnouncementModal extends StatelessWidget {
                                 child: AppElevatedButton(
                                   onPressed: () async {
                                     final url = item.actionUrl?.trim() ?? '';
+                                    if (blocking && url.isEmpty) {
+                                      HapticFeedback.heavyImpact();
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Update link unavailable. Please contact support.',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return;
+                                    }
                                     if (url.isNotEmpty) {
                                       await LinkOpener.open(
                                         context,

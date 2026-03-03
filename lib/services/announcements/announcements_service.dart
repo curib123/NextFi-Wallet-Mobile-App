@@ -111,13 +111,22 @@ class AnnouncementsService {
     required String appVersion,
   }) async {
     final hasToken = await _tokenStorage.accessToken != null;
-    final uri = hasToken
-        ? Uri.parse(
-            '$centralized_baseUrl/announcements/me/active?appVersion=$appVersion',
-          )
-        : Uri.parse('$centralized_baseUrl/announcements/active');
+    Map<String, dynamic> body;
+    if (hasToken) {
+      try {
+        final authUri = Uri.parse(
+          '$centralized_baseUrl/announcements/me/active?appVersion=$appVersion',
+        );
+        body = await _getJson(authUri, auth: true);
+      } catch (_) {
+        final publicUri = Uri.parse('$centralized_baseUrl/announcements/active');
+        body = await _getJson(publicUri, auth: false);
+      }
+    } else {
+      final publicUri = Uri.parse('$centralized_baseUrl/announcements/active');
+      body = await _getJson(publicUri, auth: false);
+    }
 
-    final body = await _getJson(uri, auth: hasToken);
     final root = _unwrapEnvelope(body);
     final itemsRaw = _extractList(
       root,
