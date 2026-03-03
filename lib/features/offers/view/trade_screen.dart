@@ -9,10 +9,10 @@ import 'package:next_fi/services/offer_payment_method/models/offer_payment_metho
 import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
-import 'package:next_fi/services/wallet/wallet_core_service.dart';
-import 'package:next_fi/services/wallet/models/wallet_models.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 
@@ -30,9 +30,7 @@ class _TradeScreenState extends State<TradeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fiatCtrl = TextEditingController();
   final _cryptoCtrl = TextEditingController();
-  final _receiverAddressCtrl = TextEditingController();
   final _tradesCore = TradesCoreService.I;
-  final _walletCore = WalletCoreService.I;
   final _offerPaymentCore = OfferPaymentMethodCoreService.I;
   final _userAccountCore = PaymentMethodAndAccountsCoreService.I;
 
@@ -41,12 +39,11 @@ class _TradeScreenState extends State<TradeScreen> {
   String? _loadError;
 
   List<OfferPaymentMethodResponse> _offerPaymentMethods = [];
-  List<WalletAddress> _wallets = [];
   List<UserPaymentAccountModel> _userAccounts = [];
+  String? _activeWalletAddress;
 
   OfferPaymentMethodResponse? _selectedOfferMethod;
   MerchantPaymentAccountModel? _selectedMerchantAccount;
-  WalletAddress? _selectedWallet;
   UserPaymentAccountModel? _selectedUserAccount;
 
   bool _enterFiatMode = true;
@@ -99,9 +96,11 @@ class _TradeScreenState extends State<TradeScreen> {
     if (!_userIsBuyer && _selectedUserAccount == null) {
       return 'Select your account';
     }
-    if (_receiverIsCurrentActor &&
-        (_selectedWallet?.publicAddress.trim().isEmpty ?? true)) {
-      return 'Select receiving wallet';
+    if (_receiverIsCurrentActor && (_activeWalletAddress?.trim().isEmpty ?? true)) {
+      return 'No active wallet selected';
+    }
+    if (!_receiverIsCurrentActor && (_sellerWalletAddress ?? '').isEmpty) {
+      return 'Merchant receiving wallet unavailable';
     }
     return null;
   }
@@ -109,8 +108,7 @@ class _TradeScreenState extends State<TradeScreen> {
   String? get _sellerWalletAddress {
     final raw = offer.seller;
     final addr =
-        (offer.receiverStellarAddress ??
-                raw?['walletAddress'] ??
+        (raw?['walletAddress'] ??
                 raw?['stellarAddress'] ??
                 raw?['receiverStellarAddress'] ??
                 raw?['receiver_stellar_address'] ??
@@ -152,8 +150,19 @@ class _TradeScreenState extends State<TradeScreen> {
     _cryptoCtrl.removeListener(_onCryptoChanged);
     _fiatCtrl.dispose();
     _cryptoCtrl.dispose();
-    _receiverAddressCtrl.dispose();
     super.dispose();
+  }
+
+  Future<String?> _resolveActiveWalletAddress() async {
+    try {
+      final managerAddress = await WalletManager.I.getActiveWalletAddress();
+      final trimmed = managerAddress?.trim() ?? '';
+      if (trimmed.isNotEmpty) return trimmed;
+    } catch (_) {}
+
+    final localActive = await SeedStorage.getActiveWalletMeta();
+    final localAddress = localActive?.publicAddress?.trim() ?? '';
+    return localAddress.isEmpty ? null : localAddress;
   }
 
   void _onFiatChanged() {
@@ -190,25 +199,16 @@ class _TradeScreenState extends State<TradeScreen> {
     try {
       final results = await Future.wait([
         _offerPaymentCore.getOfferPaymentMethodsWithId(offer.id),
-        _walletCore.list(),
         _userAccountCore.listMyPaymentAccounts(activeOnly: true),
       ]);
+      final activeWalletAddress = await _resolveActiveWalletAddress();
 
       if (!mounted) return;
 
       setState(() {
         _offerPaymentMethods = results[0] as List<OfferPaymentMethodResponse>;
-        _wallets = (results[1] as List<WalletAddress>)
-            .where((w) => w.publicAddress.trim().isNotEmpty)
-            .toList();
-        _userAccounts = results[2] as List<UserPaymentAccountModel>;
-
-        if (_wallets.isNotEmpty) {
-          _selectedWallet = _wallets.firstWhere(
-            (w) => w.isActive,
-            orElse: () => _wallets.first,
-          );
-        }
+        _userAccounts = results[1] as List<UserPaymentAccountModel>;
+        _activeWalletAddress = activeWalletAddress;
         if (_offerPaymentMethods.isNotEmpty) {
           _selectedOfferMethod = _offerPaymentMethods.first;
         }
@@ -310,15 +310,6 @@ class _TradeScreenState extends State<TradeScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_receiverIsCurrentActor && _selectedWallet == null) {
-      showFloatingSnackBar(
-        context,
-        message: 'No wallet address found. Please add a wallet first.',
-        type: SnackBarType.error,
-      );
-      return;
-    }
-
     final fiatAmount = _enterFiatMode
         ? _fiatCtrl.text.trim()
         : _computedFiat.toStringAsFixed(2);
@@ -371,13 +362,29 @@ class _TradeScreenState extends State<TradeScreen> {
       return;
     }
 
+    final refreshedActiveWallet = await _resolveActiveWalletAddress();
+    if (!mounted) return;
+    if (refreshedActiveWallet != null &&
+        refreshedActiveWallet.trim().isNotEmpty &&
+        refreshedActiveWallet != _activeWalletAddress) {
+      setState(() => _activeWalletAddress = refreshedActiveWallet.trim());
+    }
+
     String cryptoReceiverAddress = '';
     if (_receiverIsCurrentActor) {
-      final selectedAddress = _selectedWallet?.publicAddress.trim() ?? '';
+      final selectedAddress = (_activeWalletAddress ?? '').trim();
       if (selectedAddress.isEmpty) {
         showFloatingSnackBar(
           context,
-          message: 'Selected wallet address is missing.',
+          message: 'No active wallet address found. Set an active wallet first.',
+          type: SnackBarType.error,
+        );
+        return;
+      }
+      if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(selectedAddress)) {
+        showFloatingSnackBar(
+          context,
+          message: 'Active wallet address format is invalid.',
           type: SnackBarType.error,
         );
         return;
@@ -388,24 +395,12 @@ class _TradeScreenState extends State<TradeScreen> {
       if (sellerReceiverAddress != null && sellerReceiverAddress.isNotEmpty) {
         cryptoReceiverAddress = sellerReceiverAddress;
       } else {
-        final manual = _receiverAddressCtrl.text.trim();
-        if (manual.isEmpty) {
-          showFloatingSnackBar(
-            context,
-            message: 'Receiver address (where funds will be sent) is required.',
-            type: SnackBarType.error,
-          );
-          return;
-        }
-        if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(manual)) {
-          showFloatingSnackBar(
-            context,
-            message: 'Receiver address format is invalid.',
-            type: SnackBarType.error,
-          );
-          return;
-        }
-        cryptoReceiverAddress = manual;
+        showFloatingSnackBar(
+          context,
+          message: 'Merchant receiving wallet is unavailable for this offer.',
+          type: SnackBarType.error,
+        );
+        return;
       }
     }
 
@@ -643,7 +638,7 @@ class _TradeScreenState extends State<TradeScreen> {
                           _ReadOnlyAddressTile(
                             c: c,
                             label: 'Receiving to',
-                            address: _selectedWallet?.publicAddress.trim(),
+                            address: _activeWalletAddress?.trim(),
                           )
                         else if ((_sellerWalletAddress ?? '').isNotEmpty)
                           _ReadOnlyAddressTile(
@@ -652,88 +647,16 @@ class _TradeScreenState extends State<TradeScreen> {
                             address: _sellerWalletAddress,
                           )
                         else
-                          TextFormField(
-                            controller: _receiverAddressCtrl,
-                            textCapitalization: TextCapitalization.characters,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'[A-Za-z0-9]'),
-                              ),
-                            ],
-                            validator: (v) {
-                              if (!_receiverIsCurrentActor &&
-                                  (_sellerWalletAddress ?? '').isEmpty) {
-                                final value = (v ?? '').trim();
-                                if (value.isEmpty) {
-                                  return 'Receiver address (where funds will be sent) is required';
-                                }
-                                if (!RegExp(
-                                  r'^G[A-Z2-7]{55}$',
-                                ).hasMatch(value)) {
-                                  return 'Invalid Stellar address';
-                                }
-                              }
-                              return null;
-                            },
-                            decoration: InputDecoration(
-                              labelText:
-                                  'Receiver address (where funds will be sent)',
-                              hintText: 'G...',
-                              filled: true,
-                              fillColor: c.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(color: c.border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(color: c.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(
-                                  color: c.primary,
-                                  width: 1.6,
-                                ),
-                              ),
-                            ),
+                          _InfoChip(
+                            c: c,
+                            message:
+                                'Merchant receiving wallet is not published for this offer.',
+                            isWarning: true,
                           ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  if (isBuy) ...[
-                    _PanelCard(
-                      c: c,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionLabel(
-                            c: c,
-                            label: 'Receiving wallet (${offer.asset})',
-                          ),
-                          const SizedBox(height: 10),
-                          if (_wallets.isEmpty)
-                            _InfoChip(
-                              c: c,
-                              message:
-                                  'No wallet found - add one in your wallet settings',
-                              isWarning: true,
-                            )
-                          else
-                            _WalletSelector(
-                              c: c,
-                              wallets: _wallets,
-                              selected: _selectedWallet,
-                              onChanged: (w) =>
-                                  setState(() => _selectedWallet = w),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
 
                   if (!isBuy) ...[
                     _PanelCard(
@@ -1554,70 +1477,6 @@ class _AccountRow extends StatelessWidget {
   );
 }
 
-// ─── Wallet Selector ──────────────────────────────────────────────────────────
-
-class _WalletSelector extends StatelessWidget {
-  const _WalletSelector({
-    required this.c,
-    required this.wallets,
-    required this.selected,
-    required this.onChanged,
-  });
-  final AppColor c;
-  final List<WalletAddress> wallets;
-  final WalletAddress? selected;
-  final ValueChanged<WalletAddress?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<WalletAddress>(
-      value: selected,
-      isExpanded: true,
-      dropdownColor: c.surface,
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: c.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c.primary, width: 1.5),
-        ),
-      ),
-      items: wallets.map((w) {
-        final addr = w.publicAddress;
-        final short = addr.length > 20
-            ? '${addr.substring(0, 10)}...${addr.substring(addr.length - 6)}'
-            : addr;
-        final label = (w.label ?? '').trim();
-        return DropdownMenuItem(
-          value: w,
-          child: Text(
-            label.isNotEmpty ? '$label ($short)' : short,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        );
-      }).toList(),
-      onChanged: onChanged,
-    );
-  }
-}
-
 // ─── User Account Selector ────────────────────────────────────────────────────
 
 class _UserAccountSelector extends StatelessWidget {
@@ -1901,3 +1760,4 @@ class _SubmitBar extends StatelessWidget {
     );
   }
 }
+

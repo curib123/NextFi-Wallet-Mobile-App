@@ -8,6 +8,9 @@ import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
+import 'package:next_fi/features/offers/view/widgets/public_offer_tile.dart';
+import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
+import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
 import 'package:next_fi/reusable_model/asset_model.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
@@ -16,9 +19,9 @@ import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/services/wallet/models/wallet_models.dart';
-import 'package:next_fi/services/wallet/wallet_core_service.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:provider/provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +40,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     with TickerProviderStateMixin {
   final _offersCore = OffersCoreService.I;
   final _paymentMethodsCore = PaymentMethodAndAccountsCoreService.I;
-  final _walletCore = WalletCoreService.I;
+  late final PriceChartVM _xlmPriceVm;
+  late final PriceChartVM _usdcPriceVm;
+  late final VoidCallback _priceListener;
 
   bool _loading = true;
   bool _submitting = false;
@@ -49,9 +54,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   bool? _activeWalletHasUsdcTrustline;
   Timer? _availableQtyTimer;
   double? _liveAvailableQty;
+  String? _activeWalletAddress;
   List<OfferModel> _offers = const [];
   List<PaymentMethodModel> _paymentMethods = const [];
-  List<WalletAddress> _wallets = const [];
   String? _error;
 
   final _marginCtrl = TextEditingController(text: '0');
@@ -76,6 +81,14 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   @override
   void initState() {
     super.initState();
+    final currency = context.read<CurrencyVM>();
+    _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
+    _usdcPriceVm = PriceChartVM(currency, initialToken: PriceToken.usdc);
+    _priceListener = () {
+      if (mounted) setState(() {});
+    };
+    _xlmPriceVm.addListener(_priceListener);
+    _usdcPriceVm.addListener(_priceListener);
     _totalQtyCtrl.addListener(_onTotalQtyChanged);
     _tabCtrl = TabController(length: 2, vsync: this);
     _pageEnterCtrl = AnimationController(
@@ -94,15 +107,28 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         .animate(
           CurvedAnimation(parent: _pageEnterCtrl, curve: Curves.easeOutCubic),
         );
+    _tabCtrl.addListener(() {
+      if (!_tabCtrl.indexIsChanging &&
+          _tabCtrl.index == 0 &&
+          _type == OfferType.sell) {
+        _syncAvailableQty(silent: true);
+      }
+    });
     _load();
     _availableQtyTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      _syncAvailableQty(silent: true);
+      if (_tabCtrl.index == 0 && _type == OfferType.sell) {
+        _syncAvailableQty(silent: true);
+      }
     });
   }
 
   @override
   void dispose() {
     _availableQtyTimer?.cancel();
+    _xlmPriceVm.removeListener(_priceListener);
+    _usdcPriceVm.removeListener(_priceListener);
+    _xlmPriceVm.dispose();
+    _usdcPriceVm.dispose();
     _totalQtyCtrl.removeListener(_onTotalQtyChanged);
     _marginCtrl.dispose();
     _minCtrl.dispose();
@@ -117,28 +143,99 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     super.dispose();
   }
 
+  bool _hasTrustedVmRates() {
+    final currency = context.read<CurrencyVM>();
+    return !currency.loading &&
+        !currency.ratesUnavailable &&
+        !currency.usingFallbackRates;
+  }
+
+  double? _rawPriceForAsset(String assetCode, String fiatCode) {
+    final code = assetCode.trim().toUpperCase();
+    final vm = switch (code) {
+      'XLM' => _xlmPriceVm,
+      'USDC' => _usdcPriceVm,
+      _ => null,
+    };
+    if (vm == null || vm.fiatCode != fiatCode) return null;
+    final p = vm.priceNow;
+    return (p.isFinite && p > 0) ? p : null;
+  }
+
+  String? _offerEffectivePrice(OfferModel offer) {
+    final fiatCode = offer.fiatCurrency.trim().toUpperCase();
+    final live = _hasTrustedVmRates()
+        ? _rawPriceForAsset(offer.asset, fiatCode)
+        : null;
+    final fallbackMarket = (offer.marketPrice != null && offer.marketPrice! > 0)
+        ? offer.marketPrice
+        : null;
+    final base = live ?? fallbackMarket;
+    if (base == null) return null;
+    final margin = offer.marginPercent ?? 0.0;
+    final factor = offer.type == OfferType.sell
+        ? (1.0 + margin / 100.0)
+        : (1.0 - margin / 100.0);
+    final adjusted = base * factor;
+    if (!adjusted.isFinite || adjusted <= 0) return null;
+    return '${fmtFiat(fiatSymbol(fiatCode), adjusted)} $fiatCode';
+  }
+
+  bool _priceLoadingFor(OfferModel offer) {
+    if (!_hasTrustedVmRates()) return false;
+    final fiatCode = offer.fiatCurrency.trim().toUpperCase();
+    final code = offer.asset.trim().toUpperCase();
+    final vm = switch (code) {
+      'XLM' => _xlmPriceVm,
+      'USDC' => _usdcPriceVm,
+      _ => null,
+    };
+    if (vm == null || vm.fiatCode != fiatCode) return false;
+    return vm.priceNow <= 0;
+  }
+
+  bool _offerEnabled(OfferModel offer) {
+    if (_offerEffectivePrice(offer) != null) return true;
+    return _priceLoadingFor(offer);
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
+      final previousMethodId = _selectedPaymentMethod?.id;
       final methods = await _paymentMethodsCore.listPaymentMethods(
         activeOnly: true,
       );
-      final wallets = await _walletCore.list();
+      final activeWalletAddress = await _resolveActiveWalletAddress();
       final offers = await _offersCore.listMine(
         query: const OffersListQuery(page: '1', limit: '50'),
       );
       if (!mounted) return;
+      PaymentMethodModel? nextMethod;
+      if (methods.isNotEmpty) {
+        if (previousMethodId != null && previousMethodId.isNotEmpty) {
+          for (final method in methods) {
+            if (method.id == previousMethodId) {
+              nextMethod = method;
+              break;
+            }
+          }
+        }
+        nextMethod ??= methods.first;
+      }
       setState(() {
         _paymentMethods = methods;
-        _wallets = wallets;
-        _selectedPaymentMethod = methods.isEmpty ? null : methods.first;
+        _activeWalletAddress = activeWalletAddress;
+        _selectedPaymentMethod = nextMethod;
         _offers = offers;
         _loading = false;
       });
-      _syncAvailableQty(silent: true, forceTotalQty: true);
+      if (_type == OfferType.sell) {
+        _syncAvailableQty(silent: true, forceTotalQty: true);
+      }
       _pageEnterCtrl.forward(from: 0);
       _heroCtrl.forward(from: 0);
     } catch (e) {
@@ -169,10 +266,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     final minAmt = double.tryParse(_minCtrl.text.trim());
     final maxAmt = double.tryParse(_maxCtrl.text.trim());
     final totalQ = double.tryParse(_totalQtyCtrl.text.trim());
-    final availQInput = double.tryParse(_availableQtyCtrl.text.trim());
     final window = int.tryParse(_paymentWindowCtrl.text.trim());
-    final wallet = _activeWallet();
-    final addr = wallet?.publicAddress.trim() ?? '';
+    final addr = (await _resolveActiveWalletAddress())?.trim() ?? '';
+    final isSell = _type == OfferType.sell;
 
     if (asset.isEmpty || fiat.isEmpty) {
       _snack('Asset and fiat are required.', error: true);
@@ -186,35 +282,45 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       _snack('Max must be ≥ min amount.', error: true);
       return;
     }
+    if (margin < -99.99 || margin > 999.99) {
+      _snack('Margin must be between -99.99 and 999.99.', error: true);
+      return;
+    }
+    if (minAmt < 0 || maxAmt < 0) {
+      _snack('Min and max amounts must be 0 or higher.', error: true);
+      return;
+    }
     if (_totalQtyCtrl.text.trim().isNotEmpty && totalQ == null) {
       _snack('Enter a valid total quantity.', error: true);
       return;
     }
-    if (_availableQtyCtrl.text.trim().isNotEmpty && availQInput == null) {
-      _snack('Enter a valid available quantity.', error: true);
-      return;
-    }
-    if (totalQ != null && availQInput != null && availQInput > totalQ) {
-      _snack('Available qty cannot exceed total qty.', error: true);
+    if (totalQ != null && totalQ < 0) {
+      _snack('Total quantity must be 0 or higher.', error: true);
       return;
     }
     if (_paymentWindowCtrl.text.trim().isNotEmpty && window == null) {
       _snack('Enter a valid payment window (minutes).', error: true);
       return;
     }
-    if (wallet == null || addr.isEmpty) {
-      _snack('Active wallet receiver address is required.', error: true);
+    if (window != null && (window < 1 || window > 1440)) {
+      _snack('Payment window must be between 1 and 1440 minutes.', error: true);
       return;
     }
-    if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(addr)) {
-      _snack('Invalid Stellar address format.', error: true);
+    if (isSell && addr.isEmpty) {
+      _snack(
+        'No active wallet address found. Set an active wallet to continue.',
+        error: true,
+      );
       return;
     }
-
+    if (isSell && !RegExp(r'^G[A-Z2-7]{55}$').hasMatch(addr)) {
+      _snack('Invalid active wallet Stellar address format.', error: true);
+      return;
+    }
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
-      if (asset == 'USDC') {
+      if (isSell && asset == 'USDC') {
         final hasTrustline = await _syncUsdcTrustlineStatus(
           accountId: addr,
           silent: false,
@@ -228,31 +334,44 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         }
       }
 
-      final liveAvail = await _syncAvailableQtyForSubmit(asset);
-      if (liveAvail <= 0) {
-        _snack(
-          'Active wallet has no available $asset balance for this offer.',
-          error: true,
-        );
-        return;
-      }
-      if (totalQ != null && totalQ > liveAvail) {
-        _snack(
-          'Total qty cannot exceed active wallet balance (${_formatQty(liveAvail)} $asset). Tap Sync Balance.',
-          error: true,
-        );
-        return;
-      }
-
-      final effectiveAvailableQty = totalQ == null
-          ? liveAvail
-          : math.min(totalQ, liveAvail);
-      if (_isVisible && effectiveAvailableQty <= 0) {
-        _snack(
-          'Available qty is zero on selected wallet. Fund wallet or set offer hidden.',
-          error: true,
-        );
-        return;
+      double? effectiveAvailableQty;
+      if (isSell) {
+        final liveAvail = await _syncAvailableQtyForSubmit(asset);
+        if (liveAvail <= 0) {
+          _snack(
+            'Active wallet has no available $asset balance for this offer.',
+            error: true,
+          );
+          return;
+        }
+        if (totalQ != null && totalQ > liveAvail) {
+          _snack(
+            'Total qty cannot exceed active wallet balance (${_formatQty(liveAvail)} $asset). Tap Sync Balance.',
+            error: true,
+          );
+          return;
+        }
+        effectiveAvailableQty = totalQ == null
+            ? liveAvail
+            : math.min(totalQ, liveAvail);
+        if (_isVisible && effectiveAvailableQty <= 0) {
+          _snack(
+            'Available qty is zero on selected wallet. Fund wallet or set offer hidden.',
+            error: true,
+          );
+          return;
+        }
+      } else {
+        effectiveAvailableQty = totalQ;
+        if (_isVisible &&
+            effectiveAvailableQty != null &&
+            effectiveAvailableQty <= 0) {
+          _snack(
+            'Available qty must be above zero for a visible offer.',
+            error: true,
+          );
+          return;
+        }
       }
 
       await _offersCore.create(
@@ -260,7 +379,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
           type: _type,
           asset: asset,
           fiatCurrency: fiat,
-          receiverStellarAddress: addr.isEmpty ? null : addr,
+          receiverStellarAddress: null,
           marginPercent: margin,
           minAmount: minAmt,
           maxAmount: maxAmt,
@@ -344,14 +463,34 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     position: SnackBarPosition.top,
   );
 
-  WalletAddress? _activeWallet() {
-    for (final w in _wallets) {
-      if (w.isActive && w.publicAddress.trim().isNotEmpty) return w;
+  Future<String?> _resolveActiveWalletAddress() async {
+    try {
+      final managerAddress = await WalletManager.I.getActiveWalletAddress();
+      final trimmedManager = managerAddress?.trim() ?? '';
+      if (trimmedManager.isNotEmpty) {
+        return trimmedManager;
+      }
+    } catch (_) {}
+
+    final localActive = await SeedStorage.getActiveWalletMeta();
+    final localAddress = localActive?.publicAddress?.trim() ?? '';
+    return localAddress.isEmpty ? null : localAddress;
+  }
+
+  String _activeWalletAddressOrEmpty() => _activeWalletAddress?.trim() ?? '';
+
+  Future<String> _requireActiveWalletAddress() async {
+    final latest = (await _resolveActiveWalletAddress())?.trim() ?? '';
+    if (latest.isNotEmpty) {
+      if (_activeWalletAddress != latest && mounted) {
+        setState(() => _activeWalletAddress = latest);
+      } else {
+        _activeWalletAddress = latest;
+      }
+      return latest;
     }
-    for (final w in _wallets) {
-      if (w.publicAddress.trim().isNotEmpty) return w;
-    }
-    return null;
+    final cached = _activeWalletAddressOrEmpty();
+    return cached;
   }
 
   String _formatQty(double value) {
@@ -391,11 +530,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   }
 
   Future<double> _fetchLiveAvailableQty(String assetUpper) async {
-    final wallet = _activeWallet();
-    final accountId = wallet?.publicAddress.trim() ?? '';
-    if (accountId.isEmpty) return 0.0;
-
     final stellar = context.read<StellarWalletServices>();
+    final accountId = await _requireActiveWalletAddress();
+    if (accountId.isEmpty) return 0.0;
     if (assetUpper == 'XLM') {
       return await stellar.getXlmBalance(accountId);
     }
@@ -419,6 +556,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     bool silent = false,
     bool forceTotalQty = false,
   }) async {
+    if (_type != OfferType.sell) return;
     if (_loading || _submitting) return;
     if (_syncingAvailableQty) return;
     final assets = context.read<AssetVM>().assets;
@@ -435,10 +573,20 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       setState(() => _syncingAvailableQty = true);
     }
     try {
+      final activeAddress = (await _resolveActiveWalletAddress())?.trim() ?? '';
+      if (mounted && activeAddress != _activeWalletAddressOrEmpty()) {
+        setState(
+          () => _activeWalletAddress = activeAddress.isEmpty
+              ? null
+              : activeAddress,
+        );
+      } else if (activeAddress.isNotEmpty) {
+        _activeWalletAddress = activeAddress;
+      }
       final qty = await _fetchLiveAvailableQty(selected);
       bool? hasUsdcTrustline = _activeWalletHasUsdcTrustline;
       if (selected == 'USDC') {
-        final accountId = _activeWallet()?.publicAddress.trim() ?? '';
+        final accountId = await _requireActiveWalletAddress();
         hasUsdcTrustline = await _syncUsdcTrustlineStatus(
           accountId: accountId,
           silent: true,
@@ -470,10 +618,14 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
 
   Future<double> _syncAvailableQtyForSubmit(String assetUpper) async {
     try {
+      final activeAddress = (await _resolveActiveWalletAddress())?.trim() ?? '';
+      if (activeAddress.isNotEmpty) {
+        _activeWalletAddress = activeAddress;
+      }
       final qty = await _fetchLiveAvailableQty(assetUpper.toUpperCase());
       bool? hasUsdcTrustline = _activeWalletHasUsdcTrustline;
       if (assetUpper.toUpperCase() == 'USDC') {
-        final accountId = _activeWallet()?.publicAddress.trim() ?? '';
+        final accountId = await _requireActiveWalletAddress();
         hasUsdcTrustline = await _syncUsdcTrustlineStatus(
           accountId: accountId,
           silent: true,
@@ -569,12 +721,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                       // ── Dashboard summary card (always visible)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: _DashboardCard(
-                          c: c,
-                          offers: _offers,
-                          accountCount: _paymentMethods.length,
-                          animCtrl: _heroCtrl,
-                        ),
+                        child: _DashboardCard(c: c, offers: _offers),
                       ),
 
                       // ── Warning banner
@@ -627,11 +774,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                                     minCtrl: _minCtrl,
                                     maxCtrl: _maxCtrl,
                                     totalQtyCtrl: _totalQtyCtrl,
-                                    availableQtyCtrl: _availableQtyCtrl,
                                     paymentWindowCtrl: _paymentWindowCtrl,
-                                    autoReceiverAddress: _activeWallet()
-                                        ?.publicAddress
-                                        .trim(),
                                     autoReplyCtrl: _autoReplyCtrl,
                                     type: _type,
                                     methods: _paymentMethods,
@@ -643,11 +786,27 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                                         _checkingUsdcTrustline,
                                     hasUsdcTrustline:
                                         _activeWalletHasUsdcTrustline,
-                                    onTypeChanged: (v) =>
-                                        setState(() => _type = v),
+                                    onTypeChanged: (v) {
+                                      setState(() {
+                                        _type = v;
+                                        if (v == OfferType.buy) {
+                                          _syncingAvailableQty = false;
+                                          _checkingUsdcTrustline = false;
+                                          _activeWalletHasUsdcTrustline = null;
+                                        }
+                                      });
+                                      if (v == OfferType.sell) {
+                                        _syncAvailableQty(
+                                          silent: true,
+                                          forceTotalQty: true,
+                                        );
+                                      }
+                                    },
                                     onAssetChanged: (v) {
                                       setState(() => _selectedAssetSymbol = v);
-                                      _syncAvailableQty(forceTotalQty: true);
+                                      if (_type == OfferType.sell) {
+                                        _syncAvailableQty(forceTotalQty: true);
+                                      }
                                     },
                                     onMethodChanged: (v) => setState(
                                       () => _selectedPaymentMethod = v,
@@ -683,14 +842,23 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                                         40,
                                       ),
                                       itemCount: _offers.length,
-                                      itemBuilder: (_, i) => _AnimatedOfferTile(
-                                        index: i,
-                                        c: c,
-                                        offer: _offers[i],
-                                        onPauseOrResume: () =>
-                                            _pauseOrResume(_offers[i]),
-                                        onCancel: () => _cancel(_offers[i]),
-                                      ),
+                                      itemBuilder: (_, i) {
+                                        final offer = _offers[i];
+                                        return _AnimatedOfferTile(
+                                          index: i,
+                                          c: c,
+                                          offer: offer,
+                                          marketPrice: _offerEffectivePrice(
+                                            offer,
+                                          ),
+                                          priceLoading: _priceLoadingFor(offer),
+                                          enabled: _offerEnabled(offer),
+                                          shimmerAnim: _heroCtrl,
+                                          onPauseOrResume: () =>
+                                              _pauseOrResume(offer),
+                                          onCancel: () => _cancel(offer),
+                                        );
+                                      },
                                     ),
                             ),
                           ],
@@ -718,7 +886,7 @@ class _ScreenHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       child: Row(
         children: [
           if (canPop) ...[
@@ -738,19 +906,19 @@ class _ScreenHeader extends StatelessWidget {
                   style: TextStyle(
                     color: c.textPrimary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 26,
-                    letterSpacing: -0.8,
-                    height: 1.1,
+                    fontSize: 21,
+                    letterSpacing: -0.4,
+                    height: 1.0,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 1),
                 Text(
-                  'Configure your marketplace presence',
+                  'Marketplace settings',
                   style: TextStyle(
                     color: c.textSecondary,
-                    fontSize: 13,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w400,
-                    letterSpacing: -0.1,
+                    letterSpacing: 0,
                   ),
                 ),
               ],
@@ -963,172 +1131,77 @@ class _RefreshBtnState extends State<_RefreshBtn>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DashboardCard extends StatelessWidget {
-  const _DashboardCard({
-    required this.c,
-    required this.offers,
-    required this.accountCount,
-    required this.animCtrl,
-  });
+  const _DashboardCard({required this.c, required this.offers});
   final AppColor c;
   final List<OfferModel> offers;
-  final int accountCount;
-  final AnimationController animCtrl;
 
   @override
   Widget build(BuildContext context) {
     final active = offers.where((o) => o.status == OfferStatus.active).length;
     final paused = offers.where((o) => o.status == OfferStatus.paused).length;
     final total = offers.length;
-    final progress = total == 0 ? 0.0 : (active / total).clamp(0.0, 1.0);
 
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: c.border.withValues(alpha: 0.18)),
         boxShadow: [
           BoxShadow(
             color: c.primary.withValues(alpha: 0.05),
             blurRadius: 24,
-            offset: Offset(0, 8),
+            offset: const Offset(0, 8),
           ),
           BoxShadow(
             color: c.textPrimary.withValues(alpha: 0.03),
             blurRadius: 6,
-            offset: Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
         children: [
-          // ── Label row
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: c.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: Text(
-                  'MERCHANT',
-                  style: TextStyle(
-                    color: c.primary,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: c.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Text(
+              'MERCHANT',
+              style: TextStyle(
+                color: c.primary,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: c.background,
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: c.border.withValues(alpha: 0.2)),
-                ),
-                child: Text(
-                  '$total total',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // ── Title
-          Text(
-            'Your Marketplace\nOffers',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
-              height: 1.15,
             ),
           ),
-
-          const SizedBox(height: 16),
-
-          // ── Stat chips
+          const Spacer(),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 6,
             children: [
-              _StatChip(
+              _CountPill(
+                c: c,
+                value: '$total',
+                label: 'Total',
+                accent: c.textSecondary,
+                filled: false,
+              ),
+              _CountPill(
                 c: c,
                 value: '$active',
                 label: 'Active',
                 accent: c.success,
               ),
-              _StatChip(
+              _CountPill(
                 c: c,
                 value: '$paused',
                 label: 'Paused',
                 accent: c.warning,
               ),
-              _StatChip(
-                c: c,
-                value: '$accountCount',
-                label: 'Accounts',
-                accent: c.primary,
-              ),
             ],
-          ),
-
-          const SizedBox(height: 18),
-
-          // ── Progress bar
-          Row(
-            children: [
-              Text(
-                'ACTIVITY',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const Spacer(),
-              AnimatedBuilder(
-                animation: animCtrl,
-                builder: (_, __) => Text(
-                  total == 0
-                      ? '–'
-                      : '${(progress * 100).toStringAsFixed(0)}% active',
-                  style: TextStyle(
-                    color: c.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          AnimatedBuilder(
-            animation: animCtrl,
-            builder: (_, __) {
-              final t = Curves.easeOutCubic.transform(animCtrl.value);
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: progress * t,
-                  minHeight: 6,
-                  backgroundColor: c.border.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation(c.primary),
-                ),
-              );
-            },
           ),
         ],
       ),
@@ -1136,54 +1209,57 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({
+class _CountPill extends StatelessWidget {
+  const _CountPill({
     required this.c,
     required this.value,
     required this.label,
     required this.accent,
+    this.filled = true,
   });
   final AppColor c;
   final String value;
   final String label;
   final Color accent;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
     decoration: BoxDecoration(
-      color: accent.withValues(alpha: 0.07),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: accent.withValues(alpha: 0.14)),
+      color: filled ? accent.withValues(alpha: 0.08) : c.background,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: filled
+            ? accent.withValues(alpha: 0.14)
+            : c.border.withValues(alpha: 0.25),
+      ),
     ),
-    child: Column(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
           style: TextStyle(
             color: accent,
-            fontSize: 16,
+            fontSize: 12.5,
             fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
+            letterSpacing: -0.2,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(width: 4),
         Text(
           label,
           style: TextStyle(
             color: accent.withValues(alpha: 0.75),
             fontSize: 10,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
     ),
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CREATE OFFER CARD
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _CreateOfferCard extends StatelessWidget {
   const _CreateOfferCard({
@@ -1195,9 +1271,7 @@ class _CreateOfferCard extends StatelessWidget {
     required this.minCtrl,
     required this.maxCtrl,
     required this.totalQtyCtrl,
-    required this.availableQtyCtrl,
     required this.paymentWindowCtrl,
-    required this.autoReceiverAddress,
     required this.autoReplyCtrl,
     required this.type,
     required this.methods,
@@ -1223,9 +1297,7 @@ class _CreateOfferCard extends StatelessWidget {
   final TextEditingController minCtrl;
   final TextEditingController maxCtrl;
   final TextEditingController totalQtyCtrl;
-  final TextEditingController availableQtyCtrl;
   final TextEditingController paymentWindowCtrl;
-  final String? autoReceiverAddress;
   final TextEditingController autoReplyCtrl;
   final OfferType type;
   final List<PaymentMethodModel> methods;
@@ -1246,9 +1318,13 @@ class _CreateOfferCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedAsset = (selectedAssetSymbol ?? '').trim().toUpperCase();
+    final isWalletLocked = type == OfferType.sell;
     final isUsdc = selectedAsset == 'USDC';
     final showUsdcTrustlineWarning =
-        isUsdc && hasUsdcTrustline == false && !checkingUsdcTrustline;
+        isWalletLocked &&
+        isUsdc &&
+        hasUsdcTrustline == false &&
+        !checkingUsdcTrustline;
 
     return Container(
       decoration: BoxDecoration(
@@ -1351,41 +1427,26 @@ class _CreateOfferCard extends StatelessWidget {
                 _FormGroup(
                   c: c,
                   label: 'Quantity & Payment Window',
-                  sublabel: 'Auto-synced',
+                  sublabel: isWalletLocked ? 'Auto-synced' : 'Manual',
                   child: Column(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _Field(
-                              c: c,
-                              controller: totalQtyCtrl,
-                              hint: 'Total qty',
-                              icon: Icons.inventory_2_outlined,
-                              isNumber: true,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _Field(
-                              c: c,
-                              controller: availableQtyCtrl,
-                              hint: 'Available qty (live)',
-                              icon: Icons.dataset_outlined,
-                              isNumber: true,
-                              readOnly: true,
-                            ),
-                          ),
-                        ],
+                      _Field(
+                        c: c,
+                        controller: totalQtyCtrl,
+                        hint: 'Total qty',
+                        icon: Icons.inventory_2_outlined,
+                        isNumber: true,
                       ),
                       const SizedBox(height: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            syncingAvailableQty
-                                ? 'Syncing from active wallet...'
-                                : 'Total and available qty default from active wallet balance.',
+                            isWalletLocked
+                                ? (syncingAvailableQty
+                                      ? 'Syncing from active wallet...'
+                                      : 'Total qty defaults from active wallet balance.')
+                                : 'Set total quantity manually.',
                             style: TextStyle(
                               color: c.textSecondary,
                               fontSize: 11,
@@ -1393,7 +1454,7 @@ class _CreateOfferCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          if (isUsdc) ...[
+                          if (isWalletLocked && isUsdc) ...[
                             Text(
                               checkingUsdcTrustline
                                   ? 'Checking USDC trustline on active wallet...'
@@ -1410,26 +1471,27 @@ class _CreateOfferCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                           ],
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: syncingAvailableQty
-                                  ? null
-                                  : () => onSyncAvailableQty(
-                                      silent: false,
-                                      forceTotalQty: true,
-                                    ),
-                              icon: const Icon(Icons.sync_rounded, size: 14),
-                              label: const Text('Sync Balance'),
-                              style: TextButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
+                          if (isWalletLocked)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: syncingAvailableQty
+                                    ? null
+                                    : () => onSyncAvailableQty(
+                                        silent: false,
+                                        forceTotalQty: true,
+                                      ),
+                                icon: const Icon(Icons.sync_rounded, size: 14),
+                                label: const Text('Sync Balance'),
+                                style: TextButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                       if (showUsdcTrustlineWarning) ...[
@@ -1456,41 +1518,6 @@ class _CreateOfferCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
-
-                // Receiver address (auto-default)
-                _FormGroup(
-                  c: c,
-                  label: 'Receiver address',
-                  child: (autoReceiverAddress ?? '').isNotEmpty
-                      ? _ReadOnlyReceiverAddress(
-                          c: c,
-                          address: autoReceiverAddress!,
-                        )
-                      : Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 13,
-                          ),
-                          decoration: BoxDecoration(
-                            color: c.background,
-                            borderRadius: BorderRadius.circular(11),
-                            border: Border.all(
-                              color: c.warning.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            'No active wallet address found. Set an active wallet to continue.',
-                            style: TextStyle(
-                              color: c.warning,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
                 ),
 
                 // Auto reply
@@ -1565,67 +1592,6 @@ class _CreateOfferCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // FORM GROUP WRAPPER — adds consistent label + spacing
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _ReadOnlyReceiverAddress extends StatelessWidget {
-  const _ReadOnlyReceiverAddress({required this.c, required this.address});
-
-  final AppColor c;
-  final String address;
-
-  @override
-  Widget build(BuildContext context) {
-    final short = address.length > 14
-        ? '${address.substring(0, 6)}...${address.substring(address.length - 6)}'
-        : address;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.background,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: c.border.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 16,
-            color: c.textSecondary,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Receiving to: $short',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          IconButton(
-            tooltip: 'Copy address',
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: address));
-              if (!context.mounted) return;
-              showFloatingSnackBar(
-                context,
-                message: 'Receiver address copied',
-                type: SnackBarType.success,
-              );
-            },
-            icon: Icon(Icons.copy_rounded, size: 16, color: c.textSecondary),
-            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-            padding: EdgeInsets.zero,
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _FormGroup extends StatelessWidget {
   const _FormGroup({
@@ -1816,7 +1782,6 @@ class _Field extends StatelessWidget {
     this.icon,
     this.isNumber = false,
     this.maxLines = 1,
-    this.readOnly = false,
   });
   final AppColor c;
   final TextEditingController controller;
@@ -1824,7 +1789,6 @@ class _Field extends StatelessWidget {
   final IconData? icon;
   final bool isNumber;
   final int maxLines;
-  final bool readOnly;
 
   InputDecoration _dec() => InputDecoration(
     hintText: hint,
@@ -1856,7 +1820,6 @@ class _Field extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
-    readOnly: readOnly,
     keyboardType: isNumber ? TextInputType.number : TextInputType.text,
     maxLines: maxLines,
     style: TextStyle(
@@ -2207,12 +2170,20 @@ class _AnimatedOfferTile extends StatefulWidget {
     required this.index,
     required this.c,
     required this.offer,
+    required this.marketPrice,
+    required this.priceLoading,
+    required this.enabled,
+    required this.shimmerAnim,
     required this.onPauseOrResume,
     required this.onCancel,
   });
   final int index;
   final AppColor c;
   final OfferModel offer;
+  final String? marketPrice;
+  final bool priceLoading;
+  final bool enabled;
+  final Animation<double> shimmerAnim;
   final VoidCallback onPauseOrResume;
   final VoidCallback onCancel;
 
@@ -2255,10 +2226,14 @@ class _AnimatedOfferTileState extends State<_AnimatedOfferTile>
     child: SlideTransition(
       position: _slide,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 8),
         child: _OfferTile(
           c: widget.c,
           offer: widget.offer,
+          marketPrice: widget.marketPrice,
+          priceLoading: widget.priceLoading,
+          enabled: widget.enabled,
+          shimmerAnim: widget.shimmerAnim,
           onPauseOrResume: widget.onPauseOrResume,
           onCancel: widget.onCancel,
         ),
@@ -2271,355 +2246,82 @@ class _OfferTile extends StatelessWidget {
   const _OfferTile({
     required this.c,
     required this.offer,
+    required this.marketPrice,
+    required this.priceLoading,
+    required this.enabled,
+    required this.shimmerAnim,
     required this.onPauseOrResume,
     required this.onCancel,
   });
   final AppColor c;
   final OfferModel offer;
+  final String? marketPrice;
+  final bool priceLoading;
+  final bool enabled;
+  final Animation<double> shimmerAnim;
   final VoidCallback onPauseOrResume;
   final VoidCallback onCancel;
 
-  bool get _isBuy => offer.type == OfferType.buy;
-
-  Color _accent(OfferStatus? s) => switch (s) {
-    OfferStatus.active => c.success,
-    OfferStatus.paused => c.warning,
-    OfferStatus.completed => c.primary,
-    OfferStatus.cancelled => c.error,
-    _ => c.textSecondary,
-  };
-
-  String _fmt(dynamic v) {
-    if (v == null) return '-';
-    if (v is double) {
-      return v == v.truncateToDouble()
-          ? v.toInt().toString()
-          : v.toStringAsFixed(2);
-    }
-    return v.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isBuy = _isBuy;
-    final typeColor = isBuy ? c.success : c.primary;
-    final accent = _accent(offer.status);
     final canToggle =
         offer.status == OfferStatus.active ||
         offer.status == OfferStatus.paused;
-    final isActive = offer.status == OfferStatus.active;
+    final canCancel =
+        offer.status == OfferStatus.active ||
+        offer.status == OfferStatus.paused;
 
-    final statusText = (offer.status?.name ?? 'unknown').toUpperCase();
-    final priceText = offer.marketPrice == null
-        ? '-'
-        : '${offer.fiatCurrency.toUpperCase()} ${offer.marketPrice!.toStringAsFixed(2)}';
-    final marginText =
-        '${offer.marginPercent == null ? '0' : offer.marginPercent!.toStringAsFixed(1)}%';
-    final paymentText =
-        '${offer.paymentMethodIds.length} method${offer.paymentMethodIds.length == 1 ? '' : 's'}';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isActive
-              ? accent.withValues(alpha: 0.26)
-              : c.border.withValues(alpha: 0.18),
-          width: isActive ? 1.4 : 1,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PublicOfferTile(
+          c: c,
+          offer: offer,
+          marketPrice: marketPrice,
+          onTap: () {},
+          shimmerAnim: shimmerAnim,
+          priceLoading: priceLoading,
+          enabled: enabled,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: c.textPrimary.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: c.textPrimary.withValues(alpha: 0.03),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
+        if (canToggle || canCancel) ...[
+          const SizedBox(height: 7),
+          Row(
+            children: [
+              if (canToggle)
+                Expanded(
+                  child: _ActionBtn(
+                    c: c,
+                    label: offer.status == OfferStatus.active
+                        ? 'Pause'
+                        : 'Resume',
+                    icon: offer.status == OfferStatus.active
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    color: c.textPrimary,
+                    bg: c.textPrimary.withValues(alpha: 0.06),
+                    border: c.border.withValues(alpha: 0.25),
+                    onTap: onPauseOrResume,
+                  ),
+                ),
+              if (canToggle && canCancel) const SizedBox(width: 8),
+              if (canCancel)
+                Expanded(
+                  child: _ActionBtn(
+                    c: c,
+                    label: 'Cancel',
+                    icon: Icons.close_rounded,
+                    color: c.error,
+                    bg: c.error.withValues(alpha: 0.06),
+                    border: c.error.withValues(alpha: 0.2),
+                    onTap: onCancel,
+                  ),
+                ),
+            ],
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(height: 3, color: typeColor),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: c.background,
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(color: c.border),
-                        ),
-                        child: Icon(
-                          isBuy
-                              ? Icons.arrow_downward_rounded
-                              : Icons.arrow_upward_rounded,
-                          size: 18,
-                          color: typeColor,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${isBuy ? 'BUY' : 'SELL'} ${offer.asset}/${offer.fiatCurrency}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.35,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Margin $marginText',
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontSize: 11.8,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          statusText,
-                          style: TextStyle(
-                            color: c.onPrimary,
-                            fontSize: 9.6,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.45,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 14),
-                    height: 1,
-                    color: c.border.withValues(alpha: 0.12),
-                  ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 5,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Text(
-                                  offer.asset,
-                                  style: TextStyle(
-                                    color: c.textPrimary,
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.7,
-                                  ),
-                                ),
-                                Text(
-                                  '/ ${offer.fiatCurrency.toUpperCase()}',
-                                  style: TextStyle(
-                                    color: c.textSecondary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              'Min ${_fmt(offer.minAmount)}  |  Max ${_fmt(offer.maxAmount)}',
-                              style: TextStyle(
-                                color: c.textSecondary,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: offer.marketPrice == null
-                              ? c.background
-                              : typeColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: offer.marketPrice == null
-                                ? c.border
-                                : typeColor,
-                          ),
-                        ),
-                        child: Text(
-                          priceText,
-                          style: TextStyle(
-                            color: offer.marketPrice == null
-                                ? c.textSecondary
-                                : c.onPrimary,
-                            fontSize: 12.8,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.25,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 14),
-                    height: 1,
-                    color: c.border.withValues(alpha: 0.12),
-                  ),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _MetricPill(
-                        c: c,
-                        label: 'AVAILABLE',
-                        value: _fmt(offer.availableQty),
-                      ),
-                      _MetricPill(
-                        c: c,
-                        label: 'TOTAL',
-                        value: _fmt(offer.totalQty),
-                      ),
-                      _MetricPill(c: c, label: 'PAYMENT', value: paymentText),
-                      _MetricPill(
-                        c: c,
-                        label: 'SUCCESS',
-                        value: offer.successRate != null
-                            ? '${offer.successRate!.toStringAsFixed(1)}%'
-                            : '-',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      if (canToggle) ...[
-                        Expanded(
-                          child: _ActionBtn(
-                            c: c,
-                            label: offer.status == OfferStatus.active
-                                ? 'Pause'
-                                : 'Resume',
-                            icon: offer.status == OfferStatus.active
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            color: c.textPrimary,
-                            bg: c.textPrimary.withValues(alpha: 0.06),
-                            border: c.border.withValues(alpha: 0.25),
-                            onTap: onPauseOrResume,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: _ActionBtn(
-                          c: c,
-                          label: 'Cancel',
-                          icon: Icons.close_rounded,
-                          color: c.error,
-                          bg: c.error.withValues(alpha: 0.06),
-                          border: c.error.withValues(alpha: 0.2),
-                          onTap: onCancel,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
-}
-
-class _MetricPill extends StatelessWidget {
-  const _MetricPill({
-    required this.c,
-    required this.label,
-    required this.value,
-  });
-  final AppColor c;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minWidth: 74),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    decoration: BoxDecoration(
-      color: c.surface,
-      borderRadius: BorderRadius.circular(9),
-      border: Border.all(color: c.border.withValues(alpha: 0.2)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    ),
-  );
 }
 
 class _ActionBtn extends StatelessWidget {
@@ -2647,11 +2349,11 @@ class _ActionBtn extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(11),
       child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(9),
           border: Border.all(color: border),
         ),
         child: Row(
@@ -2664,7 +2366,7 @@ class _ActionBtn extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: color,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
                 maxLines: 1,

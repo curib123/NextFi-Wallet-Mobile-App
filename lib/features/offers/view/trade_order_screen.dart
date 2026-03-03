@@ -434,18 +434,15 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         );
       }
 
-      String recipientAddress = _trade.cryptoReceiverAddress.trim();
-      if (recipientAddress.isEmpty && _trade.offerType == TradeOfferType.buy) {
-        recipientAddress =
-            (_trade.offer?['seller']?['walletAddress'] ??
-                    _trade.offer?['seller']?['stellarAddress'] ??
-                    '')
-                .toString()
-                .trim();
-      }
+      final recipientAddress = _trade.cryptoReceiverAddress.trim();
       if (recipientAddress.isEmpty) {
         throw Exception(
-          'Recipient address unavailable. Please contact support.',
+          'Trade receiver address is missing. Refresh this trade and try again.',
+        );
+      }
+      if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
+        throw Exception(
+          'Trade receiver address format is invalid.',
         );
       }
 
