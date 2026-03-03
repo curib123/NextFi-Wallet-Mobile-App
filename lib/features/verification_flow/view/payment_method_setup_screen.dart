@@ -4,9 +4,6 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
-import 'package:next_fi/services/merchant_payment_account/merchant_payment_account_core_service.dart';
-import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_dtos.dart';
-import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_dtos.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
@@ -16,8 +13,7 @@ import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_
 // ─────────────────────────────────────────────────────────────────────────────
 
 class PaymentAccountSetupScreen extends StatefulWidget {
-  /// [isMerchant] = true  → uses MerchantPaymentAccountCoreService
-  /// [isMerchant] = false → uses PaymentMethodAndAccountsCoreService (default)
+  /// [isMerchant] controls copy/flow only; data source is always UserPaymentAccount.
   final bool isMerchant;
 
   const PaymentAccountSetupScreen({super.key, this.isMerchant = false});
@@ -29,7 +25,6 @@ class PaymentAccountSetupScreen extends StatefulWidget {
 
 class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     with SingleTickerProviderStateMixin {
-  final _merchantCore = MerchantPaymentAccountCoreService.I;
   final _paymentCore = PaymentMethodAndAccountsCoreService.I;
 
   final _accountNameCtrl = TextEditingController();
@@ -79,15 +74,8 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     setState(() => _loading = true);
     try {
       final methods = await _paymentCore.listPaymentMethods(activeOnly: true);
-      final List<_AccountItem> accounts;
-
-      if (_isMerchant) {
-        final raw = await _merchantCore.listAll();
-        accounts = raw.map(_AccountItem.fromMerchant).toList();
-      } else {
-        final raw = await _paymentCore.listMyPaymentAccounts();
-        accounts = raw.map(_AccountItem.fromUser).toList();
-      }
+      final raw = await _paymentCore.listMyPaymentAccounts();
+      final accounts = raw.map(_AccountItem.fromUser).toList();
 
       if (!mounted) return;
       setState(() {
@@ -120,39 +108,22 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     HapticFeedback.mediumImpact();
     setState(() => _saving = true);
     try {
-      if (_isMerchant) {
-        await _merchantCore.create(
-          CreateMerchantPaymentAccountRequest(
-            paymentMethodId: method.id,
-            accountName: accountName,
-            accountNo: _accountNoCtrl.text.trim().isEmpty
-                ? null
-                : _accountNoCtrl.text.trim(),
-            label: _labelCtrl.text.trim().isEmpty
-                ? null
-                : _labelCtrl.text.trim(),
-            instructions: _instructionsCtrl.text.trim().isEmpty
-                ? null
-                : _instructionsCtrl.text.trim(),
-            isActive: _setAsActive,
-          ),
-        );
-      } else {
-        await _paymentCore.createMyPaymentAccount(
-          CreateUserPaymentAccountRequest(
-            paymentMethodId: method.id,
-            accountName: accountName,
-            accountNo: _accountNoCtrl.text.trim().isEmpty
-                ? null
-                : _accountNoCtrl.text.trim(),
-            label: _labelCtrl.text.trim().isEmpty
-                ? null
-                : _labelCtrl.text.trim(),
-            instructions: null,
-            isActive: _setAsActive,
-          ),
-        );
-      }
+      await _paymentCore.createMyPaymentAccount(
+        CreateUserPaymentAccountRequest(
+          paymentMethodId: method.id,
+          accountName: accountName,
+          accountNo: _accountNoCtrl.text.trim().isEmpty
+              ? null
+              : _accountNoCtrl.text.trim(),
+          label: _labelCtrl.text.trim().isEmpty
+              ? null
+              : _labelCtrl.text.trim(),
+          instructions: _instructionsCtrl.text.trim().isEmpty
+              ? null
+              : _instructionsCtrl.text.trim(),
+          isActive: _setAsActive,
+        ),
+      );
 
       _accountNameCtrl.clear();
       _accountNoCtrl.clear();
@@ -163,10 +134,8 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       if (!mounted) return;
       await showVerificationResultModal(
         context,
-        title: _isMerchant ? 'Merchant Account Added' : 'Payment Account Added',
-        message: _isMerchant
-            ? 'Your merchant payment account has been created.'
-            : 'Your payment account has been created.',
+        title: 'Payment Account Added',
+        message: 'Your payment account has been created.',
       );
       if (_isMerchant && mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -187,17 +156,10 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     HapticFeedback.lightImpact();
     setState(() => _settingActive = true);
     try {
-      if (_isMerchant) {
-        await _merchantCore.update(
-          account.id,
-          const UpdateMerchantPaymentAccountRequest(isActive: true),
-        );
-      } else {
-        await _paymentCore.updateMyPaymentAccount(
-          account.id,
-          const UpdateUserPaymentAccountRequest(isActive: true),
-        );
-      }
+      await _paymentCore.updateMyPaymentAccount(
+        account.id,
+        const UpdateUserPaymentAccountRequest(isActive: true),
+      );
       if (!mounted) return;
       await _loadAll();
     } catch (e) {
@@ -311,9 +273,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
                 ? _EmptyCard(
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'No Accounts Yet',
-                    body: _isMerchant
-                        ? 'Add your first merchant payment account above.'
-                        : 'Add your first payment account above.',
+                    body: 'Add your first payment account above.',
                     c: c,
                   )
                 : _AccountList(
@@ -332,7 +292,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UNIFIED ACCOUNT ITEM
-// Thin wrapper so the UI doesn't care whether it's a user or merchant account.
+// Thin wrapper so the UI can stay independent from raw API models.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AccountItem {
@@ -360,18 +320,6 @@ class _AccountItem {
     isActive: m.isActive,
     paymentMethod: m.paymentMethod,
   );
-
-  factory _AccountItem.fromMerchant(MerchantPaymentAccountModel m) =>
-      _AccountItem(
-        id: m.id,
-        accountName: m.accountName,
-        accountNo: m.accountNo,
-        label: m.label,
-        isActive: m.isActive,
-        // merchant stores paymentMethod as Map — resolve name for display
-        paymentMethod: null,
-        // pass raw name via label fallback below in tile
-      );
 
   /// Display subtitle parts
   String get subtitle {
@@ -430,7 +378,7 @@ class _StepHero extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isMerchant ? 'Merchant Payment Account' : 'Payment Account',
+                  'Payment Account',
                   style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 15,
@@ -1430,9 +1378,7 @@ class _CreateButton extends StatelessWidget {
                     const Icon(Icons.add_rounded, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      isMerchant
-                          ? 'Create Merchant Account'
-                          : 'Create Payment Account',
+                      'Create Payment Account',
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,

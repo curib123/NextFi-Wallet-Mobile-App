@@ -134,7 +134,7 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
             ),
             _StepTile(
               c: c,
-              title: 'Merchant Payment Account',
+              title: 'Payment Account',
               subtitle: 'Set up payment details after approval',
               icon: Icons.account_balance_wallet_outlined,
               isDone: snapshot.nextStepIndex > 2,
@@ -360,7 +360,7 @@ class _StatusNotice extends StatelessWidget {
         title = 'Profile Approved';
         body = snapshot.isCompleted
             ? 'Merchant setup is complete.'
-            : 'Great! Continue to merchant payment account setup.';
+            : 'Great! Continue to payment account setup.';
         accent = c.success;
         break;
       case MerchantStatus.rejected:

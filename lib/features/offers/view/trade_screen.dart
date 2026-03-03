@@ -4,12 +4,11 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/offers/view/trade_order_screen.dart';
-import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
-import 'package:next_fi/services/offer_payment_method/models/offer_payment_method_dtos.dart';
-import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
+import 'package:next_fi/services/trade_payment_accounts/models/trade_payment_accounts_models.dart';
+import 'package:next_fi/services/trade_payment_accounts/trade_payment_accounts_core_service.dart';
 import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
@@ -31,19 +30,20 @@ class _TradeScreenState extends State<TradeScreen> {
   final _fiatCtrl = TextEditingController();
   final _cryptoCtrl = TextEditingController();
   final _tradesCore = TradesCoreService.I;
-  final _offerPaymentCore = OfferPaymentMethodCoreService.I;
+  final _tradePaymentCore = TradePaymentAccountsCoreService.I;
   final _userAccountCore = PaymentMethodAndAccountsCoreService.I;
 
   bool _loading = true;
   bool _submitting = false;
   String? _loadError;
 
-  List<OfferPaymentMethodResponse> _offerPaymentMethods = [];
+  List<PaymentMethodModel> _offerPaymentMethods = [];
+  List<UserPaymentAccountModel> _merchantAccounts = [];
   List<UserPaymentAccountModel> _userAccounts = [];
   String? _activeWalletAddress;
 
-  OfferPaymentMethodResponse? _selectedOfferMethod;
-  MerchantPaymentAccountModel? _selectedMerchantAccount;
+  PaymentMethodModel? _selectedOfferMethod;
+  UserPaymentAccountModel? _selectedMerchantAccount;
   UserPaymentAccountModel? _selectedUserAccount;
 
   bool _enterFiatMode = true;
@@ -57,26 +57,23 @@ class _TradeScreenState extends State<TradeScreen> {
 
   String _normalizeId(String? value) => value?.trim().toLowerCase() ?? '';
 
-  Set<String> _selectedMethodIds() {
-    final selected = _selectedOfferMethod;
-    if (selected == null) return const {};
-
-    final ids = <String>{};
-    final primaryId = _normalizeId(selected.paymentMethodId);
-    if (primaryId.isNotEmpty) ids.add(primaryId);
-
-    final nestedId = _normalizeId(selected.paymentMethod.id);
-    if (nestedId.isNotEmpty) ids.add(nestedId);
-
-    return ids;
-  }
+  String _selectedMethodId() => _normalizeId(_selectedOfferMethod?.id);
 
   List<UserPaymentAccountModel> get _filteredUserAccounts {
-    final methodIds = _selectedMethodIds();
-    if (methodIds.isEmpty) return _userAccounts;
+    final methodId = _selectedMethodId();
+    if (methodId.isEmpty) return _userAccounts;
     return _userAccounts.where((a) {
       final accountMethodId = _normalizeId(a.paymentMethodId);
-      return accountMethodId.isNotEmpty && methodIds.contains(accountMethodId);
+      return accountMethodId.isNotEmpty && accountMethodId == methodId;
+    }).toList();
+  }
+
+  List<UserPaymentAccountModel> get _filteredMerchantAccounts {
+    final methodId = _selectedMethodId();
+    if (methodId.isEmpty) return _merchantAccounts;
+    return _merchantAccounts.where((a) {
+      final accountMethodId = _normalizeId(a.paymentMethodId);
+      return accountMethodId.isNotEmpty && accountMethodId == methodId;
     }).toList();
   }
 
@@ -87,13 +84,10 @@ class _TradeScreenState extends State<TradeScreen> {
     if (_selectedOfferMethod == null) {
       return 'Select payment method';
     }
-    if (_userIsBuyer && _selectedMerchantAccount == null) {
-      return 'No seller account for method';
-    }
-    if (!_userIsBuyer && _filteredUserAccounts.isEmpty) {
+    if (_filteredUserAccounts.isEmpty) {
       return 'Add account for selected method';
     }
-    if (!_userIsBuyer && _selectedUserAccount == null) {
+    if (_selectedUserAccount == null) {
       return 'Select your account';
     }
     if (_receiverIsCurrentActor && (_activeWalletAddress?.trim().isEmpty ?? true)) {
@@ -197,17 +191,41 @@ class _TradeScreenState extends State<TradeScreen> {
       _loadError = null;
     });
     try {
+      TradePaymentAccountsContext? tradeContext;
+      try {
+        tradeContext = await _tradePaymentCore.getOfferContext(
+          offer.id,
+          activeOnly: true,
+        );
+      } catch (_) {
+        tradeContext = null;
+      }
+
       final results = await Future.wait([
-        _offerPaymentCore.getOfferPaymentMethodsWithId(offer.id),
         _userAccountCore.listMyPaymentAccounts(activeOnly: true),
+        _userAccountCore.listPaymentMethods(activeOnly: true),
       ]);
       final activeWalletAddress = await _resolveActiveWalletAddress();
+      final fallbackAccounts = results[0] as List<UserPaymentAccountModel>;
+      final allMethods = results[1] as List<PaymentMethodModel>;
 
       if (!mounted) return;
 
+      final offeredIds = offer.paymentMethodIds
+          .map(_normalizeId)
+          .where((e) => e.isNotEmpty)
+          .toSet();
+      final contextMethods = tradeContext?.paymentMethods ?? const <PaymentMethodModel>[];
+      final methods = (contextMethods.isNotEmpty ? contextMethods : allMethods)
+          .where((m) => offeredIds.isEmpty || offeredIds.contains(_normalizeId(m.id)))
+          .toList();
+
       setState(() {
-        _offerPaymentMethods = results[0] as List<OfferPaymentMethodResponse>;
-        _userAccounts = results[1] as List<UserPaymentAccountModel>;
+        _offerPaymentMethods = methods;
+        _merchantAccounts = tradeContext?.merchantAccounts ?? const [];
+        _userAccounts = tradeContext?.clientAccounts.isNotEmpty == true
+            ? tradeContext!.clientAccounts
+            : fallbackAccounts;
         _activeWalletAddress = activeWalletAddress;
         if (_offerPaymentMethods.isNotEmpty) {
           _selectedOfferMethod = _offerPaymentMethods.first;
@@ -233,42 +251,17 @@ class _TradeScreenState extends State<TradeScreen> {
       });
       return;
     }
-    final methodIds = _selectedMethodIds();
-    final linkedMerchantAccount = _selectedOfferMethod?.merchantPaymentAccount;
+    final filteredMerchant = _filteredMerchantAccounts;
     final filteredUser = _filteredUserAccounts;
     setState(() {
-      _selectedMerchantAccount =
-          linkedMerchantAccount != null &&
-              linkedMerchantAccount.isActive &&
-              methodIds.contains(
-                _normalizeId(linkedMerchantAccount.paymentMethodId),
-              )
-          ? linkedMerchantAccount
-          : null;
+      _selectedMerchantAccount = filteredMerchant.isEmpty ? null : filteredMerchant.first;
       if (filteredUser.isEmpty) {
         _selectedUserAccount = null;
       } else if (_selectedUserAccount == null ||
-          !methodIds.contains(
-            _normalizeId(_selectedUserAccount!.paymentMethodId),
-          )) {
+          _normalizeId(_selectedUserAccount!.paymentMethodId) != _selectedMethodId()) {
         _selectedUserAccount = filteredUser.first;
       }
     });
-
-    if (_userIsBuyer && _selectedMerchantAccount == null) {
-      assert(() {
-        final offered = methodIds.toList()..sort();
-        final linkedId = _selectedOfferMethod?.merchantPaymentAccountId;
-        final linkedMethod =
-            _selectedOfferMethod?.merchantPaymentAccount?.paymentMethodId;
-        debugPrint(
-          '[TradeScreen] No linked merchant payment account for selected offer method. '
-          'offerMethodIds=$offered linkedMerchantPaymentAccountId=$linkedId '
-          'linkedMethodId=$linkedMethod offerMethod=${_selectedOfferMethod?.id}',
-        );
-        return true;
-      }());
-    }
   }
 
   String? _validateFiat(String? v) {
@@ -344,19 +337,10 @@ class _TradeScreenState extends State<TradeScreen> {
       );
       return;
     }
-    if (_userIsBuyer && _selectedMerchantAccount == null) {
+    if (_selectedUserAccount == null) {
       showFloatingSnackBar(
         context,
-        message:
-            'Seller payment account is unavailable for this method. Choose another method/offer.',
-        type: SnackBarType.error,
-      );
-      return;
-    }
-    if (!_userIsBuyer && _selectedUserAccount == null) {
-      showFloatingSnackBar(
-        context,
-        message: 'Please select your receiving payment account.',
+        message: 'Please select your payment account.',
         type: SnackBarType.error,
       );
       return;
@@ -415,17 +399,10 @@ class _TradeScreenState extends State<TradeScreen> {
 
     setState(() => _submitting = true);
     try {
-      final methodId = _selectedOfferMethod!.paymentMethodId.trim().isNotEmpty
-          ? _selectedOfferMethod!.paymentMethodId.trim()
-          : _selectedOfferMethod!.paymentMethod.id.trim();
-      if (methodId.isEmpty) {
-        throw Exception('Selected payment method is invalid.');
-      }
       final trade = await _tradesCore.create(
         CreateTradeRequest(
           offerId: offer.id,
-          paymentMethodId: methodId,
-          buyerPaymentAccountId: _userIsBuyer ? null : _selectedUserAccount?.id,
+          userPaymentAccountId: _selectedUserAccount!.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
           cryptoReceiverAddress: cryptoReceiverAddress,
@@ -658,37 +635,32 @@ class _TradeScreenState extends State<TradeScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  if (!isBuy) ...[
-                    _PanelCard(
-                      c: c,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionLabel(
+                  _PanelCard(
+                    c: c,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionLabel(c: c, label: 'Your payment account'),
+                        const SizedBox(height: 10),
+                        if (_filteredUserAccounts.isEmpty)
+                          _InfoChip(
                             c: c,
-                            label: 'Your payment account (for receiving fiat)',
+                            message:
+                                'No active account for selected method. Add one in Payment Accounts.',
+                            isWarning: true,
+                          )
+                        else
+                          _UserAccountSelector(
+                            c: c,
+                            accounts: _filteredUserAccounts,
+                            selected: _selectedUserAccount,
+                            onChanged: (a) =>
+                                setState(() => _selectedUserAccount = a),
                           ),
-                          const SizedBox(height: 10),
-                          if (_filteredUserAccounts.isEmpty)
-                            _InfoChip(
-                              c: c,
-                              message:
-                                  'No active account for selected method. Add one in Payment Accounts.',
-                              isWarning: true,
-                            )
-                          else
-                            _UserAccountSelector(
-                              c: c,
-                              accounts: _filteredUserAccounts,
-                              selected: _selectedUserAccount,
-                              onChanged: (a) =>
-                                  setState(() => _selectedUserAccount = a),
-                            ),
-                        ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                  ],
+                  ),
+                  const SizedBox(height: 16),
 
                   _PanelCard(
                     c: c,
@@ -1294,16 +1266,16 @@ class _PaymentMethodSelector extends StatelessWidget {
     required this.onChanged,
   });
   final AppColor c;
-  final List<OfferPaymentMethodResponse> methods;
-  final OfferPaymentMethodResponse? selected;
-  final ValueChanged<OfferPaymentMethodResponse?> onChanged;
+  final List<PaymentMethodModel> methods;
+  final PaymentMethodModel? selected;
+  final ValueChanged<PaymentMethodModel?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: methods.map((m) {
         final isSelected = selected?.id == m.id;
-        final logo = m.paymentMethod.logo;
+        final logo = m.logo;
         return GestureDetector(
           onTap: () => onChanged(m),
           child: Container(
@@ -1342,7 +1314,7 @@ class _PaymentMethodSelector extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    m.paymentMethod.name,
+                    m.name,
                     style: TextStyle(
                       color: isSelected ? c.onPrimary : c.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -1370,7 +1342,7 @@ class _PaymentMethodSelector extends StatelessWidget {
 class _MerchantAccountCard extends StatelessWidget {
   const _MerchantAccountCard({required this.c, required this.account});
   final AppColor c;
-  final MerchantPaymentAccountModel account;
+  final UserPaymentAccountModel account;
 
   @override
   Widget build(BuildContext context) {

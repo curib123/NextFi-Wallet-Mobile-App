@@ -1,7 +1,7 @@
-import 'package:next_fi/services/merchant_payment_account/merchant_payment_account_core_service.dart';
-import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
+import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
+import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 
 enum MerchantOnboardingStep { profile, paymentAccount, completed }
 
@@ -9,7 +9,7 @@ class MerchantOnboardingSnapshot {
   final MerchantOnboardingStep nextStep;
   final int nextStepIndex;
   final MerchantProfileModel? merchantProfile;
-  final List<MerchantPaymentAccountModel> paymentAccounts;
+  final List<UserPaymentAccountModel> paymentAccounts;
 
   const MerchantOnboardingSnapshot({
     required this.nextStep,
@@ -42,11 +42,11 @@ class MerchantOnboardingFlowService {
   Future<MerchantOnboardingSnapshot> getSnapshot() async {
     final profile = await MerchantProfileCoreService.I.getMe();
 
-    List<MerchantPaymentAccountModel> paymentAccounts = const [];
+    List<UserPaymentAccountModel> paymentAccounts = const [];
     if (profile != null && profile.isApproved) {
       try {
-        paymentAccounts =
-            await MerchantPaymentAccountCoreService.I.listAll();
+        paymentAccounts = await PaymentMethodAndAccountsCoreService.I
+            .listMyPaymentAccounts(activeOnly: true);
       } catch (_) {}
     }
 
@@ -61,7 +61,7 @@ class MerchantOnboardingFlowService {
 
   MerchantOnboardingStep _resolveStep({
     required MerchantProfileModel? profile,
-    required List<MerchantPaymentAccountModel> accounts,
+    required List<UserPaymentAccountModel> accounts,
   }) {
     if (profile == null || profile.isRejected) {
       return MerchantOnboardingStep.profile;

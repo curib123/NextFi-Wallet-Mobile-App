@@ -1,5 +1,4 @@
 import 'package:next_fi/services/offer_payment_method/models/offer_payment_method_dtos.dart';
-import 'package:next_fi/services/merchant_payment_account/models/merchant_payment_account_models.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 
@@ -7,18 +6,14 @@ class OfferPaymentMethodModel {
   final String id;
   final String offerId;
   final String paymentMethodId;
-  final String? merchantPaymentAccountId;
   final PaymentMethodModel paymentMethod;
-  final MerchantPaymentAccountModel? merchantPaymentAccount;
   final OfferModel? offer;
 
   const OfferPaymentMethodModel({
     required this.id,
     required this.offerId,
     required this.paymentMethodId,
-    this.merchantPaymentAccountId,
     required this.paymentMethod,
-    this.merchantPaymentAccount,
     this.offer,
   });
 }

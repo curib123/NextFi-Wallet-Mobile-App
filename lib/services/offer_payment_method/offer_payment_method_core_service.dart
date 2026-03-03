@@ -78,9 +78,7 @@ class OfferPaymentMethodCoreService {
               id: item.id,
               offerId: item.offerId,
               paymentMethodId: item.paymentMethodId,
-              merchantPaymentAccountId: item.merchantPaymentAccountId,
               paymentMethod: item.paymentMethod,
-              merchantPaymentAccount: item.merchantPaymentAccount,
               offer: item.offer,
             ),
           )
