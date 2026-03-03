@@ -395,9 +395,12 @@ final ThemeData _lightTheme = ThemeData(
   fontFamily: GoogleFonts.sora().fontFamily,
   scaffoldBackgroundColor: AppColor.light.background,
   canvasColor: AppColor.light.surface,
-  dialogBackgroundColor: AppColor.light.surface,
-  textTheme: GoogleFonts.soraTextTheme(),
-  primaryTextTheme: GoogleFonts.soraTextTheme(),
+  textTheme: GoogleFonts.soraTextTheme().apply(
+    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
+  ),
+  primaryTextTheme: GoogleFonts.soraTextTheme().apply(
+    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
+  ),
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColor.light.primary,
     surface: AppColor.light.surface,
@@ -410,9 +413,12 @@ final ThemeData _darkTheme = ThemeData(
   fontFamily: GoogleFonts.sora().fontFamily,
   scaffoldBackgroundColor: AppColor.dark.background,
   canvasColor: AppColor.dark.surface,
-  dialogBackgroundColor: AppColor.dark.surface,
-  textTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme),
-  primaryTextTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme),
+  textTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme).apply(
+    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
+  ),
+  primaryTextTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme).apply(
+    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
+  ),
   colorScheme: ColorScheme.fromSeed(
     seedColor: AppColor.dark.primary,
     surface: AppColor.dark.surface,

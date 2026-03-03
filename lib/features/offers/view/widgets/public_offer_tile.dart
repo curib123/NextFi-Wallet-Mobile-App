@@ -69,6 +69,20 @@ class _PublicOfferTileState extends State<PublicOfferTile>
   }
 
   @override
+  void didUpdateWidget(covariant PublicOfferTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldSellerId = _resolveSellerId(oldWidget.offer);
+    final newSellerId = _resolveSellerId(widget.offer);
+    if (oldWidget.offer.id != widget.offer.id || oldSellerId != newSellerId) {
+      setState(() {
+        _loadingMerchant = true;
+        _loadingReviews = true;
+      });
+      _loadData();
+    }
+  }
+
+  @override
   void dispose() {
     _pressCtrl.dispose();
     super.dispose();
@@ -79,6 +93,18 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     _loadReviews(),
     _loadPaymentMethods(),
   ]);
+
+  String? _resolveSellerId(OfferModel offer) {
+    final direct = (offer.sellerId ?? '').trim();
+    if (direct.isNotEmpty) return direct;
+    final seller = offer.seller;
+    if (seller == null) return null;
+    final nested =
+        (seller['id'] ?? seller['userId'] ?? seller['user_id'] ?? '')
+            .toString()
+            .trim();
+    return nested.isEmpty ? null : nested;
+  }
 
   Future<void> _loadPaymentMethods() async {
     try {
@@ -100,7 +126,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       ids.map((id) => _paymentMethodsMap[id]?.name ?? id).take(3).join(' · ');
 
   Future<void> _loadMerchantProfile() async {
-    final sid = widget.offer.sellerId;
+    final sid = _resolveSellerId(widget.offer);
     if (sid == null || sid.isEmpty) {
       if (mounted) setState(() => _loadingMerchant = false);
       return;
@@ -119,18 +145,17 @@ class _PublicOfferTileState extends State<PublicOfferTile>
   }
 
   Future<void> _loadReviews() async {
-    final sid = widget.offer.sellerId;
+    final sid = _resolveSellerId(widget.offer);
     if (sid == null || sid.isEmpty) {
       if (mounted) setState(() => _loadingReviews = false);
       return;
     }
     try {
-      final avg = await _reviewsCore.getUserAverageRating(sid);
-      final count = await _reviewsCore.getUserReviewCount(sid);
+      final summary = await _reviewsCore.getUserRatingSummary(sid);
       if (mounted) {
         setState(() {
-          _averageRating = avg;
-          _reviewCount = count;
+          _averageRating = summary.averageRating;
+          _reviewCount = summary.reviewCount;
           _loadingReviews = false;
         });
       }

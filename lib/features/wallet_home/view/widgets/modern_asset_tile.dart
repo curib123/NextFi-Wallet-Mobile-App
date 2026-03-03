@@ -4,6 +4,12 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/reusable_model/asset_model.dart';
 
+const List<String> _kCurrencyFontFallback = <String>[
+  'Noto Sans',
+  'Noto Sans Symbols 2',
+  'Roboto',
+];
+
 class ModernAssetTile extends StatefulWidget {
   final AssetModel asset;
   final AppColor colors;
@@ -188,6 +194,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                           fontWeight: FontWeight.w600,
                           color: widget.colors.textSecondary,
                           letterSpacing: -0.05,
+                          fontFamilyFallback: _kCurrencyFontFallback,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -217,6 +224,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                           color: widget.colors.textPrimary,
                           letterSpacing: -0.25,
                           height: 1.05,
+                          fontFamilyFallback: _kCurrencyFontFallback,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -232,6 +240,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                           fontWeight: FontWeight.w700,
                           color: trendColor,
                           letterSpacing: -0.05,
+                          fontFamilyFallback: _kCurrencyFontFallback,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

@@ -11,63 +11,108 @@ extension PriceTokenX on PriceToken {
 String fiatSymbol(String fiat) {
   switch (fiat.toUpperCase()) {
     // Americas
-    case 'USD': return '\$';
-    case 'CAD': return 'CA\$';
-    case 'MXN': return 'MX\$';
-    case 'BRL': return 'R\$';
-    case 'ARS': return '\$';
-    case 'CLP': return '\$';
-    case 'COP': return '\$';
+    case 'USD':
+      return r'$';
+    case 'CAD':
+      return 'CA\$';
+    case 'MXN':
+      return 'MX\$';
+    case 'BRL':
+      return 'R\$';
+    case 'ARS':
+      return r'$';
+    case 'CLP':
+      return r'$';
+    case 'COP':
+      return r'$';
     // Europe
-    case 'EUR': return '€';
-    case 'GBP': return '£';
-    case 'CHF': return 'Fr';
-    case 'SEK': return 'kr';
-    case 'NOK': return 'kr';
-    case 'DKK': return 'kr';
-    case 'PLN': return 'zł';
-    case 'CZK': return 'Kč';
-    case 'HUF': return 'Ft';
-    case 'RON': return 'lei';
-    case 'TRY': return '₺';
-    case 'RUB': return '₽';
-    case 'UAH': return '₴';
+    case 'EUR':
+      return '\u20AC';
+    case 'GBP':
+      return '\u00A3';
+    case 'CHF':
+      return 'Fr';
+    case 'SEK':
+      return 'kr';
+    case 'NOK':
+      return 'kr';
+    case 'DKK':
+      return 'kr';
+    case 'PLN':
+      return 'z\u0142';
+    case 'CZK':
+      return 'K\u010D';
+    case 'HUF':
+      return 'Ft';
+    case 'RON':
+      return 'lei';
+    case 'TRY':
+      return '\u20BA';
+    case 'RUB':
+      return '\u20BD';
+    case 'UAH':
+      return '\u20B4';
     // Asia-Pacific
-    case 'JPY': return '¥';
-    case 'CNY': return '¥';
-    case 'HKD': return 'HK\$';
-    case 'TWD': return 'NT\$';
-    case 'KRW': return '₩';
-    case 'SGD': return 'S\$';
-    case 'MYR': return 'RM';
-    case 'IDR': return 'Rp';
-    case 'PHP': return '₱';
-    case 'THB': return '฿';
-    case 'VND': return '₫';
-    case 'INR': return '₹';
-    case 'PKR': return '₨';
-    case 'BDT': return '৳';
-    case 'AUD': return 'A\$';
-    case 'NZD': return 'NZ\$';
+    case 'JPY':
+      return '\u00A5';
+    case 'CNY':
+      return '\u00A5';
+    case 'HKD':
+      return 'HK\$';
+    case 'TWD':
+      return 'NT\$';
+    case 'KRW':
+      return '\u20A9';
+    case 'SGD':
+      return 'S\$';
+    case 'MYR':
+      return 'RM';
+    case 'IDR':
+      return 'Rp';
+    case 'PHP':
+      return '\u20B1';
+    case 'THB':
+      return '\u0E3F';
+    case 'VND':
+      return '\u20AB';
+    case 'INR':
+      return '\u20B9';
+    case 'PKR':
+      return '\u20A8';
+    case 'BDT':
+      return '\u09F3';
+    case 'AUD':
+      return 'A\$';
+    case 'NZD':
+      return 'NZ\$';
     // Middle East / Africa
-    case 'AED': return 'د.إ';
-    case 'SAR': return '﷼';
-    case 'QAR': return 'ر.ق';
-    case 'KWD': return 'KD';
-    case 'ZAR': return 'R';
-    case 'NGN': return '₦';
-    case 'EGP': return 'E£';
-    case 'GHS': return 'GH₵';
-    case 'KES': return 'KSh';
-    default:    return '';
+    case 'AED':
+      return '\u062F.\u0625';
+    case 'SAR':
+      return '\uFDFC';
+    case 'QAR':
+      return '\u0631.\u0642';
+    case 'KWD':
+      return 'KD';
+    case 'ZAR':
+      return 'R';
+    case 'NGN':
+      return '\u20A6';
+    case 'EGP':
+      return 'E\u00A3';
+    case 'GHS':
+      return 'GH\u20B5';
+    case 'KES':
+      return 'KSh';
+    default:
+      return '';
   }
 }
 
 String fmtFiat(String symbol, double v) {
-  // keep the same logic you had, simplified here:
   final abs = v.abs();
-  int dd = abs >= 1 ? 2 : (abs >= 0.1 ? 4 : 6);
-  return "${symbol}${v.toStringAsFixed(dd)}";
+  final dd = abs >= 1 ? 2 : (abs >= 0.1 ? 4 : 6);
+  return '$symbol${v.toStringAsFixed(dd)}';
 }
 
 String fmtPct(double v) {

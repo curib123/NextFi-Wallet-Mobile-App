@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/modal/showFiatPickerBottomSheet.dart';
@@ -178,7 +179,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         : (1.0 - margin / 100.0);
     final adjusted = base * factor;
     if (!adjusted.isFinite || adjusted <= 0) return null;
-    return '${fmtFiat(fiatSymbol(fiatCode), adjusted)} $fiatCode';
+    return '${NumberFormat.simpleCurrency(name: fiatCode).format(adjusted)} $fiatCode';
   }
 
   bool _priceLoadingFor(OfferModel offer) {

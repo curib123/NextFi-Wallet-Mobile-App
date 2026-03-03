@@ -194,7 +194,13 @@ class OfferModel {
       })(),
       isVisible: readBool(const ['isVisible', 'is_visible']),
       sellerId: (() {
-        final text = readString(const ['sellerId', 'seller_id']);
+        var text = readString(const ['sellerId', 'seller_id']);
+        if (text.isEmpty && sellerRaw is Map<String, dynamic>) {
+          text =
+              (sellerRaw['id'] ?? sellerRaw['userId'] ?? sellerRaw['user_id'] ?? '')
+                  .toString()
+                  .trim();
+        }
         return text.isEmpty ? null : text;
       })(),
       createdAt: readDate(const ['createdAt', 'created_at']),

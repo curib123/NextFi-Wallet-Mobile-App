@@ -110,3 +110,14 @@ class ReviewsPagedResponse {
 
   const ReviewsPagedResponse({required this.items, required this.meta});
 }
+
+/// Lightweight user rating aggregate.
+class UserRatingSummary {
+  final double? averageRating;
+  final int reviewCount;
+
+  const UserRatingSummary({
+    required this.averageRating,
+    required this.reviewCount,
+  });
+}

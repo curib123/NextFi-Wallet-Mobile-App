@@ -90,12 +90,6 @@ class _TradeScreenState extends State<TradeScreen> {
     if (_selectedUserAccount == null) {
       return 'Select your account';
     }
-    if (_receiverIsCurrentActor && (_activeWalletAddress?.trim().isEmpty ?? true)) {
-      return 'No active wallet selected';
-    }
-    if (!_receiverIsCurrentActor && (_sellerWalletAddress ?? '').isEmpty) {
-      return 'Merchant receiving wallet unavailable';
-    }
     return null;
   }
 
@@ -346,57 +340,6 @@ class _TradeScreenState extends State<TradeScreen> {
       return;
     }
 
-    final refreshedActiveWallet = await _resolveActiveWalletAddress();
-    if (!mounted) return;
-    if (refreshedActiveWallet != null &&
-        refreshedActiveWallet.trim().isNotEmpty &&
-        refreshedActiveWallet != _activeWalletAddress) {
-      setState(() => _activeWalletAddress = refreshedActiveWallet.trim());
-    }
-
-    String cryptoReceiverAddress = '';
-    if (_receiverIsCurrentActor) {
-      final selectedAddress = (_activeWalletAddress ?? '').trim();
-      if (selectedAddress.isEmpty) {
-        showFloatingSnackBar(
-          context,
-          message: 'No active wallet address found. Set an active wallet first.',
-          type: SnackBarType.error,
-        );
-        return;
-      }
-      if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(selectedAddress)) {
-        showFloatingSnackBar(
-          context,
-          message: 'Active wallet address format is invalid.',
-          type: SnackBarType.error,
-        );
-        return;
-      }
-      cryptoReceiverAddress = selectedAddress;
-    } else {
-      final sellerReceiverAddress = _sellerWalletAddress;
-      if (sellerReceiverAddress != null && sellerReceiverAddress.isNotEmpty) {
-        cryptoReceiverAddress = sellerReceiverAddress;
-      } else {
-        showFloatingSnackBar(
-          context,
-          message: 'Merchant receiving wallet is unavailable for this offer.',
-          type: SnackBarType.error,
-        );
-        return;
-      }
-    }
-
-    if (cryptoReceiverAddress.trim().isEmpty) {
-      showFloatingSnackBar(
-        context,
-        message: 'Crypto receiver address is missing.',
-        type: SnackBarType.error,
-      );
-      return;
-    }
-
     setState(() => _submitting = true);
     try {
       final trade = await _tradesCore.create(
@@ -405,7 +348,6 @@ class _TradeScreenState extends State<TradeScreen> {
           userPaymentAccountId: _selectedUserAccount!.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
-          cryptoReceiverAddress: cryptoReceiverAddress,
         ),
       );
       if (!mounted) return;

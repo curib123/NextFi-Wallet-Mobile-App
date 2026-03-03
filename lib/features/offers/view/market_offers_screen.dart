@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/modal/offer_details_modal.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
@@ -212,9 +213,8 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
   String? _offerEffectivePrice(OfferModel offer) {
     final fiatCode = offer.fiatCurrency.trim().toUpperCase();
-    final sym = fiatSymbol(fiatCode);
     if (offer.marketPrice != null && offer.marketPrice! > 0) {
-      return '${fmtFiat(sym, offer.marketPrice!)} $fiatCode';
+      return '${_formatFiat(fiatCode, offer.marketPrice!)} $fiatCode';
     }
     if (!_hasTrustedVmRates()) return null;
     final code = offer.asset.trim().toUpperCase();
@@ -231,7 +231,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     final factor = isMerchantSell
         ? (1.0 + margin / 100.0)
         : (1.0 - margin / 100.0);
-    return '${fmtFiat(vm.fiatSym, live * factor)} $fiatCode';
+    return '${_formatFiat(fiatCode, live * factor)} $fiatCode';
   }
 
   double? _rawPriceForAsset(String assetCode) {
@@ -264,6 +264,13 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     if (!_hasTrustedVmRates()) return true;
     if (_offerEffectivePrice(offer) != null) return true;
     return _priceLoadingFor(offer);
+  }
+
+  String _formatFiat(String fiatCode, double value, {int? decimalDigits}) {
+    return NumberFormat.simpleCurrency(
+      name: fiatCode,
+      decimalDigits: decimalDigits,
+    ).format(value);
   }
 
   @override
@@ -538,8 +545,11 @@ class _PriceStrip extends StatelessWidget {
               c: c,
               token: 'XLM',
               price: (xlm.isFinite && xlm > 0)
-                  ? '${xlmVm.fiatSym}${xlm.toStringAsFixed(4)}'
-                  : '—',
+                  ? NumberFormat.simpleCurrency(
+                      name: xlmVm.fiatCode,
+                      decimalDigits: 4,
+                    ).format(xlm)
+                  : '--',
               fiat: xlmVm.fiatCode,
             ),
             Container(width: 1, height: 28, color: c.border),
@@ -547,8 +557,11 @@ class _PriceStrip extends StatelessWidget {
               c: c,
               token: 'USDC',
               price: (usdc.isFinite && usdc > 0)
-                  ? '${usdcVm.fiatSym}${usdc.toStringAsFixed(4)}'
-                  : '—',
+                  ? NumberFormat.simpleCurrency(
+                      name: usdcVm.fiatCode,
+                      decimalDigits: 4,
+                    ).format(usdc)
+                  : '--',
               fiat: usdcVm.fiatCode,
             ),
           ],

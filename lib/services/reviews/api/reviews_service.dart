@@ -224,23 +224,46 @@ class ReviewsService {
 
   /// Get average rating for a user
   Future<double?> getUserAverageRating(String userId) async {
-    try {
-      final reviews = await getUserReviews(userId: userId);
-      if (reviews.isEmpty) return null;
-      final total = reviews.fold<int>(0, (sum, r) => sum + r.rating);
-      return total / reviews.length;
-    } catch (_) {
-      return null;
-    }
+    final summary = await getUserRatingSummary(userId);
+    return summary.averageRating;
   }
 
   /// Get review count for a user
   Future<int> getUserReviewCount(String userId) async {
+    final summary = await getUserRatingSummary(userId);
+    return summary.reviewCount;
+  }
+
+  /// Get rating summary for a user using paginated public endpoint.
+  Future<UserRatingSummary> getUserRatingSummary(String userId) async {
     try {
-      final reviews = await getUserReviews(userId: userId);
-      return reviews.length;
+      final first = await getUserReviewsPaged(
+        userId: userId,
+        query: const ReviewsListQuery(page: '1', limit: '100'),
+      );
+      if (first.items.isEmpty) {
+        return const UserRatingSummary(averageRating: null, reviewCount: 0);
+      }
+
+      var total = first.items.fold<int>(0, (sum, r) => sum + r.rating);
+      var count = first.items.length;
+
+      final totalPages = first.meta.totalPages <= 0 ? 1 : first.meta.totalPages;
+      for (var page = 2; page <= totalPages; page++) {
+        final next = await getUserReviewsPaged(
+          userId: userId,
+          query: ReviewsListQuery(page: page.toString(), limit: '100'),
+        );
+        total += next.items.fold<int>(0, (sum, r) => sum + r.rating);
+        count += next.items.length;
+      }
+
+      if (count == 0) {
+        return const UserRatingSummary(averageRating: null, reviewCount: 0);
+      }
+      return UserRatingSummary(averageRating: total / count, reviewCount: count);
     } catch (_) {
-      return 0;
+      return const UserRatingSummary(averageRating: null, reviewCount: 0);
     }
   }
 

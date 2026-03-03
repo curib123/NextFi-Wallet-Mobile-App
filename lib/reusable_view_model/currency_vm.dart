@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/io_client.dart';
+import 'package:intl/intl.dart';
 import 'package:next_fi/services/secure_storage/currency_secure_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 
@@ -92,6 +93,8 @@ class CurrencyVM extends ChangeNotifier {
 
   // ── Public API ────────────────────────────────────────────────────────────
   String get fiat => _fiat;
+  String get fiatCode => _fiat.toUpperCase();
+  String get fiatSymbol => NumberFormat.simpleCurrency(name: fiatCode).currencySymbol;
   bool get loading => _loading;
 
   /// True when rates could not be fetched. UI should show "—" or "N/A"
@@ -180,6 +183,24 @@ class CurrencyVM extends ChangeNotifier {
       return;
     }
     await _refreshXlmHistoriesWithFallbacks();
+  }
+
+  /// Centralized fiat formatter for all UI layers.
+  NumberFormat fiatFormatter({int? decimalDigits}) {
+    return NumberFormat.simpleCurrency(
+      name: fiatCode,
+      decimalDigits: decimalDigits,
+    );
+  }
+
+  String formatFiat(double amount, {int? decimalDigits}) {
+    final safeAmount = amount.isFinite ? amount : 0.0;
+    return fiatFormatter(decimalDigits: decimalDigits).format(safeAmount);
+  }
+
+  String formatSignedFiat(double amount, {int? decimalDigits}) {
+    final formatted = formatFiat(amount.abs(), decimalDigits: decimalDigits);
+    return amount >= 0 ? '+$formatted' : '-$formatted';
   }
 
   // ── Quick Converters ──────────────────────────────────────────────────────

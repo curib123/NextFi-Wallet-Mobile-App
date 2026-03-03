@@ -1,5 +1,6 @@
 // lib/features/price_chart/view/price_chart_card.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
@@ -100,7 +101,8 @@ class _PriceChartView extends StatelessWidget {
     // Header value: hovered (fiat) else live-now (fiat)
     final shown = vm.hoveredPrice ?? vm.priceNow;
 
-    String fmtPrice(double v) => fmtFiat(vm.fiatSym, v);
+    String fmtPrice(double v) =>
+        NumberFormat.simpleCurrency(name: vm.fiatCode).format(v);
 
     return Card(
       elevation: 0,

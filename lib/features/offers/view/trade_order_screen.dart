@@ -11,6 +11,7 @@ import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/offers/view/trade_messages_screen.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
+import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/reviews/models/reviews_dtos.dart';
@@ -143,6 +144,38 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   bool get _isBuyingCrypto => _isUserCryptoReceiver;
+
+  String? get _merchantUserId {
+    String read(dynamic v) => v == null ? '' : v.toString().trim();
+
+    final fromWidgetOfferId = read(widget.offer?.sellerId);
+    if (fromWidgetOfferId.isNotEmpty) return fromWidgetOfferId;
+
+    final fromWidgetOfferMap = widget.offer?.seller;
+    if (fromWidgetOfferMap != null) {
+      final nested = read(
+        fromWidgetOfferMap['id'] ??
+            fromWidgetOfferMap['userId'] ??
+            fromWidgetOfferMap['user_id'],
+      );
+      if (nested.isNotEmpty) return nested;
+    }
+
+    final tradeOffer = _trade.offer;
+    if (tradeOffer != null) {
+      final fromTradeOffer = read(tradeOffer['sellerId'] ?? tradeOffer['seller_id']);
+      if (fromTradeOffer.isNotEmpty) return fromTradeOffer;
+      final tradeSeller = tradeOffer['seller'];
+      if (tradeSeller is Map) {
+        final nested = read(
+          tradeSeller['id'] ?? tradeSeller['userId'] ?? tradeSeller['user_id'],
+        );
+        if (nested.isNotEmpty) return nested;
+      }
+    }
+
+    return null;
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -505,11 +538,21 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     );
     if (!ok) return;
     _runAction(() async {
+      String? uploadedProofUrl;
       final proof = await _showProofPickSheet();
       if (proof != null) {
-        await _tradesCore.uploadProof(_trade.id, file: proof, type: 'FIAT');
+        uploadedProofUrl = await _tradesCore.uploadProof(
+          _trade.id,
+          file: proof,
+          type: 'FIAT',
+        );
       }
-      final u = await _tradesCore.markFiatSent(_trade.id);
+      final u = uploadedProofUrl != null && uploadedProofUrl.trim().isNotEmpty
+          ? await _tradesCore.markFiatSentWithProof(
+              _trade.id,
+              proofUrls: [uploadedProofUrl.trim()],
+            )
+          : await _tradesCore.markFiatSent(_trade.id);
       if (mounted) setState(() => _trade = u);
       await _loadProofs(silent: true);
     }, successMsg: 'Payment marked as sent — waiting for confirmation');
@@ -871,6 +914,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   trade: _trade,
                   colors: colors,
                   isBuyingCrypto: _isBuyingCrypto,
+                  currentUserId: _currentUserId,
+                  merchantUserId: _merchantUserId,
                 ),
               if (s == TradeStatus.cancelled) _CancelledCard(colors: colors),
               if (s == TradeStatus.disputed) _DisputedCard(colors: colors),
@@ -2269,6 +2314,85 @@ class _ProofsCard extends StatelessWidget {
   final bool loading;
   final AppColor colors;
 
+  String _resolveProofUrl(String raw) {
+    final v = raw.trim();
+    if (v.isEmpty) return '';
+    if (v.startsWith('http://') || v.startsWith('https://')) return v;
+    final base = centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
+    if (v.startsWith('/')) return '$base$v';
+    return '$base/$v';
+  }
+
+  String _extractFileUrl(Map<String, dynamic> row) {
+    String read(dynamic value) => value == null ? '' : value.toString().trim();
+
+    for (final key in const [
+      'fileUrl',
+      'file_url',
+      'url',
+      'proofUrl',
+      'proof_url',
+      'imageUrl',
+      'image_url',
+      'attachmentUrl',
+      'attachment_url',
+      'location',
+      'path',
+    ]) {
+      final v = read(row[key]);
+      if (v.isNotEmpty) return v;
+    }
+
+    final nested = row['file'];
+    if (nested is Map<String, dynamic>) {
+      for (final key in const ['url', 'fileUrl', 'file_url', 'location', 'path']) {
+        final v = read(nested[key]);
+        if (v.isNotEmpty) return v;
+      }
+    }
+
+    return '';
+  }
+
+  void _openImageViewer(BuildContext context, String src) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 4.0,
+                child: Image.network(
+                  src,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Icon(
+                      Icons.broken_image_rounded,
+                      color: colors.onPrimary,
+                      size: 42,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Icon(Icons.close_rounded, color: colors.onPrimary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _fmtTime(Map<String, dynamic> row) {
     final raw =
         row['createdAt'] ??
@@ -2314,15 +2438,8 @@ class _ProofsCard extends StatelessWidget {
             final txHash = (p['txHash'] ?? p['tx_hash'] ?? '')
                 .toString()
                 .trim();
-            final fileUrl =
-                (p['fileUrl'] ??
-                        p['file_url'] ??
-                        p['url'] ??
-                        p['proofUrl'] ??
-                        p['proof_url'] ??
-                        '')
-                    .toString()
-                    .trim();
+            final fileUrl = _extractFileUrl(p);
+            final proofImageUrl = _resolveProofUrl(fileUrl);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -2388,6 +2505,31 @@ class _ProofsCard extends StatelessWidget {
                         copyable: true,
                         mono: true,
                         colors: colors,
+                      ),
+                    ],
+                    if (proofImageUrl.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () => _openImageViewer(context, proofImageUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 180,
+                            child: Image.network(
+                              proofImageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: colors.surface,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.broken_image_rounded,
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                     if (fileUrl.isNotEmpty) ...[
@@ -3019,10 +3161,14 @@ class _CompletedCard extends StatefulWidget {
     required this.trade,
     required this.colors,
     required this.isBuyingCrypto,
+    required this.currentUserId,
+    required this.merchantUserId,
   });
   final TradeModel trade;
   final AppColor colors;
   final bool isBuyingCrypto;
+  final String? currentUserId;
+  final String? merchantUserId;
 
   @override
   State<_CompletedCard> createState() => _CompletedCardState();
@@ -3030,8 +3176,56 @@ class _CompletedCard extends StatefulWidget {
 
 class _CompletedCardState extends State<_CompletedCard> {
   bool _reviewSubmitted = false;
+  bool _alreadyReviewed = false;
+  bool _checkingReview = true;
+
+  bool get _canSubmitReview {
+    final me = (widget.currentUserId ?? '').trim();
+    final merchant = (widget.merchantUserId ?? '').trim();
+    if (me.isEmpty || merchant.isEmpty) return false;
+    // Only non-merchant participant can review merchant.
+    return me != merchant;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviewState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CompletedCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trade.id != widget.trade.id ||
+        oldWidget.currentUserId != widget.currentUserId ||
+        oldWidget.merchantUserId != widget.merchantUserId) {
+      _loadReviewState();
+    }
+  }
+
+  Future<void> _loadReviewState() async {
+    if (!_canSubmitReview) {
+      if (mounted) {
+        setState(() {
+          _alreadyReviewed = false;
+          _checkingReview = false;
+          _reviewSubmitted = false;
+        });
+      }
+      return;
+    }
+    if (mounted) setState(() => _checkingReview = true);
+    final already = await ReviewsCoreService.I.hasReviewedTrade(widget.trade.id);
+    if (!mounted) return;
+    setState(() {
+      _alreadyReviewed = already;
+      _reviewSubmitted = already;
+      _checkingReview = false;
+    });
+  }
 
   Future<void> _openReviewSheet() async {
+    if (!_canSubmitReview || _alreadyReviewed || _reviewSubmitted) return;
     final result = await showModalBottomSheet<_ReviewResult>(
       context: context,
       isScrollControlled: true,
@@ -3048,7 +3242,12 @@ class _CompletedCardState extends State<_CompletedCard> {
           comment: result.comment.isNotEmpty ? result.comment : null,
         ),
       );
-      if (mounted) setState(() => _reviewSubmitted = true);
+      if (mounted) {
+        setState(() {
+          _reviewSubmitted = true;
+          _alreadyReviewed = true;
+        });
+      }
       if (mounted) {
         showFloatingSnackBar(
           context,
@@ -3057,6 +3256,15 @@ class _CompletedCardState extends State<_CompletedCard> {
         );
       }
     } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('duplicate') || msg.contains('already') || msg.contains('review')) {
+        if (mounted) {
+          setState(() {
+            _reviewSubmitted = true;
+            _alreadyReviewed = true;
+          });
+        }
+      }
       if (mounted) {
         showFloatingSnackBar(
           context,
@@ -3108,7 +3316,32 @@ class _CompletedCardState extends State<_CompletedCard> {
             style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
           ),
           const SizedBox(height: 20),
-          _reviewSubmitted
+          _checkingReview
+              ? Text(
+                  'Checking review status...',
+                  style: GoogleFonts.sora(
+                    fontSize: 13,
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              : !_canSubmitReview
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.visibility_rounded, color: green, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Merchant view: ratings are read-only',
+                      style: GoogleFonts.sora(
+                        fontSize: 13,
+                        color: green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                )
+              : _reviewSubmitted
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
