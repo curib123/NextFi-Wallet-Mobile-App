@@ -107,6 +107,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   bool _lockPendingVerification = false;
   bool _proofsLoading = false;
   List<Map<String, dynamic>> _proofs = const [];
+  double? _activeAssetBalance;
+  bool _balanceLoading = false;
+  String? _balanceError;
   Map<String, dynamic>? _fallbackMerchantPaymentAccount;
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
 
@@ -157,6 +160,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     _startPolling();
     _loadCurrentUserId();
     unawaited(_loadProofs(silent: true));
+    unawaited(_refreshActiveAssetBalance(silent: true));
 
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -172,7 +176,54 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     try {
       final user = await AuthService().currentUser;
       if (mounted) setState(() => _currentUserId = user.id);
+      unawaited(_refreshActiveAssetBalance(silent: true));
     } catch (_) {}
+  }
+
+  Asset _tradeStellarAsset(StellarWalletServices stellarSvc) {
+    final assetCode = _trade.asset.toUpperCase();
+    return switch (assetCode) {
+      'XLM' => Asset.NATIVE,
+      'USDC' => AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer),
+      _ => throw Exception('Unsupported escrow asset: $assetCode'),
+    };
+  }
+
+  Future<void> _refreshActiveAssetBalance({bool silent = true}) async {
+    if (!mounted) return;
+    if (!_isUserEscrowLocker || _trade.status != TradeStatus.created) {
+      setState(() {
+        _activeAssetBalance = null;
+        _balanceLoading = false;
+        _balanceError = null;
+      });
+      return;
+    }
+    setState(() {
+      _balanceLoading = true;
+      if (!silent) _balanceError = null;
+    });
+    try {
+      final stellarSvc = context.read<StellarWalletServices>();
+      final seedVM = context.read<SeedKeypairVM>();
+      final kp = await seedVM.deriveKeyPair();
+      final balance = await stellarSvc.accountService.getAssetBalance(
+        kp.accountId,
+        _tradeStellarAsset(stellarSvc),
+      );
+      if (!mounted) return;
+      setState(() {
+        _activeAssetBalance = balance;
+        _balanceLoading = false;
+        _balanceError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _balanceLoading = false;
+        _balanceError = e.toString();
+      });
+    }
   }
 
   @override
@@ -204,16 +255,40 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   void _startCountdown() {
-    final expires = _trade.expiresAt;
-    if (expires == null) {
-      final created = _trade.createdAt;
-      final window = _trade.paymentWindowMinutes;
-      if (created != null && window != null) {
-        _updateTimeLeft(created.add(Duration(minutes: window)));
-      }
+    final deadline = _resolveCountdownDeadline();
+    if (deadline == null) {
+      _countdownTimer?.cancel();
+      if (mounted) setState(() => _timeLeft = Duration.zero);
       return;
     }
-    _updateTimeLeft(expires);
+    _updateTimeLeft(deadline);
+  }
+
+  DateTime? _resolveCountdownDeadline() {
+    if (_trade.status == TradeStatus.disputed) {
+      final disputeStart =
+          _trade.updatedAt ??
+          _trade.fiatConfirmDueAt ??
+          _trade.fiatSentAt ??
+          _trade.createdAt;
+      if (disputeStart == null) return null;
+      return disputeStart.add(const Duration(hours: 24));
+    }
+    final expires = _trade.expiresAt;
+    if (expires != null) return expires;
+    final created = _trade.createdAt;
+    final window = _trade.paymentWindowMinutes;
+    if (created != null && window != null) {
+      return created.add(Duration(minutes: window));
+    }
+    return null;
+  }
+
+  Duration get _countdownTotalDuration {
+    if (_trade.status == TradeStatus.disputed) {
+      return const Duration(hours: 24);
+    }
+    return Duration(minutes: _trade.paymentWindowMinutes ?? 30);
   }
 
   void _updateTimeLeft(DateTime deadline) {
@@ -263,6 +338,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         if (!_trade.status.isActive) _pollTimer?.cancel();
       });
       _startCountdown();
+      await _refreshActiveAssetBalance(silent: true);
       await _loadProofs(silent: true);
     } catch (_) {
       if (!mounted) return;
@@ -341,13 +417,22 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       final stellarSvc = context.read<StellarWalletServices>();
       final seedVM = context.read<SeedKeypairVM>();
       final kp = await seedVM.deriveKeyPair();
-
-      final assetCode = _trade.asset.toUpperCase();
-      final asset = switch (assetCode) {
-        'XLM' => Asset.NATIVE,
-        'USDC' => AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer),
-        _ => throw Exception('Unsupported escrow asset: $assetCode'),
-      };
+      final asset = _tradeStellarAsset(stellarSvc);
+      final liveBalance = await stellarSvc.accountService.getAssetBalance(
+        kp.accountId,
+        asset,
+      );
+      setState(() {
+        _activeAssetBalance = liveBalance;
+        _balanceError = null;
+      });
+      if (liveBalance < _trade.cryptoAmount) {
+        throw Exception(
+          'Insufficient active wallet balance. '
+          'Available: ${liveBalance.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}, '
+          'Required: ${_trade.cryptoAmount.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}.',
+        );
+      }
 
       String recipientAddress = _trade.cryptoReceiverAddress.trim();
       if (recipientAddress.isEmpty && _trade.offerType == TradeOfferType.buy) {
@@ -697,7 +782,12 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
               const SizedBox(height: 12),
 
               if (s.isActive && _timeLeft > Duration.zero) ...[
-                _CountdownCard(timeLeft: _timeLeft, colors: colors),
+                _CountdownCard(
+                  timeLeft: _timeLeft,
+                  colors: colors,
+                  isDispute: s == TradeStatus.disputed,
+                  totalDuration: _countdownTotalDuration,
+                ),
                 const SizedBox(height: 12),
               ],
 
@@ -707,6 +797,11 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   colors: colors,
                   isCryptoReceiverBuyer:
                       _trade.offerType == TradeOfferType.sell,
+                  activeBalance: _activeAssetBalance,
+                  balanceLoading: _balanceLoading,
+                  balanceError: _balanceError,
+                  onRefreshBalance: () =>
+                      unawaited(_refreshActiveAssetBalance(silent: false)),
                   onLock: _lockCrypto,
                   loading: _actionLoading,
                 ),
@@ -1202,9 +1297,16 @@ class _HeroCard extends StatelessWidget {
 // ─── Countdown card ───────────────────────────────────────────────────────────
 
 class _CountdownCard extends StatelessWidget {
-  const _CountdownCard({required this.timeLeft, required this.colors});
+  const _CountdownCard({
+    required this.timeLeft,
+    required this.colors,
+    required this.isDispute,
+    required this.totalDuration,
+  });
   final Duration timeLeft;
   final AppColor colors;
+  final bool isDispute;
+  final Duration totalDuration;
 
   String _fmt(Duration d) {
     final h = d.inHours;
@@ -1216,11 +1318,13 @@ class _CountdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final urgent = timeLeft.inMinutes < 5;
+    final urgent = isDispute ? timeLeft.inHours < 2 : timeLeft.inMinutes < 5;
     final accent = urgent
         ? AppColor.of(context).error
         : AppColor.of(context).warning;
-    final totalSecs = 30 * 60.0;
+    final totalSecs = totalDuration.inSeconds <= 0
+        ? 1.0
+        : totalDuration.inSeconds.toDouble();
     final progress = (timeLeft.inSeconds / totalSecs).clamp(0.0, 1.0);
 
     return Container(
@@ -1248,7 +1352,7 @@ class _CountdownCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Payment Window',
+                  isDispute ? 'Dispute Resolution Timer' : 'Payment Window',
                   style: GoogleFonts.sora(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -1258,9 +1362,13 @@ class _CountdownCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  urgent
-                      ? 'Act fast — time is running out!'
-                      : 'Complete the trade before the timer ends',
+                  isDispute
+                      ? (urgent
+                            ? 'Timer is running. Submit evidence now.'
+                            : 'Timer is running while support reviews this case.')
+                      : (urgent
+                            ? 'Act fast - time is running out!'
+                            : 'Complete the trade before the timer ends'),
                   style: GoogleFonts.sora(
                     fontSize: 12,
                     color: colors.textSecondary,
@@ -1333,18 +1441,29 @@ class _EscrowSenderCard extends StatelessWidget {
     required this.trade,
     required this.colors,
     required this.isCryptoReceiverBuyer,
+    required this.activeBalance,
+    required this.balanceLoading,
+    required this.balanceError,
+    required this.onRefreshBalance,
     required this.onLock,
     required this.loading,
   });
   final TradeModel trade;
   final AppColor colors;
   final bool isCryptoReceiverBuyer;
+  final double? activeBalance;
+  final bool balanceLoading;
+  final String? balanceError;
+  final VoidCallback onRefreshBalance;
   final VoidCallback onLock;
   final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final accent = colors.primary;
+    final hasBalance = activeBalance != null;
+    final enoughBalance = hasBalance && activeBalance! >= trade.cryptoAmount;
+    final balanceAccent = enoughBalance ? colors.success : colors.error;
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
@@ -1445,6 +1564,122 @@ class _EscrowSenderCard extends StatelessWidget {
                   accent: accent,
                 ),
                 const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colors.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: hasBalance
+                          ? (enoughBalance ? colors.success : colors.error)
+                          : colors.border,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_rounded,
+                            size: 14,
+                            color: colors.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Your Active Wallet Balance',
+                            style: GoogleFonts.sora(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (balanceLoading)
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colors.primary,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (hasBalance)
+                        Text(
+                          '${activeBalance!.toStringAsFixed(6)} ${trade.asset.toUpperCase()}',
+                          style: GoogleFonts.sora(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: balanceAccent,
+                          ),
+                        )
+                      else if (balanceError != null && balanceError!.isNotEmpty)
+                        Text(
+                          'Unable to fetch live balance.',
+                          style: GoogleFonts.sora(
+                            fontSize: 12,
+                            color: colors.error,
+                          ),
+                        )
+                      else
+                        Text(
+                          'Fetching live balance...',
+                          style: GoogleFonts.sora(
+                            fontSize: 12,
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Required: ${trade.cryptoAmount.toStringAsFixed(6)} ${trade.asset.toUpperCase()}',
+                        style: GoogleFonts.sora(
+                          fontSize: 11.5,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                      if (trade.asset.toUpperCase() == 'XLM') ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'XLM available balance already excludes reserve.',
+                          style: GoogleFonts.sora(
+                            fontSize: 10.5,
+                            color: colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                      if (hasBalance && !enoughBalance) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Insufficient balance to lock escrow.',
+                          style: GoogleFonts.sora(
+                            fontSize: 11.5,
+                            color: colors.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      if (balanceError != null && balanceError!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: balanceLoading ? null : onRefreshBalance,
+                          child: Text(
+                            'Retry balance sync',
+                            style: GoogleFonts.sora(
+                              fontSize: 11.5,
+                              color: colors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 GestureDetector(
                   onTap: loading ? null : onLock,
                   child: AnimatedContainer(

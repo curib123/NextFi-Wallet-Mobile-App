@@ -48,6 +48,8 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       _currentUserId != null &&
       (_currentUserId == widget.trade.buyerId ||
           _currentUserId == widget.trade.sellerId);
+  bool get _isDisputed => widget.trade.status == TradeStatus.disputed;
+  bool get _canUploadEvidence => _isParticipant && _isDisputed;
 
   @override
   void initState() {
@@ -241,6 +243,14 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       );
       return;
     }
+    if (!_isDisputed) {
+      showFloatingSnackBar(
+        context,
+        message: 'Evidence upload is only available while trade is disputed.',
+        type: SnackBarType.error,
+      );
+      return;
+    }
     final senderKeyId = (_senderKeyId ?? '').trim();
     if (senderKeyId.isEmpty) return;
 
@@ -254,13 +264,13 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     _pollTimer?.cancel();
     final localProofId = _appendLocalImageMessage(
       imagePath: file.path,
-      message: 'Uploading payment proof...',
+      message: 'Uploading dispute evidence...',
       isUploading: true,
       uploadState: 'uploading',
     );
     showFloatingSnackBar(
       context,
-      message: 'Uploading proof…',
+      message: 'Uploading evidence...',
       type: SnackBarType.success,
     );
 
@@ -272,7 +282,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         referenceNo: config.referenceNo,
         txHash: config.txHash,
       );
-      final proofMsg = '${config.type} proof uploaded: ${file.name}';
+      final proofMsg = '${config.type} evidence uploaded: ${file.name}';
       final payload =
           uploadedProofUrl == null || uploadedProofUrl.trim().isEmpty
           ? proofMsg
@@ -304,7 +314,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         );
         showFloatingSnackBar(
           context,
-          message: 'Proof uploaded successfully',
+          message: 'Evidence uploaded successfully',
           type: SnackBarType.success,
         );
         await _loadMessages(silent: true);
@@ -313,7 +323,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       if (mounted) {
         _updateLocalMessage(
           localProofId,
-          message: 'Payment proof upload failed',
+          message: 'Evidence upload failed',
           isUploadingProof: false,
           proofUploadState: 'failed',
         );
@@ -385,6 +395,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             colors: colors,
             sending: _sending,
             enabled: _isParticipant,
+            attachEnabled: _canUploadEvidence,
             onSend: _sendMessage,
             onAttach: _uploadProof,
           ),
@@ -977,6 +988,7 @@ class _InputBar extends StatelessWidget {
     required this.colors,
     required this.sending,
     required this.enabled,
+    required this.attachEnabled,
     required this.onSend,
     required this.onAttach,
   });
@@ -984,6 +996,7 @@ class _InputBar extends StatelessWidget {
   final AppColor colors;
   final bool sending;
   final bool enabled;
+  final bool attachEnabled;
   final VoidCallback onSend;
   final VoidCallback onAttach;
 
@@ -1005,7 +1018,7 @@ class _InputBar extends StatelessWidget {
           width: 42,
           height: 42,
           child: AppOutlinedButton(
-            onPressed: enabled ? onAttach : null,
+            onPressed: attachEnabled ? onAttach : null,
             style: OutlinedButton.styleFrom(
               padding: EdgeInsets.zero,
               backgroundColor: colors.surface,
@@ -1126,7 +1139,7 @@ class _ProofSourceSheetState extends State<_ProofSourceSheet> {
     final type = _proofType.trim().toUpperCase();
     final txHash = _txHashCtrl.text.trim();
     if (type == 'CRYPTO' && txHash.isEmpty) {
-      setState(() => _error = 'Transaction hash is required for CRYPTO proof.');
+      setState(() => _error = 'Transaction hash is required for CRYPTO evidence.');
       return;
     }
     Navigator.pop(
@@ -1170,7 +1183,7 @@ class _ProofSourceSheetState extends State<_ProofSourceSheet> {
             ),
           ),
           Text(
-            'Upload Payment Proof',
+            'Upload Dispute Evidence',
             style: GoogleFonts.sora(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -1179,7 +1192,7 @@ class _ProofSourceSheetState extends State<_ProofSourceSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Select proof type and upload a screenshot/photo.',
+            'Select evidence type and upload a screenshot/photo.',
             textAlign: TextAlign.center,
             style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
           ),
