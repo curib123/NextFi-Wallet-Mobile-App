@@ -59,14 +59,9 @@ class ReviewsService {
   };
 
   Future<Map<String, String>> _publicHeaders() async {
-    final token = await tokenProvider();
-    if (token == null || token.isEmpty) {
-      return const {'Content-Type': 'application/json'};
-    }
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
+    // Public reviews route should not depend on JWT validity.
+    // Sending an expired/invalid token can cause avoidable 401s.
+    return const {'Content-Type': 'application/json'};
   }
 
   Future<Map<String, String>> _headers() async {
@@ -222,6 +217,37 @@ class ReviewsService {
     return page.items;
   }
 
+  /// Get public reviews for an offer
+  Future<ReviewsPagedResponse> getOfferReviewsPaged({
+    required String offerId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async {
+    final res = await _client.get(
+      ReviewsHttp.uri(
+        ReviewsEndpoints.offerReviews(offerId),
+        queryParams: query.toQueryParams(),
+      ),
+      headers: await _publicHeaders(),
+    );
+    ReviewsHttp.ensureOk(res);
+    final data = ReviewsHttp.decodeJson<dynamic>(res);
+    final items = _extractListMaps(
+      data,
+      keys: const ['items', 'data', 'reviews', 'list'],
+    ).map(ReviewModel.fromJson).toList();
+    final meta = _extractMeta(data, fallbackCount: items.length);
+    return ReviewsPagedResponse(items: items, meta: meta);
+  }
+
+  /// Get list of reviews for an offer (non-paginated)
+  Future<List<ReviewModel>> getOfferReviews({
+    required String offerId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async {
+    final page = await getOfferReviewsPaged(offerId: offerId, query: query);
+    return page.items;
+  }
+
   /// Get average rating for a user
   Future<double?> getUserAverageRating(String userId) async {
     final summary = await getUserRatingSummary(userId);
@@ -252,6 +278,39 @@ class ReviewsService {
       for (var page = 2; page <= totalPages; page++) {
         final next = await getUserReviewsPaged(
           userId: userId,
+          query: ReviewsListQuery(page: page.toString(), limit: '100'),
+        );
+        total += next.items.fold<int>(0, (sum, r) => sum + r.rating);
+        count += next.items.length;
+      }
+
+      if (count == 0) {
+        return const UserRatingSummary(averageRating: null, reviewCount: 0);
+      }
+      return UserRatingSummary(averageRating: total / count, reviewCount: count);
+    } catch (_) {
+      return const UserRatingSummary(averageRating: null, reviewCount: 0);
+    }
+  }
+
+  /// Get rating summary for an offer using paginated public endpoint.
+  Future<UserRatingSummary> getOfferRatingSummary(String offerId) async {
+    try {
+      final first = await getOfferReviewsPaged(
+        offerId: offerId,
+        query: const ReviewsListQuery(page: '1', limit: '100'),
+      );
+      if (first.items.isEmpty) {
+        return const UserRatingSummary(averageRating: null, reviewCount: 0);
+      }
+
+      var total = first.items.fold<int>(0, (sum, r) => sum + r.rating);
+      var count = first.items.length;
+
+      final totalPages = first.meta.totalPages <= 0 ? 1 : first.meta.totalPages;
+      for (var page = 2; page <= totalPages; page++) {
+        final next = await getOfferReviewsPaged(
+          offerId: offerId,
           query: ReviewsListQuery(page: page.toString(), limit: '100'),
         );
         total += next.items.fold<int>(0, (sum, r) => sum + r.rating);

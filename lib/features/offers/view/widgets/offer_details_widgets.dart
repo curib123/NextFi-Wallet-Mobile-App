@@ -219,14 +219,12 @@ class MerchantInfoSection extends StatelessWidget {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.star_rounded,
-                              size: 13,
-                              color: c.warning,
-                            ),
+                            _InlineRatingStars(c: c, rating: averageRating),
                             const SizedBox(width: 4),
                             Text(
-                              (averageRating ?? 5.0).toStringAsFixed(1),
+                              averageRating == null
+                                  ? '--'
+                                  : averageRating!.toStringAsFixed(1),
                               style: TextStyle(
                                 color: c.warning,
                                 fontSize: 14,
@@ -238,7 +236,7 @@ class MerchantInfoSection extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${reviewCount ?? 0} reviews',
+                          '${reviewCount ?? 0} offer reviews',
                           style: TextStyle(
                             color: c.textSecondary,
                             fontSize: 9.5,
@@ -476,7 +474,9 @@ class ReviewsSection extends StatelessWidget {
 
                 // Average score
                 Text(
-                  (averageRating ?? 5.0).toStringAsFixed(1),
+                  averageRating == null
+                      ? '--'
+                      : averageRating!.toStringAsFixed(1),
                   style: TextStyle(
                     color: c.warning,
                     fontSize: 14,
@@ -484,6 +484,8 @@ class ReviewsSection extends StatelessWidget {
                     letterSpacing: -0.3,
                   ),
                 ),
+                const SizedBox(width: 4),
+                _InlineRatingStars(c: c, rating: averageRating),
                 Text(
                   ' / 5',
                   style: TextStyle(
@@ -654,4 +656,30 @@ class _SolidRule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(height: 1, color: c.border);
+}
+
+class _InlineRatingStars extends StatelessWidget {
+  const _InlineRatingStars({required this.c, required this.rating});
+
+  final AppColor c;
+  final double? rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = (rating ?? 0).round().clamp(0, 5);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        5,
+        (i) => Padding(
+          padding: EdgeInsets.only(right: i < 4 ? 1 : 0),
+          child: Icon(
+            i < filled ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: 10,
+            color: i < filled ? c.warning : c.border,
+          ),
+        ),
+      ),
+    );
+  }
 }

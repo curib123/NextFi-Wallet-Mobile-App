@@ -58,9 +58,12 @@ class ReviewModel {
       reviewerId: readString(const ['reviewerId', 'reviewer_id']),
       revieweeId: readString(const ['revieweeId', 'reviewee_id']),
       rating: readInt(const ['rating']) ?? 0,
-      comment: readString(const ['comment']).isEmpty
-          ? null
-          : readString(const ['comment']),
+      comment: (() {
+        final text = readString(
+          const ['comment', 'feedback', 'message', 'review', 'remarks'],
+        );
+        return text.isEmpty ? null : text;
+      })(),
       createdAt: readDate(const ['createdAt', 'created_at']),
     );
   }

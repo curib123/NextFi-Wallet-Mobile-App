@@ -40,6 +40,66 @@ class ReviewsCoreService {
   }) async =>
       _api.getUserReviews(userId: userId, query: query);
 
+  /// Get public reviews for an offer (paginated)
+  Future<ReviewsPagedResponse> getOfferReviewsPaged({
+    required String offerId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async =>
+      _api.getOfferReviewsPaged(offerId: offerId, query: query);
+
+  /// Get public reviews for an offer (non-paginated)
+  Future<List<ReviewModel>> getOfferReviews({
+    required String offerId,
+    ReviewsListQuery query = const ReviewsListQuery(),
+  }) async =>
+      _api.getOfferReviews(offerId: offerId, query: query);
+
+  /// Get all public reviews for a user by paging until last page.
+  Future<List<ReviewModel>> getAllUserReviews({
+    required String userId,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    final normalized = userId.trim();
+    if (normalized.isEmpty) return const [];
+
+    var page = 1;
+    final out = <ReviewModel>[];
+    while (page <= maxPages) {
+      final res = await _api.getUserReviewsPaged(
+        userId: normalized,
+        query: ReviewsListQuery(page: page.toString(), limit: '$pageSize'),
+      );
+      out.addAll(res.items);
+      if (page >= res.meta.totalPages || res.items.isEmpty) break;
+      page += 1;
+    }
+    return out;
+  }
+
+  /// Get all public reviews for an offer by paging until last page.
+  Future<List<ReviewModel>> getAllOfferReviews({
+    required String offerId,
+    int pageSize = 100,
+    int maxPages = 50,
+  }) async {
+    final normalized = offerId.trim();
+    if (normalized.isEmpty) return const [];
+
+    var page = 1;
+    final out = <ReviewModel>[];
+    while (page <= maxPages) {
+      final res = await _api.getOfferReviewsPaged(
+        offerId: normalized,
+        query: ReviewsListQuery(page: page.toString(), limit: '$pageSize'),
+      );
+      out.addAll(res.items);
+      if (page >= res.meta.totalPages || res.items.isEmpty) break;
+      page += 1;
+    }
+    return out;
+  }
+
   /// Get average rating for a user
   Future<double?> getUserAverageRating(String userId) async =>
       (await getUserRatingSummary(userId)).averageRating;
@@ -47,6 +107,10 @@ class ReviewsCoreService {
   /// Get review count for a user
   Future<int> getUserReviewCount(String userId) async =>
       (await getUserRatingSummary(userId)).reviewCount;
+
+  /// Get rating summary for an offer.
+  Future<UserRatingSummary> getOfferRatingSummary(String offerId) async =>
+      _api.getOfferRatingSummary(offerId);
 
   /// Get cached rating summary for a user.
   Future<UserRatingSummary> getUserRatingSummary(

@@ -5,6 +5,9 @@ class ReviewsEndpoints {
   /// Get reviews for a specific user (public)
   static String userReviews(String userId) => '$base/user/$userId';
 
+  /// Get reviews for a specific offer (public)
+  static String offerReviews(String offerId) => '$base/offer/$offerId';
+
   /// Get current user's reviews (authenticated)
   static String me() => '$base/me';
 

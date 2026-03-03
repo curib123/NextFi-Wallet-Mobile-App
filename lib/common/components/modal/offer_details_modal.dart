@@ -6,8 +6,8 @@ import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
-import 'package:next_fi/services/reviews/models/reviews_models.dart';
 import 'package:next_fi/services/reviews/reviews_core_service.dart';
+import 'package:next_fi/common/components/modal/public_offer_reviews_modal.dart';
 import 'package:next_fi/features/offers/view/widgets/offer_details_widgets.dart';
 
 class OfferDetailsModal extends StatefulWidget {
@@ -34,8 +34,8 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   MerchantProfileModel? _merchantProfile;
   bool _loadingMerchant = true;
-  List<ReviewModel> _reviews = [];
   double? _averageRating;
+  int _reviewCount = 0;
   bool _loadingReviews = true;
   Map<String, PaymentMethodModel> _paymentMethodsMap = {};
   bool _loadingPaymentMethods = true;
@@ -78,11 +78,31 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
   }
 
   Future<void> _loadData() async {
+    await _loadMerchantProfile();
     await Future.wait([
-      _loadMerchantProfile(),
       _loadReviews(),
       _loadPaymentMethods(),
     ]);
+  }
+
+  List<String> _resolveSellerIds({MerchantProfileModel? profile}) {
+    final ids = <String>[];
+    void add(dynamic raw) {
+      final v = raw?.toString().trim() ?? '';
+      if (v.isEmpty) return;
+      if (!ids.contains(v)) ids.add(v);
+    }
+
+    final seller = widget.offer.seller;
+    if (seller != null) {
+      add(seller['userId']);
+      add(seller['user_id']);
+      add(seller['id']);
+    }
+    add(widget.offer.sellerId);
+    add(profile?.userId);
+    add(profile?.id);
+    return ids;
   }
 
   Future<void> _loadPaymentMethods() async {
@@ -109,43 +129,76 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
       ids.map((id) => _paymentMethodsMap[id]?.name ?? id).join(' · ');
 
   Future<void> _loadMerchantProfile() async {
-    final sellerId = widget.offer.sellerId;
-    if (sellerId == null || sellerId.isEmpty) {
+    final ids = _resolveSellerIds();
+    if (ids.isEmpty) {
       if (mounted) setState(() => _loadingMerchant = false);
       return;
     }
-    try {
-      final profile = await _merchantCore.getPublic(sellerId);
-      if (mounted) {
-        setState(() {
-          _merchantProfile = profile;
-          _loadingMerchant = false;
-        });
+    MerchantProfileModel? profile;
+    for (final id in ids) {
+      try {
+        final candidate = await _merchantCore.getPublic(id);
+        if (candidate != null) {
+          profile = candidate;
+          break;
+        }
+      } catch (_) {
+        // try next candidate
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingMerchant = false);
+    }
+    if (mounted) {
+      setState(() {
+        _merchantProfile = profile;
+        if (profile?.avgRating != null) {
+          _averageRating = profile!.avgRating;
+        }
+        _loadingMerchant = false;
+      });
     }
   }
 
   Future<void> _loadReviews() async {
-    final sellerId = widget.offer.sellerId;
-    if (sellerId == null || sellerId.isEmpty) {
+    final offerId = widget.offer.id.trim();
+    if (offerId.isEmpty) {
       if (mounted) setState(() => _loadingReviews = false);
       return;
     }
     try {
-      final reviews = await _reviewsCore.getUserReviews(userId: sellerId);
-      final avgRating = await _reviewsCore.getUserAverageRating(sellerId);
+      final summary = await _reviewsCore.getOfferRatingSummary(offerId);
       if (mounted) {
         setState(() {
-          _reviews = reviews;
-          _averageRating = avgRating;
+          _reviewCount = summary.reviewCount;
+          _averageRating = summary.averageRating ?? _merchantProfile?.avgRating;
           _loadingReviews = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingReviews = false);
+      if (mounted) {
+        setState(() {
+          _reviewCount = 0;
+          _averageRating = _merchantProfile?.avgRating;
+          _loadingReviews = false;
+        });
+      }
     }
+  }
+
+  Future<void> _openAllReviewsSheet() async {
+    final c = AppColor.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => PublicOfferReviewsModal(
+        offerId: widget.offer.id,
+        c: c,
+        averageRating: _averageRating,
+        totalCount: _reviewCount,
+      ),
+    );
   }
 
   // ─── Color helpers ──────────────────────────────────────────────────────────
@@ -254,22 +307,54 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                               shimmerAnim: _shimmerAnim,
                             )
                           else if (_merchantProfile != null)
-                            MerchantInfoSection(
-                              c: c,
-                              profile: _merchantProfile!,
-                              getTierLabel: _tierLabel,
-                              getTierColor: (t) => _tierColor(t, c),
-                              getTierIcon: _tierIcon,
-                              getAvailabilityLabel: _availLabel,
-                              getAvailabilityColor: (a) => _availColor(a, c),
-                              paymentMethodIds: _effectivePaymentMethodIds
-                                  .map(
-                                    (id) => _paymentMethodsMap[id]?.name ?? id,
-                                  )
-                                  .toList(),
-                              averageRating: _averageRating,
-                              reviewCount: _reviews.length,
-                              loadingReviews: _loadingReviews,
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                MerchantInfoSection(
+                                  c: c,
+                                  profile: _merchantProfile!,
+                                  getTierLabel: _tierLabel,
+                                  getTierColor: (t) => _tierColor(t, c),
+                                  getTierIcon: _tierIcon,
+                                  getAvailabilityLabel: _availLabel,
+                                  getAvailabilityColor: (a) => _availColor(a, c),
+                                  paymentMethodIds: _effectivePaymentMethodIds
+                                      .map(
+                                        (id) =>
+                                            _paymentMethodsMap[id]?.name ?? id,
+                                      )
+                                      .toList(),
+                                  averageRating: _averageRating,
+                                  reviewCount: _reviewCount,
+                                  loadingReviews: _loadingReviews,
+                                ),
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: _loadingReviews
+                                        ? null
+                                        : _openAllReviewsSheet,
+                                    icon: const Icon(
+                                      Icons.rate_review_outlined,
+                                      size: 16,
+                                    ),
+                                    label: Text(
+                                      _loadingReviews
+                                          ? 'Loading reviews...'
+                                          : 'View offer reviews ($_reviewCount)',
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: c.primary,
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
 
                           const SizedBox(height: 10),
@@ -285,21 +370,6 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                             paymentMethodsMap: _paymentMethodsMap,
                             getPaymentMethodNames: _getPaymentMethodNames,
                           ),
-
-                          if (_loadingReviews) ...[
-                            const SizedBox(height: 10),
-                            _ReviewsLoadingCard(
-                              c: c,
-                              shimmerAnim: _shimmerAnim,
-                            ),
-                          ] else if (_reviews.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            _ReviewsCard(
-                              c: c,
-                              reviews: _reviews,
-                              averageRating: _averageRating,
-                            ),
-                          ],
 
                           const SizedBox(height: 14),
                           _TradeButton(
@@ -692,82 +762,7 @@ class _DetailsCard extends StatelessWidget {
 
 // ─── Reviews Card ─────────────────────────────────────────────────────────────
 
-class _ReviewsCard extends StatelessWidget {
-  const _ReviewsCard({
-    required this.c,
-    required this.reviews,
-    this.averageRating,
-  });
-  final AppColor c;
-  final List<ReviewModel> reviews;
-  final double? averageRating;
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = reviews.take(3).toList();
-    return _SectionCard(
-      c: c,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.rate_review_rounded, size: 16, color: c.textPrimary),
-              const SizedBox(width: 8),
-              Text(
-                'Reviews',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14.2,
-                ),
-              ),
-              const Spacer(),
-              if (averageRating != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: c.background,
-                    borderRadius: BorderRadius.circular(7),
-                    border: Border.all(color: c.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star_rounded, size: 13, color: c.warning),
-                      const SizedBox(width: 3),
-                      Text(
-                        averageRating!.toStringAsFixed(1),
-                        style: TextStyle(
-                          color: c.warning,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 13),
-          ...shown.asMap().entries.map(
-            (e) => Column(
-              children: [
-                _ReviewItem(c: c, review: e.value),
-                if (e.key < shown.length - 1) const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Trade Button ─────────────────────────────────────────────────────────────
+// Trade Button ─────────────────────────────────────────────────────────────
 
 class _TradeButton extends StatefulWidget {
   const _TradeButton({
@@ -1025,67 +1020,7 @@ class _DetailRow extends StatelessWidget {
   );
 }
 
-class _ReviewItem extends StatelessWidget {
-  const _ReviewItem({required this.c, required this.review});
-  final AppColor c;
-  final ReviewModel review;
-
-  String _timeAgo(DateTime d) {
-    final diff = DateTime.now().difference(d);
-    if (diff.inDays > 30) return '${d.day}/${d.month}/${d.year}';
-    if (diff.inDays > 0) return '${diff.inDays}d ago';
-    if (diff.inHours > 0) return '${diff.inHours}h ago';
-    return 'Just now';
-  }
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: c.background,
-      borderRadius: BorderRadius.circular(13),
-      border: Border.all(color: c.border),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Row(
-              children: List.generate(
-                5,
-                (i) => Icon(
-                  i < review.rating
-                      ? Icons.star_rounded
-                      : Icons.star_outline_rounded,
-                  size: 14,
-                  color: i < review.rating ? c.warning : c.border,
-                ),
-              ),
-            ),
-            const Spacer(),
-            if (review.createdAt != null)
-              Text(
-                _timeAgo(review.createdAt!),
-                style: TextStyle(color: c.textSecondary, fontSize: 10),
-              ),
-          ],
-        ),
-        if (review.comment != null && review.comment!.isNotEmpty) ...[
-          const SizedBox(height: 7),
-          Text(
-            review.comment!,
-            style: TextStyle(color: c.textPrimary, fontSize: 12.5, height: 1.4),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
-// ─── Payment Method Chip ──────────────────────────────────────────────────────
+// Payment Method Chip ──────────────────────────────────────────────────────
 
 class _PaymentMethodChip extends StatelessWidget {
   const _PaymentMethodChip({required this.c, required this.method});
@@ -1331,70 +1266,4 @@ class _MerchantCardSkeleton extends StatelessWidget {
   }
 }
 
-class _ReviewsLoadingCard extends StatelessWidget {
-  const _ReviewsLoadingCard({required this.c, required this.shimmerAnim});
-  final AppColor c;
-  final Animation<double> shimmerAnim;
 
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      c: c,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _Skeleton(c: c, anim: shimmerAnim, height: 16, width: 16),
-              const SizedBox(width: 8),
-              _Skeleton(c: c, anim: shimmerAnim, height: 14, width: 64),
-              const Spacer(),
-              _Skeleton(c: c, anim: shimmerAnim, height: 24, width: 46),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...List.generate(
-            2,
-            (index) => Padding(
-              padding: EdgeInsets.only(bottom: index == 1 ? 0 : 8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: c.background,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: c.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _Skeleton(
-                          c: c,
-                          anim: shimmerAnim,
-                          height: 12,
-                          width: 76,
-                        ),
-                        const Spacer(),
-                        _Skeleton(
-                          c: c,
-                          anim: shimmerAnim,
-                          height: 10,
-                          width: 46,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    _Skeleton(c: c, anim: shimmerAnim, height: 10),
-                    const SizedBox(height: 6),
-                    _Skeleton(c: c, anim: shimmerAnim, height: 10, width: 210),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

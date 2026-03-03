@@ -364,7 +364,7 @@ class _MyAppState extends State<MyApp> {
         return MaterialApp(
           title: 'NextFi Wallet',
           debugShowCheckedModeBanner: false,
-          themeMode: mode,
+          themeMode: mode, 
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),

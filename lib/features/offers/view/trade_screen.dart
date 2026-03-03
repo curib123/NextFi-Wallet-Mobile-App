@@ -557,8 +557,8 @@ class _TradeScreenState extends State<TradeScreen> {
                           _InfoChip(
                             c: c,
                             message:
-                                'Merchant receiving wallet is not published for this offer.',
-                            isWarning: true,
+                                'Receiver wallet will be resolved automatically after trade is created.',
+                            isWarning: false,
                           ),
                       ],
                     ),

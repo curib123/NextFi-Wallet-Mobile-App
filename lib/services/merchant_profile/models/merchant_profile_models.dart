@@ -112,6 +112,8 @@ class MerchantProfileModel {
   final String? location;
   final String? email;
   final String? phone;
+  final double? avgRating;
+  final int completedTrades;
 
   // Business info
   final String? businessName;
@@ -158,6 +160,8 @@ class MerchantProfileModel {
     this.location,
     this.email,
     this.phone,
+    this.avgRating,
+    this.completedTrades = 0,
     this.businessName,
     this.registrationNumber,
     this.businessAddress,
@@ -219,6 +223,31 @@ class MerchantProfileModel {
       return null;
     }
 
+    double? readDouble(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is num) return value.toDouble();
+        if (value is String) {
+          final parsed = double.tryParse(value.trim());
+          if (parsed != null) return parsed;
+        }
+      }
+      return null;
+    }
+
+    int readInt(List<String> keys, {int fallback = 0}) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is int) return value;
+        if (value is num) return value.toInt();
+        if (value is String) {
+          final parsed = int.tryParse(value.trim());
+          if (parsed != null) return parsed;
+        }
+      }
+      return fallback;
+    }
+
     return MerchantProfileModel(
       id: readString(const ['id']) ?? '',
       userId: readString(const ['userId', 'user_id']) ?? '',
@@ -231,6 +260,11 @@ class MerchantProfileModel {
       location: readString(const ['location']),
       email: readString(const ['email']),
       phone: readString(const ['phone']),
+      avgRating: readDouble(const ['avgRating', 'avg_rating']),
+      completedTrades: readInt(
+        const ['completedTrades', 'completed_trades'],
+        fallback: 0,
+      ),
       businessName: readString(const ['businessName', 'business_name']),
       registrationNumber: readString(const [
         'registrationNumber',

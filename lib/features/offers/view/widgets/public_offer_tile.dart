@@ -88,22 +88,38 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     super.dispose();
   }
 
-  Future<void> _loadData() => Future.wait([
-    _loadMerchantProfile(),
-    _loadReviews(),
-    _loadPaymentMethods(),
-  ]);
+  Future<void> _loadData() async {
+    await _loadMerchantProfile();
+    await Future.wait([
+      _loadReviews(),
+      _loadPaymentMethods(),
+    ]);
+  }
+
+  List<String> _resolveSellerIds(OfferModel offer, {MerchantProfileModel? profile}) {
+    final ids = <String>[];
+    void add(dynamic raw) {
+      final v = raw?.toString().trim() ?? '';
+      if (v.isEmpty) return;
+      if (!ids.contains(v)) ids.add(v);
+    }
+
+    final seller = offer.seller;
+    if (seller != null) {
+      // Prefer explicit user IDs first, then fallback to generic id.
+      add(seller['userId']);
+      add(seller['user_id']);
+      add(seller['id']);
+    }
+    add(offer.sellerId);
+    add(profile?.userId);
+    add(profile?.id);
+    return ids;
+  }
 
   String? _resolveSellerId(OfferModel offer) {
-    final direct = (offer.sellerId ?? '').trim();
-    if (direct.isNotEmpty) return direct;
-    final seller = offer.seller;
-    if (seller == null) return null;
-    final nested =
-        (seller['id'] ?? seller['userId'] ?? seller['user_id'] ?? '')
-            .toString()
-            .trim();
-    return nested.isEmpty ? null : nested;
+    final ids = _resolveSellerIds(offer, profile: _merchantProfile);
+    return ids.isEmpty ? null : ids.first;
   }
 
   Future<void> _loadPaymentMethods() async {
@@ -126,41 +142,57 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       ids.map((id) => _paymentMethodsMap[id]?.name ?? id).take(3).join(' · ');
 
   Future<void> _loadMerchantProfile() async {
-    final sid = _resolveSellerId(widget.offer);
-    if (sid == null || sid.isEmpty) {
+    final ids = _resolveSellerIds(widget.offer);
+    if (ids.isEmpty) {
       if (mounted) setState(() => _loadingMerchant = false);
       return;
     }
-    try {
-      final p = await _merchantCore.getPublic(sid);
-      if (mounted) {
-        setState(() {
-          _merchantProfile = p;
-          _loadingMerchant = false;
-        });
+    MerchantProfileModel? profile;
+    for (final id in ids) {
+      try {
+        final candidate = await _merchantCore.getPublic(id);
+        if (candidate != null) {
+          profile = candidate;
+          break;
+        }
+      } catch (_) {
+        // try next id candidate
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingMerchant = false);
+    }
+    if (mounted) {
+      setState(() {
+        _merchantProfile = profile;
+        if (profile?.avgRating != null) {
+          _averageRating = profile!.avgRating;
+        }
+        _loadingMerchant = false;
+      });
     }
   }
 
   Future<void> _loadReviews() async {
-    final sid = _resolveSellerId(widget.offer);
-    if (sid == null || sid.isEmpty) {
+    final offerId = widget.offer.id.trim();
+    if (offerId.isEmpty) {
       if (mounted) setState(() => _loadingReviews = false);
       return;
     }
     try {
-      final summary = await _reviewsCore.getUserRatingSummary(sid);
+      final summary = await _reviewsCore.getOfferRatingSummary(offerId);
       if (mounted) {
         setState(() {
-          _averageRating = summary.averageRating;
+          _averageRating = summary.averageRating ?? _merchantProfile?.avgRating;
           _reviewCount = summary.reviewCount;
           _loadingReviews = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingReviews = false);
+      if (mounted) {
+        setState(() {
+          _averageRating = _merchantProfile?.avgRating;
+          _reviewCount = 0;
+          _loadingReviews = false;
+        });
+      }
     }
   }
 
@@ -485,10 +517,10 @@ class _MerchantMeta extends StatelessWidget {
             if (loadingReviews)
               _SkimBox(c: c, w: 42, h: 10, r: 3, anim: shimmerAnim)
             else ...[
-              Icon(Icons.star_rounded, size: 11, color: c.warning),
+              _InlineRatingStars(c: c, rating: averageRating),
               const SizedBox(width: 2),
               Text(
-                (averageRating ?? 5.0).toStringAsFixed(1),
+                averageRating == null ? '--' : averageRating!.toStringAsFixed(1),
                 style: TextStyle(
                   color: c.textPrimary,
                   fontSize: 11,
@@ -1171,6 +1203,32 @@ class _MetaDot extends StatelessWidget {
       decoration: BoxDecoration(color: c.border, shape: BoxShape.circle),
     ),
   );
+}
+
+class _InlineRatingStars extends StatelessWidget {
+  const _InlineRatingStars({required this.c, required this.rating});
+
+  final AppColor c;
+  final double? rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = (rating ?? 0).round().clamp(0, 5);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        5,
+        (i) => Padding(
+          padding: EdgeInsets.only(right: i < 4 ? 1 : 0),
+          child: Icon(
+            i < filled ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: 10,
+            color: i < filled ? c.warning : c.border,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
