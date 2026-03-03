@@ -43,9 +43,11 @@ android {
         }
     }
 
+    // Keep debug output as a single APK so Flutter tooling can find app-debug.apk.
+    val isReleaseTask = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
     splits {
         abi {
-            isEnable = true
+            isEnable = isReleaseTask
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = false
