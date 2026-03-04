@@ -2769,7 +2769,7 @@ class _TimelineCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
+              ), 
             ],
           );
         }),

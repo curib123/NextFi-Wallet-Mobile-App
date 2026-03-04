@@ -21,7 +21,7 @@ class TradeHistoryScreen extends StatefulWidget {
 
 class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
   final _tradesService = TradesCoreService.I;
-  final _dateFormat    = DateFormat('MMM d, yyyy');
+  final _dateFormat = DateFormat('MMM d, yyyy');
 
   bool _loading = true;
   String? _error;
@@ -34,16 +34,27 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
   }
 
   Future<void> _loadTrades({bool showLoader = true}) async {
-    if (showLoader) setState(() { _loading = true; _error = null; });
+    if (showLoader) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final result = await _tradesService.list(
         const TradesListQuery(page: 1, limit: 50),
       );
       if (!mounted) return;
-      setState(() { _tradesList = result; _loading = false; });
+      setState(() {
+        _tradesList = result;
+        _loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = e.toString(); _loading = false; });
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
     }
   }
 
@@ -62,7 +73,9 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
     OfferModel? offer;
     if (trade.offer != null) offer = OfferModel.fromJson(trade.offer!);
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TradeOrderScreen(trade: trade, offer: offer)),
+      MaterialPageRoute(
+        builder: (_) => TradeOrderScreen(trade: trade, offer: offer),
+      ),
     );
   }
 
@@ -85,18 +98,22 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
               child: _loading
                   ? const PageLoader(label: 'Loading trades…')
                   : _error != null
-                  ? _ErrorState(c: c, error: _error!, onRetry: () => _loadTrades())
+                  ? _ErrorState(
+                      c: c,
+                      error: _error!,
+                      onRetry: () => _loadTrades(),
+                    )
                   : _tradesList.isEmpty
                   ? _EmptyState(c: c)
                   : RefreshIndicator(
-                color: c.primary,
-                onRefresh: () => _loadTrades(showLoader: false),
-                child: _TradeList(
-                  c: c,
-                  grouped: _grouped,
-                  onTap: _openDetail,
-                ),
-              ),
+                      color: c.primary,
+                      onRefresh: () => _loadTrades(showLoader: false),
+                      child: _TradeList(
+                        c: c,
+                        grouped: _grouped,
+                        onTap: _openDetail,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -139,8 +156,8 @@ class _Header extends StatelessWidget {
                   style: TextStyle(
                     color: c.textPrimary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 26,
-                    letterSpacing: -0.8,
+                    fontSize: 24,
+                    letterSpacing: -0.5,
                     height: 1.1,
                   ),
                 ),
@@ -149,19 +166,15 @@ class _Header extends StatelessWidget {
                   'Your buy & sell activity',
                   style: TextStyle(
                     color: c.textSecondary,
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w400,
-                    letterSpacing: -0.1,
+                    letterSpacing: 0,
                   ),
                 ),
               ],
             ),
           ),
-          _IconBtn(
-            c: c,
-            icon: Icons.refresh_rounded,
-            onTap: onRefresh,
-          ),
+          _IconBtn(c: c, icon: Icons.refresh_rounded, onTap: onRefresh),
         ],
       ),
     );
@@ -183,7 +196,13 @@ class _IconBtn extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border),
+        boxShadow: [
+          BoxShadow(
+            color: c.textPrimary.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Icon(icon, size: 17, color: c.textSecondary),
     ),
@@ -201,9 +220,11 @@ class _SummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buys      = trades.where((t) => t.offerType == TradeOfferType.sell).length;
-    final sells     = trades.where((t) => t.offerType == TradeOfferType.buy).length;
-    final completed = trades.where((t) => t.status == TradeStatus.completed).length;
+    final buys = trades.where((t) => t.offerType == TradeOfferType.sell).length;
+    final sells = trades.where((t) => t.offerType == TradeOfferType.buy).length;
+    final completed = trades
+        .where((t) => t.status == TradeStatus.completed)
+        .length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
@@ -211,15 +232,19 @@ class _SummaryStrip extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.border),
         ),
         child: Row(
           children: [
-            _StatCell(c: c, label: 'Buys',  value: '$buys',      accent: c.success),
+            _StatCell(c: c, label: 'Buys', value: '$buys', accent: c.success),
             _VSep(c: c),
-            _StatCell(c: c, label: 'Sells', value: '$sells',     accent: c.error),
+            _StatCell(c: c, label: 'Sells', value: '$sells', accent: c.error),
             _VSep(c: c),
-            _StatCell(c: c, label: 'Done',  value: '$completed', accent: c.primary),
+            _StatCell(
+              c: c,
+              label: 'Done',
+              value: '$completed',
+              accent: c.primary,
+            ),
           ],
         ),
       ),
@@ -302,7 +327,7 @@ class _TradeList extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 22, 18, 36),
       itemCount: dates.length,
       itemBuilder: (_, i) {
-        final date   = dates[i];
+        final date = dates[i];
         final trades = grouped[date]!;
 
         return Column(
@@ -330,10 +355,16 @@ class _TradeList extends StatelessWidget {
             const SizedBox(height: 10),
 
             // ── Cards ────────────────────────────────────────────────────────
-            ...trades.map((trade) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _TradeCard(c: c, trade: trade, onTap: () => onTap(trade)),
-            )),
+            ...trades.map(
+              (trade) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _TradeCard(
+                  c: c,
+                  trade: trade,
+                  onTap: () => onTap(trade),
+                ),
+              ),
+            ),
           ],
         );
       },
@@ -358,7 +389,7 @@ class _TradeCard extends StatefulWidget {
 class _TradeCardState extends State<_TradeCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pressCtrl;
-  late final Animation<double>   _scaleAnim;
+  late final Animation<double> _scaleAnim;
 
   @override
   void initState() {
@@ -368,8 +399,10 @@ class _TradeCardState extends State<_TradeCard>
       duration: const Duration(milliseconds: 80),
       reverseDuration: const Duration(milliseconds: 150),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.975)
-        .animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: 0.975,
+    ).animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
   }
 
   @override
@@ -383,28 +416,28 @@ class _TradeCardState extends State<_TradeCard>
   Color _statusColor(TradeStatus s) {
     final c = widget.c;
     return switch (s) {
-      TradeStatus.completed     => c.success,
-      TradeStatus.cancelled     => c.error,
-      TradeStatus.expired       => c.error,
-      TradeStatus.disputed      => c.warning,
-      TradeStatus.cryptoLocked  => c.primary,
-      TradeStatus.fiatSent      => c.warning,
+      TradeStatus.completed => c.success,
+      TradeStatus.cancelled => c.error,
+      TradeStatus.expired => c.error,
+      TradeStatus.disputed => c.warning,
+      TradeStatus.cryptoLocked => c.primary,
+      TradeStatus.fiatSent => c.warning,
       TradeStatus.fiatConfirmed => c.primary,
-      TradeStatus.created       => c.textSecondary,
-      TradeStatus.unknown       => c.textSecondary,
+      TradeStatus.created => c.textSecondary,
+      TradeStatus.unknown => c.textSecondary,
     };
   }
 
   String _statusLabel(TradeStatus s) => switch (s) {
-    TradeStatus.completed     => 'Completed',
-    TradeStatus.cancelled     => 'Cancelled',
-    TradeStatus.expired       => 'Expired',
-    TradeStatus.disputed      => 'Disputed',
-    TradeStatus.cryptoLocked  => 'Locked',
-    TradeStatus.fiatSent      => 'Fiat Sent',
+    TradeStatus.completed => 'Completed',
+    TradeStatus.cancelled => 'Cancelled',
+    TradeStatus.expired => 'Expired',
+    TradeStatus.disputed => 'Disputed',
+    TradeStatus.cryptoLocked => 'Locked',
+    TradeStatus.fiatSent => 'Fiat Sent',
     TradeStatus.fiatConfirmed => 'Confirming',
-    TradeStatus.created       => 'Pending',
-    TradeStatus.unknown       => 'Unknown',
+    TradeStatus.created => 'Pending',
+    TradeStatus.unknown => 'Unknown',
   };
 
   String _formatCrypto(double v) => v.toStringAsFixed(4);
@@ -413,18 +446,21 @@ class _TradeCardState extends State<_TradeCard>
 
   @override
   Widget build(BuildContext context) {
-    final c           = widget.c;
-    final trade       = widget.trade;
-    final isBuy       = _isBuy;
-    final typeColor   = isBuy ? c.success : c.error;
+    final c = widget.c;
+    final trade = widget.trade;
+    final isBuy = _isBuy;
+    final typeColor = isBuy ? c.success : c.error;
     final statusColor = _statusColor(trade.status);
     final statusLabel = _statusLabel(trade.status);
-    final isActive    = trade.status.isActive;
+    final isActive = trade.status.isActive;
 
     return GestureDetector(
-      onTapDown:   (_) => _pressCtrl.forward(),
-      onTapUp:     (_) { _pressCtrl.reverse(); widget.onTap(); },
-      onTapCancel: ()  => _pressCtrl.reverse(),
+      onTapDown: (_) => _pressCtrl.forward(),
+      onTapUp: (_) {
+        _pressCtrl.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _pressCtrl.reverse(),
       child: ScaleTransition(
         scale: _scaleAnim,
         child: Container(
@@ -432,10 +468,6 @@ class _TradeCardState extends State<_TradeCard>
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isActive ? statusColor : c.border,
-              width: isActive ? 1.5 : 1.0,
-            ),
             boxShadow: [
               BoxShadow(
                 color: c.textPrimary.withValues(alpha: 0.04),
@@ -453,7 +485,6 @@ class _TradeCardState extends State<_TradeCard>
                 decoration: BoxDecoration(
                   color: c.background,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: c.border),
                 ),
                 child: Icon(
                   isBuy
@@ -481,18 +512,22 @@ class _TradeCardState extends State<_TradeCard>
                           style: TextStyle(
                             color: typeColor,
                             fontWeight: FontWeight.w800,
-                            fontSize: 14,
+                            fontSize: 14.5,
                             letterSpacing: -0.3,
                           ),
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          trade.asset,
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            letterSpacing: -0.3,
+                        Expanded(
+                          child: Text(
+                            trade.asset,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              letterSpacing: -0.3,
+                            ),
                           ),
                         ),
                       ],
@@ -503,13 +538,19 @@ class _TradeCardState extends State<_TradeCard>
                     // Amounts
                     Row(
                       children: [
-                        Text(
-                          '${_formatCrypto(trade.cryptoAmount)} ${trade.asset}',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                        Expanded(
+                          child: Text(
+                            '${_formatCrypto(trade.cryptoAmount)} ${trade.asset}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                           ),
                         ),
                         Padding(
@@ -523,13 +564,20 @@ class _TradeCardState extends State<_TradeCard>
                             ),
                           ),
                         ),
-                        Text(
-                          '${trade.fiatCurrency} ${_formatFiat(trade.fiatAmount)}',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                        Expanded(
+                          child: Text(
+                            '${trade.fiatCurrency} ${_formatFiat(trade.fiatAmount)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -585,12 +633,11 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 110),
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
     decoration: BoxDecoration(
-      // Completed/terminal states: solid bg; active states: outline only
-      color: isActive ? c.background : color,
+      color: color,
       borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: isActive ? color : color),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -598,19 +645,20 @@ class _StatusPill extends StatelessWidget {
         Container(
           width: 5,
           height: 5,
-          decoration: BoxDecoration(
-            color: isActive ? color : c.onPrimary,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: c.onPrimary, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(
-          label,
-          style: TextStyle(
-            color: isActive ? color : c.onPrimary,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.1,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: c.onPrimary,
+              fontSize: 10.8,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.1,
+            ),
           ),
         ),
       ],
@@ -639,7 +687,6 @@ class _EmptyState extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.border),
             ),
             child: Icon(
               Icons.swap_horiz_rounded,
@@ -652,7 +699,7 @@ class _EmptyState extends StatelessWidget {
             'No trades yet',
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.4,
             ),
@@ -663,7 +710,7 @@ class _EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: c.textSecondary,
-              fontSize: 13,
+              fontSize: 13.5,
               height: 1.6,
               fontWeight: FontWeight.w400,
             ),
@@ -701,7 +748,6 @@ class _ErrorState extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.error),
             ),
             child: Icon(Icons.cloud_off_rounded, color: c.error, size: 24),
           ),

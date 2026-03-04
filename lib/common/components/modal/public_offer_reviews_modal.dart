@@ -33,7 +33,7 @@ class _PublicOfferReviewsModalState extends State<PublicOfferReviewsModal> {
   bool _hasMore = true;
   int _page = 1;
   String? _error;
-       
+
   @override
   void initState() {
     super.initState();
