@@ -598,7 +598,7 @@ class _TierBadge extends StatelessWidget {
           Text(
             _tierLabel(tier),
             style: TextStyle(
-              color: c.textPrimary,
+              color: c.error,
               fontSize: 11.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.1,
