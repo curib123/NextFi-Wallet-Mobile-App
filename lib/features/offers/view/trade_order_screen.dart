@@ -764,7 +764,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         }
         if (disputeId == null) {
           throw Exception(
-            'Dispute record is not ready yet. Please refresh and try again.',
+            'Dispute ID is missing from trade data. Please refresh. '
+            'If it still fails, backend must include dispute.id in trade response.',
           );
         }
         await _tradesCore.uploadDisputeEvidence(

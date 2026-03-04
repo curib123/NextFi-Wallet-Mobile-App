@@ -354,6 +354,9 @@ class TradeModel {
     final escrowRaw = json['escrow'] ?? json['tradeEscrow'];
     final offerRaw = json['offer'];
     final disputeRaw = json['dispute'];
+    final activeDisputeRaw = json['activeDispute'] ?? json['active_dispute'];
+    final latestDisputeRaw = json['latestDispute'] ?? json['latest_dispute'];
+    final disputesRaw = json['disputes'];
     final spaRaw =
         json['sellerPaymentAccount'] ?? json['seller_payment_account'];
     final bpaRaw =
@@ -374,6 +377,39 @@ class TradeModel {
         return TradeOfferType.fromString(offerType);
       }
       return TradeOfferType.unknown;
+    }
+
+    String? readDisputeId() {
+      final direct = readStr(const [
+        'disputeId',
+        'dispute_id',
+        'activeDisputeId',
+        'active_dispute_id',
+        'latestDisputeId',
+        'latest_dispute_id',
+      ]);
+      if (direct.isNotEmpty) return direct;
+
+      String fromMap(dynamic raw) {
+        if (raw is! Map) return '';
+        final m = Map<String, dynamic>.from(raw);
+        return (m['id'] ?? m['disputeId'] ?? m['dispute_id'] ?? '')
+            .toString()
+            .trim();
+      }
+
+      for (final raw in [disputeRaw, activeDisputeRaw, latestDisputeRaw]) {
+        final id = fromMap(raw);
+        if (id.isNotEmpty) return id;
+      }
+
+      if (disputesRaw is List) {
+        for (final item in disputesRaw) {
+          final id = fromMap(item);
+          if (id.isNotEmpty) return id;
+        }
+      }
+      return null;
     }
 
     return TradeModel(
@@ -430,19 +466,7 @@ class TradeModel {
         'fiatConfirmDueAt',
         'fiat_confirm_due_at',
       ]),
-      disputeId: (() {
-        final direct = readStr(const ['disputeId', 'dispute_id']);
-        if (direct.isNotEmpty) return direct;
-        if (disputeRaw is Map<String, dynamic>) {
-          final nested =
-              disputeRaw['id']?.toString().trim() ??
-              disputeRaw['disputeId']?.toString().trim() ??
-              disputeRaw['dispute_id']?.toString().trim() ??
-              '';
-          if (nested.isNotEmpty) return nested;
-        }
-        return null;
-      })(),
+      disputeId: readDisputeId(),
       autoDisputeTrigger: (() {
         final v = readStr(const ['autoDisputeTrigger', 'auto_dispute_trigger']);
         return v.isEmpty ? null : v;
