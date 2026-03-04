@@ -48,7 +48,8 @@ class _UploadDisputeEvidenceModalState
     final txHash = _txHashCtrl.text.trim();
     if (type == 'CRYPTO' && txHash.isEmpty) {
       setState(
-        () => _error = 'Transaction hash is required for CRYPTO evidence.',
+        () =>
+            _error = 'Please add the transaction ID for crypto payment proof.',
       );
       return;
     }
@@ -99,7 +100,7 @@ class _UploadDisputeEvidenceModalState
                   ),
                 ),
                 Text(
-                  'Upload Dispute Evidence',
+                  'Upload Files for Support Review',
                   style: GoogleFonts.sora(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -108,7 +109,7 @@ class _UploadDisputeEvidenceModalState
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Select evidence type and upload a screenshot/photo.',
+                  'Choose file type and upload screenshots or photos.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.sora(
                     fontSize: 13,
@@ -148,7 +149,7 @@ class _UploadDisputeEvidenceModalState
                   _ProofField(
                     colors: colors,
                     controller: _txHashCtrl,
-                    hint: 'Transaction hash (required)',
+                    hint: 'Transaction ID (required)',
                   ),
                 ],
                 if (_error != null) ...[
@@ -193,7 +194,7 @@ class _UploadDisputeEvidenceModalState
                       ),
                     ),
                     child: Text(
-                      'Cancel',
+                      'Close',
                       style: GoogleFonts.sora(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,

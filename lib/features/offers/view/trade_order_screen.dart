@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/modal/payment_proof_view_modal.dart';
+import 'package:next_fi/common/components/modal/trade_confirm_sheet.dart';
+import 'package:next_fi/common/components/modal/trade_proof_pick_sheet.dart';
+import 'package:next_fi/common/components/modal/trade_review_sheet.dart';
+import 'package:next_fi/common/components/modal/upload_dispute_evidence_modal.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/features/offers/view/trade_messages_screen.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
@@ -54,29 +58,76 @@ String _statusLabel(
   required bool isUserEscrowLocker,
   required bool isUserFiatPayer,
   required bool isUserCryptoReceiver,
+  required String assetCode,
 }) {
   switch (s) {
     case TradeStatus.created:
-      return isUserEscrowLocker
-          ? 'Action Required - Lock Escrow'
-          : 'Awaiting Escrow Lock';
+      return isUserEscrowLocker ? 'Your Action Needed' : 'Waiting to Start';
     case TradeStatus.cryptoLocked:
-      return isUserFiatPayer ? 'Send Your Payment' : 'Waiting for Payment';
+      return isUserFiatPayer ? 'Send Payment Now' : 'Waiting for Payment';
     case TradeStatus.fiatSent:
-      return isUserFiatPayer ? 'Payment Sent' : 'Confirm Receipt';
+      return isUserFiatPayer ? 'Payment Sent' : 'Confirm You Got Paid';
     case TradeStatus.fiatConfirmed:
-      return isUserCryptoReceiver ? 'Claim Your Crypto' : 'Payment Confirmed';
+      return isUserCryptoReceiver
+          ? 'Get Your ${assetCode.toUpperCase()}'
+          : 'Payment Confirmed';
     case TradeStatus.completed:
-      return 'Trade Completed';
+      return 'Trade Finished';
     case TradeStatus.cancelled:
-      return 'Trade Cancelled';
+      return 'Trade Canceled';
     case TradeStatus.disputed:
-      return 'Under Dispute';
+      return 'Needs Support Review';
     case TradeStatus.expired:
-      return 'Trade Expired';
+      return 'Time Ran Out';
     default:
       return 'Unknown Status';
   }
+}
+
+String _resolveTradeProofUrl(String raw) {
+  final v = raw.trim();
+  if (v.isEmpty) return '';
+  if (v.startsWith('http://') || v.startsWith('https://')) return v;
+  final base = centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
+  if (v.startsWith('/')) return '$base$v';
+  return '$base/$v';
+}
+
+String _extractTradeProofFileUrl(Map<String, dynamic> row) {
+  String read(dynamic value) => value == null ? '' : value.toString().trim();
+
+  for (final key in const [
+    'fileUrl',
+    'file_url',
+    'url',
+    'proofUrl',
+    'proof_url',
+    'imageUrl',
+    'image_url',
+    'attachmentUrl',
+    'attachment_url',
+    'location',
+    'path',
+  ]) {
+    final v = read(row[key]);
+    if (v.isNotEmpty) return v;
+  }
+
+  final nested = row['file'];
+  if (nested is Map<String, dynamic>) {
+    for (final key in const [
+      'url',
+      'fileUrl',
+      'file_url',
+      'location',
+      'path',
+    ]) {
+      final v = read(nested[key]);
+      if (v.isNotEmpty) return v;
+    }
+  }
+
+  return '';
 }
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
@@ -107,6 +158,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   bool _proofsLoading = false;
   List<Map<String, dynamic>> _proofs = const [];
   int _unreadMessages = 0;
+  bool _hasAutoOpenedProofModal = false;
   double? _activeAssetBalance;
   bool _balanceLoading = false;
   String? _balanceError;
@@ -115,9 +167,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   Timer? _countdownTimer;
   Duration _timeLeft = Duration.zero;
   Timer? _pollTimer;
-
-  late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;
 
   // ── Role helpers ─────────────────────────────────────────────────────────
 
@@ -236,15 +285,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     unawaited(_loadProofs(silent: true));
     unawaited(_refreshUnreadMessages(silent: true));
     unawaited(_refreshActiveAssetBalance(silent: true));
-
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(
-      begin: 0.4,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -261,7 +301,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     return switch (assetCode) {
       'XLM' => Asset.NATIVE,
       'USDC' => AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer),
-      _ => throw Exception('Unsupported escrow asset: $assetCode'),
+      _ => throw Exception('Unsupported token: $assetCode'),
     };
   }
 
@@ -308,7 +348,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     _connectivitySub.cancel();
     _countdownTimer?.cancel();
     _pollTimer?.cancel();
-    _pulseCtrl.dispose();
     super.dispose();
   }
 
@@ -359,13 +398,6 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       return created.add(Duration(minutes: window));
     }
     return null;
-  }
-
-  Duration get _countdownTotalDuration {
-    if (_trade.status == TradeStatus.disputed) {
-      return const Duration(hours: 24);
-    }
-    return Duration(minutes: _trade.paymentWindowMinutes ?? 30);
   }
 
   void _updateTimeLeft(DateTime deadline) {
@@ -449,12 +481,72 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         _proofs = List<Map<String, dynamic>>.from(proofs);
         _proofsLoading = false;
       });
+      _maybeAutoOpenPaymentProofModal();
     } catch (_) {
       if (!mounted) return;
       setState(() => _proofsLoading = false);
     } finally {
       _proofsLoading = false;
     }
+  }
+
+  String _firstProofImageUrl(List<Map<String, dynamic>> proofs) {
+    for (final row in proofs) {
+      final raw = _extractTradeProofFileUrl(row);
+      final resolved = _resolveTradeProofUrl(raw);
+      if (resolved.isNotEmpty) return resolved;
+    }
+    return '';
+  }
+
+  void _openProofModalFromRow(Map<String, dynamic> row) {
+    final imageUrl = _resolveTradeProofUrl(_extractTradeProofFileUrl(row));
+    if (imageUrl.isEmpty) return;
+    final type = (row['type'] ?? '').toString().trim().toUpperCase();
+    final title = type.isEmpty ? 'Payment Proof' : '$type Proof';
+    unawaited(
+      showPaymentProofViewModal(
+        context,
+        colors: AppColor.of(context),
+        imageUrl: imageUrl,
+        title: title,
+      ),
+    );
+  }
+
+  void _openLatestProofModal() {
+    if (_proofs.isEmpty || !mounted) return;
+    final latestWithImage = _proofs.firstWhere(
+      (row) => _resolveTradeProofUrl(_extractTradeProofFileUrl(row)).isNotEmpty,
+      orElse: () => const <String, dynamic>{},
+    );
+    if (latestWithImage.isEmpty) {
+      showFloatingSnackBar(
+        context,
+        message: 'No proof image is available to preview yet.',
+        type: SnackBarType.info,
+      );
+      return;
+    }
+    _openProofModalFromRow(latestWithImage);
+  }
+
+  void _maybeAutoOpenPaymentProofModal() {
+    if (_hasAutoOpenedProofModal || !mounted) return;
+    final imageUrl = _firstProofImageUrl(_proofs);
+    if (imageUrl.isEmpty) return;
+    _hasAutoOpenedProofModal = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        showPaymentProofViewModal(
+          context,
+          colors: AppColor.of(context),
+          imageUrl: imageUrl,
+          title: 'Payment Proof',
+        ),
+      );
+    });
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -464,93 +556,96 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       showFloatingSnackBar(
         context,
         message:
-            'Escrow lock transaction is still being verified. Refresh and wait a few seconds.',
+            'Your lock is still being checked. Please refresh in a few seconds.',
         type: SnackBarType.warning,
       );
       return;
     }
     final ok = await _showConfirm(
-      title: 'Lock Crypto in Escrow',
+      title: 'Lock ${_trade.asset.toUpperCase()} to Start',
       body:
-          'Your ${_trade.asset} will be locked in a Stellar Claimable Balance. '
-          'It can only be claimed once payment is confirmed. '
-          'If the trade expires the funds return to you automatically.',
-      confirmLabel: 'Lock Crypto',
+          'You are about to lock ${_trade.asset} for this trade. '
+          'It will be released after payment is confirmed. '
+          'If time runs out, it comes back to your wallet automatically.',
+      confirmLabel: 'Lock Now',
     );
     if (!ok) return;
 
-    _runAction(() async {
-      await _refresh(silent: true);
-      if (!mounted) return;
-      final hasEscrowId =
-          (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
-      if (_trade.status != TradeStatus.created || hasEscrowId) {
-        throw Exception(
-          'Escrow may already be funded for this trade. Please refresh.',
-        );
-      }
-
-      final stellarSvc = context.read<StellarWalletServices>();
-      final seedVM = context.read<SeedKeypairVM>();
-      final kp = await seedVM.deriveKeyPair();
-      final asset = _tradeStellarAsset(stellarSvc);
-      final liveBalance = await stellarSvc.accountService.getAssetBalance(
-        kp.accountId,
-        asset,
-      );
-      setState(() {
-        _activeAssetBalance = liveBalance;
-        _balanceError = null;
-      });
-      if (liveBalance < _trade.cryptoAmount) {
-        throw Exception(
-          'Insufficient active wallet balance. '
-          'Available: ${liveBalance.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}, '
-          'Required: ${_trade.cryptoAmount.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}.',
-        );
-      }
-
-      final recipientAddress = _trade.cryptoReceiverAddress.trim();
-      if (recipientAddress.isEmpty) {
-        throw Exception(
-          'Trade receiver address is missing. Refresh this trade and try again.',
-        );
-      }
-      if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
-        throw Exception('Trade receiver address format is invalid.');
-      }
-
-      final expiry =
-          _trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24));
-      final txHash = await stellarSvc.claimableBalanceService
-          .createUnconditionalWithExpiry(
-            keyPair: kp,
-            asset: asset,
-            amount: _trade.cryptoAmount,
-            recipientId: recipientAddress,
-            expiryTime: expiry,
+    _runAction(
+      () async {
+        await _refresh(silent: true);
+        if (!mounted) return;
+        final hasEscrowId =
+            (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+        if (_trade.status != TradeStatus.created || hasEscrowId) {
+          throw Exception(
+            'This trade may already be locked. Please refresh and try again.',
           );
+        }
 
-      final cbId = await _resolveClaimableBalanceId(
-        stellarSvc: stellarSvc,
-        txHash: txHash,
-      );
-
-      if (cbId == null || cbId.isEmpty) {
-        if (mounted) setState(() => _lockPendingVerification = true);
-        throw Exception(
-          'Lock tx submitted but escrow ID is not indexed yet. '
-          'Please refresh and wait before trying again.',
+        final stellarSvc = context.read<StellarWalletServices>();
+        final seedVM = context.read<SeedKeypairVM>();
+        final kp = await seedVM.deriveKeyPair();
+        final asset = _tradeStellarAsset(stellarSvc);
+        final liveBalance = await stellarSvc.accountService.getAssetBalance(
+          kp.accountId,
+          asset,
         );
-      }
+        setState(() {
+          _activeAssetBalance = liveBalance;
+          _balanceError = null;
+        });
+        if (liveBalance < _trade.cryptoAmount) {
+          throw Exception(
+            'Not enough balance in your wallet. '
+            'Available: ${liveBalance.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}, '
+            'Required: ${_trade.cryptoAmount.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}.',
+          );
+        }
 
-      final u = await _tradesCore.lockCrypto(
-        _trade.id,
-        claimableBalanceId: cbId,
-        createTxHash: txHash,
-      );
-      if (mounted) setState(() => _trade = u);
-    }, successMsg: 'Crypto locked in escrow — the other party is notified');
+        final recipientAddress = _trade.cryptoReceiverAddress.trim();
+        if (recipientAddress.isEmpty) {
+          throw Exception(
+            'Wallet address is missing. Please refresh and try again.',
+          );
+        }
+        if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
+          throw Exception('Wallet address format is not valid.');
+        }
+
+        final expiry =
+            _trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24));
+        final txHash = await stellarSvc.claimableBalanceService
+            .createUnconditionalWithExpiry(
+              keyPair: kp,
+              asset: asset,
+              amount: _trade.cryptoAmount,
+              recipientId: recipientAddress,
+              expiryTime: expiry,
+            );
+
+        final cbId = await _resolveClaimableBalanceId(
+          stellarSvc: stellarSvc,
+          txHash: txHash,
+        );
+
+        if (cbId == null || cbId.isEmpty) {
+          if (mounted) setState(() => _lockPendingVerification = true);
+          throw Exception(
+            'Your lock was sent, but it is still updating. Please refresh and try again in a moment.',
+          );
+        }
+
+        final u = await _tradesCore.lockCrypto(
+          _trade.id,
+          claimableBalanceId: cbId,
+          createTxHash: txHash,
+        );
+        if (mounted) setState(() => _trade = u);
+      },
+      successMsg:
+          '${_trade.asset.toUpperCase()} locked. The other person has been notified.',
+    );
   }
 
   Future<String?> _resolveClaimableBalanceId({
@@ -582,7 +677,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       body:
           'Have you already sent the ${_trade.fiatCurrency} payment? '
           'This cannot be undone and notifies the other party.',
-      confirmLabel: "Yes, I've Already Paid",
+      confirmLabel: "Yes, I've paid",
     );
     if (!ok) return;
     _runAction(() async {
@@ -608,26 +703,49 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         showFloatingSnackBar(
           context,
           message:
-              'Payment proof is required. Upload it from the Upload Proof button before completion.',
+              'Please upload your payment screenshot before this trade can finish.',
           type: SnackBarType.warning,
         );
       }
-    }, successMsg: 'Payment marked as sent — waiting for confirmation');
+    }, successMsg: 'Marked as paid. Waiting for confirmation.');
   }
 
   Future<void> _uploadFiatProofFromPanel() async {
-    if (!_canUploadFiatProofFromPanel || _uploadingFiatProof) return;
-    final proof = await _showProofPickSheet(forceUpload: true);
-    if (proof == null) return;
-
+    final canUploadFromPanel = _trade.status == TradeStatus.disputed
+        ? _isParticipant
+        : _canUploadFiatProofFromPanel;
+    if (!canUploadFromPanel || _uploadingFiatProof) return;
     setState(() => _uploadingFiatProof = true);
     try {
-      await _tradesCore.uploadProof(_trade.id, file: proof, type: 'FIAT');
+      if (_trade.status == TradeStatus.disputed) {
+        final config = await showModalBottomSheet<TradeProofPickResult>(
+          context: context,
+          backgroundColor: AppColor.of(context).surface,
+          builder: (_) =>
+              UploadDisputeEvidenceModal(colors: AppColor.of(context)),
+        );
+        if (config == null || !mounted) return;
+        final file = await ImagePicker().pickImage(source: config.source);
+        if (file == null || !mounted) return;
+        await _tradesCore.uploadProof(
+          _trade.id,
+          file: File(file.path),
+          type: config.type,
+          referenceNo: config.referenceNo,
+          txHash: config.txHash,
+        );
+      } else {
+        final proof = await _showProofPickSheet(forceUpload: true);
+        if (proof == null || !mounted) return;
+        await _tradesCore.uploadProof(_trade.id, file: proof, type: 'FIAT');
+      }
       await _loadProofs(silent: true);
       if (mounted) {
         showFloatingSnackBar(
           context,
-          message: 'Payment proof uploaded',
+          message: _trade.status == TradeStatus.disputed
+              ? 'File uploaded'
+              : 'Payment screenshot uploaded',
           type: SnackBarType.success,
         );
       }
@@ -635,7 +753,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       if (mounted) {
         showFloatingSnackBar(
           context,
-          message: 'Failed to upload proof: $e',
+          message: 'Could not upload screenshot: $e',
           type: SnackBarType.error,
         );
       }
@@ -723,17 +841,21 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         ? 'buyer'
         : 'seller';
     final ok = await _showConfirm(
-      title: 'Confirm Payment Received',
+      title: 'Confirm You Got Paid',
       body:
           'Have you received the full ${_trade.fiatCurrency.toUpperCase()} payment? '
-          'Confirming will release the crypto escrow to the $cryptoRecipientLabel.',
-      confirmLabel: 'Yes, I Received It',
+          'This will release ${_trade.asset.toUpperCase()} to the $cryptoRecipientLabel.',
+      confirmLabel: 'Yes, I got it',
     );
     if (!ok) return;
-    _runAction(() async {
-      final u = await _tradesCore.confirmFiat(_trade.id);
-      if (mounted) setState(() => _trade = u);
-    }, successMsg: 'Payment confirmed — crypto is being released');
+    _runAction(
+      () async {
+        final u = await _tradesCore.confirmFiat(_trade.id);
+        if (mounted) setState(() => _trade = u);
+      },
+      successMsg:
+          'Payment confirmed. ${_trade.asset.toUpperCase()} is being released.',
+    );
   }
 
   Future<void> _claimCrypto() async {
@@ -741,17 +863,16 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     if (cbId == null || cbId.trim().isEmpty) {
       showFloatingSnackBar(
         context,
-        message: 'Escrow ID not available. Refresh and try again.',
+        message: 'Lock ID not ready yet. Please refresh and try again.',
         type: SnackBarType.error,
       );
       return;
     }
     final ok = await _showConfirm(
-      title: 'Claim Your Crypto',
+      title: 'Receive Your ${_trade.asset.toUpperCase()}',
       body:
-          'Claim ${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} '
-          'from the escrow to your wallet.',
-      confirmLabel: 'Claim Crypto',
+          'Receive ${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} in your wallet.',
+      confirmLabel: 'Receive ${_trade.asset.toUpperCase()}',
     );
     if (!ok) return;
     _runAction(() async {
@@ -762,7 +883,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           .claimClaimableBalance(keyPair: kp, balanceId: cbId);
       final u = await _tradesCore.claimCrypto(_trade.id, claimTxHash: claimTx);
       if (mounted) setState(() => _trade = u);
-    }, successMsg: 'Crypto claimed to your wallet!');
+    }, successMsg: '${_trade.asset.toUpperCase()} received in your wallet.');
   }
 
   Future<void> _refundCrypto() async {
@@ -770,17 +891,17 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     if (cbId == null || cbId.trim().isEmpty) {
       showFloatingSnackBar(
         context,
-        message: 'No escrow to refund.',
+        message: 'Nothing to return right now.',
         type: SnackBarType.error,
       );
       return;
     }
     final ok = await _showConfirm(
-      title: 'Refund Expired Escrow',
+      title: 'Return ${_trade.asset.toUpperCase()}',
       body:
-          'The trade has expired. Reclaim your '
+          'Time ran out for this trade. Return your '
           '${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} back to your wallet.',
-      confirmLabel: 'Reclaim My Crypto',
+      confirmLabel: 'Return ${_trade.asset.toUpperCase()}',
     );
     if (!ok) return;
     _runAction(() async {
@@ -794,15 +915,15 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         refundTxHash: refundTx,
       );
       if (mounted) setState(() => _trade = u);
-    }, successMsg: 'Crypto refunded to your wallet');
+    }, successMsg: '${_trade.asset.toUpperCase()} returned to your wallet.');
   }
 
   Future<void> _cancelTrade() async {
     final ok = await _showConfirm(
       title: 'Cancel Trade',
       body:
-          'Are you sure? Any locked escrow will be released back automatically.',
-      confirmLabel: 'Cancel Trade',
+          'Are you sure? Any locked ${_trade.asset.toUpperCase()} will return to the original wallet automatically.',
+      confirmLabel: 'Yes, cancel',
       isDestructive: true,
     );
     if (!ok) return;
@@ -812,14 +933,14 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         reason: 'User cancelled',
       );
       if (mounted) setState(() => _trade = u);
-    }, successMsg: 'Trade cancelled');
+    }, successMsg: 'Trade canceled');
   }
 
   Future<void> _navigateToMessages() async {
     if (!(_isUserBuyer || _isUserSeller)) {
       showFloatingSnackBar(
         context,
-        message: 'Only trade participants can access this chat.',
+        message: 'Only the two people in this trade can open this chat.',
         type: SnackBarType.error,
       );
       return;
@@ -835,7 +956,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final pick = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: AppColor.of(context).surface,
-      builder: (_) => _ProofPickSheet(
+      builder: (_) => TradeProofPickSheet(
         colors: AppColor.of(context),
         forceUpload: forceUpload,
       ),
@@ -886,7 +1007,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       context: context,
       backgroundColor: AppColor.of(context).surface,
       isScrollControlled: true,
-      builder: (_) => _ConfirmSheet(
+      builder: (_) => TradeConfirmSheet(
         title: title,
         body: body,
         confirmLabel: confirmLabel,
@@ -901,7 +1022,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final leave = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: AppColor.of(context).surface,
-      builder: (_) => _ConfirmSheet(
+      builder: (_) => TradeConfirmSheet(
         title: 'Leave Trade Room?',
         body: 'Your trade is active. Return any time from Trade History.',
         confirmLabel: 'Leave',
@@ -958,17 +1079,15 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 isUserCryptoReceiver: _isUserCryptoReceiver,
                 colors: colors,
               ),
-              const SizedBox(height: 12),
-
-              if (s.isActive && _timeLeft > Duration.zero) ...[
-                _CountdownCard(
-                  timeLeft: _timeLeft,
-                  colors: colors,
-                  isDispute: s == TradeStatus.disputed,
-                  totalDuration: _countdownTotalDuration,
-                ),
-                const SizedBox(height: 12),
-              ],
+              const SizedBox(height: 8),
+              _TimelineCard(
+                trade: _trade,
+                isUserBuyer: _isUserBuyer,
+                showViewProof: _proofs.isNotEmpty,
+                onViewProof: _openLatestProofModal,
+                colors: colors,
+              ),
+              const SizedBox(height: 8),
 
               if (s == TradeStatus.created && _isUserEscrowLocker) ...[
                 _EscrowSenderCard(
@@ -984,12 +1103,12 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   onLock: _lockCrypto,
                   loading: _actionLoading,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ],
 
               if (s == TradeStatus.created && !_isUserEscrowLocker) ...[
                 _WaitingForEscrowCard(colors: colors, trade: _trade),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ],
 
               if (s == TradeStatus.cryptoLocked && _isUserFiatPayer) ...[
@@ -1001,7 +1120,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   uploading: _uploadingFiatProof,
                   onUpload: _uploadFiatProofFromPanel,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ],
 
               if (s == TradeStatus.fiatSent && _isUserFiatPayer) ...[
@@ -1011,7 +1130,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   uploading: _uploadingFiatProof,
                   onUpload: _uploadFiatProofFromPanel,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ],
 
               if (s == TradeStatus.fiatSent && !_isUserFiatPayer) ...[
@@ -1020,7 +1139,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   colors: colors,
                   isBuyerFiatSender: _trade.offerType == TradeOfferType.sell,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ],
 
               if (s == TradeStatus.fiatSent && _isUserFiatPayer) ...[
@@ -1029,45 +1148,13 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   colors: colors,
                   isSellerVerifier: _trade.offerType == TradeOfferType.sell,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
               ],
-
-              _TradeDetailsCard(
-                trade: _trade,
-                isBuyingCrypto: _isBuyingCrypto,
-                colors: colors,
-              ),
-              const SizedBox(height: 12),
-
-              if (_proofsLoading || _proofs.isNotEmpty) ...[
-                _ProofsCard(
-                  proofs: _proofs,
-                  loading: _proofsLoading,
-                  colors: colors,
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              if (_trade.escrow != null) ...[
-                _EscrowCard(escrow: _trade.escrow!, colors: colors),
-                const SizedBox(height: 12),
-              ],
-
-              _TimelineCard(
-                trade: _trade,
-                isUserBuyer: _isUserBuyer,
-                isUserSeller: _isUserSeller,
-                pulseAnim: _pulseAnim,
-                colors: colors,
-              ),
-              const SizedBox(height: 12),
 
               if (_actionError != null) ...[
                 _ErrorBanner(message: _actionError!, colors: colors),
                 const SizedBox(height: 10),
               ],
-
-              if (s.isActive) _SafetyNote(colors: colors),
 
               if (s == TradeStatus.completed)
                 _CompletedCard(
@@ -1078,14 +1165,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   merchantUserId: _merchantUserId,
                 ),
               if (s == TradeStatus.cancelled) _CancelledCard(colors: colors),
-              if (s == TradeStatus.disputed) ...[
-                _DisputedCard(colors: colors),
-                const SizedBox(height: 12),
-                _EvidenceUploadCard(
-                  colors: colors,
-                  onOpenChat: _navigateToMessages,
-                ),
-              ],
+              if (s == TradeStatus.disputed) ...[_DisputedCard(colors: colors)],
             ],
           ),
         ),
@@ -1107,7 +1187,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           onUploadFiatProof: _uploadFiatProofFromPanel,
           onMessages: _navigateToMessages,
           lockPendingVerification: _lockPendingVerification,
-          showUploadFiatProof: _canUploadFiatProofFromPanel,
+          showUploadFiatProof:
+              _canUploadFiatProofFromPanel ||
+              (_isParticipant && _trade.status == TradeStatus.disputed),
           unreadMessages: _unreadMessages,
           uploadingFiatProof: _uploadingFiatProof,
           colors: colors,
@@ -1117,6 +1199,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   PreferredSizeWidget _buildAppBar(AppColor colors) {
+    final showHeaderTimer = _trade.status.isActive && _timeLeft > Duration.zero;
+    final timerLabel = _trade.status == TradeStatus.disputed
+        ? 'Dispute time'
+        : 'Trade time';
     return AppBar(
       backgroundColor: colors.background,
       elevation: 0,
@@ -1154,110 +1240,106 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         ],
       ),
       actions: [
-        if (_refreshing)
+        if (showHeaderTimer)
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colors.primary,
-              ),
-            ),
-          )
-        else if (_trade.status.isActive)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: _GlassIconButton(
-              icon: Icons.refresh_rounded,
+            child: _HeaderCountdownChip(
+              label: timerLabel,
+              value: _formatHeaderCountdown(_timeLeft),
               colors: colors,
-              onTap: _refresh,
             ),
           ),
-        if (_isUserBuyer || _isUserSeller)
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _GlassIconButton(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  colors: colors,
-                  accent: colors.primary,
-                  onTap: _navigateToMessages,
-                ),
-                if (_unreadMessages > 0)
-                  Positioned(
-                    right: -5,
-                    top: -6,
-                    child: _UnreadBadge(count: _unreadMessages, colors: colors),
-                  ),
-              ],
-            ),
-          ),
+        const SizedBox(width: 8),
       ],
     );
+  }
+
+  String _formatHeaderCountdown(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    final mm = m.toString().padLeft(2, '0');
+    final ss = s.toString().padLeft(2, '0');
+    if (h > 0) return '${h.toString().padLeft(2, '0')}:$mm:$ss';
+    return '$mm:$ss';
   }
 }
 
 // ─── Glass icon button ────────────────────────────────────────────────────────
+
+class _HeaderCountdownChip extends StatelessWidget {
+  const _HeaderCountdownChip({
+    required this.label,
+    required this.value,
+    required this.colors,
+  });
+
+  final String label;
+  final String value;
+  final AppColor colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 170),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.timer_outlined, size: 14, color: colors.textSecondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '$label $value',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.sora(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: colors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _GlassIconButton extends StatelessWidget {
   const _GlassIconButton({
     required this.icon,
     required this.onTap,
     required this.colors,
-    this.accent,
   });
   final IconData icon;
   final VoidCallback onTap;
   final AppColor colors;
-  final Color? accent;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 38,
-      height: 38,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(11),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Icon(icon, color: accent ?? colors.textSecondary, size: 18),
+      child: Icon(icon, color: colors.textSecondary, size: 17),
     ),
   );
-}
-
-class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count, required this.colors});
-  final int count;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = count > 99 ? '99+' : '$count';
-    return Container(
-      constraints: const BoxConstraints(minWidth: 18),
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: colors.error,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.background, width: 1.2),
-      ),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: GoogleFonts.sora(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: AppColor.of(context).onPrimary,
-        ),
-      ),
-    );
-  }
 }
 
 // ─── Connectivity banner ──────────────────────────────────────────────────────
@@ -1270,16 +1352,22 @@ class _ConnectivityBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final amber = AppColor.of(context).warning;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: amber),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Icon(Icons.wifi_off_rounded, color: amber, size: 16),
-          const SizedBox(width: 10),
+          Icon(Icons.wifi_off_rounded, color: amber, size: 15),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1287,7 +1375,7 @@ class _ConnectivityBanner extends StatelessWidget {
                 Text(
                   'No Connection',
                   style: GoogleFonts.sora(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: amber,
                   ),
@@ -1295,7 +1383,7 @@ class _ConnectivityBanner extends StatelessWidget {
                 Text(
                   'Trade is safe. Updates resume when reconnected.',
                   style: GoogleFonts.sora(
-                    fontSize: 11,
+                    fontSize: 10.5,
                     color: colors.textSecondary,
                   ),
                 ),
@@ -1338,7 +1426,13 @@ class _HeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.045),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -1353,7 +1447,6 @@ class _HeroCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colors.background,
                     borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: colors.border),
                   ),
                   child: Icon(
                     _statusIcon(trade.status),
@@ -1372,6 +1465,7 @@ class _HeroCard extends StatelessWidget {
                           isUserEscrowLocker: isUserEscrowLocker,
                           isUserFiatPayer: isUserFiatPayer,
                           isUserCryptoReceiver: isUserCryptoReceiver,
+                          assetCode: trade.asset,
                         ),
                         style: GoogleFonts.sora(
                           fontSize: 13,
@@ -1379,7 +1473,7 @@ class _HeroCard extends StatelessWidget {
                           color: colors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       GestureDetector(
                         onTap: () {
                           Clipboard.setData(ClipboardData(text: trade.id));
@@ -1432,7 +1526,7 @@ class _HeroCard extends StatelessWidget {
                   child: Text(
                     isBuyingCrypto ? 'BUYING' : 'SELLING',
                     style: GoogleFonts.sora(
-                      fontSize: 9.5,
+                      fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppColor.of(context).onPrimary,
                       letterSpacing: 0.5,
@@ -1443,7 +1537,7 @@ class _HeroCard extends StatelessWidget {
             ),
 
             const SizedBox(height: 14),
-            Divider(color: colors.border, height: 1),
+            Divider(color: colors.border.withValues(alpha: 0.8), height: 1),
             const SizedBox(height: 14),
 
             // Amounts
@@ -1536,146 +1630,6 @@ class _HeroCard extends StatelessWidget {
 
 // ─── Countdown card ───────────────────────────────────────────────────────────
 
-class _CountdownCard extends StatelessWidget {
-  const _CountdownCard({
-    required this.timeLeft,
-    required this.colors,
-    required this.isDispute,
-    required this.totalDuration,
-  });
-  final Duration timeLeft;
-  final AppColor colors;
-  final bool isDispute;
-  final Duration totalDuration;
-
-  String _fmt(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    final s = d.inSeconds.remainder(60);
-    if (h > 0) return '${h}h ${m.toString().padLeft(2, '0')}m';
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final urgent = isDispute ? timeLeft.inHours < 2 : timeLeft.inMinutes < 5;
-    final accent = urgent
-        ? AppColor.of(context).error
-        : AppColor.of(context).warning;
-    final totalSecs = totalDuration.inSeconds <= 0
-        ? 1.0
-        : totalDuration.inSeconds.toDouble();
-    final progress = (timeLeft.inSeconds / totalSecs).clamp(0.0, 1.0);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 46,
-            height: 46,
-            child: CustomPaint(
-              painter: _RingPainter(progress: progress, color: accent),
-              child: Center(
-                child: Icon(Icons.timer_rounded, color: accent, size: 19),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isDispute ? 'Dispute Resolution Timer' : 'Payment Window',
-                  style: GoogleFonts.sora(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textSecondary,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  isDispute
-                      ? (urgent
-                            ? 'Timer is running. Submit evidence now.'
-                            : 'Timer is running while support reviews this case.')
-                      : (urgent
-                            ? 'Act fast - time is running out!'
-                            : 'Complete the trade before the timer ends'),
-                  style: GoogleFonts.sora(
-                    fontSize: 11.5,
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: colors.background,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: accent),
-            ),
-            child: Text(
-              _fmt(timeLeft),
-              style: GoogleFonts.sora(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: accent,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  const _RingPainter({required this.progress, required this.color});
-  final double progress;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = (size.width / 2) - 3;
-    final bgPaint = Paint()
-      ..color = color.withValues(alpha: ((40) / 255.0))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    final fgPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(Offset(cx, cy), r, bgPaint);
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: r),
-      -math.pi / 2,
-      2 * math.pi * progress,
-      false,
-      fgPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) => old.progress != progress;
-}
-
-// ─── Escrow sender card ───────────────────────────────────────────────────────
-
 class _EscrowSenderCard extends StatelessWidget {
   const _EscrowSenderCard({
     required this.trade,
@@ -1708,7 +1662,6 @@ class _EscrowSenderCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accent),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1716,9 +1669,7 @@ class _EscrowSenderCard extends StatelessWidget {
           // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: colors.border)),
-            ),
+            decoration: BoxDecoration(),
             child: Row(
               children: [
                 Container(
@@ -1727,7 +1678,6 @@ class _EscrowSenderCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colors.background,
                     borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: colors.border),
                   ),
                   child: Icon(Icons.lock_open_rounded, color: accent, size: 17),
                 ),
@@ -1745,7 +1695,7 @@ class _EscrowSenderCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Lock crypto to start the trade',
+                        'Lock your ${trade.asset.toUpperCase()} to start this trade',
                         style: GoogleFonts.sora(
                           fontSize: 11,
                           color: colors.textSecondary,
@@ -1783,7 +1733,7 @@ class _EscrowSenderCard extends StatelessWidget {
                 _EscrowStep(
                   num: '1',
                   text:
-                      'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} into a Stellar Claimable Balance',
+                      'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} for this trade',
                   colors: colors,
                   accent: accent,
                 ),
@@ -1799,7 +1749,7 @@ class _EscrowSenderCard extends StatelessWidget {
                 _EscrowStep(
                   num: '3',
                   text:
-                      'Confirm receipt → crypto is released from escrow to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}',
+                      'Confirm you got paid → ${trade.asset.toUpperCase()} is released to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}',
                   colors: colors,
                   accent: accent,
                 ),
@@ -1810,11 +1760,6 @@ class _EscrowSenderCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colors.background,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: hasBalance
-                          ? (enoughBalance ? colors.success : colors.error)
-                          : colors.border,
-                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1894,7 +1839,7 @@ class _EscrowSenderCard extends StatelessWidget {
                       if (hasBalance && !enoughBalance) ...[
                         const SizedBox(height: 4),
                         Text(
-                          'Insufficient balance to lock escrow.',
+                          'Not enough balance to lock this trade.',
                           style: GoogleFonts.sora(
                             fontSize: 11.5,
                             color: colors.error,
@@ -1950,7 +1895,7 @@ class _EscrowSenderCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Lock Crypto in Escrow',
+                                  'Lock ${trade.asset.toUpperCase()} to Start',
                                   style: GoogleFonts.sora(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
@@ -2033,7 +1978,6 @@ class _WaitingForEscrowCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: amber),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2044,7 +1988,6 @@ class _WaitingForEscrowCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: colors.background,
               borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: colors.border),
             ),
             child: Icon(Icons.hourglass_empty_rounded, color: amber, size: 18),
           ),
@@ -2054,7 +1997,7 @@ class _WaitingForEscrowCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Waiting for Escrow',
+                  'Waiting for Lock',
                   style: GoogleFonts.sora(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -2063,9 +2006,8 @@ class _WaitingForEscrowCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'The other party is locking ${trade.cryptoAmount.toStringAsFixed(4)} '
-                  '${trade.asset} into a Stellar escrow. Once locked you\'ll be '
-                  'notified to send payment.',
+                  'The other person is locking ${trade.cryptoAmount.toStringAsFixed(4)} '
+                  '${trade.asset}. Once done, you can send payment.',
                   style: GoogleFonts.sora(
                     fontSize: 12,
                     color: colors.textSecondary,
@@ -2104,38 +2046,41 @@ class _PaymentInstructionsCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: blue),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: colors.border)),
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(),
             child: Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
                     color: colors.background,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: colors.border),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.account_balance_rounded,
                     color: blue,
-                    size: 16,
+                    size: 14,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Text(
-                  'Send Payment To $payeeLabel',
+                  'Send Payment To ${payeeLabel == 'merchant' ? 'Seller' : 'Buyer'}',
                   style: GoogleFonts.sora(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: colors.textPrimary,
                   ),
@@ -2153,10 +2098,10 @@ class _PaymentInstructionsCard extends StatelessWidget {
                   child: Text(
                     'STEP 2',
                     style: GoogleFonts.sora(
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                       color: AppColor.of(context).onPrimary,
-                      letterSpacing: 0.8,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
@@ -2164,7 +2109,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             child: Column(
               children: [
                 if (accountName != null)
@@ -2185,11 +2130,10 @@ class _PaymentInstructionsCard extends StatelessWidget {
                 if (instructions != null && instructions.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: colors.background,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: colors.border),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2197,14 +2141,14 @@ class _PaymentInstructionsCard extends StatelessWidget {
                         Icon(
                           Icons.info_outline_rounded,
                           color: colors.textSecondary,
-                          size: 14,
+                          size: 13,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             instructions,
                             style: GoogleFonts.sora(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               color: colors.textSecondary,
                             ),
                           ),
@@ -2247,27 +2191,33 @@ class _PaymentProofCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = hasProof ? colors.success : colors.warning;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Icon(
             hasProof ? Icons.verified_rounded : Icons.upload_file_rounded,
             color: accent,
-            size: 18,
+            size: 17,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               hasProof
-                  ? 'Payment proof uploaded. You can re-upload to replace it.'
-                  : 'Upload payment proof now. This stays available until trade completion.',
+                  ? 'Payment screenshot uploaded. You can upload a new one anytime.'
+                  : 'Upload your payment screenshot now. You can still add it later.',
               style: GoogleFonts.sora(
-                fontSize: 12.5,
+                fontSize: 11.5,
                 color: colors.textPrimary,
                 height: 1.35,
               ),
@@ -2277,11 +2227,11 @@ class _PaymentProofCard extends StatelessWidget {
           GestureDetector(
             onTap: uploading ? null : onUpload,
             child: Container(
-              height: 36,
+              height: 34,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: colors.primary,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(9),
               ),
               child: Center(
                 child: uploading
@@ -2296,7 +2246,7 @@ class _PaymentProofCard extends StatelessWidget {
                     : Text(
                         hasProof ? 'Re-upload' : 'Upload Proof',
                         style: GoogleFonts.sora(
-                          fontSize: 11.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: AppColor.of(context).onPrimary,
                         ),
@@ -2329,14 +2279,12 @@ class _FiatSentNoticeCard extends StatelessWidget {
     final dueAt = trade.fiatConfirmDueAt;
     final bool autoDisputeSoon =
         dueAt != null && dueAt.difference(DateTime.now()).inMinutes < 30;
-    final border = autoDisputeSoon ? red : green;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border),
       ),
       child: Column(
         children: [
@@ -2349,7 +2297,6 @@ class _FiatSentNoticeCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: colors.background,
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: colors.border),
                 ),
                 child: Icon(Icons.payments_rounded, color: green, size: 18),
               ),
@@ -2388,7 +2335,6 @@ class _FiatSentNoticeCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.background,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: red),
               ),
               child: Row(
                 children: [
@@ -2396,7 +2342,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Auto-dispute will trigger if not confirmed within '
+                      'Support review will start automatically if not confirmed within '
                       '${dueAt.difference(DateTime.now()).inMinutes} min. '
                       'Check your account and confirm receipt now.',
                       style: GoogleFonts.sora(
@@ -2437,7 +2383,6 @@ class _WaitingConfirmationCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: amber),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2451,7 +2396,6 @@ class _WaitingConfirmationCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: colors.background,
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: colors.border),
                 ),
                 child: Icon(
                   Icons.hourglass_top_rounded,
@@ -2474,7 +2418,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'The ${isSellerVerifier ? 'seller' : 'buyer'} is verifying your payment. Once confirmed, your crypto will be released from escrow.',
+                      'The ${isSellerVerifier ? 'seller' : 'buyer'} is checking your payment. After confirmation, your ${trade.asset.toUpperCase()} will be released.',
                       style: GoogleFonts.sora(
                         fontSize: 12,
                         color: colors.textSecondary,
@@ -2493,7 +2437,6 @@ class _WaitingConfirmationCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.background,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.border),
               ),
               child: Row(
                 children: [
@@ -2505,7 +2448,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'If unconfirmed by the deadline, a dispute is auto-opened and support will resolve it.',
+                      'If this is not confirmed before the deadline, support will review and resolve it.',
                       style: GoogleFonts.sora(
                         fontSize: 11.5,
                         color: colors.textSecondary,
@@ -2524,540 +2467,119 @@ class _WaitingConfirmationCard extends StatelessWidget {
 
 // ─── Trade details card ───────────────────────────────────────────────────────
 
-class _TradeDetailsCard extends StatelessWidget {
-  const _TradeDetailsCard({
-    required this.trade,
-    required this.isBuyingCrypto,
-    required this.colors,
-  });
-  final TradeModel trade;
-  final bool isBuyingCrypto;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      icon: Icons.receipt_long_rounded,
-      iconColor: AppColor.of(context).primary,
-      title: 'Trade Details',
-      colors: colors,
-      children: [
-        _DataRow(label: 'Asset', value: trade.asset, colors: colors),
-        _DataRow(
-          label: 'Currency',
-          value: trade.fiatCurrency.toUpperCase(),
-          colors: colors,
-        ),
-        _DataRow(
-          label: isBuyingCrypto ? 'You Pay' : 'You Receive',
-          value:
-              '${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()}',
-          highlight: true,
-          colors: colors,
-        ),
-        _DataRow(
-          label: isBuyingCrypto ? 'You Receive' : 'You Send',
-          value: '${trade.cryptoAmount.toStringAsFixed(6)} ${trade.asset}',
-          highlight: true,
-          mono: true,
-          colors: colors,
-        ),
-        _DataRow(
-          label: 'Crypto Receiver Address',
-          value: trade.cryptoReceiverAddress.length > 20
-              ? '${trade.cryptoReceiverAddress.substring(0, 14)}…'
-              : trade.cryptoReceiverAddress,
-          copyable: true,
-          fullCopyValue: trade.cryptoReceiverAddress,
-          mono: true,
-          colors: colors,
-        ),
-        if (trade.cryptoReceiverMemo != null)
-          _DataRow(
-            label: 'Memo / Tag',
-            value: trade.cryptoReceiverMemo!,
-            copyable: true,
-            mono: true,
-            colors: colors,
-          ),
-      ],
-    );
-  }
-}
-
-// ─── Escrow card ──────────────────────────────────────────────────────────────
-
-class _ProofsCard extends StatelessWidget {
-  const _ProofsCard({
-    required this.proofs,
-    required this.loading,
-    required this.colors,
-  });
-
-  final List<Map<String, dynamic>> proofs;
-  final bool loading;
-  final AppColor colors;
-
-  String _resolveProofUrl(String raw) {
-    final v = raw.trim();
-    if (v.isEmpty) return '';
-    if (v.startsWith('http://') || v.startsWith('https://')) return v;
-    final base = centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
-    if (v.startsWith('/')) return '$base$v';
-    return '$base/$v';
-  }
-
-  String _extractFileUrl(Map<String, dynamic> row) {
-    String read(dynamic value) => value == null ? '' : value.toString().trim();
-
-    for (final key in const [
-      'fileUrl',
-      'file_url',
-      'url',
-      'proofUrl',
-      'proof_url',
-      'imageUrl',
-      'image_url',
-      'attachmentUrl',
-      'attachment_url',
-      'location',
-      'path',
-    ]) {
-      final v = read(row[key]);
-      if (v.isNotEmpty) return v;
-    }
-
-    final nested = row['file'];
-    if (nested is Map<String, dynamic>) {
-      for (final key in const [
-        'url',
-        'fileUrl',
-        'file_url',
-        'location',
-        'path',
-      ]) {
-        final v = read(nested[key]);
-        if (v.isNotEmpty) return v;
-      }
-    }
-
-    return '';
-  }
-
-  void _openImageViewer(BuildContext context, String src) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(12),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 4.0,
-                child: Image.network(
-                  src,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Center(
-                    child: Icon(
-                      Icons.broken_image_rounded,
-                      color: colors.onPrimary,
-                      size: 42,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(Icons.close_rounded, color: colors.onPrimary),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _fmtTime(Map<String, dynamic> row) {
-    final raw =
-        row['createdAt'] ??
-        row['created_at'] ??
-        row['updatedAt'] ??
-        row['updated_at'];
-    if (raw == null) return '';
-    final dt = DateTime.tryParse(raw.toString());
-    if (dt == null) return '';
-    final local = dt.toLocal();
-    final mm = local.month.toString().padLeft(2, '0');
-    final dd = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final min = local.minute.toString().padLeft(2, '0');
-    return '$mm/$dd/${local.year} $hh:$min';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      icon: Icons.verified_rounded,
-      iconColor: AppColor.of(context).info,
-      title: 'Payment Proofs',
-      colors: colors,
-      children: [
-        if (loading && proofs.isEmpty)
-          Text(
-            'Loading proofs...',
-            style: GoogleFonts.sora(fontSize: 12, color: colors.textSecondary),
-          )
-        else if (proofs.isEmpty)
-          Text(
-            'No proofs uploaded yet.',
-            style: GoogleFonts.sora(fontSize: 12, color: colors.textSecondary),
-          )
-        else
-          ...proofs.map((p) {
-            final type = (p['type'] ?? '').toString().trim().toUpperCase();
-            final note = (p['note'] ?? '').toString().trim();
-            final ref = (p['referenceNo'] ?? p['reference_no'] ?? '')
-                .toString()
-                .trim();
-            final txHash = (p['txHash'] ?? p['tx_hash'] ?? '')
-                .toString()
-                .trim();
-            final fileUrl = _extractFileUrl(p);
-            final proofImageUrl = _resolveProofUrl(fileUrl);
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          type.isEmpty ? 'PROOF' : type,
-                          style: GoogleFonts.sora(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: colors.textPrimary,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          _fmtTime(p),
-                          style: GoogleFonts.sora(
-                            fontSize: 11,
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (note.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        note,
-                        style: GoogleFonts.sora(
-                          fontSize: 12,
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    ],
-                    if (ref.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      _DataRow(
-                        label: 'Reference',
-                        value: ref,
-                        copyable: true,
-                        mono: true,
-                        colors: colors,
-                      ),
-                    ],
-                    if (txHash.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      _DataRow(
-                        label: 'Tx Hash',
-                        value: txHash.length > 22
-                            ? '${txHash.substring(0, 14)}...'
-                            : txHash,
-                        fullCopyValue: txHash,
-                        copyable: true,
-                        mono: true,
-                        colors: colors,
-                      ),
-                    ],
-                    if (proofImageUrl.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: () => _openImageViewer(context, proofImageUrl),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: SizedBox(
-                            width: double.infinity,
-                            height: 180,
-                            child: Image.network(
-                              proofImageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: colors.surface,
-                                alignment: Alignment.center,
-                                child: Icon(
-                                  Icons.broken_image_rounded,
-                                  color: colors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (fileUrl.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      _DataRow(
-                        label: 'Proof URL',
-                        value: fileUrl.length > 26
-                            ? '${fileUrl.substring(0, 22)}...'
-                            : fileUrl,
-                        fullCopyValue: fileUrl,
-                        copyable: true,
-                        mono: true,
-                        colors: colors,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }),
-      ],
-    );
-  }
-}
-
-class _EscrowCard extends StatelessWidget {
-  const _EscrowCard({required this.escrow, required this.colors});
-  final TradeEscrowModel escrow;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final status = escrow.status;
-    final accent = switch (status) {
-      EscrowStatus.cbCreated => AppColor.of(context).success,
-      EscrowStatus.cbClaimed => AppColor.of(context).primary,
-      EscrowStatus.cbRefunded => AppColor.of(context).warning,
-      EscrowStatus.failed => AppColor.of(context).error,
-      _ => AppColor.of(context).textSecondary,
-    };
-    final statusLabel = switch (status) {
-      EscrowStatus.cbCreated => 'LOCKED',
-      EscrowStatus.cbClaimed => 'CLAIMED',
-      EscrowStatus.cbRefunded => 'REFUNDED',
-      EscrowStatus.failed => 'FAILED',
-      _ => 'PENDING',
-    };
-
-    return _SectionCard(
-      icon: Icons.lock_rounded,
-      iconColor: accent,
-      title: 'Stellar Escrow',
-      colors: colors,
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(
-          color: accent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          statusLabel,
-          style: GoogleFonts.sora(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: AppColor.of(context).onPrimary,
-            letterSpacing: 0.8,
-          ),
-        ),
-      ),
-      children: [
-        if (escrow.claimableBalanceId != null)
-          _DataRow(
-            label: 'Balance ID',
-            value:
-                '${escrow.claimableBalanceId!.substring(0, 10)}…'
-                '${escrow.claimableBalanceId!.substring(escrow.claimableBalanceId!.length - 8)}',
-            copyable: true,
-            fullCopyValue: escrow.claimableBalanceId,
-            mono: true,
-            colors: colors,
-          ),
-        if (escrow.createTxHash != null)
-          _DataRow(
-            label: 'Lock Tx',
-            value:
-                '${escrow.createTxHash!.substring(0, 10)}…'
-                '${escrow.createTxHash!.substring(escrow.createTxHash!.length - 8)}',
-            copyable: true,
-            fullCopyValue: escrow.createTxHash,
-            mono: true,
-            colors: colors,
-          ),
-        if (escrow.claimTxHash != null)
-          _DataRow(
-            label: 'Claim Tx',
-            value:
-                '${escrow.claimTxHash!.substring(0, 10)}…'
-                '${escrow.claimTxHash!.substring(escrow.claimTxHash!.length - 8)}',
-            copyable: true,
-            fullCopyValue: escrow.claimTxHash,
-            mono: true,
-            colors: colors,
-          ),
-      ],
-    );
-  }
-}
-
-// ─── Timeline card ────────────────────────────────────────────────────────────
-
 class _TimelineCard extends StatelessWidget {
   const _TimelineCard({
     required this.trade,
     required this.isUserBuyer,
-    required this.isUserSeller,
-    required this.pulseAnim,
+    required this.showViewProof,
+    required this.onViewProof,
     required this.colors,
   });
   final TradeModel trade;
   final bool isUserBuyer;
-  final bool isUserSeller;
-  final Animation<double> pulseAnim;
+  final bool showViewProof;
+  final VoidCallback onViewProof;
   final AppColor colors;
 
   List<(TradeStatus, String, String)> _steps() {
-    if (trade.offerType == TradeOfferType.sell) {
-      if (isUserBuyer) {
-        return [
-          (
-            TradeStatus.created,
-            'Trade Created',
-            'Waiting for seller to lock crypto in escrow',
-          ),
-          (
-            TradeStatus.cryptoLocked,
-            'Escrow Funded',
-            'Send your fiat payment to the seller',
-          ),
-          (
-            TradeStatus.fiatSent,
-            'Payment Sent',
-            'Seller is verifying your payment',
-          ),
-          (
-            TradeStatus.fiatConfirmed,
-            'Payment Confirmed',
-            'Claim your crypto to your wallet',
-          ),
-          (
-            TradeStatus.completed,
-            'Trade Complete',
-            'Crypto delivered to your wallet',
-          ),
-        ];
-      } else {
-        return [
-          (
-            TradeStatus.created,
-            'Trade Created',
-            'Lock your crypto to fund the escrow',
-          ),
-          (
-            TradeStatus.cryptoLocked,
-            'Escrow Funded',
-            'Waiting for buyer to send payment',
-          ),
-          (
-            TradeStatus.fiatSent,
-            'Payment Received',
-            'Confirm you received the payment',
-          ),
-          (
-            TradeStatus.fiatConfirmed,
-            'Payment Confirmed',
-            'Buyer will claim crypto from escrow',
-          ),
-          (TradeStatus.completed, 'Trade Complete', 'Crypto released to buyer'),
-        ];
-      }
-    } else {
-      if (isUserBuyer) {
-        return [
-          (
-            TradeStatus.created,
-            'Trade Created',
-            'Lock your crypto to fund the escrow',
-          ),
-          (
-            TradeStatus.cryptoLocked,
-            'Escrow Funded',
-            'Waiting for seller to send fiat payment',
-          ),
-          (
-            TradeStatus.fiatSent,
-            'Payment Sent',
-            'Confirm you received the fiat payment',
-          ),
-          (
-            TradeStatus.fiatConfirmed,
-            'Payment Confirmed',
-            'Seller will claim crypto from escrow',
-          ),
-          (
-            TradeStatus.completed,
-            'Trade Complete',
-            'Crypto released to seller',
-          ),
-        ];
-      } else {
-        return [
-          (
-            TradeStatus.created,
-            'Trade Created',
-            'Waiting for buyer to lock crypto in escrow',
-          ),
-          (
-            TradeStatus.cryptoLocked,
-            'Escrow Funded',
-            'Send your fiat payment to the buyer',
-          ),
-          (
-            TradeStatus.fiatSent,
-            'Payment Sent',
-            'Buyer is verifying your payment',
-          ),
-          (
-            TradeStatus.fiatConfirmed,
-            'Payment Confirmed',
-            'Claim your crypto to your wallet',
-          ),
-          (
-            TradeStatus.completed,
-            'Trade Complete',
-            'Crypto delivered to your wallet',
-          ),
-        ];
-      }
+    final asset = trade.asset.toUpperCase();
+    final isSellOffer = trade.offerType == TradeOfferType.sell;
+    final actingAsBuyer = isUserBuyer;
+
+    final createdDesc = isSellOffer
+        ? (actingAsBuyer
+              ? 'Waiting for seller to lock $asset'
+              : 'Lock your $asset to start')
+        : (actingAsBuyer
+              ? 'Lock your $asset to start'
+              : 'Waiting for buyer to lock $asset');
+
+    final lockedDesc = isSellOffer
+        ? (actingAsBuyer
+              ? 'Send payment to the seller'
+              : 'Waiting for buyer to send payment')
+        : (actingAsBuyer
+              ? 'Waiting for seller to send payment'
+              : 'Send payment to the buyer');
+
+    final fiatSentTitle = (isSellOffer && !actingAsBuyer)
+        ? 'Payment Received'
+        : 'Payment Sent';
+    final fiatSentDesc = isSellOffer
+        ? (actingAsBuyer
+              ? 'Seller is verifying your payment'
+              : 'Confirm you received the payment')
+        : (actingAsBuyer
+              ? 'Confirm you received the payment'
+              : 'Buyer is verifying your payment');
+
+    final fiatConfirmedDesc = isSellOffer
+        ? (actingAsBuyer
+              ? 'Receive $asset in your wallet'
+              : 'Buyer will receive $asset')
+        : (actingAsBuyer
+              ? 'Seller will receive $asset'
+              : 'Receive $asset in your wallet');
+
+    final completedDesc = isSellOffer
+        ? (actingAsBuyer
+              ? '$asset received in your wallet'
+              : '$asset sent to buyer')
+        : (actingAsBuyer
+              ? '$asset sent to seller'
+              : '$asset received in your wallet');
+
+    return [
+      (TradeStatus.created, 'Trade Started', createdDesc),
+      (TradeStatus.cryptoLocked, '$asset Locked', lockedDesc),
+      (TradeStatus.fiatSent, fiatSentTitle, fiatSentDesc),
+      (TradeStatus.fiatConfirmed, 'Payment Confirmed', fiatConfirmedDesc),
+      (TradeStatus.completed, 'Trade Complete', completedDesc),
+    ];
+  }
+
+  String _escrowStatusLabel() {
+    final status = trade.escrow?.status;
+    return switch (status) {
+      EscrowStatus.cbCreated => 'LOCKED',
+      EscrowStatus.cbClaimed => 'CLAIMED',
+      EscrowStatus.cbRefunded => 'REFUNDED',
+      EscrowStatus.failed => 'FAILED',
+      EscrowStatus.pending => 'PENDING',
+      EscrowStatus.unknown => 'PENDING',
+      null => 'NOT LOCKED',
+    };
+  }
+
+  Color _escrowStatusColor() {
+    final status = trade.escrow?.status;
+    return switch (status) {
+      EscrowStatus.cbCreated => colors.success,
+      EscrowStatus.cbClaimed => colors.primary,
+      EscrowStatus.cbRefunded => colors.warning,
+      EscrowStatus.failed => colors.error,
+      _ => colors.background,
+    };
+  }
+
+  int _resolvedProgressIndex(List<TradeStatus> order) {
+    if (order.contains(trade.status)) return order.indexOf(trade.status);
+
+    final hasFiatSent = trade.fiatSentAt != null;
+    final escrow = trade.escrow;
+    final hasClaimTx = (escrow?.claimTxHash?.trim().isNotEmpty ?? false);
+    final hasLockedEscrow =
+        (escrow?.claimableBalanceId?.trim().isNotEmpty ?? false) ||
+        escrow?.status == EscrowStatus.cbCreated ||
+        escrow?.status == EscrowStatus.cbClaimed ||
+        escrow?.status == EscrowStatus.cbRefunded;
+
+    if (hasClaimTx) return order.indexOf(TradeStatus.fiatConfirmed);
+    if (hasFiatSent) return order.indexOf(TradeStatus.fiatSent);
+    if (hasLockedEscrow || trade.status == TradeStatus.cryptoLocked) {
+      return order.indexOf(TradeStatus.cryptoLocked);
     }
+    return order.indexOf(TradeStatus.created);
   }
 
   @override
@@ -3070,9 +2592,7 @@ class _TimelineCard extends StatelessWidget {
       TradeStatus.fiatConfirmed,
       TradeStatus.completed,
     ];
-    final currentIdx = order.contains(trade.status)
-        ? order.indexOf(trade.status)
-        : -1;
+    final currentIdx = _resolvedProgressIndex(order);
     final isTerminal =
         trade.status == TradeStatus.cancelled ||
         trade.status == TradeStatus.disputed ||
@@ -3080,6 +2600,12 @@ class _TimelineCard extends StatelessWidget {
 
     final doneColor = AppColor.of(context).success;
     final activeColor = AppColor.of(context).primary;
+    final escrowLabel = _escrowStatusLabel();
+    final escrowColor = _escrowStatusColor();
+    final isEscrowNeutral =
+        trade.escrow == null ||
+        trade.escrow!.status == EscrowStatus.pending ||
+        trade.escrow!.status == EscrowStatus.unknown;
 
     return _SectionCard(
       icon: Icons.route_rounded,
@@ -3087,113 +2613,167 @@ class _TimelineCard extends StatelessWidget {
       title: 'Progress',
       colors: colors,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-      children: List.generate(steps.length, (i) {
-        final step = steps[i];
-        final stepIdx = order.indexOf(step.$1);
-        final isCompleted = trade.status == TradeStatus.completed;
-        final isDone = isCompleted || currentIdx > stepIdx;
-        final isCurrent = stepIdx == currentIdx && trade.status.isActive;
-        final isLast = i == steps.length - 1;
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: escrowColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Escrow: $escrowLabel',
+                  style: GoogleFonts.sora(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: isEscrowNeutral
+                        ? colors.textSecondary
+                        : colors.onPrimary,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (showViewProof)
+                GestureDetector(
+                  onTap: onViewProof,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.background,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.image_outlined,
+                          size: 14,
+                          color: colors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'View Proof',
+                          style: GoogleFonts.sora(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        ...List.generate(steps.length, (i) {
+          final step = steps[i];
+          final stepIdx = order.indexOf(step.$1);
+          final isCompleted = trade.status == TradeStatus.completed;
+          final isDone = isCompleted || currentIdx > stepIdx;
+          final isCurrent = stepIdx == currentIdx && trade.status.isActive;
+          final isLast = i == steps.length - 1;
 
-        final dotColor = isTerminal && stepIdx > 0
-            ? colors.border
-            : isDone
-            ? doneColor
-            : isCurrent
-            ? activeColor
-            : colors.border;
+          final dotColor = isTerminal && stepIdx > 0
+              ? colors.border
+              : isDone
+              ? doneColor
+              : isCurrent
+              ? activeColor
+              : colors.border;
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              children: [
-                isCurrent
-                    ? AnimatedBuilder(
-                        animation: pulseAnim,
-                        builder: (_, __) => Container(
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  isCurrent
+                      ? Container(
                           width: 28,
                           height: 28,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: colors.background,
-                            border: Border.all(color: activeColor, width: 2),
+                            color: doneColor,
                           ),
                           child: Center(
                             child: Icon(
                               Icons.circle,
-                              color: activeColor,
+                              color: colors.onPrimary,
                               size: 8,
                             ),
                           ),
-                        ),
-                      )
-                    : Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: colors.background,
-                          border: Border.all(
-                            color: dotColor,
-                            width: isDone ? 2 : 1.5,
+                        )
+                      : Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isDone ? doneColor : colors.background,
                           ),
+                          child: isDone
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  color: colors.onPrimary,
+                                  size: 14,
+                                )
+                              : Icon(
+                                  Icons.circle_outlined,
+                                  color: dotColor,
+                                  size: 10,
+                                ),
                         ),
-                        child: isDone
-                            ? Icon(
-                                Icons.check_rounded,
-                                color: doneColor,
-                                size: 14,
-                              )
-                            : Icon(
-                                Icons.circle_outlined,
-                                color: dotColor,
-                                size: 10,
-                              ),
+                  if (!isLast)
+                    Container(
+                      width: 2,
+                      height: 36,
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      color: isDone ? doneColor : colors.border,
+                    ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 4, bottom: isLast ? 0 : 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        step.$2,
+                        style: GoogleFonts.sora(
+                          fontSize: 13.5,
+                          fontWeight: isCurrent
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: isDone || isCurrent
+                              ? colors.textPrimary
+                              : colors.textSecondary,
+                        ),
                       ),
-                if (!isLast)
-                  Container(
-                    width: 2,
-                    height: 36,
-                    margin: const EdgeInsets.symmetric(vertical: 3),
-                    color: isDone ? doneColor : colors.border,
+                      const SizedBox(height: 2),
+                      Text(
+                        step.$3,
+                        style: GoogleFonts.sora(
+                          fontSize: 11.5,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-              ],
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(top: 4, bottom: isLast ? 0 : 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      step.$2,
-                      style: GoogleFonts.sora(
-                        fontSize: 13.5,
-                        fontWeight: isCurrent
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        color: isDone || isCurrent
-                            ? colors.textPrimary
-                            : colors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      step.$3,
-                      style: GoogleFonts.sora(
-                        fontSize: 11.5,
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ),
-          ],
-        );
-      }),
+            ],
+          );
+        }),
+      ],
     );
   }
 }
@@ -3207,7 +2787,6 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.children,
     required this.colors,
-    this.trailing,
     this.padding,
   });
   final IconData icon;
@@ -3215,7 +2794,6 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
   final AppColor colors;
-  final Widget? trailing;
   final EdgeInsets? padding;
 
   @override
@@ -3224,7 +2802,13 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.035),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -3238,7 +2822,6 @@ class _SectionCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colors.background,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: colors.border),
                   ),
                   child: Icon(icon, color: iconColor, size: 14),
                 ),
@@ -3251,8 +2834,6 @@ class _SectionCard extends StatelessWidget {
                     color: colors.textSecondary,
                   ),
                 ),
-                const Spacer(),
-                if (trailing != null) trailing!,
               ],
             ),
           ),
@@ -3277,17 +2858,13 @@ class _DataRow extends StatefulWidget {
     required this.value,
     required this.colors,
     this.copyable = false,
-    this.fullCopyValue,
     this.mono = false,
-    this.highlight = false,
   });
   final String label;
   final String value;
   final AppColor colors;
   final bool copyable;
-  final String? fullCopyValue;
   final bool mono;
-  final bool highlight;
 
   @override
   State<_DataRow> createState() => _DataRowState();
@@ -3298,9 +2875,7 @@ class _DataRowState extends State<_DataRow> {
 
   void _copy() {
     if (!widget.copyable) return;
-    Clipboard.setData(
-      ClipboardData(text: widget.fullCopyValue ?? widget.value),
-    );
+    Clipboard.setData(ClipboardData(text: widget.value));
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
@@ -3358,9 +2933,6 @@ class _DataRowState extends State<_DataRow> {
                       decoration: BoxDecoration(
                         color: _copied ? doneColor : widget.colors.background,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: _copied ? doneColor : widget.colors.border,
-                        ),
                       ),
                       child: Icon(
                         _copied ? Icons.check_rounded : Icons.copy_rounded,
@@ -3383,37 +2955,6 @@ class _DataRowState extends State<_DataRow> {
 
 // ─── Safety note ──────────────────────────────────────────────────────────────
 
-class _SafetyNote extends StatelessWidget {
-  const _SafetyNote({required this.colors});
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-    decoration: BoxDecoration(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: colors.border),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.shield_outlined, size: 15, color: colors.textSecondary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Trade stays active if you leave. Return from Trade History.',
-            style: GoogleFonts.sora(
-              fontSize: 11.5,
-              color: colors.textSecondary,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 // ─── Error banner ─────────────────────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
@@ -3427,7 +2968,6 @@ class _ErrorBanner extends StatelessWidget {
     decoration: BoxDecoration(
       color: colors.surface,
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: colors.error),
     ),
     child: Row(
       children: [
@@ -3518,12 +3058,14 @@ class _CompletedCardState extends State<_CompletedCard> {
 
   Future<void> _openReviewSheet() async {
     if (!_canSubmitReview || _alreadyReviewed || _reviewSubmitted) return;
-    final result = await showModalBottomSheet<_ReviewResult>(
+    final result = await showModalBottomSheet<TradeReviewResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColor.of(context).surface,
-      builder: (_) =>
-          _ReviewSheet(tradeId: widget.trade.id, colors: AppColor.of(context)),
+      builder: (_) => TradeReviewSheet(
+        tradeId: widget.trade.id,
+        colors: AppColor.of(context),
+      ),
     );
     if (result == null) return;
     try {
@@ -3578,7 +3120,6 @@ class _CompletedCardState extends State<_CompletedCard> {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: green),
       ),
       child: Column(
         children: [
@@ -3659,7 +3200,6 @@ class _CompletedCardState extends State<_CompletedCard> {
                     decoration: BoxDecoration(
                       color: colors.background,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: green),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -3696,7 +3236,6 @@ class _CancelledCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: colors.surface,
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: colors.error),
     ),
     child: Column(
       children: [
@@ -3745,7 +3284,6 @@ class _DisputedCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: colors.surface,
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: colors.error),
     ),
     child: Column(
       children: [
@@ -3764,7 +3302,7 @@ class _DisputedCard extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Text(
-          'Under Dispute',
+          'Support Is Reviewing',
           style: GoogleFonts.sora(
             fontSize: 18,
             fontWeight: FontWeight.w700,
@@ -3781,65 +3319,6 @@ class _DisputedCard extends StatelessWidget {
     ),
   );
 }
-
-class _EvidenceUploadCard extends StatelessWidget {
-  const _EvidenceUploadCard({required this.colors, required this.onOpenChat});
-
-  final AppColor colors;
-  final VoidCallback onOpenChat;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.error),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.folder_open_rounded, color: colors.error, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Upload screenshots, images, or documents in trade chat for admin review.',
-              style: GoogleFonts.sora(
-                fontSize: 12.5,
-                color: colors.textPrimary,
-                height: 1.35,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onOpenChat,
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: colors.error,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(
-                child: Text(
-                  'Upload Evidence',
-                  style: GoogleFonts.sora(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColor.of(context).onPrimary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Bottom actions ───────────────────────────────────────────────────────────
 
 class _BottomActions extends StatelessWidget {
   const _BottomActions({
@@ -3930,12 +3409,7 @@ class _BottomActions extends StatelessWidget {
         isParticipant &&
         (s == TradeStatus.created || s == TradeStatus.cryptoLocked);
     final hasPrimary =
-        showLock ||
-        showMarkFiat ||
-        showConfirm ||
-        showClaim ||
-        showRefund ||
-        showUploadFiatProof;
+        showLock || showMarkFiat || showConfirm || showClaim || showRefund;
 
     if (!hasPrimary && !showCancel && !s.isActive) {
       return const SizedBox.shrink();
@@ -3948,16 +3422,13 @@ class _BottomActions extends StatelessWidget {
         12,
         MediaQuery.of(context).padding.bottom + 12,
       ),
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
+      decoration: BoxDecoration(color: colors.background),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (showLock)
             _ActionBtn(
-              label: 'Lock Crypto in Escrow',
+              label: 'Lock ${trade.asset.toUpperCase()}',
               icon: Icons.lock_rounded,
               accent: colors.primary,
               loading: loading,
@@ -3981,7 +3452,7 @@ class _BottomActions extends StatelessWidget {
             ),
           if (showClaim)
             _ActionBtn(
-              label: 'Claim Your Crypto',
+              label: 'Receive ${trade.asset.toUpperCase()}',
               icon: Icons.account_balance_wallet_rounded,
               accent: colors.success,
               loading: loading,
@@ -3989,22 +3460,14 @@ class _BottomActions extends StatelessWidget {
             ),
           if (showRefund)
             _ActionBtn(
-              label: 'Reclaim Expired Escrow',
+              label: 'Return ${trade.asset.toUpperCase()}',
               icon: Icons.replay_rounded,
               accent: colors.warning,
               loading: loading,
               onTap: onRefund,
             ),
-          if (showUploadFiatProof)
-            _ActionBtn(
-              label: 'Upload Proof',
-              icon: Icons.upload_file_rounded,
-              accent: colors.primary,
-              loading: uploadingFiatProof,
-              onTap: onUploadFiatProof,
-            ),
           if (hasPrimary) const SizedBox(height: 10),
-          if (showCancel || s.isActive)
+          if (showCancel || s.isActive || showUploadFiatProof)
             Row(
               children: [
                 if (showCancel)
@@ -4019,7 +3482,24 @@ class _BottomActions extends StatelessWidget {
                       compact: true,
                     ),
                   ),
-                if (showCancel && s.isActive) const SizedBox(width: 10),
+                if (showCancel && (showUploadFiatProof || s.isActive))
+                  const SizedBox(width: 10),
+                if (showUploadFiatProof)
+                  Expanded(
+                    child: _ActionBtn(
+                      label: s == TradeStatus.disputed
+                          ? 'Upload Evidence'
+                          : 'Upload Payment Proof',
+                      icon: Icons.upload_file_rounded,
+                      accent: colors.primary,
+                      loading: uploadingFiatProof,
+                      onTap: onUploadFiatProof,
+                      outlined: false,
+                      compact: true,
+                    ),
+                  ),
+                if (showUploadFiatProof && s.isActive)
+                  const SizedBox(width: 10),
                 if (s.isActive)
                   Expanded(
                     child: _ActionBtn(
@@ -4077,7 +3557,15 @@ class _ActionBtn extends StatelessWidget {
               ? accent.withValues(alpha: ((128) / 255.0))
               : accent,
           borderRadius: BorderRadius.circular(14),
-          border: outlined ? Border.all(color: accent, width: 1.5) : null,
+          boxShadow: outlined
+              ? null
+              : [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.22),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
         ),
         child: Center(
           child: loading
@@ -4144,373 +3632,3 @@ class _ActionBtn extends StatelessWidget {
 }
 
 // ─── Bottom sheet base ────────────────────────────────────────────────────────
-
-class _SheetBase extends StatelessWidget {
-  const _SheetBase({
-    required this.child,
-    required this.colors,
-    this.fullScroll = false,
-  });
-  final Widget child;
-  final AppColor colors;
-  final bool fullScroll;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: colors.border),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        20,
-        16,
-        20,
-        (fullScroll
-                ? MediaQuery.of(context).viewInsets.bottom
-                : MediaQuery.of(context).padding.bottom) +
-            24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: colors.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Confirm sheet ────────────────────────────────────────────────────────────
-
-class _ConfirmSheet extends StatelessWidget {
-  const _ConfirmSheet({
-    required this.title,
-    required this.body,
-    required this.confirmLabel,
-    required this.colors,
-    this.isDestructive = false,
-  });
-  final String title;
-  final String body;
-  final String confirmLabel;
-  final AppColor colors;
-  final bool isDestructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final actionColor = isDestructive ? colors.error : colors.primary;
-    return _SheetBase(
-      colors: colors,
-      child: Column(
-        children: [
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.sora(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.sora(
-              fontSize: 13.5,
-              color: colors.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 28),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context, false),
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: colors.background,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: colors.border),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Go Back',
-                        style: GoogleFonts.sora(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context, true),
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: actionColor,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        confirmLabel,
-                        style: GoogleFonts.sora(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColor.of(context).onPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Proof pick sheet ─────────────────────────────────────────────────────────
-
-class _ProofPickSheet extends StatelessWidget {
-  const _ProofPickSheet({required this.colors, this.forceUpload = false});
-  final AppColor colors;
-  final bool forceUpload;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SheetBase(
-      colors: colors,
-      child: Column(
-        children: [
-          Icon(Icons.image_rounded, color: colors.primary, size: 36),
-          const SizedBox(height: 14),
-          Text(
-            forceUpload ? 'Upload Payment Proof' : 'Attach Payment Proof?',
-            style: GoogleFonts.sora(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            forceUpload
-                ? 'Upload a screenshot or receipt now.'
-                : 'Optionally attach a screenshot of your payment confirmation.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
-          ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: () => Navigator.pop(context, true),
-            child: Container(
-              height: 52,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.photo_library_rounded,
-                    color: AppColor.of(context).onPrimary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Choose from Gallery',
-                    style: GoogleFonts.sora(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColor.of(context).onPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (!forceUpload) ...[
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: () => Navigator.pop(context, false),
-              child: Container(
-                height: 48,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: colors.background,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: colors.border),
-                ),
-                child: Center(
-                  child: Text(
-                    'Skip for Now',
-                    style: GoogleFonts.sora(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Review result + sheet ────────────────────────────────────────────────────
-
-class _ReviewResult {
-  final int rating;
-  final String comment;
-  const _ReviewResult({required this.rating, required this.comment});
-}
-
-class _ReviewSheet extends StatefulWidget {
-  const _ReviewSheet({required this.tradeId, required this.colors});
-  final String tradeId;
-  final AppColor colors;
-
-  @override
-  State<_ReviewSheet> createState() => _ReviewSheetState();
-}
-
-class _ReviewSheetState extends State<_ReviewSheet> {
-  int _rating = 5;
-  final _ctrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = widget.colors;
-    return _SheetBase(
-      colors: colors,
-      fullScroll: true,
-      child: Column(
-        children: [
-          Text(
-            'Rate Your Experience',
-            style: GoogleFonts.sora(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'How was the trade?',
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (i) {
-              final star = i + 1;
-              return GestureDetector(
-                onTap: () => setState(() => _rating = star),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Icon(
-                    star <= _rating
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: star <= _rating
-                        ? AppColor.of(context).warning
-                        : colors.textSecondary,
-                    size: star <= _rating ? 40 : 34,
-                  ),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _ctrl,
-            maxLines: 3,
-            style: GoogleFonts.sora(fontSize: 14, color: colors.textPrimary),
-            cursorColor: colors.primary,
-            decoration: InputDecoration(
-              hintText: 'Leave a comment (optional)…',
-              hintStyle: GoogleFonts.sora(
-                fontSize: 13.5,
-                color: colors.textSecondary,
-              ),
-              filled: true,
-              fillColor: colors.background,
-              contentPadding: const EdgeInsets.all(16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: colors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: colors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: colors.primary, width: 1.5),
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          GestureDetector(
-            onTap: () => Navigator.pop(
-              context,
-              _ReviewResult(rating: _rating, comment: _ctrl.text.trim()),
-            ),
-            child: Container(
-              height: 52,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Center(
-                child: Text(
-                  'Submit Review',
-                  style: GoogleFonts.sora(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColor.of(context).onPrimary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -5,10 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
-import 'package:next_fi/common/components/modal/upload_dispute_evidence_modal.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/services/base_url/base_url.dart';
@@ -43,21 +41,16 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   final _scrollCtrl = ScrollController();
 
   List<Map<String, dynamic>> _messages = [];
-  List<Map<String, dynamic>> _localMessages = [];
   bool _loading = true;
   bool _sending = false;
   String? _currentUserId;
   String? _senderKeyId;
   Timer? _pollTimer;
-  bool _proofUploading = false;
 
   bool get _isParticipant =>
       _currentUserId != null &&
       (_currentUserId == widget.trade.buyerId ||
           _currentUserId == widget.trade.sellerId);
-  bool get _isDisputed => widget.trade.status == TradeStatus.disputed;
-  bool get _canUploadAttachments =>
-      _isParticipant && widget.trade.status.isActive;
 
   @override
   void initState() {
@@ -79,53 +72,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   void _startPolling() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_proofUploading) return;
       _loadMessages(silent: true);
-    });
-  }
-
-  String _appendLocalImageMessage({
-    required String imagePath,
-    required String message,
-    bool isUploading = false,
-    String uploadState = 'uploaded',
-  }) {
-    final id = 'local-${DateTime.now().microsecondsSinceEpoch}';
-    setState(() {
-      _localMessages = [
-        ..._localMessages,
-        {
-          'id': id,
-          'kind': 'TEXT',
-          'senderId': _currentUserId ?? 'local-me',
-          'message': message,
-          'localImagePath': imagePath,
-          'isUploadingProof': isUploading,
-          'proofUploadState': uploadState,
-          'createdAt': DateTime.now().toUtc().toIso8601String(),
-        },
-      ];
-    });
-    _scrollToBottom();
-    return id;
-  }
-
-  void _updateLocalMessage(
-    String id, {
-    String? message,
-    bool? isUploadingProof,
-    String? proofUploadState,
-  }) {
-    setState(() {
-      _localMessages = _localMessages.map((m) {
-        if ((m['id'] ?? '').toString() != id) return m;
-        return {
-          ...m,
-          if (message != null) 'message': message,
-          if (isUploadingProof != null) 'isUploadingProof': isUploadingProof,
-          if (proofUploadState != null) 'proofUploadState': proofUploadState,
-        };
-      }).toList();
     });
   }
 
@@ -177,9 +124,6 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       if (!mounted) return;
       setState(() {
         _messages = normalized;
-        _localMessages = _localMessages
-            .where((m) => m['isUploadingProof'] == true)
-            .toList();
         _loading = false;
       });
       await markTradeAsRead(
@@ -224,7 +168,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     if (!_isParticipant) {
       showFloatingSnackBar(
         context,
-        message: 'Only trade participants can send messages.',
+        message: 'Only the two people in this trade can chat here.',
         type: SnackBarType.error,
       );
       return;
@@ -263,143 +207,9 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     }
   }
 
-  Future<void> _uploadProof() async {
-    if (!_isParticipant) {
-      showFloatingSnackBar(
-        context,
-        message: 'Only trade participants can upload proofs.',
-        type: SnackBarType.error,
-      );
-      return;
-    }
-    final senderKeyId = (_senderKeyId ?? '').trim();
-    if (senderKeyId.isEmpty) return;
-
-    final config = await _showProofSourceSheet(isDispute: _isDisputed);
-    if (!mounted || config == null) return;
-
-    final ImagePicker picker = ImagePicker();
-    final XFile? file = await picker.pickImage(source: config.source);
-    if (!mounted || file == null) return;
-    setState(() => _proofUploading = true);
-    _pollTimer?.cancel();
-    final localProofId = _appendLocalImageMessage(
-      imagePath: file.path,
-      message: _isDisputed
-          ? 'Uploading dispute evidence...'
-          : 'Uploading proof...',
-      isUploading: true,
-      uploadState: 'uploading',
-    );
-    showFloatingSnackBar(
-      context,
-      message: _isDisputed ? 'Uploading evidence...' : 'Uploading proof...',
-      type: SnackBarType.success,
-    );
-
-    try {
-      final uploadedProofUrl = await _tradesCore.uploadProof(
-        widget.trade.id,
-        file: File(file.path),
-        type: config.type,
-        referenceNo: config.referenceNo,
-        txHash: config.txHash,
-      );
-      final proofLabel = _isDisputed ? 'evidence' : 'proof';
-      final proofMsg = '${config.type} $proofLabel uploaded: ${file.name}';
-      final payload =
-          uploadedProofUrl == null || uploadedProofUrl.trim().isEmpty
-          ? proofMsg
-          : jsonEncode({
-              'text': proofMsg,
-              'proofType': config.type,
-              'proofUrl': uploadedProofUrl.trim(),
-              'proofUrls': [uploadedProofUrl.trim()],
-              'imageUrl': uploadedProofUrl.trim(),
-            });
-      final envelope = ChatEnvelopeCodec.encodeText(
-        plainText: payload,
-        senderKeyId: senderKeyId,
-      );
-      await _tradesCore.sendTradeMessage(
-        widget.trade.id,
-        ciphertext: envelope.ciphertext,
-        algorithm: envelope.algorithm,
-        senderKeyId: envelope.senderKeyId,
-        nonce: envelope.nonce,
-        kind: envelope.kind.name.toUpperCase(),
-      );
-      if (mounted) {
-        _updateLocalMessage(
-          localProofId,
-          message: proofMsg,
-          isUploadingProof: false,
-          proofUploadState: 'uploaded',
-        );
-        showFloatingSnackBar(
-          context,
-          message: _isDisputed
-              ? 'Evidence uploaded successfully'
-              : 'Proof uploaded successfully',
-          type: SnackBarType.success,
-        );
-        await _loadMessages(silent: true);
-      }
-    } catch (e) {
-      if (mounted) {
-        _updateLocalMessage(
-          localProofId,
-          message: 'Evidence upload failed',
-          isUploadingProof: false,
-          proofUploadState: 'failed',
-        );
-        showFloatingSnackBar(
-          context,
-          message: 'Upload failed: $e',
-          type: SnackBarType.error,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _proofUploading = false);
-      _startPolling();
-    }
-  }
-
-  Future<TradeProofPickResult?> _showProofSourceSheet({
-    required bool isDispute,
-  }) async {
-    if (isDispute) {
-      return showModalBottomSheet<TradeProofPickResult>(
-        context: context,
-        backgroundColor: AppColor.of(context).surface,
-        builder: (_) =>
-            UploadDisputeEvidenceModal(colors: AppColor.of(context)),
-      );
-    }
-    return showModalBottomSheet<TradeProofPickResult>(
-      context: context,
-      backgroundColor: AppColor.of(context).surface,
-      builder: (_) => _ProofSourceSheet(colors: AppColor.of(context)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final allMessages = [..._messages, ..._localMessages]
-      ..sort((a, b) {
-        DateTime? parse(dynamic v) =>
-            v == null ? null : DateTime.tryParse(v.toString());
-        final ad =
-            parse(a['createdAt'] ?? a['created_at']) ??
-            parse(a['updatedAt'] ?? a['updated_at']) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final bd =
-            parse(b['createdAt'] ?? b['created_at']) ??
-            parse(b['updatedAt'] ?? b['updated_at']) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return ad.compareTo(bd);
-      });
     return Scaffold(
       backgroundColor: colors.background,
       appBar: _buildAppBar(colors),
@@ -411,14 +221,14 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
                 ? Center(
                     child: CircularProgressIndicator(color: colors.primary),
                   )
-                : allMessages.isEmpty
+                : _messages.isEmpty
                 ? _EmptyState(colors: colors)
                 : ListView.builder(
                     controller: _scrollCtrl,
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    itemCount: allMessages.length,
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    itemCount: _messages.length,
                     itemBuilder: (_, i) => _MessageBubble(
-                      message: allMessages[i],
+                      message: _messages[i],
                       currentUserId: _currentUserId,
                       colors: colors,
                     ),
@@ -431,9 +241,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             colors: colors,
             sending: _sending,
             enabled: _isParticipant,
-            attachEnabled: _canUploadAttachments,
             onSend: _sendMessage,
-            onAttach: _uploadProof,
           ),
         ],
       ),
@@ -448,13 +256,14 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       systemOverlayStyle: Theme.of(context).brightness == Brightness.dark
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
-      leading: IconButton(
-        icon: Icon(
-          Icons.arrow_back_ios_new_rounded,
-          color: colors.textPrimary,
-          size: 18,
+      leadingWidth: 50,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 10),
+        child: _ChatTopIconButton(
+          icon: Icons.arrow_back_ios_new_rounded,
+          colors: colors,
+          onTap: () => Navigator.maybePop(context),
         ),
-        onPressed: () => Navigator.maybePop(context),
       ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,28 +271,66 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
           Text(
             'Trade Chat',
             style: GoogleFonts.sora(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
               color: colors.textPrimary,
+              letterSpacing: -0.2,
             ),
           ),
           Text(
             widget.trade.id.length > 16
                 ? '${widget.trade.id.substring(0, 12)}…'
                 : widget.trade.id,
-            style: GoogleFonts.sora(fontSize: 10, color: colors.textSecondary),
+            style: GoogleFonts.sora(fontSize: 9.5, color: colors.textSecondary),
           ),
         ],
       ),
       actions: [
-        IconButton(
-          icon: Icon(Icons.refresh_rounded, color: colors.textSecondary),
-          onPressed: () => _loadMessages(),
-          tooltip: 'Refresh',
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: _ChatTopIconButton(
+            icon: Icons.refresh_rounded,
+            colors: colors,
+            onTap: () => _loadMessages(),
+          ),
         ),
       ],
     );
   }
+}
+
+class _ChatTopIconButton extends StatelessWidget {
+  const _ChatTopIconButton({
+    required this.icon,
+    required this.colors,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final AppColor colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(icon, color: colors.textSecondary, size: 17),
+    ),
+  );
 }
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
@@ -747,6 +594,25 @@ class _MessageBubble extends StatelessWidget {
   bool get _isProofFailed =>
       (message['proofUploadState'] ?? '').toString().toLowerCase() == 'failed';
 
+  bool _looksLikeUrlOnly(String input) {
+    final raw = input.trim();
+    if (raw.isEmpty) return false;
+    final urlOnly = RegExp(
+      r'^(https?:\/\/\S+|\/\S+|uploads\/\S+|upload\/\S+|media\/\S+)$',
+      caseSensitive: false,
+    );
+    return urlOnly.hasMatch(raw);
+  }
+
+  bool _containsProofUrl(String input) {
+    final raw = input.trim();
+    if (raw.isEmpty) return false;
+    return RegExp(
+      r'(https?:\/\/\S+|\/\S+|uploads\/\S+|upload\/\S+|media\/\S+)',
+      caseSensitive: false,
+    ).hasMatch(raw);
+  }
+
   void _openImageViewer(BuildContext context) {
     final src = _resolveImageRef(_imageRef);
     final isHttp = src.startsWith('http://') || src.startsWith('https://');
@@ -846,27 +712,32 @@ class _MessageBubble extends StatelessWidget {
     if (_isSystem) return _SystemMessage(text: _text, colors: colors);
 
     final isMe = _isMe;
+    final sanitizedText = _withBreakHints(_text);
+    final hideProofUrlText =
+        _hasImage &&
+        (_looksLikeUrlOnly(sanitizedText) || _containsProofUrl(sanitizedText));
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: isMe ? colors.primary : colors.surface,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMe ? 18 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 18),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 6),
+            bottomRight: Radius.circular(isMe ? 6 : 16),
           ),
           border: isMe ? null : Border.all(color: colors.border),
           boxShadow: [
             BoxShadow(
-              color: colors.textPrimary.withValues(alpha: 0.06),
-              blurRadius: 8,
+              color: colors.textPrimary.withValues(alpha: 0.05),
+              blurRadius: 10,
               offset: const Offset(0, 2),
             ),
           ],
@@ -909,15 +780,16 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ),
               ],
-              if (_text.isNotEmpty) const SizedBox(height: 8),
+              if (_text.isNotEmpty && !hideProofUrlText)
+                const SizedBox(height: 8),
             ],
-            if (_text.isNotEmpty)
+            if (_text.isNotEmpty && !hideProofUrlText)
               Text(
-                _withBreakHints(_text),
+                sanitizedText,
                 style: GoogleFonts.sora(
-                  fontSize: 14,
+                  fontSize: 12.5,
                   color: isMe ? colors.onPrimary : colors.textPrimary,
-                  height: 1.4,
+                  height: 1.35,
                 ),
                 softWrap: true,
               ),
@@ -925,7 +797,7 @@ class _MessageBubble extends StatelessWidget {
             Text(
               _timeStr,
               style: GoogleFonts.sora(
-                fontSize: 10,
+                fontSize: 9.5,
                 color: isMe
                     ? colors.onPrimary.withValues(alpha: 0.7)
                     : colors.textSecondary,
@@ -947,25 +819,32 @@ class _SystemMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(vertical: 8),
+    margin: const EdgeInsets.symmetric(vertical: 6),
     child: Row(
       children: [
         Expanded(child: Divider(color: colors.border, height: 1)),
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12),
+          margin: const EdgeInsets.symmetric(horizontal: 10),
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.7,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
           decoration: BoxDecoration(
             color: colors.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: colors.border),
+            boxShadow: [
+              BoxShadow(
+                color: colors.textPrimary.withValues(alpha: 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
           child: Text(
             text,
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 11, color: colors.textSecondary),
+            style: GoogleFonts.sora(fontSize: 10, color: colors.textSecondary),
             softWrap: true,
           ),
         ),
@@ -988,23 +867,23 @@ class _EmptyState extends StatelessWidget {
       children: [
         Icon(
           Icons.chat_bubble_outline_rounded,
-          size: 48,
-          color: colors.textSecondary.withValues(alpha: 0.4),
+          size: 42,
+          color: colors.textSecondary.withValues(alpha: 0.36),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Text(
           'No messages yet',
           style: GoogleFonts.sora(
-            fontSize: 16,
+            fontSize: 14.5,
             fontWeight: FontWeight.w600,
             color: colors.textSecondary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
-          'Trade activity and chat will appear here',
+          'Updates and messages will show up here',
           style: GoogleFonts.sora(
-            fontSize: 13,
+            fontSize: 11.5,
             color: colors.textSecondary.withValues(alpha: 0.7),
           ),
         ),
@@ -1021,76 +900,57 @@ class _InputBar extends StatelessWidget {
     required this.colors,
     required this.sending,
     required this.enabled,
-    required this.attachEnabled,
     required this.onSend,
-    required this.onAttach,
   });
   final TextEditingController controller;
   final AppColor colors;
   final bool sending;
   final bool enabled;
-  final bool attachEnabled;
   final VoidCallback onSend;
-  final VoidCallback onAttach;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: EdgeInsets.fromLTRB(
-      12,
       10,
-      12,
-      MediaQuery.of(context).padding.bottom + 10,
+      8,
+      10,
+      MediaQuery.of(context).padding.bottom + 8,
     ),
     decoration: BoxDecoration(
       color: colors.background,
       border: Border(top: BorderSide(color: colors.border)),
+      boxShadow: [
+        BoxShadow(
+          color: colors.textPrimary.withValues(alpha: 0.04),
+          blurRadius: 10,
+          offset: const Offset(0, -2),
+        ),
+      ],
     ),
     child: Row(
       children: [
-        SizedBox(
-          width: 42,
-          height: 42,
-          child: AppOutlinedButton(
-            onPressed: attachEnabled ? onAttach : null,
-            style: OutlinedButton.styleFrom(
-              padding: EdgeInsets.zero,
-              backgroundColor: colors.surface,
-              side: BorderSide(color: colors.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-            ),
-            child: Icon(
-              Icons.attach_file_rounded,
-              color: colors.textSecondary,
-              size: 20,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-
         // Text field
         Expanded(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
             decoration: BoxDecoration(
               color: colors.surface,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: colors.border),
             ),
             child: TextField(
               controller: controller,
               enabled: enabled,
-              style: GoogleFonts.sora(fontSize: 14, color: colors.textPrimary),
+              style: GoogleFonts.sora(fontSize: 13, color: colors.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Type a message…',
+                hintText: 'Write a message…',
                 hintStyle: GoogleFonts.sora(
-                  fontSize: 14,
+                  fontSize: 12.5,
                   color: colors.textSecondary,
                 ),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
               ),
               maxLines: 4,
               minLines: 1,
@@ -1099,11 +959,11 @@ class _InputBar extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 7),
 
         SizedBox(
-          width: 42,
-          height: 42,
+          width: 38,
+          height: 38,
           child: AppFilledButton(
             onPressed: (sending || !enabled) ? null : onSend,
             style: FilledButton.styleFrom(
@@ -1111,19 +971,19 @@ class _InputBar extends StatelessWidget {
               backgroundColor: colors.primary,
               disabledBackgroundColor: colors.primary.withValues(alpha: 0.5),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(11),
               ),
             ),
             child: sending
                 ? SizedBox(
-                    width: 18,
-                    height: 18,
+                    width: 16,
+                    height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: colors.onPrimary,
                     ),
                   )
-                : Icon(Icons.send_rounded, color: colors.onPrimary, size: 20),
+                : Icon(Icons.send_rounded, color: colors.onPrimary, size: 18),
           ),
         ),
       ],
@@ -1132,196 +992,3 @@ class _InputBar extends StatelessWidget {
 }
 
 // ─── Proof source picker sheet ────────────────────────────────────────────────
-
-class _ProofSourceSheet extends StatefulWidget {
-  const _ProofSourceSheet({required this.colors});
-  final AppColor colors;
-
-  @override
-  State<_ProofSourceSheet> createState() => _ProofSourceSheetState();
-}
-
-class _ProofSourceSheetState extends State<_ProofSourceSheet> {
-  final TextEditingController _referenceCtrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _referenceCtrl.dispose();
-    super.dispose();
-  }
-
-  void _submitWith(ImageSource source) {
-    const type = 'FIAT';
-    Navigator.pop(
-      context,
-      TradeProofPickResult(
-        source: source,
-        type: type,
-        referenceNo: _referenceCtrl.text.trim().isEmpty
-            ? null
-            : _referenceCtrl.text.trim(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = widget.colors;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        20,
-        16,
-        20,
-        MediaQuery.of(context).padding.bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: colors.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Text(
-            'Upload Payment Proof',
-            style: GoogleFonts.sora(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Send payment proof or screenshots directly in trade chat.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          _ProofField(
-            colors: colors,
-            controller: _referenceCtrl,
-            hint: 'Reference no. (optional)',
-          ),
-          const SizedBox(height: 14),
-          _SourceOption(
-            icon: Icons.photo_library_rounded,
-            label: 'Choose from Gallery',
-            colors: colors,
-            onTap: () => _submitWith(ImageSource.gallery),
-          ),
-          const SizedBox(height: 10),
-          _SourceOption(
-            icon: Icons.camera_alt_rounded,
-            label: 'Take a Photo',
-            colors: colors,
-            onTap: () => _submitWith(ImageSource.camera),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 48,
-            width: double.infinity,
-            child: AppOutlinedButton(
-              onPressed: () => Navigator.pop(context, null),
-              style: OutlinedButton.styleFrom(
-                backgroundColor: colors.background,
-                side: BorderSide(color: colors.border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.sora(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: colors.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProofField extends StatelessWidget {
-  const _ProofField({
-    required this.colors,
-    required this.controller,
-    required this.hint,
-  });
-
-  final AppColor colors;
-  final TextEditingController controller;
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.border),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: TextField(
-        controller: controller,
-        style: GoogleFonts.sora(fontSize: 13, color: colors.textPrimary),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: GoogleFonts.sora(
-            fontSize: 12.5,
-            color: colors.textSecondary,
-          ),
-          border: InputBorder.none,
-        ),
-      ),
-    );
-  }
-}
-
-class _SourceOption extends StatelessWidget {
-  const _SourceOption({
-    required this.icon,
-    required this.label,
-    required this.colors,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final AppColor colors;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 52,
-    width: double.infinity,
-    child: AppFilledButton.icon(
-      onPressed: onTap,
-      style: FilledButton.styleFrom(
-        backgroundColor: colors.primary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        elevation: 0,
-      ),
-      icon: Icon(icon, color: colors.onPrimary, size: 18),
-      label: Text(
-        label,
-        style: GoogleFonts.sora(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: colors.onPrimary,
-        ),
-      ),
-    ),
-  );
-}
