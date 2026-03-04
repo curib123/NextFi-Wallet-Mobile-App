@@ -64,8 +64,9 @@ class _ClaimableCardState extends State<ClaimableCard> {
   }
 
   bool get _hasSavedName => _recipient != null && _recipient!.name.isNotEmpty;
-  Color get _recipientColor =>
-      _recipient != null ? Color(_recipient!.color) : AppColor.of(context).textSecondary;
+  Color get _recipientColor => _recipient != null
+      ? Color(_recipient!.color)
+      : AppColor.of(context).textSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -112,22 +113,24 @@ class _ClaimableCardState extends State<ClaimableCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(
-                        '${_amtFmt.format(widget.item.amount)} ${widget.item.displayAsset}',
-                        style: TextStyle(
-                          color: isExpired ? c.textSecondary : c.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          decoration: isExpired
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
+                    Text(
+                      '${_amtFmt.format(widget.item.amount)} ${widget.item.displayAsset}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isExpired ? c.textSecondary : c.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        decoration: isExpired
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     _statusBadge(c, isLocked, isExpired),
                   ],
                 ),
@@ -316,7 +319,12 @@ class _ClaimableCardState extends State<ClaimableCard> {
       );
     }
 
-    return Row(children: items);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: items,
+    );
   }
 
   Widget _buildActionButton(AppColor c, bool isExpired) {

@@ -64,8 +64,9 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
   }
 
   bool get _hasSavedName => _recipient != null && _recipient!.name.isNotEmpty;
-  Color get _recipientColor =>
-      _recipient != null ? Color(_recipient!.color) : AppColor.of(context).textSecondary;
+  Color get _recipientColor => _recipient != null
+      ? Color(_recipient!.color)
+      : AppColor.of(context).textSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -110,19 +111,21 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Flexible(
-                      child: Text(
-                        '${_amtFmt.format(widget.item.amount)} ${widget.item.displayAsset}',
-                        style: TextStyle(
-                          color: c.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
+                    Text(
+                      '${_amtFmt.format(widget.item.amount)} ${widget.item.displayAsset}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     _statusBadge(c, isLocked, isExpired),
                   ],
                 ),
@@ -311,7 +314,12 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
       );
     }
 
-    return Row(children: items);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: items,
+    );
   }
 
   Widget _buildActionButton(AppColor c, bool isExpired) {

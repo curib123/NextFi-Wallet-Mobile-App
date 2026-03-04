@@ -247,6 +247,7 @@ class TradeModel {
   final String? cryptoReceiverMemo;
   final String sellerPaymentAccountId;
   final String? buyerPaymentAccountId;
+  final String? userPaymentAccountId;
   final int? paymentWindowMinutes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -260,6 +261,8 @@ class TradeModel {
   final Map<String, dynamic>? offer;
   final Map<String, dynamic>? sellerPaymentAccount;
   final Map<String, dynamic>? buyerPaymentAccount;
+  final Map<String, dynamic>? userPaymentAccount;
+  final Map<String, dynamic>? merchantPaymentAccount;
 
   const TradeModel({
     required this.id,
@@ -277,6 +280,7 @@ class TradeModel {
     this.cryptoReceiverMemo,
     required this.sellerPaymentAccountId,
     this.buyerPaymentAccountId,
+    this.userPaymentAccountId,
     this.paymentWindowMinutes,
     this.createdAt,
     this.updatedAt,
@@ -290,6 +294,8 @@ class TradeModel {
     this.offer,
     this.sellerPaymentAccount,
     this.buyerPaymentAccount,
+    this.userPaymentAccount,
+    this.merchantPaymentAccount,
   });
 
   factory TradeModel.fromJson(Map<String, dynamic> json) {
@@ -364,6 +370,13 @@ class TradeModel {
         json['buyerPaymentAcc'] ??
         json['buyer_payment_account'] ??
         json['buyer_payment_acc'];
+    final upaRaw =
+        json['userPaymentAccount'] ??
+        json['user_payment_account'] ??
+        json['selectedUserPaymentAccount'] ??
+        json['selected_user_payment_account'];
+    final mpaRaw =
+        json['merchantPaymentAccount'] ?? json['merchant_payment_account'];
 
     // Read offer type from the nested offer object or directly from trade
     TradeOfferType readOfferType() {
@@ -448,6 +461,13 @@ class TradeModel {
         ]);
         return v.isEmpty ? null : v;
       })(),
+      userPaymentAccountId: (() {
+        final v = readStr(const [
+          'userPaymentAccountId',
+          'user_payment_account_id',
+        ]);
+        return v.isEmpty ? null : v;
+      })(),
       paymentWindowMinutes: readInt(const [
         'paymentWindowMinutes',
         'payment_window_minutes',
@@ -477,6 +497,8 @@ class TradeModel {
       offer: offerRaw is Map<String, dynamic> ? offerRaw : null,
       sellerPaymentAccount: spaRaw is Map<String, dynamic> ? spaRaw : null,
       buyerPaymentAccount: bpaRaw is Map<String, dynamic> ? bpaRaw : null,
+      userPaymentAccount: upaRaw is Map<String, dynamic> ? upaRaw : null,
+      merchantPaymentAccount: mpaRaw is Map<String, dynamic> ? mpaRaw : null,
     );
   }
 
@@ -507,6 +529,7 @@ class TradeModel {
       cryptoReceiverMemo: cryptoReceiverMemo,
       sellerPaymentAccountId: sellerPaymentAccountId,
       buyerPaymentAccountId: buyerPaymentAccountId,
+      userPaymentAccountId: userPaymentAccountId,
       paymentWindowMinutes: paymentWindowMinutes,
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -520,6 +543,8 @@ class TradeModel {
       offer: offer,
       sellerPaymentAccount: sellerPaymentAccount,
       buyerPaymentAccount: buyerPaymentAccount,
+      userPaymentAccount: userPaymentAccount,
+      merchantPaymentAccount: merchantPaymentAccount,
     );
   }
 }

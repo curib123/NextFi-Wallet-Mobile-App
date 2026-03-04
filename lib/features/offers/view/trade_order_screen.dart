@@ -55,21 +55,28 @@ IconData _statusIcon(TradeStatus s) => switch (s) {
 
 String _statusLabel(
   TradeStatus s, {
+  required TradeOfferType offerType,
   required bool isUserEscrowLocker,
   required bool isUserFiatPayer,
   required bool isUserCryptoReceiver,
   required String assetCode,
 }) {
+  final isSellOffer = offerType == TradeOfferType.sell;
   switch (s) {
     case TradeStatus.created:
+      if (isSellOffer) {
+        return isUserFiatPayer ? 'Send Payment Now' : 'Waiting for Payment';
+      }
       return isUserEscrowLocker ? 'Your Action Needed' : 'Waiting to Start';
     case TradeStatus.cryptoLocked:
       return isUserFiatPayer ? 'Send Payment Now' : 'Waiting for Payment';
     case TradeStatus.fiatSent:
-      return isUserFiatPayer ? 'Payment Sent' : 'Confirm You Got Paid';
+      return isUserFiatPayer
+          ? 'Payment Sent'
+          : (isSellOffer ? 'Lock Crypto Now' : 'Confirm You Got Paid');
     case TradeStatus.fiatConfirmed:
       return isUserCryptoReceiver
-          ? 'Get Your ${assetCode.toUpperCase()}'
+          ? 'Releasing ${assetCode.toUpperCase()}'
           : 'Payment Confirmed';
     case TradeStatus.completed:
       return 'Trade Finished';
@@ -159,6 +166,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   List<Map<String, dynamic>> _proofs = const [];
   int _unreadMessages = 0;
   bool _hasAutoOpenedProofModal = false;
+  bool _autoSettlementInProgress = false;
+  DateTime? _lastAutoSettlementAttemptAt;
+  String? _lastAutoSettlementSignature;
   double? _activeAssetBalance;
   bool _balanceLoading = false;
   String? _balanceError;
@@ -194,6 +204,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   bool get _isBuyingCrypto => _isUserCryptoReceiver;
+
+  bool get _locksAfterFiatSent => _trade.offerType == TradeOfferType.sell;
+
+  bool _canLockAtStatus(TradeStatus status) {
+    return _locksAfterFiatSent
+        ? status == TradeStatus.fiatSent
+        : status == TradeStatus.created;
+  }
+
+  bool _canMarkFiatSentAtStatus(TradeStatus status) {
+    return _trade.offerType == TradeOfferType.sell
+        ? status == TradeStatus.created
+        : status == TradeStatus.cryptoLocked;
+  }
 
   String? get _merchantUserId {
     String read(dynamic v) => v == null ? '' : v.toString().trim();
@@ -238,7 +262,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         _trade.status == TradeStatus.expired) {
       return false;
     }
-    return _trade.status == TradeStatus.cryptoLocked ||
+    return (_trade.offerType == TradeOfferType.sell &&
+            _trade.status == TradeStatus.created) ||
+        _trade.status == TradeStatus.cryptoLocked ||
         _trade.status == TradeStatus.fiatSent ||
         _trade.status == TradeStatus.fiatConfirmed ||
         _trade.status == TradeStatus.disputed;
@@ -310,6 +336,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       if (mounted) setState(() => _currentUserId = user.id);
       unawaited(_refreshActiveAssetBalance(silent: true));
       unawaited(_refreshUnreadMessages(silent: true));
+      unawaited(_maybeAutoSettleEscrow(force: true));
     } catch (_) {}
   }
 
@@ -324,7 +351,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
   Future<void> _refreshActiveAssetBalance({bool silent = true}) async {
     if (!mounted) return;
-    if (!_isUserEscrowLocker || _trade.status != TradeStatus.created) {
+    if (!_isUserEscrowLocker || !_canLockAtStatus(_trade.status)) {
       setState(() {
         _activeAssetBalance = null;
         _balanceLoading = false;
@@ -417,15 +444,8 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     return null;
   }
 
-  DateTime _resolveEscrowUnlockTime() {
-    final now = DateTime.now();
-    final paymentDue = _trade.paymentDueAt;
-    if (paymentDue != null && paymentDue.isAfter(now)) return paymentDue;
-    return now.add(const Duration(minutes: 30));
-  }
-
-  DateTime _resolveEscrowExpiryTime(DateTime unlockTime) {
-    final minExpiry = unlockTime.add(const Duration(hours: 24));
+  DateTime _resolveEscrowExpiryTime() {
+    final minExpiry = DateTime.now().add(const Duration(hours: 24));
     final explicit = _trade.expiresAt;
     if (explicit != null && explicit.isAfter(minExpiry)) return explicit;
     return minExpiry;
@@ -469,7 +489,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         _refreshing = false;
         final hasEscrowId =
             (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
-        if (hasEscrowId || _trade.status != TradeStatus.created) {
+        if (hasEscrowId || !_canLockAtStatus(_trade.status)) {
           _lockPendingVerification = false;
         }
         if (!_trade.status.isActive) _pollTimer?.cancel();
@@ -478,9 +498,88 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       await _refreshActiveAssetBalance(silent: true);
       await _loadProofs(silent: true);
       await _refreshUnreadMessages(silent: true);
+      unawaited(_maybeAutoSettleEscrow());
     } catch (_) {
       if (!mounted) return;
       if (!silent) setState(() => _refreshing = false);
+    }
+  }
+
+  String? _pendingAutoSettlementAction() {
+    if (!_isParticipant) return null;
+    final escrow = _trade.escrow;
+    final escrowStatus = escrow?.status;
+    final hasEscrowId =
+        (escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+    final escrowFinalized =
+        escrowStatus == EscrowStatus.cbClaimed ||
+        escrowStatus == EscrowStatus.cbRefunded;
+    if (!hasEscrowId || escrowFinalized) return null;
+
+    if (_trade.status == TradeStatus.fiatConfirmed && _isUserCryptoReceiver) {
+      return 'claim';
+    }
+    if (_trade.status == TradeStatus.expired && _isUserEscrowLocker) {
+      return 'refund';
+    }
+    return null;
+  }
+
+  Future<void> _maybeAutoSettleEscrow({bool force = false}) async {
+    if (!mounted || !_isOnline || _currentUserId == null) return;
+    if (_actionLoading || _refreshing || _autoSettlementInProgress) return;
+
+    final action = _pendingAutoSettlementAction();
+    if (action == null) return;
+
+    final cbId = _trade.escrow?.claimableBalanceId?.trim() ?? '';
+    if (cbId.isEmpty) return;
+
+    final signature =
+        '$action:$cbId:${_trade.status.name}:${_trade.escrow?.status?.name ?? 'none'}';
+    final now = DateTime.now();
+    if (!force &&
+        signature == _lastAutoSettlementSignature &&
+        _lastAutoSettlementAttemptAt != null &&
+        now.difference(_lastAutoSettlementAttemptAt!) <
+            const Duration(seconds: 20)) {
+      return;
+    }
+
+    _autoSettlementInProgress = true;
+    _lastAutoSettlementSignature = signature;
+    _lastAutoSettlementAttemptAt = now;
+
+    try {
+      final stellarSvc = context.read<StellarWalletServices>();
+      final seedVM = context.read<SeedKeypairVM>();
+      final kp = await seedVM.deriveKeyPair();
+      final txHash = await stellarSvc.claimableBalanceService
+          .claimClaimableBalance(keyPair: kp, balanceId: cbId);
+
+      late final TradeModel updated;
+      if (action == 'claim') {
+        updated = await _tradesCore.claimCrypto(_trade.id, claimTxHash: txHash);
+      } else {
+        updated = await _tradesCore.refundCrypto(
+          _trade.id,
+          refundTxHash: txHash,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _trade = updated);
+      showFloatingSnackBar(
+        context,
+        message: action == 'claim'
+            ? '${_trade.asset.toUpperCase()} received in your wallet automatically.'
+            : '${_trade.asset.toUpperCase()} returned to your wallet automatically.',
+        type: SnackBarType.success,
+      );
+    } catch (_) {
+      // Auto-settlement retries on subsequent refresh cycles.
+    } finally {
+      _autoSettlementInProgress = false;
     }
   }
 
@@ -606,11 +705,11 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       return;
     }
     final ok = await _showConfirm(
-      title: 'Lock ${_trade.asset.toUpperCase()} to Start',
+      title: 'Lock ${_trade.asset.toUpperCase()} in Escrow',
       body:
           'You are about to lock ${_trade.asset.toUpperCase()} for this trade. '
           'Your funds stay protected while payment is being checked. '
-          'After payment is confirmed, the receiver can claim once the lock time ends. '
+          'After payment is confirmed, the receiver can claim. '
           'If the trade does not complete before expiry, funds return to your wallet automatically.',
       confirmLabel: 'Lock Now',
     );
@@ -622,7 +721,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         if (!mounted) return;
         final hasEscrowId =
             (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
-        if (_trade.status != TradeStatus.created || hasEscrowId) {
+        if (!_canLockAtStatus(_trade.status) || hasEscrowId) {
           throw Exception(
             'This trade may already be locked. Please refresh and try again.',
           );
@@ -658,15 +757,13 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           throw Exception('Wallet address format is not valid.');
         }
 
-        final unlockTime = _resolveEscrowUnlockTime();
-        final expiryTime = _resolveEscrowExpiryTime(unlockTime);
+        final expiryTime = _resolveEscrowExpiryTime();
         final txHash = await stellarSvc.claimableBalanceService
-            .createTimeLockedWithExpiry(
+            .createUnconditionalWithExpiry(
               keyPair: kp,
               asset: asset,
               amount: _trade.cryptoAmount,
               recipientId: recipientAddress,
-              unlockTime: unlockTime,
               expiryTime: expiryTime,
             );
 
@@ -909,7 +1006,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         if (mounted) setState(() => _trade = u);
       },
       successMsg:
-          'Payment confirmed. ${_trade.asset.toUpperCase()} will be ready to receive when the lock time ends.',
+          'Payment confirmed. ${_trade.asset.toUpperCase()} will be released automatically.',
     );
   }
 
@@ -1048,7 +1145,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       setState(() => _actionError = msg);
       showFloatingSnackBar(context, message: msg, type: SnackBarType.error);
     } finally {
-      if (mounted) setState(() => _actionLoading = false);
+      if (mounted) {
+        setState(() => _actionLoading = false);
+        unawaited(_maybeAutoSettleEscrow(force: true));
+      }
     }
   }
 
@@ -1144,7 +1244,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
               ),
               const SizedBox(height: 8),
 
-              if (s == TradeStatus.created && _isUserEscrowLocker) ...[
+              if (_isUserEscrowLocker && _canLockAtStatus(s)) ...[
                 _EscrowSenderCard(
                   trade: _trade,
                   colors: colors,
@@ -1161,12 +1261,14 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 const SizedBox(height: 8),
               ],
 
-              if (s == TradeStatus.created && !_isUserEscrowLocker) ...[
+              if (_trade.offerType == TradeOfferType.buy &&
+                  s == TradeStatus.created &&
+                  !_isUserEscrowLocker) ...[
                 _WaitingForEscrowCard(colors: colors, trade: _trade),
                 const SizedBox(height: 8),
               ],
 
-              if (s == TradeStatus.cryptoLocked && _isUserFiatPayer) ...[
+              if (_isUserFiatPayer && _canMarkFiatSentAtStatus(s)) ...[
                 _PaymentInstructionsCard(trade: _trade, colors: colors),
                 const SizedBox(height: 10),
                 _PaymentProofCard(
@@ -1193,6 +1295,9 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                   trade: _trade,
                   colors: colors,
                   isBuyerFiatSender: _trade.offerType == TradeOfferType.sell,
+                  requiresEscrowLock:
+                      _trade.offerType == TradeOfferType.sell &&
+                      _isUserEscrowLocker,
                 ),
                 const SizedBox(height: 8),
               ],
@@ -1517,6 +1622,7 @@ class _HeroCard extends StatelessWidget {
                       Text(
                         _statusLabel(
                           trade.status,
+                          offerType: trade.offerType,
                           isUserEscrowLocker: isUserEscrowLocker,
                           isUserFiatPayer: isUserFiatPayer,
                           isUserCryptoReceiver: isUserCryptoReceiver,
@@ -1710,6 +1816,20 @@ class _EscrowSenderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = colors.primary;
+    final isSellOffer = trade.offerType == TradeOfferType.sell;
+    final headerSubtitle = isSellOffer
+        ? 'Lock your ${trade.asset.toUpperCase()} to continue this trade'
+        : 'Lock your ${trade.asset.toUpperCase()} to start this trade';
+    final badgeLabel = isSellOffer ? 'ACTION' : 'STEP 1';
+    final step1Text = isSellOffer
+        ? 'Buyer has sent ${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()} and marked payment'
+        : 'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} for this trade';
+    final step2Text = isSellOffer
+        ? 'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} into escrow now'
+        : 'The other party pays ${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()} to your payment account';
+    final step3Text = isSellOffer
+        ? '${trade.asset.toUpperCase()} will be released to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}'
+        : 'Confirm you got paid -> ${trade.asset.toUpperCase()} is released to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}';
     final hasBalance = activeBalance != null;
     final enoughBalance = hasBalance && activeBalance! >= trade.cryptoAmount;
     final balanceAccent = enoughBalance ? colors.success : colors.error;
@@ -1750,7 +1870,7 @@ class _EscrowSenderCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Lock your ${trade.asset.toUpperCase()} to start this trade',
+                        headerSubtitle,
                         style: GoogleFonts.sora(
                           fontSize: 11,
                           color: colors.textSecondary,
@@ -1769,7 +1889,7 @@ class _EscrowSenderCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'STEP 1',
+                    badgeLabel,
                     style: GoogleFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -1787,24 +1907,21 @@ class _EscrowSenderCard extends StatelessWidget {
               children: [
                 _EscrowStep(
                   num: '1',
-                  text:
-                      'Lock ${trade.cryptoAmount.toStringAsFixed(4)} ${trade.asset} for this trade',
+                  text: step1Text,
                   colors: colors,
                   accent: accent,
                 ),
                 const SizedBox(height: 10),
                 _EscrowStep(
                   num: '2',
-                  text:
-                      'The other party pays ${trade.fiatAmount.toStringAsFixed(2)} ${trade.fiatCurrency.toUpperCase()} to your payment account',
+                  text: step2Text,
                   colors: colors,
                   accent: accent,
                 ),
                 const SizedBox(height: 10),
                 _EscrowStep(
                   num: '3',
-                  text:
-                      'Confirm you got paid → ${trade.asset.toUpperCase()} is released to the ${isCryptoReceiverBuyer ? 'buyer' : 'seller'}',
+                  text: step3Text,
                   colors: colors,
                   accent: accent,
                 ),
@@ -1950,7 +2067,7 @@ class _EscrowSenderCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Lock ${trade.asset.toUpperCase()} to Start',
+                                  'Lock ${trade.asset.toUpperCase()}',
                                   style: GoogleFonts.sora(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
@@ -2085,18 +2202,46 @@ class _PaymentInstructionsCard extends StatelessWidget {
   final TradeModel trade;
   final AppColor colors;
 
+  String? _readField(Map<String, dynamic>? row, List<String> keys) {
+    if (row == null) return null;
+    for (final key in keys) {
+      final value = row[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final blue = AppColor.of(context).primary;
     final payeeAccount = trade.offerType == TradeOfferType.sell
-        ? trade.sellerPaymentAccount
-        : trade.buyerPaymentAccount;
+        ? (trade.merchantPaymentAccount ?? trade.sellerPaymentAccount)
+        : (trade.userPaymentAccount ?? trade.buyerPaymentAccount);
     final payeeLabel = trade.offerType == TradeOfferType.sell
-        ? 'merchant'
-        : 'user';
-    final accountName = payeeAccount?['accountName']?.toString();
-    final accountNo = payeeAccount?['accountNo']?.toString();
-    final instructions = payeeAccount?['instructions']?.toString();
+        ? 'seller'
+        : 'buyer';
+    final accountName = _readField(payeeAccount, const [
+      'accountName',
+      'account_name',
+      'name',
+    ]);
+    final accountNo = _readField(payeeAccount, const [
+      'accountNo',
+      'account_no',
+      'accountNumber',
+      'account_number',
+      'iban',
+      'walletAddress',
+      'wallet_address',
+    ]);
+    final instructions = _readField(payeeAccount, const [
+      'instructions',
+      'instruction',
+      'note',
+      'notes',
+    ]);
 
     return Container(
       decoration: BoxDecoration(
@@ -2133,7 +2278,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Send Payment To ${payeeLabel == 'merchant' ? 'Seller' : 'Buyer'}',
+                  'Send Payment To ${payeeLabel == 'seller' ? 'Seller' : 'Buyer'}',
                   style: GoogleFonts.sora(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -2322,10 +2467,12 @@ class _FiatSentNoticeCard extends StatelessWidget {
     required this.trade,
     required this.colors,
     required this.isBuyerFiatSender,
+    required this.requiresEscrowLock,
   });
   final TradeModel trade;
   final AppColor colors;
   final bool isBuyerFiatSender;
+  final bool requiresEscrowLock;
 
   @override
   Widget build(BuildContext context) {
@@ -2370,8 +2517,11 @@ class _FiatSentNoticeCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'The ${isBuyerFiatSender ? 'buyer' : 'seller'} has marked payment as sent. '
-                      'Please verify receipt in your payment account and confirm below.',
+                      requiresEscrowLock
+                          ? 'The ${isBuyerFiatSender ? 'buyer' : 'seller'} has marked payment as sent. '
+                                'Next step: lock ${trade.asset.toUpperCase()} in escrow to continue this trade.'
+                          : 'The ${isBuyerFiatSender ? 'buyer' : 'seller'} has marked payment as sent. '
+                                'Please verify receipt in your payment account and confirm below.',
                       style: GoogleFonts.sora(
                         fontSize: 12,
                         color: colors.textSecondary,
@@ -2474,7 +2624,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       'The ${isSellerVerifier ? 'seller' : 'buyer'} is checking your payment. '
-                      'After confirmation, your ${trade.asset.toUpperCase()} will be ready to receive when the lock timer ends.',
+                      'After confirmation, your ${trade.asset.toUpperCase()} will be released automatically.',
                       style: GoogleFonts.sora(
                         fontSize: 12,
                         color: colors.textSecondary,
@@ -2544,8 +2694,8 @@ class _TimelineCard extends StatelessWidget {
 
     final createdDesc = isSellOffer
         ? (actingAsBuyer
-              ? 'Waiting for seller to lock $asset'
-              : 'Lock your $asset to start')
+              ? 'Send payment using merchant details below'
+              : 'Waiting for buyer to send payment')
         : (actingAsBuyer
               ? 'Lock your $asset to start'
               : 'Waiting for buyer to lock $asset');
@@ -2563,19 +2713,19 @@ class _TimelineCard extends StatelessWidget {
         : 'Payment Sent';
     final fiatSentDesc = isSellOffer
         ? (actingAsBuyer
-              ? 'Seller is verifying your payment'
-              : 'Confirm you received the payment')
+              ? 'Merchant is locking escrow'
+              : 'Lock $asset in escrow now')
         : (actingAsBuyer
               ? 'Confirm you received the payment'
               : 'Buyer is verifying your payment');
 
     final fiatConfirmedDesc = isSellOffer
         ? (actingAsBuyer
-              ? 'Receive $asset after the lock timer ends'
-              : 'Buyer can receive $asset after the lock timer ends')
+              ? '$asset is being released to your wallet'
+              : 'Buyer can now receive $asset')
         : (actingAsBuyer
-              ? 'Seller can receive $asset after the lock timer ends'
-              : 'Receive $asset after the lock timer ends');
+              ? 'Seller can now receive $asset'
+              : '$asset is being released to your wallet');
 
     final completedDesc = isSellOffer
         ? (actingAsBuyer
@@ -2584,6 +2734,15 @@ class _TimelineCard extends StatelessWidget {
         : (actingAsBuyer
               ? '$asset sent to seller'
               : '$asset received in your wallet');
+
+    if (isSellOffer) {
+      return [
+        (TradeStatus.created, 'Trade Started', createdDesc),
+        (TradeStatus.fiatSent, fiatSentTitle, fiatSentDesc),
+        (TradeStatus.fiatConfirmed, '$asset Locked', fiatConfirmedDesc),
+        (TradeStatus.completed, 'Trade Complete', completedDesc),
+      ];
+    }
 
     return [
       (TradeStatus.created, 'Trade Started', createdDesc),
@@ -2621,6 +2780,7 @@ class _TimelineCard extends StatelessWidget {
   int _resolvedProgressIndex(List<TradeStatus> order) {
     if (order.contains(trade.status)) return order.indexOf(trade.status);
 
+    final isSellOffer = trade.offerType == TradeOfferType.sell;
     final hasFiatSent = trade.fiatSentAt != null;
     final escrow = trade.escrow;
     final hasClaimTx = (escrow?.claimTxHash?.trim().isNotEmpty ?? false);
@@ -2630,10 +2790,21 @@ class _TimelineCard extends StatelessWidget {
         escrow?.status == EscrowStatus.cbClaimed ||
         escrow?.status == EscrowStatus.cbRefunded;
 
-    if (hasClaimTx) return order.indexOf(TradeStatus.fiatConfirmed);
-    if (hasFiatSent) return order.indexOf(TradeStatus.fiatSent);
+    if (hasClaimTx) {
+      return order.contains(TradeStatus.completed)
+          ? order.indexOf(TradeStatus.completed)
+          : order.length - 1;
+    }
+    if (hasFiatSent && order.contains(TradeStatus.fiatSent)) {
+      return order.indexOf(TradeStatus.fiatSent);
+    }
     if (hasLockedEscrow || trade.status == TradeStatus.cryptoLocked) {
-      return order.indexOf(TradeStatus.cryptoLocked);
+      if (isSellOffer && order.contains(TradeStatus.fiatConfirmed)) {
+        return order.indexOf(TradeStatus.fiatConfirmed);
+      }
+      if (order.contains(TradeStatus.cryptoLocked)) {
+        return order.indexOf(TradeStatus.cryptoLocked);
+      }
     }
     return order.indexOf(TradeStatus.created);
   }
@@ -2641,13 +2812,7 @@ class _TimelineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = _steps();
-    final order = [
-      TradeStatus.created,
-      TradeStatus.cryptoLocked,
-      TradeStatus.fiatSent,
-      TradeStatus.fiatConfirmed,
-      TradeStatus.completed,
-    ];
+    final order = steps.map((step) => step.$1).toList(growable: false);
     final currentIdx = _resolvedProgressIndex(order);
     final isTerminal =
         trade.status == TradeStatus.cancelled ||
@@ -3425,13 +3590,11 @@ class _BottomActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = trade.status;
+    final isSellOffer = trade.offerType == TradeOfferType.sell;
     final escrow = trade.escrow;
     final escrowStatus = escrow?.status;
     final hasEscrowId =
         (escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
-    final escrowFinalized =
-        escrowStatus == EscrowStatus.cbClaimed ||
-        escrowStatus == EscrowStatus.cbRefunded;
     final canAttemptLock =
         !hasEscrowId ||
         escrowStatus == null ||
@@ -3441,31 +3604,22 @@ class _BottomActions extends StatelessWidget {
 
     final bool showLock =
         isParticipant &&
-        s == TradeStatus.created &&
+        (isSellOffer ? s == TradeStatus.fiatSent : s == TradeStatus.created) &&
         isUserEscrowLocker &&
         !lockPendingVerification &&
         canAttemptLock;
     final bool showMarkFiat =
-        isParticipant && s == TradeStatus.cryptoLocked && isUserFiatPayer;
+        isParticipant &&
+        isUserFiatPayer &&
+        (isSellOffer
+            ? s == TradeStatus.created
+            : s == TradeStatus.cryptoLocked);
     final bool showConfirm =
         isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
-    final bool showClaim =
-        isParticipant &&
-        s == TradeStatus.fiatConfirmed &&
-        isUserCryptoReceiver &&
-        hasEscrowId &&
-        !escrowFinalized;
-    final bool showRefund =
-        s == TradeStatus.expired &&
-        isParticipant &&
-        isUserEscrowLocker &&
-        hasEscrowId &&
-        !escrowFinalized;
     final bool showCancel =
         isParticipant &&
         (s == TradeStatus.created || s == TradeStatus.cryptoLocked);
-    final hasPrimary =
-        showLock || showMarkFiat || showConfirm || showClaim || showRefund;
+    final hasPrimary = showLock || showMarkFiat || showConfirm;
 
     if (!hasPrimary && !showCancel && !s.isActive) {
       return const SizedBox.shrink();
@@ -3505,22 +3659,6 @@ class _BottomActions extends StatelessWidget {
               accent: colors.success,
               loading: loading,
               onTap: onConfirmFiat,
-            ),
-          if (showClaim)
-            _ActionBtn(
-              label: 'Receive ${trade.asset.toUpperCase()}',
-              icon: Icons.account_balance_wallet_rounded,
-              accent: colors.success,
-              loading: loading,
-              onTap: onClaimCrypto,
-            ),
-          if (showRefund)
-            _ActionBtn(
-              label: 'Return ${trade.asset.toUpperCase()}',
-              icon: Icons.replay_rounded,
-              accent: colors.warning,
-              loading: loading,
-              onTap: onRefund,
             ),
           if (hasPrimary) const SizedBox(height: 10),
           if (showCancel || s.isActive || showUploadFiatProof)
@@ -3600,6 +3738,7 @@ class _ActionBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final h = compact ? 42.0 : 50.0;
+    final fg = outlined ? accent : AppColor.of(context).onPrimary;
     return GestureDetector(
       onTap: loading ? null : onTap,
       child: AnimatedContainer(
@@ -3628,53 +3767,53 @@ class _ActionBtn extends StatelessWidget {
               ? SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: outlined ? accent : AppColor.of(context).onPrimary,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
                 )
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      size: compact ? 15 : 17,
-                      color: outlined ? accent : AppColor.of(context).onPrimary,
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      label,
-                      style: GoogleFonts.sora(
-                        fontSize: compact ? 12 : 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: outlined
-                            ? accent
-                            : AppColor.of(context).onPrimary,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    if (badgeCount > 0) ...[
-                      const SizedBox(width: 7),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1.5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: outlined ? accent : colorsForBadge(context),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+              : Padding(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: compact ? 15 : 17, color: fg),
+                      SizedBox(width: compact ? 5 : 7),
+                      Expanded(
                         child: Text(
-                          badgeCount > 99 ? '99+' : '$badgeCount',
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.sora(
-                            fontSize: 10,
+                            fontSize: compact ? 11 : 13.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColor.of(context).onPrimary,
+                            color: fg,
+                            letterSpacing: -0.2,
                           ),
                         ),
                       ),
+                      if (badgeCount > 0) ...[
+                        SizedBox(width: compact ? 4 : 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: outlined ? accent : colorsForBadge(context),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            badgeCount > 99 ? '99+' : '$badgeCount',
+                            style: GoogleFonts.sora(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColor.of(context).onPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
         ),
       ),
