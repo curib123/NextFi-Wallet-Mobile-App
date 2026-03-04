@@ -417,6 +417,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     return null;
   }
 
+  DateTime _resolveEscrowUnlockTime() {
+    final now = DateTime.now();
+    final paymentDue = _trade.paymentDueAt;
+    if (paymentDue != null && paymentDue.isAfter(now)) return paymentDue;
+    return now.add(const Duration(minutes: 30));
+  }
+
+  DateTime _resolveEscrowExpiryTime(DateTime unlockTime) {
+    final minExpiry = unlockTime.add(const Duration(hours: 24));
+    final explicit = _trade.expiresAt;
+    if (explicit != null && explicit.isAfter(minExpiry)) return explicit;
+    return minExpiry;
+  }
+
   void _updateTimeLeft(DateTime deadline) {
     final left = deadline.difference(DateTime.now());
     setState(() => _timeLeft = left.isNegative ? Duration.zero : left);
@@ -594,9 +608,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final ok = await _showConfirm(
       title: 'Lock ${_trade.asset.toUpperCase()} to Start',
       body:
-          'You are about to lock ${_trade.asset} for this trade. '
-          'It will be released after payment is confirmed. '
-          'If time runs out, it comes back to your wallet automatically.',
+          'You are about to lock ${_trade.asset.toUpperCase()} for this trade. '
+          'Your funds stay protected while payment is being checked. '
+          'After payment is confirmed, the receiver can claim once the lock time ends. '
+          'If the trade does not complete before expiry, funds return to your wallet automatically.',
       confirmLabel: 'Lock Now',
     );
     if (!ok) return;
@@ -643,15 +658,16 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           throw Exception('Wallet address format is not valid.');
         }
 
-        final expiry =
-            _trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24));
+        final unlockTime = _resolveEscrowUnlockTime();
+        final expiryTime = _resolveEscrowExpiryTime(unlockTime);
         final txHash = await stellarSvc.claimableBalanceService
-            .createUnconditionalWithExpiry(
+            .createTimeLockedWithExpiry(
               keyPair: kp,
               asset: asset,
               amount: _trade.cryptoAmount,
               recipientId: recipientAddress,
-              expiryTime: expiry,
+              unlockTime: unlockTime,
+              expiryTime: expiryTime,
             );
 
         final cbId = await _resolveClaimableBalanceId(
@@ -893,7 +909,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         if (mounted) setState(() => _trade = u);
       },
       successMsg:
-          'Payment confirmed. ${_trade.asset.toUpperCase()} is being released.',
+          'Payment confirmed. ${_trade.asset.toUpperCase()} will be ready to receive when the lock time ends.',
     );
   }
 
@@ -2046,7 +2062,7 @@ class _WaitingForEscrowCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'The other person is locking ${trade.cryptoAmount.toStringAsFixed(4)} '
-                  '${trade.asset}. Once done, you can send payment.',
+                  '${trade.asset.toUpperCase()}. Once locked, you can send payment using the account details shown here.',
                   style: GoogleFonts.sora(
                     fontSize: 12,
                     color: colors.textSecondary,
@@ -2457,7 +2473,8 @@ class _WaitingConfirmationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'The ${isSellerVerifier ? 'seller' : 'buyer'} is checking your payment. After confirmation, your ${trade.asset.toUpperCase()} will be released.',
+                      'The ${isSellerVerifier ? 'seller' : 'buyer'} is checking your payment. '
+                      'After confirmation, your ${trade.asset.toUpperCase()} will be ready to receive when the lock timer ends.',
                       style: GoogleFonts.sora(
                         fontSize: 12,
                         color: colors.textSecondary,
@@ -2535,11 +2552,11 @@ class _TimelineCard extends StatelessWidget {
 
     final lockedDesc = isSellOffer
         ? (actingAsBuyer
-              ? 'Send payment to the seller'
+              ? 'Send payment using the seller details below'
               : 'Waiting for buyer to send payment')
         : (actingAsBuyer
               ? 'Waiting for seller to send payment'
-              : 'Send payment to the buyer');
+              : 'Send payment using the buyer details below');
 
     final fiatSentTitle = (isSellOffer && !actingAsBuyer)
         ? 'Payment Received'
@@ -2554,11 +2571,11 @@ class _TimelineCard extends StatelessWidget {
 
     final fiatConfirmedDesc = isSellOffer
         ? (actingAsBuyer
-              ? 'Receive $asset in your wallet'
-              : 'Buyer will receive $asset')
+              ? 'Receive $asset after the lock timer ends'
+              : 'Buyer can receive $asset after the lock timer ends')
         : (actingAsBuyer
-              ? 'Seller will receive $asset'
-              : 'Receive $asset in your wallet');
+              ? 'Seller can receive $asset after the lock timer ends'
+              : 'Receive $asset after the lock timer ends');
 
     final completedDesc = isSellOffer
         ? (actingAsBuyer
