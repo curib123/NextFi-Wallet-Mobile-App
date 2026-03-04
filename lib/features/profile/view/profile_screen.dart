@@ -5,15 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
-import 'package:next_fi/common/components/modal/chat_consent_modal.dart';
 import 'package:next_fi/common/components/modal/profile_setup_modal.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
-import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
-import 'package:next_fi/features/chat/view/chat_thread_screen.dart';
 import 'package:next_fi/features/verification_flow/view/verification_flow_screen.dart';
-import 'package:next_fi/services/chat/chat_core_service.dart';
-import 'package:next_fi/services/chat/models/chat_dtos.dart';
-import 'package:next_fi/services/chat/models/chat_models.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_tier_progress_models.dart';
@@ -21,7 +15,6 @@ import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
 import 'package:next_fi/services/profile/models/profile_models.dart';
 import 'package:next_fi/services/profile/profile_core_service.dart';
-import 'package:next_fi/services/secure_storage/security_storage.dart';
 import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
 
@@ -38,14 +31,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen>
     with TickerProviderStateMixin {
-  static const String _kChatConsentKey = 'chat.user_consent.v1';
-  static const String _kChatConsentAtKey = 'chat.user_consent_at.v1';
-
   final _auth = AuthService();
   final _profile = ProfileCoreService.I;
   final _verification = VerificationCoreService.I;
   final _merchantProfile = MerchantProfileCoreService.I;
-  final _chat = ChatCoreService.I;
   final _date = DateFormat('MMM d, yyyy · HH:mm');
 
   late final AnimationController _fadeCtrl;
@@ -56,7 +45,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   StreamSubscription<void>? _profileChangesSub;
 
   bool _loading = true;
-  bool _busyChat = false;
   String? _error;
 
   User? _user;
@@ -64,34 +52,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   VerificationModel? _verificationData;
   MerchantProfileModel? _merchantProfileData;
   MerchantTierProgressModel? _tierProgress;
-  List<ChatFriendModel> _friends = const [];
-
-  List<ChatFriendModel> _sortFriends(List<ChatFriendModel> friends) {
-    final sorted = [...friends];
-    sorted.sort((a, b) {
-      final online =
-          (_isFriendOnline(b) ? 1 : 0) - (_isFriendOnline(a) ? 1 : 0);
-      if (online != 0) return online;
-
-      final unread = b.newUnreadMessageCount.compareTo(a.newUnreadMessageCount);
-      if (unread != 0) return unread;
-
-      final an = _friendName(a.friend, 'Friend').toLowerCase();
-      final bn = _friendName(b.friend, 'Friend').toLowerCase();
-      return an.compareTo(bn);
-    });
-    return sorted;
-  }
-
-  bool _looksLikeId(String value) {
-    final v = value.trim();
-    if (v.isEmpty) return false;
-    if (v.length >= 24) return true;
-    return RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-      caseSensitive: false,
-    ).hasMatch(v);
-  }
 
   @override
   void initState() {
@@ -150,7 +110,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           _verificationData = null;
           _merchantProfileData = null;
           _tierProgress = null;
-          _friends = const [];
           _loading = false;
         });
         _fadeCtrl.forward(from: 0);
@@ -163,9 +122,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         _safe<ProfileModel?>(() => _profile.getMe()),
         _safe<VerificationModel>(() => _verification.getMe()),
         _safe<MerchantProfileModel?>(() => _merchantProfile.getMe()),
-        _safe<ChatPaged<ChatFriendModel>>(
-          () => _chat.listFriends(const ChatListQuery(page: 1, limit: 50)),
-        ),
       ]);
 
       final merchant = results[3] as MerchantProfileModel?;
@@ -182,9 +138,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         _verificationData = results[2] as VerificationModel?;
         _merchantProfileData = merchant;
         _tierProgress = tierProgress;
-        _friends = _sortFriends(
-          (results[4] as ChatPaged<ChatFriendModel>?)?.items ?? const [],
-        );
         _loading = false;
       });
       _fadeCtrl.forward(from: 0);
@@ -212,88 +165,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _openMessenger() async {
-    final verified = await _ensureVerifiedForMessageAccess();
-    if (!verified || !mounted) return;
-
-    final consented = await _ensureChatConsent();
-    if (!consented || !mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ChatHubScreen()));
-    if (mounted) await _load();
-  }
-
-  Future<void> _openFriendChat(ChatFriendModel friend) async {
-    if (_busyChat) return;
-    final verified = await _ensureVerifiedForMessageAccess();
-    if (!verified || !mounted) return;
-
-    final consented = await _ensureChatConsent();
-    if (!consented || !mounted) return;
-    setState(() => _busyChat = true);
-    try {
-      final thread = await _chat.openThreadWithFriend(friend.friendUserId);
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatThreadScreen(
-            thread: thread,
-            username: friend.friend.username,
-            avatarUrl: friend.friend.avatarUrl,
-          ),
-        ),
-      );
-      if (mounted) await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    } finally {
-      if (mounted) setState(() => _busyChat = false);
-    }
-  }
-
-  Future<bool> _ensureChatConsent() async {
-    try {
-      final stored = await SecurityStorage.read(_kChatConsentKey);
-      if (stored == 'accepted') return true;
-    } catch (_) {}
-    if (!mounted) return false;
-    final accepted = await showChatConsentModal(context);
-    if (!accepted) return false;
-    try {
-      await SecurityStorage.save(_kChatConsentKey, 'accepted');
-      await SecurityStorage.save(
-        _kChatConsentAtKey,
-        DateTime.now().toUtc().toIso8601String(),
-      );
-    } catch (_) {}
-    return true;
-  }
-
-  Future<bool> _ensureVerifiedForMessageAccess() async {
-    try {
-      final verification = await _verification.getMe();
-      if (verification.status == TrustStatus.ready) return true;
-    } catch (_) {
-      final localReady =
-          _verificationData?.status == TrustStatus.ready ||
-          (_profileData?.isVerificationIdentityComplete ?? false);
-      if (localReady) return true;
-    }
-
-    if (!mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Verification READY is required for messenger'),
-      ),
-    );
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const VerificationFlowScreen()));
-    return false;
-  }
-
   String _displayName() {
     final profile = _profileData;
     final user = _user;
@@ -304,37 +175,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (user != null && user.name.trim().isNotEmpty) return user.name.trim();
     if (user != null && user.email.trim().isNotEmpty) return user.email.trim();
     return 'Profile';
-  }
-
-  String _friendName(ChatUserLite? user, String fallback) {
-    if (user == null) return _looksLikeId(fallback) ? 'Friend' : fallback;
-    final display = user.displayName?.trim() ?? '';
-    if (display.isNotEmpty) return display;
-    final name = user.name.trim();
-    if (name.isNotEmpty) return name;
-    final username = user.username?.trim() ?? '';
-    if (username.isNotEmpty) return '@$username';
-    final email = user.email.trim();
-    if (email.isNotEmpty) return email;
-    return _looksLikeId(fallback) ? 'Friend' : fallback;
-  }
-
-  String _friendSubtitle(ChatUserLite? user, String fallback) {
-    if (user == null) return fallback;
-    final username = user.username?.trim() ?? '';
-    final email = user.email.trim();
-    if (username.isNotEmpty && email.isNotEmpty) return '@$username · $email';
-    if (username.isNotEmpty) return '@$username';
-    if (email.isNotEmpty) return email;
-    return fallback;
-  }
-
-  bool _isFriendOnline(ChatFriendModel friend) {
-    if (!friend.friendIsOnline) return false;
-    final lastSeen = friend.friendLastSeenAt;
-    if (lastSeen == null) return true;
-    final diff = DateTime.now().difference(lastSeen.toLocal());
-    return diff.inMinutes <= 2;
   }
 
   String _value(String? raw) {
@@ -510,34 +350,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                           child: _MerchantTierCard(data: _tierProgress!),
                         ),
                       ],
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                      SliverToBoxAdapter(
-                        child: _SectionHeader(
-                          label: 'Friends',
-                          trailing: GestureDetector(
-                            onTap: _openMessenger,
-                            child: Text(
-                              'Messenger',
-                              style: TextStyle(
-                                color: c.primary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
-                      SliverToBoxAdapter(
-                        child: _FriendsSection(
-                          friends: _friends,
-                          busy: _busyChat,
-                          friendName: _friendName,
-                          friendSubtitle: _friendSubtitle,
-                          onChatTap: _openFriendChat,
-                          onOpenMessenger: _openMessenger,
-                        ),
-                      ),
                       SliverToBoxAdapter(
                         child: SizedBox(
                           height: MediaQuery.of(context).padding.bottom + 32,
@@ -916,9 +728,8 @@ class _StatCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label, this.trailing});
+  const _SectionHeader({required this.label});
   final String label;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -936,7 +747,6 @@ class _SectionHeader extends StatelessWidget {
               letterSpacing: -0.4,
             ),
           ),
-          if (trailing != null) ...[const Spacer(), trailing!],
         ],
       ),
     );
@@ -1427,298 +1237,6 @@ class _MerchantTierCard extends StatelessWidget {
 // FRIENDS SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _FriendsSection extends StatelessWidget {
-  const _FriendsSection({
-    required this.friends,
-    required this.busy,
-    required this.friendName,
-    required this.friendSubtitle,
-    required this.onChatTap,
-    required this.onOpenMessenger,
-  });
-
-  final List<ChatFriendModel> friends;
-  final bool busy;
-  final String Function(ChatUserLite? user, String fallback) friendName;
-  final String Function(ChatUserLite? user, String fallback) friendSubtitle;
-  final Future<void> Function(ChatFriendModel friend) onChatTap;
-  final VoidCallback onOpenMessenger;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-
-    if (friends.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: c.border),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: _solidTint(c.primary),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.people_outline_rounded,
-                  size: 24,
-                  color: c.primary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'No friends yet',
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Open Messenger to send friend requests.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: c.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: onOpenMessenger,
-                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                  label: const Text('Find Friends'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: c.primary,
-                    side: BorderSide(color: c.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(13),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: c.border),
-        ),
-        child: Column(
-          children: [
-            for (var i = 0; i < friends.length; i++) ...[
-              _FriendRow(
-                friend: friends[i],
-                busy: busy,
-                friendName: friendName,
-                friendSubtitle: friendSubtitle,
-                onChatTap: onChatTap,
-                isLast: i == friends.length - 1,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FriendRow extends StatelessWidget {
-  const _FriendRow({
-    required this.friend,
-    required this.busy,
-    required this.friendName,
-    required this.friendSubtitle,
-    required this.onChatTap,
-    required this.isLast,
-  });
-
-  final ChatFriendModel friend;
-  final bool busy;
-  final String Function(ChatUserLite? user, String fallback) friendName;
-  final String Function(ChatUserLite? user, String fallback) friendSubtitle;
-  final Future<void> Function(ChatFriendModel friend) onChatTap;
-  final bool isLast;
-
-  String _presenceLabel(ChatFriendModel friend) {
-    if (_isFriendOnline(friend)) return 'Online';
-    final lastSeen = friend.friendLastSeenAt;
-    if (lastSeen != null) {
-      final now = DateTime.now();
-      final local = lastSeen.toLocal();
-      final diff = now.difference(local);
-      if (diff.inMinutes < 1) return 'Last seen now';
-      if (diff.inMinutes < 60) return 'Last seen ${diff.inMinutes}m';
-      if (diff.inHours < 24) return 'Last seen ${diff.inHours}h';
-      if (diff.inDays < 7) return 'Last seen ${diff.inDays}d';
-      return 'Last seen ${DateFormat('MMM d').format(local)}';
-    }
-    final status = friend.friendStatus.trim();
-    if (status.isNotEmpty) {
-      return status[0].toUpperCase() + status.substring(1).toLowerCase();
-    }
-    return '';
-  }
-
-  bool _isFriendOnline(ChatFriendModel friend) {
-    if (!friend.friendIsOnline) return false;
-    final lastSeen = friend.friendLastSeenAt;
-    if (lastSeen == null) return true;
-    final diff = DateTime.now().difference(lastSeen.toLocal());
-    return diff.inMinutes <= 2;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final user = friend.friend;
-    final title = friendName(user, 'Friend');
-    final baseSubtitle = friendSubtitle(user, '');
-    final presence = _presenceLabel(friend);
-    final subtitle = [
-      baseSubtitle,
-      presence,
-    ].where((s) => s.trim().isNotEmpty).join(' · ');
-    final unread = friend.newUnreadMessageCount;
-    return Material(
-      color: c.surface,
-      child: Column(
-        children: [
-          InkWell(
-            onTap: busy ? null : () => onChatTap(friend),
-            borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(17))
-                : BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  // Avatar
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      ChatUserAvatar(
-                        name: title,
-                        avatarUrl: user.avatarUrl,
-                        size: 42,
-                      ),
-                      if (_isFriendOnline(friend))
-                        Positioned(
-                          right: 1,
-                          bottom: 1,
-                          child: Container(
-                            width: 11,
-                            height: 11,
-                            decoration: BoxDecoration(
-                              color: c.success,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: c.surface, width: 2),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  if (unread > 0) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.primary,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text(
-                        unread > 99 ? '99+' : '$unread',
-                        style: TextStyle(
-                          color: c.onPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _solidTint(c.primary),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Message',
-                      style: TextStyle(
-                        color: c.primary,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (!isLast)
-            Divider(height: 1, indent: 70, endIndent: 16, color: c.border),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // TIER HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1870,7 +1388,7 @@ class _LoggedOutState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Please sign in to view your profile, verification status, and friends.',
+              'Please sign in to view your profile and verification status.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: c.textSecondary,

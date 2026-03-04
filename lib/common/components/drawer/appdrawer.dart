@@ -9,7 +9,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/features/auth/view/login.dart';
-import 'package:next_fi/features/chat/view/chat_hub_screen.dart';
 import 'package:next_fi/features/merchant_flow/view/merchant_onboarding_flow_screen.dart';
 import 'package:next_fi/features/merchant_trades/view/merchant_trades_screen.dart';
 import 'package:next_fi/features/offers/view/market_offers_screen.dart';
@@ -25,8 +24,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
-import 'package:next_fi/services/chat/chat_core_service.dart';
-import 'package:next_fi/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_tier_progress_models.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
@@ -56,7 +53,6 @@ class _DrawerCache {
   static const _profileTtl = Duration(seconds: 5);
   static const _merchantTtl = Duration(seconds: 5);
   static const _verificationTtl = Duration(seconds: 5);
-  static const _chatTtl = Duration(seconds: 1);
   static const _appInfoTtl = Duration(days: 1);
   static const _legalLinksTtl = Duration(hours: 6);
 
@@ -66,7 +62,6 @@ class _DrawerCache {
   static _CacheEntry<MerchantProfileModel?>? merchantProfile;
   static _CacheEntry<MerchantTierProgressModel?>? tierProgress;
   static _CacheEntry<TrustStatus>? trustStatus;
-  static _CacheEntry<int>? unreadCount;
   static _CacheEntry<String>? termsUrl;
   static _CacheEntry<String>? privacyUrl;
 
@@ -81,8 +76,6 @@ class _DrawerCache {
       tierProgress != null && tierProgress!.isFresh(_merchantTtl);
   static bool get hasTrustStatus =>
       trustStatus != null && trustStatus!.isFresh(_verificationTtl);
-  static bool get hasUnreadCount =>
-      unreadCount != null && unreadCount!.isFresh(_chatTtl);
   static bool get hasLegalLinks =>
       termsUrl != null &&
       termsUrl!.isFresh(_legalLinksTtl) &&
@@ -93,7 +86,6 @@ class _DrawerCache {
     user = merchantProfile = profile = null;
     tierProgress = null;
     trustStatus = null;
-    unreadCount = null;
     termsUrl = null;
     privacyUrl = null;
   }
@@ -118,7 +110,6 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
   final _auth = AuthService();
-  final _chat = ChatCoreService.I;
   final _profile = ProfileCoreService.I;
   final _verification = VerificationCoreService.I;
   final _merchantProfileSvc = MerchantProfileCoreService.I;
@@ -140,7 +131,6 @@ class _AppDrawerState extends State<AppDrawer>
       _DrawerCache.tierProgress?.value;
   TrustStatus get _trustStatus =>
       _DrawerCache.trustStatus?.value ?? TrustStatus.unknown;
-  int get _unreadChatCount => _DrawerCache.unreadCount?.value ?? 0;
   String get _termsAndConditionsUrl => _DrawerCache.termsUrl?.value ?? '';
   String get _privacyPolicyUrl => _DrawerCache.privacyUrl?.value ?? '';
 
@@ -196,7 +186,6 @@ class _AppDrawerState extends State<AppDrawer>
         _fetchMerchantProfileData(),
       if (isAuth && !_DrawerCache.hasTierProgress) _fetchTierProgressData(),
       if (isAuth && !_DrawerCache.hasTrustStatus) _fetchVerification(),
-      if (isAuth && !_DrawerCache.hasUnreadCount) _fetchUnreadCount(),
     ];
 
     if (futures.isNotEmpty) await Future.wait(futures);
@@ -236,19 +225,6 @@ class _AppDrawerState extends State<AppDrawer>
       if (mounted) setState(() {});
     } catch (_) {
       _DrawerCache.trustStatus = _CacheEntry(TrustStatus.basic);
-    }
-  }
-
-  Future<void> _fetchUnreadCount() async {
-    try {
-      final threads = await _chat.listThreads(
-        const ChatListQuery(page: 1, limit: 50),
-      );
-      final count = threads.items.fold<int>(0, (sum, t) => sum + t.unreadCount);
-      _DrawerCache.unreadCount = _CacheEntry(count);
-      if (mounted) setState(() {});
-    } catch (_) {
-      _DrawerCache.unreadCount = _CacheEntry(0);
     }
   }
 
@@ -407,18 +383,6 @@ class _AppDrawerState extends State<AppDrawer>
     _push(const MarketOffersScreen(initialType: OfferType.sell));
   }
 
-  void _handleMessengerTap() {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
-    _push(const ChatHubScreen());
-  }
-
   void _handleTradeHistoryTap() {
     if (_user == null) {
       _redirectToLogin();
@@ -537,21 +501,6 @@ class _AppDrawerState extends State<AppDrawer>
                         colors: c,
                         accentColor: c.success, // emerald
                         onTap: _handleP2PMarketplaceTap,
-                        requiresAuth: user == null,
-                      ),
-                    ),
-                    _staggered(
-                      2,
-                      _NavTile(
-                        icon: LucideIcons.messagesSquare,
-                        label: 'Messenger',
-                        description: 'Friends, threads & secure chat',
-                        colors: c,
-                        accentColor: c.primary, // indigo
-                        trailing: user != null && _unreadChatCount > 0
-                            ? _UnreadBadge(count: _unreadChatCount, colors: c)
-                            : null,
-                        onTap: _handleMessengerTap,
                         requiresAuth: user == null,
                       ),
                     ),
@@ -1771,43 +1720,6 @@ class _AuthBadge extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// UNREAD BADGE
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count, required this.colors});
-  final int count;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = count > 99 ? '99+' : '$count';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [colors.primary, colors.primary]),
-        borderRadius: BorderRadius.circular(99),
-        boxShadow: [
-          BoxShadow(
-            color: colors.primary,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: colors.onPrimary,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w800,
-        ),
       ),
     );
   }
