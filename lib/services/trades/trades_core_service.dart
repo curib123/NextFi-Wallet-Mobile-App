@@ -80,13 +80,13 @@ class TradesCoreService {
   Future<TradeModel> openDispute(
     String id, {
     required String reason,
+    String? details,
     String? description,
-    List<String>? evidenceUrls,
   }) => _api.openDispute(
     id,
     reason: reason,
+    details: details,
     description: description,
-    evidenceUrls: evidenceUrls,
   );
 
   // Payment proof upload
@@ -108,6 +108,15 @@ class TradesCoreService {
 
   Future<List<Map<String, dynamic>>> getTradeProofs(String id) =>
       _api.getTradeProofs(id);
+
+  Future<List<Map<String, dynamic>>> getDisputeEvidence(String disputeId) =>
+      _api.getDisputeEvidence(disputeId);
+
+  Future<void> uploadDisputeEvidence(
+    String disputeId, {
+    required File file,
+    String? note,
+  }) => _api.uploadDisputeEvidence(disputeId, file: file, note: note);
 
   // Trade messages
   Future<List<Map<String, dynamic>>> getTradeMessages(String id) =>

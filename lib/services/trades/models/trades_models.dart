@@ -254,6 +254,7 @@ class TradeModel {
   final DateTime? paymentDueAt;
   final DateTime? fiatSentAt;
   final DateTime? fiatConfirmDueAt;
+  final String? disputeId;
   final String? autoDisputeTrigger;
   final TradeEscrowModel? escrow;
   final Map<String, dynamic>? offer;
@@ -283,6 +284,7 @@ class TradeModel {
     this.paymentDueAt,
     this.fiatSentAt,
     this.fiatConfirmDueAt,
+    this.disputeId,
     this.autoDisputeTrigger,
     this.escrow,
     this.offer,
@@ -351,7 +353,9 @@ class TradeModel {
 
     final escrowRaw = json['escrow'] ?? json['tradeEscrow'];
     final offerRaw = json['offer'];
-    final spaRaw = json['sellerPaymentAccount'] ?? json['seller_payment_account'];
+    final disputeRaw = json['dispute'];
+    final spaRaw =
+        json['sellerPaymentAccount'] ?? json['seller_payment_account'];
     final bpaRaw =
         json['buyerPaymentAccount'] ??
         json['buyerPaymentAcc'] ??
@@ -426,6 +430,19 @@ class TradeModel {
         'fiatConfirmDueAt',
         'fiat_confirm_due_at',
       ]),
+      disputeId: (() {
+        final direct = readStr(const ['disputeId', 'dispute_id']);
+        if (direct.isNotEmpty) return direct;
+        if (disputeRaw is Map<String, dynamic>) {
+          final nested =
+              disputeRaw['id']?.toString().trim() ??
+              disputeRaw['disputeId']?.toString().trim() ??
+              disputeRaw['dispute_id']?.toString().trim() ??
+              '';
+          if (nested.isNotEmpty) return nested;
+        }
+        return null;
+      })(),
       autoDisputeTrigger: (() {
         final v = readStr(const ['autoDisputeTrigger', 'auto_dispute_trigger']);
         return v.isEmpty ? null : v;
@@ -447,6 +464,7 @@ class TradeModel {
     DateTime? paymentDueAt,
     DateTime? fiatSentAt,
     DateTime? fiatConfirmDueAt,
+    String? disputeId,
     String? autoDisputeTrigger,
   }) {
     return TradeModel(
@@ -472,6 +490,7 @@ class TradeModel {
       paymentDueAt: paymentDueAt ?? this.paymentDueAt,
       fiatSentAt: fiatSentAt ?? this.fiatSentAt,
       fiatConfirmDueAt: fiatConfirmDueAt ?? this.fiatConfirmDueAt,
+      disputeId: disputeId ?? this.disputeId,
       autoDisputeTrigger: autoDisputeTrigger ?? this.autoDisputeTrigger,
       escrow: escrow ?? this.escrow,
       offer: offer,

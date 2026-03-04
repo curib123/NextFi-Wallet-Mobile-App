@@ -148,22 +148,17 @@ class UploadPaymentProofRequest {
 class OpenDisputeRequest {
   final String tradeId;
   final String reason;
-  final String? description;
-  final List<String>? evidenceUrls;
+  final String? details;
 
   const OpenDisputeRequest({
     required this.tradeId,
     required this.reason,
-    this.description,
-    this.evidenceUrls,
+    this.details,
   });
 
   Map<String, dynamic> toJson() => {
     'tradeId': tradeId,
     'reason': reason,
-    if (description != null && description!.isNotEmpty)
-      'description': description,
-    if (evidenceUrls != null && evidenceUrls!.isNotEmpty)
-      'evidenceUrls': evidenceUrls,
+    if (details != null && details!.isNotEmpty) 'details': details,
   };
 }

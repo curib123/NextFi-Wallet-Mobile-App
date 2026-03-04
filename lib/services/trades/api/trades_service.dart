@@ -420,21 +420,20 @@ class TradesService {
   Future<TradeModel> openDispute(
     String id, {
     required String reason,
+    String? details,
     String? description,
-    List<String>? evidenceUrls,
   }) async {
     final res = await _client.post(
-      TradesHttp.uri(TradesEndpoints.openDispute(id)),
+      TradesHttp.uri(TradesEndpoints.disputes()),
       headers: await _headers(
         idempotencyScope:
-            'open-dispute:$id:$reason:${description ?? ''}:${evidenceUrls?.join(',') ?? ''}',
+            'open-dispute:$id:$reason:${details ?? description ?? ''}',
       ),
       body: jsonEncode(
         OpenDisputeRequest(
           tradeId: id,
           reason: reason,
-          description: description,
-          evidenceUrls: evidenceUrls,
+          details: (details ?? description)?.trim(),
         ).toJson(),
       ),
     );
@@ -541,6 +540,42 @@ class TradesService {
     TradesHttp.ensureOk(res);
     final data = TradesHttp.decodeJson<dynamic>(res);
     return _extractList(data);
+  }
+
+  Future<List<Map<String, dynamic>>> getDisputeEvidence(
+    String disputeId,
+  ) async {
+    final res = await _client.get(
+      TradesHttp.uri(TradesEndpoints.disputeEvidence(disputeId)),
+      headers: await _headers(),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    return _extractList(data);
+  }
+
+  Future<void> uploadDisputeEvidence(
+    String disputeId, {
+    required File file,
+    String? note,
+  }) async {
+    final token = await tokenProvider();
+    if (token == null || token.isEmpty) {
+      throw TradeApiException(401, 'Missing auth token');
+    }
+    final uri = TradesHttp.uri(TradesEndpoints.disputeEvidence(disputeId));
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..headers['x-idempotency-key'] = _idempotencyForScope(
+        'upload-dispute-evidence:$disputeId:${file.path}:${file.lengthSync()}',
+      );
+    if (note != null && note.trim().isNotEmpty) {
+      request.fields['note'] = note.trim();
+    }
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    TradesHttp.ensureOk(res);
   }
 
   void dispose() => _client.close();

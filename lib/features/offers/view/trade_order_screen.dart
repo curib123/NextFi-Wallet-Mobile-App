@@ -271,6 +271,23 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
   bool get _hasFiatProof => _proofs.any(_isFiatProof);
 
+  String? get _disputeId {
+    final id = _trade.disputeId?.trim() ?? '';
+    return id.isEmpty ? null : id;
+  }
+
+  String? _buildDisputeEvidenceNote(TradeProofPickResult config) {
+    final parts = <String>[];
+    final type = config.type.trim().toUpperCase();
+    if (type.isNotEmpty) parts.add('Type: $type');
+    final ref = (config.referenceNo ?? '').trim();
+    if (ref.isNotEmpty) parts.add('Reference: $ref');
+    final tx = (config.txHash ?? '').trim();
+    if (tx.isNotEmpty) parts.add('TxHash: $tx');
+    if (parts.isEmpty) return null;
+    return parts.join(' | ');
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
@@ -462,7 +479,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     }
     try {
       final proofs = await _tradesCore.getTradeProofs(_trade.id);
-      proofs.sort((a, b) {
+      final merged = List<Map<String, dynamic>>.from(proofs);
+      if (_trade.status == TradeStatus.disputed && _disputeId != null) {
+        try {
+          final evidence = await _tradesCore.getDisputeEvidence(_disputeId!);
+          for (final row in evidence) {
+            final mapped = Map<String, dynamic>.from(row);
+            mapped.putIfAbsent('type', () => 'EVIDENCE');
+            merged.add(mapped);
+          }
+        } catch (_) {
+          // Keep trade proofs visible even if dispute evidence list fails.
+        }
+      }
+      merged.sort((a, b) {
         DateTime? parse(Map<String, dynamic> row) {
           final raw =
               row['createdAt'] ??
@@ -478,7 +508,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       });
       if (!mounted) return;
       setState(() {
-        _proofs = List<Map<String, dynamic>>.from(proofs);
+        _proofs = merged;
         _proofsLoading = false;
       });
       _maybeAutoOpenPaymentProofModal();
@@ -727,12 +757,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         if (config == null || !mounted) return;
         final file = await ImagePicker().pickImage(source: config.source);
         if (file == null || !mounted) return;
-        await _tradesCore.uploadProof(
-          _trade.id,
+        String? disputeId = _disputeId;
+        if (disputeId == null) {
+          await _refresh(silent: true);
+          disputeId = _disputeId;
+        }
+        if (disputeId == null) {
+          throw Exception(
+            'Dispute record is not ready yet. Please refresh and try again.',
+          );
+        }
+        await _tradesCore.uploadDisputeEvidence(
+          disputeId,
           file: File(file.path),
-          type: config.type,
-          referenceNo: config.referenceNo,
-          txHash: config.txHash,
+          note: _buildDisputeEvidenceNote(config),
         );
       } else {
         final proof = await _showProofPickSheet(forceUpload: true);
@@ -2769,7 +2807,7 @@ class _TimelineCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              ), 
+              ),
             ],
           );
         }),
