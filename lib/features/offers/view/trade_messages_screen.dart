@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
+import 'package:next_fi/common/components/modal/upload_dispute_evidence_modal.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/services/base_url/base_url.dart';
@@ -30,6 +31,12 @@ class TradeMessagesScreen extends StatefulWidget {
 
 class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
   static const String _kTradeSenderKeyId = 'trade.chat.sender_key_id.v1';
+  static String _lastSeenKey(String tradeId) => 'trade.chat.last_seen.$tradeId';
+
+  static Future<void> markTradeAsRead(String tradeId, {DateTime? at}) async {
+    final stamp = (at ?? DateTime.now()).toUtc().toIso8601String();
+    await SecurityStorage.save(_lastSeenKey(tradeId), stamp);
+  }
 
   final _tradesCore = TradesCoreService.I;
   final _msgCtrl = TextEditingController();
@@ -49,7 +56,8 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       (_currentUserId == widget.trade.buyerId ||
           _currentUserId == widget.trade.sellerId);
   bool get _isDisputed => widget.trade.status == TradeStatus.disputed;
-  bool get _canUploadEvidence => _isParticipant && _isDisputed;
+  bool get _canUploadAttachments =>
+      _isParticipant && widget.trade.status.isActive;
 
   @override
   void initState() {
@@ -61,6 +69,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
 
   @override
   void dispose() {
+    unawaited(markTradeAsRead(widget.trade.id));
     _msgCtrl.dispose();
     _scrollCtrl.dispose();
     _pollTimer?.cancel();
@@ -69,7 +78,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (_proofUploading) return;
       _loadMessages(silent: true);
     });
@@ -130,6 +139,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
           _senderKeyId = senderKeyId;
         });
       }
+      await markTradeAsRead(widget.trade.id);
     } catch (_) {}
   }
 
@@ -172,11 +182,30 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             .toList();
         _loading = false;
       });
+      await markTradeAsRead(
+        widget.trade.id,
+        at: _latestMessageTime(normalized) ?? DateTime.now(),
+      );
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
       if (!silent) setState(() => _loading = false);
     }
+  }
+
+  DateTime? _latestMessageTime(List<Map<String, dynamic>> rows) {
+    DateTime? latest;
+    for (final row in rows) {
+      final raw =
+          row['createdAt'] ??
+          row['created_at'] ??
+          row['updatedAt'] ??
+          row['updated_at'];
+      final parsed = raw == null ? null : DateTime.tryParse(raw.toString());
+      if (parsed == null) continue;
+      if (latest == null || parsed.isAfter(latest)) latest = parsed;
+    }
+    return latest;
   }
 
   void _scrollToBottom() {
@@ -243,18 +272,10 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
       );
       return;
     }
-    if (!_isDisputed) {
-      showFloatingSnackBar(
-        context,
-        message: 'Evidence upload is only available while trade is disputed.',
-        type: SnackBarType.error,
-      );
-      return;
-    }
     final senderKeyId = (_senderKeyId ?? '').trim();
     if (senderKeyId.isEmpty) return;
 
-    final config = await _showProofSourceSheet();
+    final config = await _showProofSourceSheet(isDispute: _isDisputed);
     if (!mounted || config == null) return;
 
     final ImagePicker picker = ImagePicker();
@@ -264,13 +285,15 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     _pollTimer?.cancel();
     final localProofId = _appendLocalImageMessage(
       imagePath: file.path,
-      message: 'Uploading dispute evidence...',
+      message: _isDisputed
+          ? 'Uploading dispute evidence...'
+          : 'Uploading proof...',
       isUploading: true,
       uploadState: 'uploading',
     );
     showFloatingSnackBar(
       context,
-      message: 'Uploading evidence...',
+      message: _isDisputed ? 'Uploading evidence...' : 'Uploading proof...',
       type: SnackBarType.success,
     );
 
@@ -282,7 +305,8 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         referenceNo: config.referenceNo,
         txHash: config.txHash,
       );
-      final proofMsg = '${config.type} evidence uploaded: ${file.name}';
+      final proofLabel = _isDisputed ? 'evidence' : 'proof';
+      final proofMsg = '${config.type} $proofLabel uploaded: ${file.name}';
       final payload =
           uploadedProofUrl == null || uploadedProofUrl.trim().isEmpty
           ? proofMsg
@@ -314,7 +338,9 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         );
         showFloatingSnackBar(
           context,
-          message: 'Evidence uploaded successfully',
+          message: _isDisputed
+              ? 'Evidence uploaded successfully'
+              : 'Proof uploaded successfully',
           type: SnackBarType.success,
         );
         await _loadMessages(silent: true);
@@ -339,8 +365,18 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
     }
   }
 
-  Future<_ProofPickResult?> _showProofSourceSheet() async {
-    return showModalBottomSheet<_ProofPickResult>(
+  Future<TradeProofPickResult?> _showProofSourceSheet({
+    required bool isDispute,
+  }) async {
+    if (isDispute) {
+      return showModalBottomSheet<TradeProofPickResult>(
+        context: context,
+        backgroundColor: AppColor.of(context).surface,
+        builder: (_) =>
+            UploadDisputeEvidenceModal(colors: AppColor.of(context)),
+      );
+    }
+    return showModalBottomSheet<TradeProofPickResult>(
       context: context,
       backgroundColor: AppColor.of(context).surface,
       builder: (_) => _ProofSourceSheet(colors: AppColor.of(context)),
@@ -395,7 +431,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             colors: colors,
             sending: _sending,
             enabled: _isParticipant,
-            attachEnabled: _canUploadEvidence,
+            attachEnabled: _canUploadAttachments,
             onSend: _sendMessage,
             onAttach: _uploadProof,
           ),
@@ -435,10 +471,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             widget.trade.id.length > 16
                 ? '${widget.trade.id.substring(0, 12)}…'
                 : widget.trade.id,
-            style: GoogleFonts.sora(
-              fontSize: 10,
-              color: colors.textSecondary,
-            ),
+            style: GoogleFonts.sora(fontSize: 10, color: colors.textSecondary),
           ),
         ],
       ),
@@ -1100,20 +1133,6 @@ class _InputBar extends StatelessWidget {
 
 // ─── Proof source picker sheet ────────────────────────────────────────────────
 
-class _ProofPickResult {
-  const _ProofPickResult({
-    required this.source,
-    required this.type,
-    this.referenceNo,
-    this.txHash,
-  });
-
-  final ImageSource source;
-  final String type;
-  final String? referenceNo;
-  final String? txHash;
-}
-
 class _ProofSourceSheet extends StatefulWidget {
   const _ProofSourceSheet({required this.colors});
   final AppColor colors;
@@ -1123,34 +1142,24 @@ class _ProofSourceSheet extends StatefulWidget {
 }
 
 class _ProofSourceSheetState extends State<_ProofSourceSheet> {
-  String _proofType = 'FIAT';
   final TextEditingController _referenceCtrl = TextEditingController();
-  final TextEditingController _txHashCtrl = TextEditingController();
-  String? _error;
 
   @override
   void dispose() {
     _referenceCtrl.dispose();
-    _txHashCtrl.dispose();
     super.dispose();
   }
 
   void _submitWith(ImageSource source) {
-    final type = _proofType.trim().toUpperCase();
-    final txHash = _txHashCtrl.text.trim();
-    if (type == 'CRYPTO' && txHash.isEmpty) {
-      setState(() => _error = 'Transaction hash is required for CRYPTO evidence.');
-      return;
-    }
+    const type = 'FIAT';
     Navigator.pop(
       context,
-      _ProofPickResult(
+      TradeProofPickResult(
         source: source,
         type: type,
         referenceNo: _referenceCtrl.text.trim().isEmpty
             ? null
             : _referenceCtrl.text.trim(),
-        txHash: txHash.isEmpty ? null : txHash,
       ),
     );
   }
@@ -1183,7 +1192,7 @@ class _ProofSourceSheetState extends State<_ProofSourceSheet> {
             ),
           ),
           Text(
-            'Upload Dispute Evidence',
+            'Upload Payment Proof',
             style: GoogleFonts.sora(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -1192,60 +1201,16 @@ class _ProofSourceSheetState extends State<_ProofSourceSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Select evidence type and upload a screenshot/photo.',
+            'Send payment proof or screenshots directly in trade chat.',
             textAlign: TextAlign.center,
             style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _ProofTypeChip(
-                  colors: colors,
-                  label: 'FIAT',
-                  selected: _proofType == 'FIAT',
-                  onTap: () => setState(() => _proofType = 'FIAT'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ProofTypeChip(
-                  colors: colors,
-                  label: 'CRYPTO',
-                  selected: _proofType == 'CRYPTO',
-                  onTap: () => setState(() => _proofType = 'CRYPTO'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           _ProofField(
             colors: colors,
             controller: _referenceCtrl,
             hint: 'Reference no. (optional)',
           ),
-          if (_proofType == 'CRYPTO') ...[
-            const SizedBox(height: 10),
-            _ProofField(
-              colors: colors,
-              controller: _txHashCtrl,
-              hint: 'Transaction hash (required)',
-            ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _error!,
-                style: GoogleFonts.sora(
-                  fontSize: 11.5,
-                  color: colors.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: 14),
           _SourceOption(
             icon: Icons.photo_library_rounded,
@@ -1284,45 +1249,6 @@ class _ProofSourceSheetState extends State<_ProofSourceSheet> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ProofTypeChip extends StatelessWidget {
-  const _ProofTypeChip({
-    required this.colors,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final AppColor colors;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        height: 38,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? colors.primary : colors.background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? colors.primary : colors.border),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.sora(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: selected ? colors.onPrimary : colors.textSecondary,
-          ),
-        ),
       ),
     );
   }
