@@ -12,6 +12,8 @@ import 'package:next_fi/services/trades/trades_core_service.dart';
 // TRADE HISTORY SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
+enum _FilterTab { all, buy, sell }
+
 class TradeHistoryScreen extends StatefulWidget {
   const TradeHistoryScreen({super.key});
 
@@ -19,19 +21,37 @@ class TradeHistoryScreen extends StatefulWidget {
   State<TradeHistoryScreen> createState() => _TradeHistoryScreenState();
 }
 
-class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
+class _TradeHistoryScreenState extends State<TradeHistoryScreen>
+    with SingleTickerProviderStateMixin {
   final _tradesService = TradesCoreService.I;
   final _dateFormat = DateFormat('MMM d, yyyy');
 
   bool _loading = true;
   String? _error;
   List<TradeModel> _tradesList = [];
+  _FilterTab _activeFilter = _FilterTab.all;
+
+  late final AnimationController _fadeCtrl;
+  late final Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
+    _fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadTrades();
   }
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Data ───────────────────────────────────────────────────────────────────
 
   Future<void> _loadTrades({bool showLoader = true}) async {
     if (showLoader) {
@@ -39,6 +59,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         _loading = true;
         _error = null;
       });
+      _fadeCtrl.reset();
     }
     try {
       final result = await _tradesService.list(
@@ -49,6 +70,7 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         _tradesList = result;
         _loading = false;
       });
+      _fadeCtrl.forward();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -58,9 +80,21 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
     }
   }
 
+  // ── Derived state ──────────────────────────────────────────────────────────
+
+  List<TradeModel> get _filtered {
+    return switch (_activeFilter) {
+      _FilterTab.all => _tradesList,
+      _FilterTab.buy =>
+          _tradesList.where((t) => t.offerType == TradeOfferType.sell).toList(),
+      _FilterTab.sell =>
+          _tradesList.where((t) => t.offerType == TradeOfferType.buy).toList(),
+    };
+  }
+
   Map<String, List<TradeModel>> get _grouped {
     final map = <String, List<TradeModel>>{};
-    for (final t in _tradesList) {
+    for (final t in _filtered) {
       final key = t.createdAt != null
           ? _dateFormat.format(t.createdAt!.toLocal())
           : 'Unknown Date';
@@ -68,6 +102,15 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
     }
     return map;
   }
+
+  int get _buyCount =>
+      _tradesList.where((t) => t.offerType == TradeOfferType.sell).length;
+  int get _sellCount =>
+      _tradesList.where((t) => t.offerType == TradeOfferType.buy).length;
+  int get _completedCount =>
+      _tradesList.where((t) => t.status == TradeStatus.completed).length;
+  int get _activeCount =>
+      _tradesList.where((t) => t.status.isActive).length;
 
   void _openDetail(TradeModel trade) {
     OfferModel? offer;
@@ -79,6 +122,8 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
     );
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
@@ -89,31 +134,47 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Header(c: c, onRefresh: () => _loadTrades(showLoader: true)),
+            // ── Sticky header ────────────────────────────────────────────────
+            _StickyHeader(
+              c: c,
+              buyCount: _buyCount,
+              sellCount: _sellCount,
+              completedCount: _completedCount,
+              activeCount: _activeCount,
+              showStats: !_loading && _error == null && _tradesList.isNotEmpty,
+              activeFilter: _activeFilter,
+              onFilterChanged: (f) => setState(() => _activeFilter = f),
+              onRefresh: () => _loadTrades(showLoader: true),
+            ),
 
-            if (!_loading && _error == null && _tradesList.isNotEmpty)
-              _SummaryStrip(c: c, trades: _tradesList),
-
+            // ── Body ─────────────────────────────────────────────────────────
             Expanded(
               child: _loading
                   ? const PageLoader(label: 'Loading trades…')
                   : _error != null
                   ? _ErrorState(
-                      c: c,
-                      error: _error!,
-                      onRetry: () => _loadTrades(),
-                    )
-                  : _tradesList.isEmpty
-                  ? _EmptyState(c: c)
-                  : RefreshIndicator(
-                      color: c.primary,
-                      onRefresh: () => _loadTrades(showLoader: false),
-                      child: _TradeList(
-                        c: c,
-                        grouped: _grouped,
-                        onTap: _openDetail,
-                      ),
-                    ),
+                c: c,
+                error: _error!,
+                onRetry: _loadTrades,
+              )
+                  : _filtered.isEmpty
+                  ? _EmptyState(
+                c: c,
+                isFiltered: _activeFilter != _FilterTab.all,
+              )
+                  : FadeTransition(
+                opacity: _fadeAnim,
+                child: RefreshIndicator(
+                  color: c.primary,
+                  onRefresh: () =>
+                      _loadTrades(showLoader: false),
+                  child: _TradeList(
+                    c: c,
+                    grouped: _grouped,
+                    onTap: _openDetail,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -123,66 +184,126 @@ class _TradeHistoryScreenState extends State<TradeHistoryScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HEADER
+// STICKY HEADER  (title + stats + filter tabs — all in one widget)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _Header extends StatelessWidget {
-  const _Header({required this.c, required this.onRefresh});
+class _StickyHeader extends StatelessWidget {
+  const _StickyHeader({
+    required this.c,
+    required this.buyCount,
+    required this.sellCount,
+    required this.completedCount,
+    required this.activeCount,
+    required this.showStats,
+    required this.activeFilter,
+    required this.onFilterChanged,
+    required this.onRefresh,
+  });
+
   final AppColor c;
+  final int buyCount;
+  final int sellCount;
+  final int completedCount;
+  final int activeCount;
+  final bool showStats;
+  final _FilterTab activeFilter;
+  final ValueChanged<_FilterTab> onFilterChanged;
   final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+
+    return Container(
+      color: c.background,
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (canPop) ...[
-            _IconBtn(
-              c: c,
-              icon: Icons.arrow_back_ios_new_rounded,
-              onTap: () => Navigator.of(context).pop(),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Trade History',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 24,
-                    letterSpacing: -0.5,
-                    height: 1.1,
-                  ),
+          // ── Top row: back + title + refresh ────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (canPop) ...[
+                _NavBtn(
+                  c: c,
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onTap: () => Navigator.of(context).pop(),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  'Your buy & sell activity',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0,
-                  ),
-                ),
+                const SizedBox(width: 12),
               ],
-            ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trade History',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 24,
+                        letterSpacing: -0.7,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Your buy & sell activity',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (activeCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _ActiveBadge(c: c, count: activeCount),
+                ),
+              _NavBtn(
+                c: c,
+                icon: Icons.refresh_rounded,
+                onTap: onRefresh,
+              ),
+            ],
           ),
-          _IconBtn(c: c, icon: Icons.refresh_rounded, onTap: onRefresh),
+
+          // ── Stats strip ─────────────────────────────────────────────────────
+          if (showStats) ...[
+            const SizedBox(height: 16),
+            _StatsStrip(
+              c: c,
+              buyCount: buyCount,
+              sellCount: sellCount,
+              completedCount: completedCount,
+            ),
+          ],
+
+          // ── Filter tabs ─────────────────────────────────────────────────────
+          if (showStats) ...[
+            const SizedBox(height: 14),
+            _FilterTabs(
+              c: c,
+              active: activeFilter,
+              onChanged: onFilterChanged,
+              buyCount: buyCount,
+              sellCount: sellCount,
+              totalCount: buyCount + sellCount,
+            ),
+          ],
+
+          const SizedBox(height: 2),
         ],
       ),
     );
   }
 }
 
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.c, required this.icon, required this.onTap});
+class _NavBtn extends StatelessWidget {
+  const _NavBtn({required this.c, required this.icon, required this.onTap});
   final AppColor c;
   final IconData icon;
   final VoidCallback onTap;
@@ -196,57 +317,122 @@ class _IconBtn extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: c.textPrimary.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: c.border),
       ),
-      child: Icon(icon, size: 17, color: c.textSecondary),
+      child: Icon(icon, size: 16, color: c.textSecondary),
     ),
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUMMARY STRIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SummaryStrip extends StatelessWidget {
-  const _SummaryStrip({required this.c, required this.trades});
+class _ActiveBadge extends StatefulWidget {
+  const _ActiveBadge({required this.c, required this.count});
   final AppColor c;
-  final List<TradeModel> trades;
+  final int count;
+
+  @override
+  State<_ActiveBadge> createState() => _ActiveBadgeState();
+}
+
+class _ActiveBadgeState extends State<_ActiveBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.5, end: 1.0)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final buys = trades.where((t) => t.offerType == TradeOfferType.sell).length;
-    final sells = trades.where((t) => t.offerType == TradeOfferType.buy).length;
-    final completed = trades
-        .where((t) => t.status == TradeStatus.completed)
-        .length;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
-      child: Container(
+    final c = widget.c;
+    return AnimatedBuilder(
+      animation: _pulseAnim,
+      builder: (_, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(16),
+          color: c.primary.withOpacity(0.1 + _pulseAnim.value * 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: c.primary.withOpacity(0.3 + _pulseAnim.value * 0.2),
+          ),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _StatCell(c: c, label: 'Buys', value: '$buys', accent: c.success),
-            _VSep(c: c),
-            _StatCell(c: c, label: 'Sells', value: '$sells', accent: c.error),
-            _VSep(c: c),
-            _StatCell(
-              c: c,
-              label: 'Done',
-              value: '$completed',
-              accent: c.primary,
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: c.primary.withOpacity(_pulseAnim.value),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '${widget.count} live',
+              style: TextStyle(
+                color: c.primary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATS STRIP
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatsStrip extends StatelessWidget {
+  const _StatsStrip({
+    required this.c,
+    required this.buyCount,
+    required this.sellCount,
+    required this.completedCount,
+  });
+  final AppColor c;
+  final int buyCount;
+  final int sellCount;
+  final int completedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          _StatCell(c: c, label: 'Buys', value: '$buyCount', accent: c.success),
+          _VDivider(c: c),
+          _StatCell(c: c, label: 'Sells', value: '$sellCount', accent: c.error),
+          _VDivider(c: c),
+          _StatCell(
+            c: c,
+            label: 'Completed',
+            value: '$completedCount',
+            accent: c.primary,
+          ),
+        ],
       ),
     );
   }
@@ -274,8 +460,8 @@ class _StatCell extends StatelessWidget {
             value,
             style: TextStyle(
               color: accent,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+              fontSize: 21,
+              fontWeight: FontWeight.w900,
               letterSpacing: -0.6,
               height: 1,
             ),
@@ -285,7 +471,7 @@ class _StatCell extends StatelessWidget {
             label,
             style: TextStyle(
               color: c.textSecondary,
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w500,
               letterSpacing: 0.2,
             ),
@@ -296,17 +482,104 @@ class _StatCell extends StatelessWidget {
   );
 }
 
-class _VSep extends StatelessWidget {
-  const _VSep({required this.c});
+class _VDivider extends StatelessWidget {
+  const _VDivider({required this.c});
   final AppColor c;
 
   @override
   Widget build(BuildContext context) =>
-      Container(width: 1, height: 30, color: c.border);
+      Container(width: 1, height: 28, color: c.border);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TRADE LIST  (grouped by date)
+// FILTER TABS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FilterTabs extends StatelessWidget {
+  const _FilterTabs({
+    required this.c,
+    required this.active,
+    required this.onChanged,
+    required this.totalCount,
+    required this.buyCount,
+    required this.sellCount,
+  });
+  final AppColor c;
+  final _FilterTab active;
+  final ValueChanged<_FilterTab> onChanged;
+  final int totalCount;
+  final int buyCount;
+  final int sellCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = [
+      (_FilterTab.all, 'All', totalCount),
+      (_FilterTab.buy, 'Buys', buyCount),
+      (_FilterTab.sell, 'Sells', sellCount),
+    ];
+
+    return Row(
+      children: tabs.map((tab) {
+        final (filter, label, count) = tab;
+        final isActive = active == filter;
+        return Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: GestureDetector(
+            onTap: () => onChanged(filter),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isActive ? c.primary : c.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isActive ? c.primary : c.border,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isActive ? c.onPrimary : c.textSecondary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? c.onPrimary.withOpacity(0.2)
+                          : c.background,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        color: isActive ? c.onPrimary : c.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRADE LIST
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TradeList extends StatelessWidget {
@@ -324,7 +597,7 @@ class _TradeList extends StatelessWidget {
     final dates = grouped.keys.toList();
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(18, 22, 18, 36),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 48),
       itemCount: dates.length,
       itemBuilder: (_, i) {
         final date = dates[i];
@@ -333,30 +606,15 @@ class _TradeList extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (i > 0) const SizedBox(height: 22),
+            if (i > 0) const SizedBox(height: 20),
 
-            // ── Date header ──────────────────────────────────────────────────
-            Row(
-              children: [
-                Text(
-                  date.toUpperCase(),
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Container(height: 1, color: c.border)),
-              ],
-            ),
-
+            // ── Date header ────────────────────────────────────────────────
+            _DateHeader(c: c, date: date, count: trades.length),
             const SizedBox(height: 10),
 
-            // ── Cards ────────────────────────────────────────────────────────
+            // ── Trade cards ────────────────────────────────────────────────
             ...trades.map(
-              (trade) => Padding(
+                  (trade) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _TradeCard(
                   c: c,
@@ -372,12 +630,62 @@ class _TradeList extends StatelessWidget {
   }
 }
 
+class _DateHeader extends StatelessWidget {
+  const _DateHeader({
+    required this.c,
+    required this.date,
+    required this.count,
+  });
+  final AppColor c;
+  final String date;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Text(
+        date.toUpperCase(),
+        style: TextStyle(
+          color: c.textSecondary,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.9,
+        ),
+      ),
+      const SizedBox(width: 8),
+      Container(
+        padding:
+        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: c.border),
+        ),
+        child: Text(
+          '$count',
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(child: Container(height: 1, color: c.border)),
+    ],
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TRADE CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TradeCard extends StatefulWidget {
-  const _TradeCard({required this.c, required this.trade, required this.onTap});
+  const _TradeCard({
+    required this.c,
+    required this.trade,
+    required this.onTap,
+  });
   final AppColor c;
   final TradeModel trade;
   final VoidCallback onTap;
@@ -397,12 +705,11 @@ class _TradeCardState extends State<_TradeCard>
     _pressCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 80),
-      reverseDuration: const Duration(milliseconds: 150),
+      reverseDuration: const Duration(milliseconds: 160),
     );
-    _scaleAnim = Tween<double>(
-      begin: 1.0,
-      end: 0.975,
-    ).animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.974).animate(
+      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut),
+    );
   }
 
   @override
@@ -433,16 +740,25 @@ class _TradeCardState extends State<_TradeCard>
     TradeStatus.cancelled => 'Cancelled',
     TradeStatus.expired => 'Expired',
     TradeStatus.disputed => 'Disputed',
-    TradeStatus.cryptoLocked => 'Locked',
+    TradeStatus.cryptoLocked => 'Escrowed',
     TradeStatus.fiatSent => 'Fiat Sent',
     TradeStatus.fiatConfirmed => 'Confirming',
     TradeStatus.created => 'Pending',
     TradeStatus.unknown => 'Unknown',
   };
 
-  String _formatCrypto(double v) => v.toStringAsFixed(4);
-  String _formatFiat(double v) =>
-      v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}K' : v.toStringAsFixed(2);
+  String _fmtCrypto(double v) => v < 0.001
+      ? v.toStringAsFixed(7)
+      : v < 1
+      ? v.toStringAsFixed(5)
+      : v.toStringAsFixed(4);
+
+  String _fmtFiat(double v) =>
+      v >= 1000000
+          ? '${(v / 1000000).toStringAsFixed(2)}M'
+          : v >= 1000
+          ? '${(v / 1000).toStringAsFixed(1)}K'
+          : v.toStringAsFixed(2);
 
   @override
   Widget build(BuildContext context) {
@@ -454,6 +770,11 @@ class _TradeCardState extends State<_TradeCard>
     final statusLabel = _statusLabel(trade.status);
     final isActive = trade.status.isActive;
 
+    // Time label
+    final timeLabel = trade.createdAt != null
+        ? DateFormat('h:mm a').format(trade.createdAt!.toLocal())
+        : '';
+
     return GestureDetector(
       onTapDown: (_) => _pressCtrl.forward(),
       onTapUp: (_) {
@@ -464,26 +785,20 @@ class _TradeCardState extends State<_TradeCard>
       child: ScaleTransition(
         scale: _scaleAnim,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: c.textPrimary.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(color: c.border),
           ),
           child: Row(
             children: [
-              // ── Direction badge ────────────────────────────────────────────
+              // ── Direction icon ─────────────────────────────────────────────
               Container(
-                width: 44,
-                height: 44,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: c.background,
+                  color: typeColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -494,118 +809,99 @@ class _TradeCardState extends State<_TradeCard>
                   size: 18,
                 ),
               ),
-
               const SizedBox(width: 13),
 
-              // ── Trade info ─────────────────────────────────────────────────
+              // ── Center: type + amounts ─────────────────────────────────────
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Type + asset
+                    // Row 1: type label + time
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          isBuy ? 'Buy' : 'Sell',
-                          style: TextStyle(
-                            color: typeColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14.5,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(
-                            trade.asset,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: c.textPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14.5,
-                              letterSpacing: -0.3,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              isBuy ? 'Buy' : 'Sell',
+                              style: TextStyle(
+                                color: typeColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                letterSpacing: -0.3,
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 5),
+                            Text(
+                              trade.asset,
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 5),
-
-                    // Amounts
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${_formatCrypto(trade.cryptoAmount)} ${trade.asset}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        if (timeLabel.isNotEmpty)
+                          Text(
+                            timeLabel,
                             style: TextStyle(
                               color: c.textSecondary,
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
                             ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Row 2: amounts + status pill
+                    Row(
+                      children: [
+                        // Crypto amount — primary
+                        Text(
+                          '${_fmtCrypto(trade.cryptoAmount)} ${trade.asset}',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Container(
-                            width: 3,
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: c.border,
-                              shape: BoxShape.circle,
-                            ),
+                          padding:
+                          const EdgeInsets.symmetric(horizontal: 6),
+                          child: Text(
+                            '·',
+                            style: TextStyle(
+                                color: c.border, fontSize: 14),
                           ),
                         ),
-                        Expanded(
-                          child: Text(
-                            '${trade.fiatCurrency} ${_formatFiat(trade.fiatAmount)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: c.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
+                        // Fiat amount
+                        Text(
+                          '${trade.fiatCurrency} ${_fmtFiat(trade.fiatAmount)}',
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: const [FontFeature.tabularFigures()],
                           ),
+                        ),
+                        const Spacer(),
+                        // Status pill
+                        _StatusPill(
+                          label: statusLabel,
+                          color: statusColor,
+                          isActive: isActive,
+                          c: c,
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(width: 10),
-
-              // ── Status + chevron ───────────────────────────────────────────
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Status pill — solid color, no opacity
-                  _StatusPill(
-                    label: statusLabel,
-                    color: statusColor,
-                    isActive: isActive,
-                    c: c,
-                  ),
-                  const SizedBox(height: 8),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 15,
-                    color: c.textSecondary,
-                  ),
-                ],
               ),
             ],
           ),
@@ -616,7 +912,7 @@ class _TradeCardState extends State<_TradeCard>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATUS PILL  — solid, no alpha
+// STATUS PILL
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatusPill extends StatelessWidget {
@@ -633,11 +929,13 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxWidth: 110),
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    constraints: const BoxConstraints(maxWidth: 100),
+    padding:
+    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(6),
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(7),
+      border: Border.all(color: color.withOpacity(0.25)),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -645,7 +943,10 @@ class _StatusPill extends StatelessWidget {
         Container(
           width: 5,
           height: 5,
-          decoration: BoxDecoration(color: c.onPrimary, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 5),
         Flexible(
@@ -654,8 +955,8 @@ class _StatusPill extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: c.onPrimary,
-              fontSize: 10.8,
+              color: color,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.1,
             ),
@@ -671,48 +972,53 @@ class _StatusPill extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.c});
+  const _EmptyState({required this.c, required this.isFiltered});
   final AppColor c;
+  final bool isFiltered;
 
   @override
   Widget build(BuildContext context) => Center(
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 44),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
               color: c.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.border),
             ),
             child: Icon(
-              Icons.swap_horiz_rounded,
+              isFiltered
+                  ? Icons.filter_list_off_rounded
+                  : Icons.swap_horiz_rounded,
               color: c.textSecondary,
-              size: 24,
+              size: 26,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Text(
-            'No trades yet',
+            isFiltered ? 'No results' : 'No trades yet',
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Your buy and sell history will appear here once you make your first trade.',
+            isFiltered
+                ? 'No trades match this filter. Try switching to All.'
+                : 'Your buy and sell history will\nappear here after your first trade.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 13.5,
               height: 1.6,
-              fontWeight: FontWeight.w400,
             ),
           ),
         ],
@@ -743,22 +1049,24 @@ class _ErrorState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(16),
+              color: c.error.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.error.withOpacity(0.2)),
             ),
-            child: Icon(Icons.cloud_off_rounded, color: c.error, size: 24),
+            child: Icon(Icons.cloud_off_rounded,
+                color: c.error, size: 26),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Text(
             'Couldn\'t load history',
             style: TextStyle(
               color: c.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -770,22 +1078,32 @@ class _ErrorState extends StatelessWidget {
               fontSize: 12.5,
               height: 1.6,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 24),
           GestureDetector(
             onTap: onRetry,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 32, vertical: 14),
               decoration: BoxDecoration(
                 color: c.primary,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(13),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.primary.withOpacity(0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
               child: Text(
                 'Try again',
                 style: TextStyle(
                   color: c.onPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
                   letterSpacing: -0.2,
                 ),
               ),

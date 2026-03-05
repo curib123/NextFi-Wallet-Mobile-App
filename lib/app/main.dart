@@ -67,6 +67,25 @@ Future<void> _loadInitialThemeMode() async {
   _themeModeVN.value = mode;
 }
 
+// ───────────────────────── Currency glyph fallback ─────────────────────────
+// If Sora can't render ₱/₹/฿/﷼ etc, Flutter will fallback to these fonts.
+// IMPORTANT: Font family names MUST match exactly.
+const List<String> _currencyFallback = <String>[
+  // Android
+  'Roboto',
+  // iOS
+  '.SF Pro Text',
+  // Windows
+  'Segoe UI',
+  'Segoe UI Symbol',
+  // Google Noto families (names are important!)
+  'Noto Sans',
+  'Noto Sans Symbols',
+  'Noto Sans Symbols2', // ✅ correct (NO SPACE)
+  // Common unicode fallbacks
+  'Arial Unicode MS',
+  'Arial',
+];
 // ───────────────────────── FCM background handler ─────────────────────────
 // Must be top-level
 @pragma('vm:entry-point')
@@ -295,8 +314,10 @@ class _MyAppState extends State<MyApp> {
 
     debugPrint('[FCM] token=$token');
     debugPrint(
-      '[FCM] deviceId=${deviceMeta.deviceId} platform=${deviceMeta.platform} appVersion=${deviceMeta.appVersion}',
+      '[FCM] deviceId=${deviceMeta.deviceId} platform=${deviceMeta
+          .platform} appVersion=${deviceMeta.appVersion}',
     );
+
 
     // ✅ Register token with backend
     if (token != null) {
@@ -331,7 +352,8 @@ class _MyAppState extends State<MyApp> {
     await FcmBootstrap.bindListeners(
       onForeground: (RemoteMessage msg) async {
         debugPrint(
-          '[FCM][onMessage] ${msg.notification?.title} | ${msg.notification?.body}',
+          '[FCM][onMessage] ${msg.notification?.title} | ${msg.notification
+              ?.body}',
         );
         debugPrint('[FCM][data] ${msg.data}');
         // Show notification in foreground using LocalNotif
@@ -356,6 +378,7 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -364,7 +387,7 @@ class _MyAppState extends State<MyApp> {
         return MaterialApp(
           title: 'NextFi Wallet',
           debugShowCheckedModeBanner: false,
-          themeMode: mode, 
+          themeMode: mode,
           theme: _lightTheme,
           darkTheme: _darkTheme,
           home: const Home(),
@@ -387,41 +410,45 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
+
+
+  final ThemeData _lightTheme = ThemeData(
+    useMaterial3: true,
+    fontFamily: GoogleFonts
+        .inter()
+        .fontFamily,
+    scaffoldBackgroundColor: AppColor.light.background,
+    canvasColor: AppColor.light.surface,
+    textTheme: GoogleFonts.interTextTheme().apply(
+        fontFamilyFallback: _currencyFallback),
+    primaryTextTheme: GoogleFonts.interTextTheme().apply(
+        fontFamilyFallback: _currencyFallback),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColor.light.primary,
+      surface: AppColor.light.surface,
+      brightness: Brightness.light,
+    ),
+  );
+
+  final ThemeData _darkTheme = ThemeData(
+    useMaterial3: true,
+    fontFamily: GoogleFonts
+        .inter()
+        .fontFamily,
+    scaffoldBackgroundColor: AppColor.dark.background,
+    canvasColor: AppColor.dark.surface,
+    textTheme: GoogleFonts.interTextTheme(ThemeData
+        .dark()
+        .textTheme)
+        .apply(fontFamilyFallback: _currencyFallback),
+    primaryTextTheme: GoogleFonts.interTextTheme(ThemeData
+        .dark()
+        .textTheme)
+        .apply(fontFamilyFallback: _currencyFallback),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColor.dark.primary,
+      surface: AppColor.dark.surface,
+      brightness: Brightness.dark,
+    ),
+  );
 }
-
-// ───────────────────────────── Themes ─────────────────────────────
-final ThemeData _lightTheme = ThemeData(
-  useMaterial3: true,
-  fontFamily: GoogleFonts.sora().fontFamily,
-  scaffoldBackgroundColor: AppColor.light.background,
-  canvasColor: AppColor.light.surface,
-  textTheme: GoogleFonts.soraTextTheme().apply(
-    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
-  ),
-  primaryTextTheme: GoogleFonts.soraTextTheme().apply(
-    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
-  ),
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: AppColor.light.primary,
-    surface: AppColor.light.surface,
-    brightness: Brightness.light,
-  ),
-);
-
-final ThemeData _darkTheme = ThemeData(
-  useMaterial3: true,
-  fontFamily: GoogleFonts.sora().fontFamily,
-  scaffoldBackgroundColor: AppColor.dark.background,
-  canvasColor: AppColor.dark.surface,
-  textTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme).apply(
-    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
-  ),
-  primaryTextTheme: GoogleFonts.soraTextTheme(ThemeData.dark().textTheme).apply(
-    fontFamilyFallback: const ['Noto Sans', 'Noto Sans Symbols 2', 'Roboto'],
-  ),
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: AppColor.dark.primary,
-    surface: AppColor.dark.surface,
-    brightness: Brightness.dark,
-  ),
-);

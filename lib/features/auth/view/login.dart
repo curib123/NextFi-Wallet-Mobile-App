@@ -404,7 +404,7 @@ class _LoginScreenState extends State<LoginScreen>
   // ── Buttons ──────────────────────────────────────────────────────
 
   Widget _buildButtons(AppColor colors, bool isDark) {
-    final googleBg = isDark ? colors.surface : colors.onPrimary;
+    final googleBg =  colors.primary;
     final googleText = colors.textPrimary;
 
     final fbBg = colors.surface;
@@ -423,16 +423,16 @@ class _LoginScreenState extends State<LoginScreen>
           loadingColor: colors.primary,
         ),
         const SizedBox(height: 12),
-        _AuthButton(
-          label: 'Continue with Facebook',
-          icon: const _FacebookIcon(),
-          isLoading: _facebookLoading,
-          onTap: _signInFacebook,
-          backgroundColor: fbBg,
-          textColor: fbText,
-          borderColor: colors.border,
-          loadingColor: colors.primary,
-        ),
+        // _AuthButton(
+        //   label: 'Continue with Facebook',
+        //   icon: const _FacebookIcon(),
+        //   isLoading: _facebookLoading,
+        //   onTap: _signInFacebook,
+        //   backgroundColor: fbBg,
+        //   textColor: fbText,
+        //   borderColor: colors.border,
+        //   loadingColor: colors.primary,
+        // ),
       ],
     );
   }

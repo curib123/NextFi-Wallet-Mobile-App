@@ -201,7 +201,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     );
   }
 
-  // ─── Color helpers ──────────────────────────────────────────────────────────
+  // ─── Color / label helpers ──────────────────────────────────────────────────
 
   bool get _isBuy => widget.offer.type == OfferType.sell;
 
@@ -216,13 +216,15 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
         _ => c.accent,
       };
 
+  // ── Tier ──────────────────────────────────────────────────────────────────
+
   static String _tierLabel(MerchantTier t) => const {
     MerchantTier.bronze: 'Bronze',
     MerchantTier.silver: 'Silver',
     MerchantTier.gold: 'Gold',
     MerchantTier.platinum: 'Platinum',
     MerchantTier.diamond: 'Diamond',
-  }[t]!;
+  }[t] ?? 'Unknown';                                          // ← was [t]!
 
   static Color _tierColor(MerchantTier t, AppColor c) => {
     MerchantTier.diamond: c.info,
@@ -230,7 +232,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     MerchantTier.gold: c.warning,
     MerchantTier.silver: c.accent,
     MerchantTier.bronze: c.error,
-  }[t]!;
+  }[t] ?? c.accent;                                          // ← was [t]!
 
   static IconData _tierIcon(MerchantTier t) => const {
     MerchantTier.bronze: Icons.shield_outlined,
@@ -238,21 +240,35 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
     MerchantTier.gold: Icons.emoji_events_outlined,
     MerchantTier.platinum: Icons.military_tech_outlined,
     MerchantTier.diamond: Icons.diamond_outlined,
-  }[t]!;
+  }[t] ?? Icons.shield_outlined;                             // ← was [t]!
+
+  // ── Merchant Type ─────────────────────────────────────────────────────────
+
+  static String _typeLabel(MerchantType t) => const {
+    MerchantType.individual: 'INDIVIDUAL',
+    MerchantType.business: 'BUSINESS',
+  }[t] ?? 'UNKNOWN';                                         // ← was [t]!
+
+  static IconData _typeIcon(MerchantType t) => const {
+    MerchantType.individual: Icons.person_outline_rounded,
+    MerchantType.business: Icons.store_outlined,
+  }[t] ?? Icons.person_outline_rounded;                      // ← was [t]!
+
+  // ── Availability ──────────────────────────────────────────────────────────
 
   static String _availLabel(SellerAvailability a) => const {
     SellerAvailability.available: 'Online',
     SellerAvailability.unavailable: 'Offline',
     SellerAvailability.onBreak: 'On Break',
     SellerAvailability.unknown: 'Offline',
-  }[a]!;
+  }[a] ?? 'Offline';                                         // ← was [a]! (safe but consistent)
 
   static Color _availColor(SellerAvailability a, AppColor c) => {
     SellerAvailability.available: c.success,
     SellerAvailability.unavailable: c.accent,
     SellerAvailability.onBreak: c.warning,
     SellerAvailability.unknown: c.accent,
-  }[a]!;
+  }[a] ?? c.accent;                                          // ← was [a]! (safe but consistent)
 
   // ─── Build ─────────────────────────────────────────────────────────────────
 
@@ -316,13 +332,15 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                                   getTierLabel: _tierLabel,
                                   getTierColor: (t) => _tierColor(t, c),
                                   getTierIcon: _tierIcon,
+                                  getTypeLabel: _typeLabel,
+                                  getTypeIcon: _typeIcon,
                                   getAvailabilityLabel: _availLabel,
                                   getAvailabilityColor: (a) => _availColor(a, c),
                                   paymentMethodIds: _effectivePaymentMethodIds
                                       .map(
                                         (id) =>
-                                            _paymentMethodsMap[id]?.name ?? id,
-                                      )
+                                    _paymentMethodsMap[id]?.name ?? id,
+                                  )
                                       .toList(),
                                   averageRating: _averageRating,
                                   reviewCount: _reviewCount,
@@ -366,7 +384,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                             shimmerAnim: _shimmerAnim,
                             loadingPaymentMethods: _loadingPaymentMethods,
                             effectivePaymentMethodIds:
-                                _effectivePaymentMethodIds,
+                            _effectivePaymentMethodIds,
                             paymentMethodsMap: _paymentMethodsMap,
                             getPaymentMethodNames: _getPaymentMethodNames,
                           ),
@@ -478,7 +496,8 @@ class _HeroHeader extends StatelessWidget {
               const SizedBox(width: 6),
               // Status pill — solid fill
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
                   color: statusColor,
                   borderRadius: BorderRadius.circular(10),
@@ -560,7 +579,7 @@ class _HeroHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              // Market rate badge — solid fill
+              // Market rate badge
               const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -737,7 +756,7 @@ class _DetailsCard extends StatelessWidget {
                     style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -760,9 +779,7 @@ class _DetailsCard extends StatelessWidget {
   }
 }
 
-// ─── Reviews Card ─────────────────────────────────────────────────────────────
-
-// Trade Button ─────────────────────────────────────────────────────────────
+// ─── Trade Button ─────────────────────────────────────────────────────────────
 
 class _TradeButton extends StatefulWidget {
   const _TradeButton({
@@ -1020,7 +1037,7 @@ class _DetailRow extends StatelessWidget {
   );
 }
 
-// Payment Method Chip ──────────────────────────────────────────────────────
+// ─── Payment Method Chip ──────────────────────────────────────────────────────
 
 class _PaymentMethodChip extends StatelessWidget {
   const _PaymentMethodChip({required this.c, required this.method});
@@ -1265,5 +1282,3 @@ class _MerchantCardSkeleton extends StatelessWidget {
     );
   }
 }
-
-

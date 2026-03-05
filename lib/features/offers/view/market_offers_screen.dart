@@ -8,6 +8,7 @@ import 'package:next_fi/features/offers/view/trade_screen.dart';
 import 'package:next_fi/features/offers/view/widgets/public_offer_tile.dart';
 import 'package:next_fi/features/price_chart/model/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
+import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
@@ -15,6 +16,111 @@ import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:provider/provider.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPOGRAPHY TOKENS  (mirrors public_offer_tile.dart _T)
+// ─────────────────────────────────────────────────────────────────────────────
+
+abstract class _T {
+  static const screenTitle = TextStyle(
+    fontSize: 26,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.8,
+    height: 1.1,
+  );
+
+  static const screenSubtitle = TextStyle(
+    fontSize: 12.5,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.4,
+  );
+
+  static const label = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 0.8,
+    height: 1.0,
+  );
+
+  static const pulsePair = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
+    height: 1.3,
+  );
+
+  static const pulsePrice = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.4,
+    height: 1.1,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  static const pulseChange = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    height: 1.3,
+  );
+
+  static const toggleLabel = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.4,
+    height: 1.0,
+  );
+
+  static const offerCount = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.1,
+    height: 1.3,
+  );
+
+  static const emptyTitle = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.3,
+    height: 1.3,
+  );
+
+  static const emptyBody = TextStyle(
+    fontSize: 12.5,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.5,
+  );
+
+  static const errorTitle = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.3,
+    height: 1.3,
+  );
+
+  static const errorBody = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.5,
+  );
+
+  static const retryButton = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.2,
+    height: 1.0,
+  );
+
+  static const pulseTab = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.3,
+    height: 1.0,
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKET OFFERS SCREEN — P2P Marketplace
@@ -31,6 +137,8 @@ class MarketOffersScreen extends StatefulWidget {
 class _MarketOffersScreenState extends State<MarketOffersScreen>
     with TickerProviderStateMixin {
   final _offersCore = OffersCoreService.I;
+
+  late final AssetVM _assetVm;
   late final PriceChartVM _xlmPriceVm;
   late final PriceChartVM _usdcPriceVm;
   late final VoidCallback _priceListener;
@@ -39,6 +147,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   String? _error;
   OfferType _selectedType = OfferType.buy;
   List<OfferModel> _offers = const [];
+
   SeedKeypairVM? _seedVm;
   StellarWalletServices? _stellarSvc;
   String? _lastBoundAddress;
@@ -48,7 +157,6 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   late final AnimationController _enterCtrl;
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
-
   late final AnimationController _shimmerCtrl;
   late final Animation<double> _shimmerAnim;
 
@@ -56,6 +164,8 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   void initState() {
     super.initState();
     final currency = context.read<CurrencyVM>();
+
+    _assetVm = AssetVM(currency);
     _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
     _usdcPriceVm = PriceChartVM(currency, initialToken: PriceToken.usdc);
     _priceListener = () {
@@ -63,6 +173,8 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     };
     _xlmPriceVm.addListener(_priceListener);
     _usdcPriceVm.addListener(_priceListener);
+    _assetVm.addListener(_priceListener);
+
     _seedVm = context.read<SeedKeypairVM>();
     _stellarSvc = context.read<StellarWalletServices>();
     _lastBoundAddress = _seedVm?.accountId;
@@ -71,19 +183,19 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
     _enterCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 400),
     );
     _fadeAnim = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic));
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.025), end: Offset.zero)
+        .animate(CurvedAnimation(
+        parent: _enterCtrl, curve: Curves.easeOutCubic));
 
     _shimmerCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     )..repeat();
-    _shimmerAnim = CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear);
+    _shimmerAnim =
+        CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear);
 
     _load();
   }
@@ -93,8 +205,10 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     _seedVm?.removeListener(_onActiveWalletChanged);
     _xlmPriceVm.removeListener(_priceListener);
     _usdcPriceVm.removeListener(_priceListener);
+    _assetVm.removeListener(_priceListener);
     _xlmPriceVm.dispose();
     _usdcPriceVm.dispose();
+    _assetVm.dispose();
     _enterCtrl.dispose();
     _shimmerCtrl.dispose();
     super.dispose();
@@ -111,26 +225,21 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   Future<bool> _activeAddressHasUsdcTrustline() async {
     final seedVm = _seedVm ?? context.read<SeedKeypairVM>();
     var accountId = seedVm.accountId?.trim();
-
     if (accountId == null || accountId.isEmpty) {
       await seedVm.refresh();
       accountId = seedVm.accountId?.trim();
     }
     if (accountId == null || accountId.isEmpty) return false;
-
     if (_lastTrustlineCheckedAddress == accountId) {
       return _lastHasUsdcTrustline;
     }
-
     final stellar = _stellarSvc;
     if (stellar == null) return false;
     try {
-      final hasTrustline = await stellar.accountService.hasUsdcTrustline(
-        accountId,
-      );
+      final has = await stellar.accountService.hasUsdcTrustline(accountId);
       _lastTrustlineCheckedAddress = accountId;
-      _lastHasUsdcTrustline = hasTrustline;
-      return hasTrustline;
+      _lastHasUsdcTrustline = has;
+      return has;
     } catch (_) {
       _lastTrustlineCheckedAddress = accountId;
       _lastHasUsdcTrustline = false;
@@ -144,18 +253,18 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
       _error = null;
     });
     try {
-      final hasUsdcTrustline = await _activeAddressHasUsdcTrustline();
+      final hasUsdc = await _activeAddressHasUsdcTrustline();
       final offers = await _offersCore.listPublic(
-        query: OffersListQuery(type: _selectedType, page: '1', limit: '50'),
+        query: OffersListQuery(
+            type: _selectedType, page: '1', limit: '50'),
       );
-      final filteredOffers = offers.where((offer) {
-        final asset = offer.asset.trim().toUpperCase();
-        if (asset != 'USDC') return true;
-        return hasUsdcTrustline;
+      final filtered = offers.where((o) {
+        final asset = o.asset.trim().toUpperCase();
+        return asset != 'USDC' || hasUsdc;
       }).toList();
       if (!mounted) return;
       setState(() {
-        _offers = filteredOffers;
+        _offers = filtered;
         _loading = false;
       });
       _enterCtrl.forward(from: 0);
@@ -179,29 +288,6 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     HapticFeedback.selectionClick();
     setState(() => _selectedType = type);
     _load();
-  }
-
-  Future<void> _openOfferDetails(OfferModel offer) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColor.of(context).surface,
-      builder: (_) => OfferDetailsModal(
-        offer: offer,
-        marketPrice: _offerEffectivePrice(offer),
-        onTradeNow: () {
-          Navigator.of(context).pop();
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => TradeScreen(
-                offer: offer,
-                marketPrice: _rawPriceForAsset(offer.asset),
-              ),
-            ),
-          );
-        },
-      ),
-    );
   }
 
   bool _hasTrustedVmRates() {
@@ -228,15 +314,13 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     if (!live.isFinite || live <= 0) return null;
     final margin = offer.marginPercent ?? 0.0;
     final isMerchantSell = offer.type == OfferType.sell;
-    final factor = isMerchantSell
-        ? (1.0 + margin / 100.0)
-        : (1.0 - margin / 100.0);
+    final factor =
+    isMerchantSell ? (1.0 + margin / 100.0) : (1.0 - margin / 100.0);
     return '${_formatFiat(fiatCode, live * factor)} $fiatCode';
   }
 
   double? _rawPriceForAsset(String assetCode) {
-    final code = assetCode.trim().toUpperCase();
-    final vm = switch (code) {
+    final vm = switch (assetCode.trim().toUpperCase()) {
       'XLM' => _xlmPriceVm,
       'USDC' => _usdcPriceVm,
       _ => null,
@@ -248,8 +332,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
   bool _priceLoadingFor(OfferModel offer) {
     if (!_hasTrustedVmRates()) return false;
-    final code = offer.asset.trim().toUpperCase();
-    final vm = switch (code) {
+    final vm = switch (offer.asset.trim().toUpperCase()) {
       'XLM' => _xlmPriceVm,
       'USDC' => _usdcPriceVm,
       _ => null,
@@ -266,11 +349,32 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     return _priceLoadingFor(offer);
   }
 
-  String _formatFiat(String fiatCode, double value, {int? decimalDigits}) {
-    return NumberFormat.simpleCurrency(
-      name: fiatCode,
-      decimalDigits: decimalDigits,
-    ).format(value);
+  String _formatFiat(String fiatCode, double value, {int? decimalDigits}) =>
+      NumberFormat.simpleCurrency(
+          name: fiatCode, decimalDigits: decimalDigits)
+          .format(value);
+
+  Future<void> _openOfferDetails(OfferModel offer) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColor.of(context).surface,
+      builder: (_) => OfferDetailsModal(
+        offer: offer,
+        marketPrice: _offerEffectivePrice(offer),
+        onTradeNow: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => TradeScreen(
+                offer: offer,
+                marketPrice: _rawPriceForAsset(offer.asset),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -284,87 +388,77 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _Header(c: c),
-            _PriceStrip(c: c, xlmVm: _xlmPriceVm, usdcVm: _usdcPriceVm),
+            const SizedBox(height: 16),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _MarketPulseStrip(
+                c: c,
+                xlmVm: _xlmPriceVm,
+                usdcVm: _usdcPriceVm,
+                assetVm: _assetVm,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _TypeToggle(
                 c: c,
                 selected: _selectedType,
                 onChanged: _onTypeChanged,
               ),
             ),
-
-            if (!_loading && _error == null && _offers.isNotEmpty)
+            if (!_loading && _error == null && _offers.isNotEmpty) ...[
+              const SizedBox(height: 14),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                child: Row(
-                  children: [
-                    Text(
-                      '${_offers.length} offer${_offers.length == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Container(height: 1, color: c.border)),
-                  ],
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _OfferCountRow(c: c, count: _offers.length),
               ),
-
-            const SizedBox(height: 10),
-
+            ],
+            const SizedBox(height: 12),
             Expanded(
               child: _loading
                   ? _SkeletonList(c: c)
                   : _error != null
                   ? _ErrorState(c: c, error: _error!, onRetry: _load)
                   : RefreshIndicator(
-                      color: c.primary,
-                      onRefresh: _load,
-                      child: _offers.isEmpty
-                          ? ListView(
-                              children: [
-                                _EmptyState(c: c, type: _selectedType),
-                              ],
-                            )
-                          : FadeTransition(
-                              opacity: _fadeAnim,
-                              child: SlideTransition(
-                                position: _slideAnim,
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    0,
-                                    20,
-                                    32,
-                                  ),
-                                  itemCount: _offers.length,
-                                  itemBuilder: (_, i) {
-                                    final offer = _offers[i];
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 10,
-                                      ),
-                                      child: PublicOfferTile(
-                                        c: c,
-                                        offer: offer,
-                                        marketPrice: _offerEffectivePrice(
-                                          offer,
-                                        ),
-                                        priceLoading: _priceLoadingFor(offer),
-                                        enabled: _offerEnabled(offer),
-                                        shimmerAnim: _shimmerAnim,
-                                        onTap: () => _openOfferDetails(offer),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
+                color: c.primary,
+                onRefresh: _load,
+                child: _offers.isEmpty
+                    ? ListView(children: [
+                  _EmptyState(c: c, type: _selectedType),
+                ])
+                    : FadeTransition(
+                  opacity: _fadeAnim,
+                  child: SlideTransition(
+                    position: _slideAnim,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(
+                          20, 0, 20, 32),
+                      itemCount: _offers.length,
+                      itemBuilder: (_, i) {
+                        final offer = _offers[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                              bottom: 12),
+                          child: PublicOfferTile(
+                            c: c,
+                            offer: offer,
+                            assetVm: _assetVm,
+                            marketPrice:
+                            _offerEffectivePrice(offer),
+                            priceLoading:
+                            _priceLoadingFor(offer),
+                            enabled: _offerEnabled(offer),
+                            shimmerAnim: _shimmerAnim,
+                            onTap: () =>
+                                _openOfferDetails(offer),
+                          ),
+                        );
+                      },
                     ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -385,184 +479,300 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (canPop) ...[
-            _IconBtn(
-              c: c,
-              icon: Icons.arrow_back_ios_new_rounded,
-              onTap: () => Navigator.of(context).pop(),
-            ),
-            const SizedBox(width: 10),
+            _BackButton(c: c),
+            const SizedBox(width: 12),
           ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'P2P Marketplace',
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 26,
-                    letterSpacing: -0.8,
-                    height: 1.1,
-                  ),
+                  style: _T.screenTitle.copyWith(color: c.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
                 const SizedBox(height: 3),
                 Text(
                   'Trade directly with other users',
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: -0.1,
-                  ),
+                  style: _T.screenSubtitle.copyWith(color: c.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
-          _LiveDot(c: c),
+          const SizedBox(width: 12),
+          _LiveBadge(c: c),
         ],
       ),
     );
   }
 }
 
-// ─── Live Dot ─────────────────────────────────────────────────────────────────
-
-class _LiveDot extends StatefulWidget {
-  const _LiveDot({required this.c});
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.c});
   final AppColor c;
-
-  @override
-  State<_LiveDot> createState() => _LiveDotState();
-}
-
-class _LiveDotState extends State<_LiveDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.c;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: c.success, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            'LIVE',
-            style: TextStyle(
-              color: c.success,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Icon Button ──────────────────────────────────────────────────────────────
-
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.c, required this.icon, required this.onTap});
-  final AppColor c;
-  final IconData icon;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
+    onTap: () => Navigator.of(context).pop(),
     child: Container(
       width: 38,
       height: 38,
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(11),
         border: Border.all(color: c.border),
       ),
-      child: Icon(icon, size: 17, color: c.textSecondary),
+      child: Icon(
+        Icons.arrow_back_ios_new_rounded,
+        size: 15,
+        color: c.textSecondary,
+      ),
+    ),
+  );
+}
+
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding:
+    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: c.success.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: c.success.withValues(alpha: 0.25)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration:
+          BoxDecoration(color: c.success, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          'LIVE',
+          style: _T.label.copyWith(color: c.success),
+        ),
+      ],
     ),
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LIVE PRICE STRIP
+// OFFER COUNT ROW
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PriceStrip extends StatelessWidget {
-  const _PriceStrip({
+class _OfferCountRow extends StatelessWidget {
+  const _OfferCountRow({required this.c, required this.count});
+  final AppColor c;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Text(
+        '$count offer${count == 1 ? '' : 's'}',
+        style: _T.offerCount.copyWith(color: c.textSecondary),
+      ),
+      const SizedBox(width: 8),
+      Expanded(child: Container(height: 1, color: c.border)),
+    ],
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKET PULSE STRIP
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MarketPulseStrip extends StatelessWidget {
+  const _MarketPulseStrip({
     required this.c,
     required this.xlmVm,
     required this.usdcVm,
+    required this.assetVm,
   });
   final AppColor c;
   final PriceChartVM xlmVm;
   final PriceChartVM usdcVm;
+  final AssetVM assetVm;
 
   @override
   Widget build(BuildContext context) {
     final xlm = xlmVm.priceNow;
     final usdc = usdcVm.priceNow;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Card
+        Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: c.border.withValues(alpha: 0.6)),
+          ),
+          child: Row(
+            children: [
+              _PulseCell(
+                c: c,
+                logoUrl: assetVm.logoFor('xlm'),
+                token: 'XLM',
+                fiat: xlmVm.fiatCode,
+                price: (xlm.isFinite && xlm > 0)
+                    ? NumberFormat.simpleCurrency(
+                    name: xlmVm.fiatCode, decimalDigits: 4)
+                    .format(xlm)
+                    : '--',
+                changePercent:
+                assetVm.findAsset('xlm')?.priceChangePercent24h,
+              ),
+              Container(
+                  width: 1, height: 52, color: c.border.withValues(alpha: 0.5)),
+              _PulseCell(
+                c: c,
+                logoUrl: assetVm.logoFor('usdc'),
+                token: 'USDC',
+                fiat: usdcVm.fiatCode,
+                price: (usdc.isFinite && usdc > 0)
+                    ? NumberFormat.simpleCurrency(
+                    name: usdcVm.fiatCode, decimalDigits: 4)
+                    .format(usdc)
+                    : '--',
+                changePercent:
+                assetVm.findAsset('usdc')?.priceChangePercent24h,
+              ),
+            ],
+          ),
         ),
+        // Floating "Market Pulse" tab
+        Positioned(
+          top: -10,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: c.border.withValues(alpha: 0.7)),
+              ),
+              child: Text(
+                'MARKET PULSE',
+                style: _T.pulseTab.copyWith(color: c.textSecondary),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PulseCell extends StatelessWidget {
+  const _PulseCell({
+    required this.c,
+    required this.logoUrl,
+    required this.token,
+    required this.fiat,
+    required this.price,
+    required this.changePercent,
+  });
+  final AppColor c;
+  final String logoUrl;
+  final String token;
+  final String fiat;
+  final String price;
+  final double? changePercent;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = changePercent;
+    final isPositive = pct == null || pct >= 0;
+    final pctColor = isPositive ? c.success : c.error;
+    final pctLabel = (pct == null || pct.isNaN)
+        ? null
+        : '${isPositive ? '+' : ''}${pct.toStringAsFixed(2)}%';
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
         child: Row(
           children: [
-            _PriceCell(
-              c: c,
-              token: 'XLM',
-              price: (xlm.isFinite && xlm > 0)
-                  ? NumberFormat.simpleCurrency(
-                      name: xlmVm.fiatCode,
-                      decimalDigits: 4,
-                    ).format(xlm)
-                  : '--',
-              fiat: xlmVm.fiatCode,
+            // Logo — rigid 30×30
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: c.background,
+                  border: Border.all(color: c.border),
+                ),
+                child: ClipOval(
+                  child: Image.network(
+                    logoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        token[0],
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            Container(width: 1, height: 28, color: c.border),
-            _PriceCell(
-              c: c,
-              token: 'USDC',
-              price: (usdc.isFinite && usdc > 0)
-                  ? NumberFormat.simpleCurrency(
-                      name: usdcVm.fiatCode,
-                      decimalDigits: 4,
-                    ).format(usdc)
-                  : '--',
-              fiat: usdcVm.fiatCode,
+            const SizedBox(width: 10),
+            // Text — expands, never overflows
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$token / $fiat',
+                    style: _T.pulsePair.copyWith(color: c.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    price,
+                    style: _T.pulsePrice.copyWith(color: c.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  if (pctLabel != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      pctLabel,
+                      style: _T.pulseChange.copyWith(color: pctColor),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
@@ -571,52 +781,8 @@ class _PriceStrip extends StatelessWidget {
   }
 }
 
-class _PriceCell extends StatelessWidget {
-  const _PriceCell({
-    required this.c,
-    required this.token,
-    required this.price,
-    required this.fiat,
-  });
-  final AppColor c;
-  final String token;
-  final String price;
-  final String fiat;
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Column(
-        children: [
-          Text(
-            price,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            '$token · $fiat',
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPE TOGGLE (Buy / Sell)
+// TYPE TOGGLE (BUY / SELL)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TypeToggle extends StatelessWidget {
@@ -631,33 +797,33 @@ class _TypeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isBuyTab = selected == OfferType.sell;
-    final isSellTab = selected == OfferType.buy;
+    final isBuy = selected == OfferType.sell;
+    final isSell = selected == OfferType.buy;
 
     return Container(
-      height: 42,
-      padding: const EdgeInsets.all(3),
+      height: 46,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border.withValues(alpha: 0.6)),
       ),
       child: Row(
         children: [
-          _ToggleOption(
+          _ToggleTab(
             c: c,
             label: 'BUY',
             icon: Icons.south_west_rounded,
-            active: isBuyTab,
+            active: isBuy,
             activeColor: c.success,
             onTap: () => onChanged(OfferType.sell),
           ),
-          const SizedBox(width: 3),
-          _ToggleOption(
+          const SizedBox(width: 4),
+          _ToggleTab(
             c: c,
             label: 'SELL',
             icon: Icons.north_east_rounded,
-            active: isSellTab,
+            active: isSell,
             activeColor: c.error,
             onTap: () => onChanged(OfferType.buy),
           ),
@@ -667,8 +833,8 @@ class _TypeToggle extends StatelessWidget {
   }
 }
 
-class _ToggleOption extends StatelessWidget {
-  const _ToggleOption({
+class _ToggleTab extends StatelessWidget {
+  const _ToggleTab({
     required this.c,
     required this.label,
     required this.icon,
@@ -688,28 +854,30 @@ class _ToggleOption extends StatelessWidget {
     child: GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? activeColor : c.surface,
+          color: active
+              ? activeColor
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: active ? c.onPrimary : c.textSecondary),
+            Icon(
+              icon,
+              size: 13,
+              color: active ? c.onPrimary : c.textSecondary,
+            ),
             const SizedBox(width: 6),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 180),
-              style: TextStyle(
+            Text(
+              label,
+              style: _T.toggleLabel.copyWith(
                 color: active ? c.onPrimary : c.textSecondary,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.5,
               ),
-              child: Text(label),
             ),
           ],
         ),
@@ -729,16 +897,18 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
     child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      padding:
+      const EdgeInsets.symmetric(horizontal: 24, vertical: 44),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withValues(alpha: 0.6)),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 52,
@@ -748,28 +918,20 @@ class _EmptyState extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: c.border),
             ),
-            child: Icon(
-              Icons.storefront_outlined,
-              color: c.textSecondary,
-              size: 24,
-            ),
+            child: Icon(Icons.storefront_outlined,
+                color: c.textSecondary, size: 22),
           ),
           const SizedBox(height: 16),
           Text(
             'No ${type == OfferType.sell ? 'buy' : 'sell'} offers right now',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-              letterSpacing: -0.3,
-            ),
+            style: _T.emptyTitle.copyWith(color: c.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
             'Pull down to refresh the marketplace.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5),
+            style: _T.emptyBody.copyWith(color: c.textSecondary),
           ),
         ],
       ),
@@ -802,49 +964,41 @@ class _ErrorState extends StatelessWidget {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: c.background,
+              color: c.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: c.border),
+              border: Border.all(
+                  color: c.error.withValues(alpha: 0.2)),
             ),
-            child: Icon(Icons.cloud_off_rounded, color: c.error, size: 24),
+            child: Icon(Icons.cloud_off_rounded,
+                color: c.error, size: 22),
           ),
           const SizedBox(height: 16),
           Text(
-            'Couldn\'t load offers',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
-            ),
+            "Couldn't load offers",
+            style: _T.errorTitle.copyWith(color: c.textPrimary),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             error,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 12.5,
-              height: 1.5,
-            ),
+            style: _T.errorBody.copyWith(color: c.textSecondary),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 20),
           GestureDetector(
             onTap: onRetry,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
                 color: c.primary,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 'Try again',
-                style: TextStyle(
-                  color: c.onPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                  letterSpacing: -0.2,
-                ),
+                style: _T.retryButton.copyWith(color: c.onPrimary),
               ),
             ),
           ),
@@ -872,10 +1026,8 @@ class _SkeletonListState extends State<_SkeletonList>
     vsync: this,
     duration: const Duration(milliseconds: 1100),
   )..repeat();
-  late final Animation<double> _anim = CurvedAnimation(
-    parent: _ctrl,
-    curve: Curves.linear,
-  );
+  late final Animation<double> _anim =
+  CurvedAnimation(parent: _ctrl, curve: Curves.linear);
 
   @override
   void dispose() {
@@ -889,117 +1041,113 @@ class _SkeletonListState extends State<_SkeletonList>
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: 5,
+      itemCount: 4,
       itemBuilder: (_, __) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: _SkeletonTile(c: c, shimmerAnim: _anim),
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _SkeletonTile(c: c, anim: _anim),
       ),
     );
   }
 }
 
 class _SkeletonTile extends StatelessWidget {
-  const _SkeletonTile({required this.c, required this.shimmerAnim});
+  const _SkeletonTile({required this.c, required this.anim});
   final AppColor c;
-  final Animation<double> shimmerAnim;
+  final Animation<double> anim;
 
-  Widget _box({required double w, required double h, required double r}) =>
-      _MarketShimmerBox(c: c, w: w, h: h, r: r, anim: shimmerAnim);
+  Widget _box(double w, double h, double r) =>
+      _ShimBox(c: c, w: w, h: h, r: r, anim: anim);
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _box(w: 42, h: 42, r: 12),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _box(w: 110, h: 13, r: 4),
-                    const SizedBox(height: 6),
-                    _box(w: 72, h: 10, r: 3),
-                  ],
-                ),
-              ),
-              _box(w: 60, h: 22, r: 7),
-            ],
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: c.surface,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: c.border.withValues(alpha: 0.6)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Merchant type skeleton
+        _box(72, 20, 5),
+        const SizedBox(height: 10),
+        // Merchant row
+        Row(children: [
+          _box(44, 44, 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _box(120, 12, 4),
+                  const SizedBox(height: 6),
+                  _box(80, 10, 3),
+                ]),
           ),
-          const SizedBox(height: 14),
-          Container(height: 1, color: c.border),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _box(w: 90, h: 16, r: 4),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        _box(w: 56, h: 10, r: 3),
-                        const SizedBox(width: 8),
-                        _box(w: 56, h: 10, r: 3),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              _box(w: 90, h: 36, r: 11),
-            ],
+        ]),
+        const SizedBox(height: 12),
+        Container(height: 1, color: c.border.withValues(alpha: 0.5)),
+        const SizedBox(height: 12),
+        // Asset row
+        Row(children: [
+          _box(36, 36, 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _box(100, 16, 4),
+                  const SizedBox(height: 6),
+                  _box(64, 11, 4),
+                ]),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _box(w: 48, h: 24, r: 7),
-              const SizedBox(width: 8),
-              _box(w: 64, h: 24, r: 7),
-              const Spacer(),
-              _box(w: 80, h: 18, r: 5),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+          _box(76, 36, 10),
+        ]),
+        const SizedBox(height: 12),
+        Container(height: 1, color: c.border.withValues(alpha: 0.5)),
+        const SizedBox(height: 12),
+        _box(140, 11, 3),
+        const SizedBox(height: 10),
+        // Action row
+        Row(children: [
+          Expanded(child: _box(double.infinity, 40, 10)),
+          const SizedBox(width: 8),
+          _box(100, 40, 10),
+        ]),
+      ],
+    ),
+  );
 }
 
-class _MarketShimmerBox extends StatelessWidget {
-  const _MarketShimmerBox({
+// ─────────────────────────────────────────────────────────────────────────────
+// SHIMMER BOX  (local — mirrors the one in public_offer_tile.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ShimBox extends StatelessWidget {
+  const _ShimBox({
     required this.c,
     required this.w,
     required this.h,
     required this.r,
     required this.anim,
   });
-
   final AppColor c;
-  final double w;
-  final double h;
-  final double r;
+  final double w, h, r;
   final Animation<double> anim;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = isDark
-        ? c.border.withValues(alpha: 0.52)
+        ? c.border.withValues(alpha: 0.5)
         : c.background.withValues(alpha: 0.98);
     final highlight = isDark
-        ? c.textPrimary.withValues(alpha: 0.20)
-        : c.onPrimary.withValues(alpha: 0.72);
-
+        ? c.textPrimary.withValues(alpha: 0.16)
+        : c.onPrimary.withValues(alpha: 0.65);
     return ClipRRect(
       borderRadius: BorderRadius.circular(r),
       child: SizedBox(
@@ -1012,30 +1160,28 @@ class _MarketShimmerBox extends StatelessWidget {
             AnimatedBuilder(
               animation: anim,
               builder: (_, __) {
-                final bandWidth = w * 0.52;
-                final travel = w + (bandWidth * 2);
-                final left = (travel * anim.value) - bandWidth;
-                return Stack(
-                  children: [
-                    Positioned(
-                      left: left,
-                      top: 0,
-                      bottom: 0,
-                      width: bandWidth,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              highlight.withValues(alpha: 0),
-                              highlight,
-                              highlight.withValues(alpha: 0),
-                            ],
-                          ),
+                final band = w * 0.5;
+                final travel = w + band * 2;
+                final left = travel * anim.value - band;
+                return Stack(children: [
+                  Positioned(
+                    left: left,
+                    top: 0,
+                    bottom: 0,
+                    width: band,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            highlight.withValues(alpha: 0),
+                            highlight,
+                            highlight.withValues(alpha: 0),
+                          ],
                         ),
                       ),
                     ),
-                  ],
-                );
+                  ),
+                ]);
               },
             ),
           ],

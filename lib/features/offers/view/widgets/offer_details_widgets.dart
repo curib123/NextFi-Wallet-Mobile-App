@@ -15,6 +15,8 @@ class MerchantInfoSection extends StatelessWidget {
     required this.getTierLabel,
     required this.getTierColor,
     required this.getTierIcon,
+    required this.getTypeLabel,
+    required this.getTypeIcon,
     required this.getAvailabilityLabel,
     required this.getAvailabilityColor,
     required this.paymentMethodIds,
@@ -28,6 +30,8 @@ class MerchantInfoSection extends StatelessWidget {
   final String Function(MerchantTier) getTierLabel;
   final Color Function(MerchantTier) getTierColor;
   final IconData Function(MerchantTier) getTierIcon;
+  final String Function(MerchantType) getTypeLabel;
+  final IconData Function(MerchantType) getTypeIcon;
   final String Function(SellerAvailability) getAvailabilityLabel;
   final Color Function(SellerAvailability) getAvailabilityColor;
   final List<String> paymentMethodIds;
@@ -35,13 +39,23 @@ class MerchantInfoSection extends StatelessWidget {
   final int? reviewCount;
   final bool loadingReviews;
 
+  /// Returns true only for known, displayable merchant types.
+  bool _isKnownType(MerchantType t) =>
+      t == MerchantType.individual || t == MerchantType.business;
+
   @override
   Widget build(BuildContext context) {
-    final tierColor = getTierColor(profile.tier);
-    final tierLabel = getTierLabel(profile.tier);
-    final tierIcon = getTierIcon(profile.tier);
+    final tierColor  = getTierColor(profile.tier);
+    final tierLabel  = getTierLabel(profile.tier);
+    final tierIcon   = getTierIcon(profile.tier);
     final availColor = getAvailabilityColor(profile.availability);
     final availLabel = getAvailabilityLabel(profile.availability);
+
+    // Only resolve type label/icon when the type is known — avoids showing
+    // 'UNKNOWN' badge for merchants with an unrecognised type value.
+    final showTypeBadge = _isKnownType(profile.type);
+    final typeLabel = showTypeBadge ? getTypeLabel(profile.type) : null;
+    final typeIcon  = showTypeBadge ? getTypeIcon(profile.type)  : null;
 
     return Container(
       width: double.infinity,
@@ -85,12 +99,9 @@ class MerchantInfoSection extends StatelessWidget {
                 ),
                 const Spacer(),
 
-                // Tier badge — solid fill
+                // ── Tier badge
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: tierColor,
                     borderRadius: BorderRadius.circular(6),
@@ -113,9 +124,38 @@ class MerchantInfoSection extends StatelessWidget {
                   ),
                 ),
 
+                // ── Merchant type badge — only shown for known types
+                if (showTypeBadge && typeLabel != null && typeIcon != null) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: c.info.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: c.info.withValues(alpha: 0.30)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(typeIcon, size: 10, color: c.info),
+                        const SizedBox(width: 4),
+                        Text(
+                          typeLabel,
+                          style: TextStyle(
+                            color: c.info,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(width: 10),
 
-                // Availability
+                // ── Availability
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -339,16 +379,8 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
       animation: _a,
       builder: (_, __) {
         final skeletonColor = isLight
-            ? Color.lerp(
-                c.border,
-                c.border,
-                _a.value,
-              )!
-            : Color.lerp(
-                c.textPrimary,
-                c.textPrimary,
-                _a.value,
-              )!;
+            ? Color.lerp(c.border, c.border, _a.value)!
+            : Color.lerp(c.textPrimary, c.textPrimary, _a.value)!;
 
         Widget box({required double w, required double h, required double r}) =>
             Container(
@@ -371,7 +403,7 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header bar
+              // Header bar: icon · label · spacer · tier · type · availability
               Row(
                 children: [
                   box(w: 28, h: 28, r: 8),
@@ -379,6 +411,8 @@ class _MerchantInfoSkeletonState extends State<MerchantInfoSkeleton>
                   box(w: 70, h: 13, r: 4),
                   const Spacer(),
                   box(w: 52, h: 22, r: 6),
+                  const SizedBox(width: 6),
+                  box(w: 68, h: 22, r: 6),
                   const SizedBox(width: 10),
                   box(w: 64, h: 16, r: 5),
                 ],
@@ -542,12 +576,12 @@ class ReviewsSection extends StatelessWidget {
                     .entries
                     .map(
                       (e) => Padding(
-                        padding: EdgeInsets.only(
-                          bottom: e.key < recent.length - 1 ? 10 : 0,
-                        ),
-                        child: ReviewItem(c: c, review: e.value),
-                      ),
-                    )
+                    padding: EdgeInsets.only(
+                      bottom: e.key < recent.length - 1 ? 10 : 0,
+                    ),
+                    child: ReviewItem(c: c, review: e.value),
+                  ),
+                )
                     .toList(),
               ),
             ),
@@ -594,7 +628,7 @@ class ReviewItem extends StatelessWidget {
               Row(
                 children: List.generate(
                   5,
-                  (i) => Padding(
+                      (i) => Padding(
                     padding: const EdgeInsets.only(right: 2),
                     child: Icon(
                       i < review.rating
@@ -671,7 +705,7 @@ class _InlineRatingStars extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(
         5,
-        (i) => Padding(
+            (i) => Padding(
           padding: EdgeInsets.only(right: i < 4 ? 1 : 0),
           child: Icon(
             i < filled ? Icons.star_rounded : Icons.star_outline_rounded,

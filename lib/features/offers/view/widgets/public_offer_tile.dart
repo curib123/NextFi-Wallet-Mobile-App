@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
@@ -7,6 +8,84 @@ import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offer_payment_method/offer_payment_method_core_service.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/reviews/reviews_core_service.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPOGRAPHY TOKENS
+// ─────────────────────────────────────────────────────────────────────────────
+
+abstract class _T {
+  static const assetName = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.5,
+    height: 1.1,
+  );
+
+  static const assetPair = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.2,
+  );
+
+  static const price = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.2,
+    height: 1.1,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  static const merchantName = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.2,
+    height: 1.2,
+  );
+
+  static const caption = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.1,
+    height: 1.3,
+  );
+
+  static const captionBold = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.1,
+    height: 1.3,
+  );
+
+  static const micro = TextStyle(
+    fontSize: 9.5,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.3,
+    height: 1.2,
+  );
+
+  static const button = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 0.8,
+    height: 1.0,
+  );
+
+  static const rating = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0,
+    height: 1.3,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  static const available = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.3,
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC OFFER TILE
@@ -20,6 +99,7 @@ class PublicOfferTile extends StatefulWidget {
     required this.marketPrice,
     required this.onTap,
     required this.shimmerAnim,
+    required this.assetVm,
     this.priceLoading = false,
     this.enabled = true,
   });
@@ -29,6 +109,7 @@ class PublicOfferTile extends StatefulWidget {
   final String? marketPrice;
   final VoidCallback onTap;
   final Animation<double> shimmerAnim;
+  final AssetVM assetVm;
   final bool priceLoading;
   final bool enabled;
 
@@ -58,22 +139,19 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     super.initState();
     _pressCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 90),
-      reverseDuration: const Duration(milliseconds: 160),
+      duration: const Duration(milliseconds: 80),
+      reverseDuration: const Duration(milliseconds: 150),
     );
-    _scaleAnim = Tween<double>(
-      begin: 1.0,
-      end: 0.975,
-    ).animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut),
+    );
     _loadData();
   }
 
   @override
   void didUpdateWidget(covariant PublicOfferTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldSellerId = _resolveSellerId(oldWidget.offer);
-    final newSellerId = _resolveSellerId(widget.offer);
-    if (oldWidget.offer.id != widget.offer.id || oldSellerId != newSellerId) {
+    if (oldWidget.offer.id != widget.offer.id) {
       setState(() {
         _loadingMerchant = true;
         _loadingReviews = true;
@@ -90,23 +168,20 @@ class _PublicOfferTileState extends State<PublicOfferTile>
 
   Future<void> _loadData() async {
     await _loadMerchantProfile();
-    await Future.wait([
-      _loadReviews(),
-      _loadPaymentMethods(),
-    ]);
+    await Future.wait([_loadReviews(), _loadPaymentMethods()]);
   }
 
-  List<String> _resolveSellerIds(OfferModel offer, {MerchantProfileModel? profile}) {
+  List<String> _resolveSellerIds(OfferModel offer,
+      {MerchantProfileModel? profile}) {
     final ids = <String>[];
     void add(dynamic raw) {
       final v = raw?.toString().trim() ?? '';
-      if (v.isEmpty) return;
-      if (!ids.contains(v)) ids.add(v);
+      if (v.isEmpty || ids.contains(v)) return;
+      ids.add(v);
     }
 
     final seller = offer.seller;
     if (seller != null) {
-      // Prefer explicit user IDs first, then fallback to generic id.
       add(seller['userId']);
       add(seller['user_id']);
       add(seller['id']);
@@ -116,30 +191,6 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     add(profile?.id);
     return ids;
   }
-
-  String? _resolveSellerId(OfferModel offer) {
-    final ids = _resolveSellerIds(offer, profile: _merchantProfile);
-    return ids.isEmpty ? null : ids.first;
-  }
-
-  Future<void> _loadPaymentMethods() async {
-    try {
-      final methods = await _offerPaymentCore.getPaymentMethodsForOffer(
-        widget.offer.id,
-      );
-      if (mounted) {
-        setState(() {
-          _paymentMethodsMap = {for (final m in methods) m.id: m};
-          _loadingPaymentMethods = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loadingPaymentMethods = false);
-    }
-  }
-
-  String _paymentNames(List<String> ids) =>
-      ids.map((id) => _paymentMethodsMap[id]?.name ?? id).take(3).join(' · ');
 
   Future<void> _loadMerchantProfile() async {
     final ids = _resolveSellerIds(widget.offer);
@@ -155,16 +206,12 @@ class _PublicOfferTileState extends State<PublicOfferTile>
           profile = candidate;
           break;
         }
-      } catch (_) {
-        // try next id candidate
-      }
+      } catch (_) {}
     }
     if (mounted) {
       setState(() {
         _merchantProfile = profile;
-        if (profile?.avgRating != null) {
-          _averageRating = profile!.avgRating;
-        }
+        if (profile?.avgRating != null) _averageRating = profile!.avgRating;
         _loadingMerchant = false;
       });
     }
@@ -180,7 +227,8 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       final summary = await _reviewsCore.getOfferRatingSummary(offerId);
       if (mounted) {
         setState(() {
-          _averageRating = summary.averageRating ?? _merchantProfile?.avgRating;
+          _averageRating =
+              summary.averageRating ?? _merchantProfile?.avgRating;
           _reviewCount = summary.reviewCount;
           _loadingReviews = false;
         });
@@ -189,124 +237,107 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       if (mounted) {
         setState(() {
           _averageRating = _merchantProfile?.avgRating;
-          _reviewCount = 0;
           _loadingReviews = false;
         });
       }
     }
   }
 
-  bool get _isBuy => widget.offer.type == OfferType.sell;
+  Future<void> _loadPaymentMethods() async {
+    try {
+      final methods =
+      await _offerPaymentCore.getPaymentMethodsForOffer(widget.offer.id);
+      if (mounted) {
+        setState(() {
+          _paymentMethodsMap = {for (final m in methods) m.id: m};
+          _loadingPaymentMethods = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingPaymentMethods = false);
+    }
+  }
 
+  bool get _isBuy => widget.offer.type == OfferType.sell;
   Color get _typeColor => _isBuy ? widget.c.success : widget.c.error;
 
-  Color _statusColor(String s) => switch (s.toUpperCase()) {
-    'ACTIVE' => widget.c.success,
-    'PAUSED' => widget.c.warning,
-    'COMPLETED' => widget.c.primary,
-    'CANCELLED' => widget.c.error,
-    _ => widget.c.textSecondary,
-  };
+  String _formatCount(int n) =>
+      n >= 1000 ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k' : '$n';
+
+  List<PaymentMethodModel> get _resolvedMethods {
+    final ids = _paymentMethodsMap.isNotEmpty
+        ? _paymentMethodsMap.keys.toList()
+        : widget.offer.paymentMethodIds;
+    return ids
+        .map((id) => _paymentMethodsMap[id])
+        .whereType<PaymentMethodModel>()
+        .toList();
+  }
+
+  String _fallbackPaymentNames() {
+    final ids = _paymentMethodsMap.isNotEmpty
+        ? _paymentMethodsMap.keys.toList()
+        : widget.offer.paymentMethodIds;
+    return ids
+        .map((id) => _paymentMethodsMap[id]?.name ?? id)
+        .take(2)
+        .join(', ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
     final offer = widget.offer;
     final typeColor = _typeColor;
-    final statusText = offer.status?.name.toUpperCase() ?? 'UNKNOWN';
-    final enabled = widget.enabled;
+    final isBuy = _isBuy;
 
     return GestureDetector(
-      onTapDown: enabled ? (_) => _pressCtrl.forward() : null,
-      onTapUp: enabled
+      onTapDown: widget.enabled ? (_) => _pressCtrl.forward() : null,
+      onTapUp: widget.enabled
           ? (_) {
-              _pressCtrl.reverse();
-              widget.onTap();
-            }
+        _pressCtrl.reverse();
+        widget.onTap();
+      }
           : null,
-      onTapCancel: enabled ? () => _pressCtrl.reverse() : null,
+      onTapCancel: widget.enabled ? () => _pressCtrl.reverse() : null,
       child: ScaleTransition(
         scale: _scaleAnim,
         child: Opacity(
-          opacity: enabled ? 1.0 : 0.48,
+          opacity: widget.enabled ? 1.0 : 0.45,
           child: Container(
             decoration: BoxDecoration(
               color: c.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.border),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.border.withValues(alpha: 0.6)),
               boxShadow: [
                 BoxShadow(
-                  color: c.textPrimary.withValues(alpha: 0.06),
+                  color: c.textPrimary.withValues(alpha: 0.04),
                   blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: c.textPrimary.withValues(alpha: 0.03),
-                  blurRadius: 3,
-                  offset: const Offset(0, 1),
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ── 3px top accent bar
-                  Container(height: 3, color: typeColor),
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ── Merchant Row
-                        _MerchantRow(
-                          c: c,
-                          isBuy: _isBuy,
-                          typeColor: typeColor,
-                          statusText: statusText,
-                          statusColor: _statusColor(statusText),
-                          merchantProfile: _merchantProfile,
-                          loadingMerchant: _loadingMerchant,
-                          averageRating: _averageRating,
-                          reviewCount: _reviewCount,
-                          loadingReviews: _loadingReviews,
-                          shimmerAnim: widget.shimmerAnim,
-                        ),
-
-                        const SizedBox(height: 10),
-                        _SolidDivider(c: c),
-                        const SizedBox(height: 10),
-
-                        // ── Price Row
-                        _PriceRow(
-                          c: c,
-                          offer: offer,
-                          typeColor: typeColor,
-                          marketPrice: widget.marketPrice,
-                          priceLoading: widget.priceLoading,
-                          shimmerAnim: widget.shimmerAnim,
-                        ),
-
-                        const SizedBox(height: 10),
-                        _SolidDivider(c: c),
-                        const SizedBox(height: 10),
-
-                        // ── Footer Row
-                        _FooterRow(
-                          c: c,
-                          offer: offer,
-                          typeColor: typeColor,
-                          isBuy: _isBuy,
-                          loadingPaymentMethods: _loadingPaymentMethods,
-                          paymentMethodsMap: _paymentMethodsMap,
-                          paymentNames: _paymentNames,
-                          shimmerAnim: widget.shimmerAnim,
-                        ),
-                      ],
+                  if (!_loadingMerchant && _merchantProfile != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _MerchantTypeBadge(
+                          c: c, type: _merchantProfile!.type),
                     ),
-                  ),
+                  _buildMerchantRow(c),
+                  const SizedBox(height: 12),
+                  _Divider(c: c),
+                  const SizedBox(height: 12),
+                  _buildAssetPriceRow(c, offer, typeColor),
+                  const SizedBox(height: 12),
+                  _Divider(c: c),
+                  const SizedBox(height: 12),
+                  _buildFooter(c, offer, typeColor, isBuy),
                 ],
               ),
             ),
@@ -315,105 +346,264 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MERCHANT ROW
-// ─────────────────────────────────────────────────────────────────────────────
+  // ── MERCHANT ROW ────────────────────────────────────────────────────────────
 
-class _MerchantRow extends StatelessWidget {
-  const _MerchantRow({
-    required this.c,
-    required this.isBuy,
-    required this.typeColor,
-    required this.statusText,
-    required this.statusColor,
-    required this.merchantProfile,
-    required this.loadingMerchant,
-    required this.averageRating,
-    required this.reviewCount,
-    required this.loadingReviews,
-    required this.shimmerAnim,
-  });
-
-  final AppColor c;
-  final bool isBuy;
-  final Color typeColor;
-  final String statusText;
-  final Color statusColor;
-  final MerchantProfileModel? merchantProfile;
-  final bool loadingMerchant;
-  final double? averageRating;
-  final int reviewCount;
-  final bool loadingReviews;
-  final Animation<double> shimmerAnim;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildMerchantRow(AppColor c) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Direction badge
-        Container(
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: _loadingMerchant
+              ? _ShimBox(c: c, w: 44, h: 44, r: 22, anim: widget.shimmerAnim)
+              : _Avatar(c: c, profile: _merchantProfile),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _loadingMerchant
+              ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ShimBox(
+                  c: c, w: 120, h: 12, r: 4, anim: widget.shimmerAnim),
+              const SizedBox(height: 6),
+              _ShimBox(
+                  c: c, w: 80, h: 10, r: 3, anim: widget.shimmerAnim),
+            ],
+          )
+              : _merchantProfile != null
+              ? _MerchantInfo(
+            c: c,
+            profile: _merchantProfile!,
+            averageRating: _averageRating,
+            reviewCount: _reviewCount,
+            loadingReviews: _loadingReviews,
+            shimmerAnim: widget.shimmerAnim,
+            formatCount: _formatCount,
+          )
+              : Text(
+            'Unknown merchant',
+            style: _T.caption.copyWith(color: c.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── ASSET + PRICE ROW ───────────────────────────────────────────────────────
+
+  Widget _buildAssetPriceRow(AppColor c, OfferModel offer, Color typeColor) {
+    final logoUrl = widget.assetVm.logoFor(offer.asset);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
           width: 36,
           height: 36,
-          decoration: BoxDecoration(
-            color: c.background,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: c.border),
-          ),
-          child: Icon(
-            isBuy ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-            size: 16,
-            color: typeColor,
-          ),
+          child: _AssetLogo(c: c, logoUrl: logoUrl),
         ),
         const SizedBox(width: 10),
-
         Expanded(
-          child: loadingMerchant
-              ? _MerchantSkeleton(c: c, shimmerAnim: shimmerAnim)
-              : merchantProfile != null
-              ? _MerchantMeta(
-                  c: c,
-                  profile: merchantProfile!,
-                  averageRating: averageRating,
-                  reviewCount: reviewCount,
-                  loadingReviews: loadingReviews,
-                  shimmerAnim: shimmerAnim,
-                )
-              : Text(
-                  'Unknown merchant',
-                  style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-                ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: Text(
+                      offer.asset,
+                      style: _T.assetName.copyWith(color: c.textPrimary),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '/ ${offer.fiatCurrency.toUpperCase()}',
+                    style: _T.assetPair.copyWith(color: c.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Wrap(
+                spacing: 5,
+                runSpacing: 4,
+                children: [
+                  _SmallChip(c: c, label: 'Deal Limit'),
+                  if (offer.minAmount != null || offer.maxAmount != null)
+                    _SmallChip(
+                      c: c,
+                      label:
+                      'Min: ${offer.minAmount ?? "—"} · Max: ${offer.maxAmount ?? "—"}',
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
-
         const SizedBox(width: 10),
+        if (widget.priceLoading)
+          _ShimBox(c: c, w: 76, h: 36, r: 10, anim: widget.shimmerAnim)
+        else if (widget.marketPrice != null)
+          _PricePill(c: c, price: widget.marketPrice!, color: typeColor)
+        else
+          Text('—', style: _T.price.copyWith(color: c.textSecondary)),
+      ],
+    );
+  }
 
-        _Pill(
-          label: statusText,
-          textColor: c.onPrimary,
-          bg: statusColor,
-          fontSize: 9.5,
-          weight: FontWeight.w800,
+  // ── FOOTER ──────────────────────────────────────────────────────────────────
+
+  Widget _buildFooter(
+      AppColor c, OfferModel offer, Color typeColor, bool isBuy) {
+    final methods = _resolvedMethods;
+    final fallback = _fallbackPaymentNames();
+    final rate = offer.successRate;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // FIX: All variable-width children are now wrapped in Expanded so
+        // the Row always has a finite main-axis upper bound. Previously,
+        // Flexible children inside this Row could receive unbounded width
+        // when availableQty was null (no Expanded sibling existed), causing
+        // "BoxConstraints forces an infinite width".
+        Row(
+          children: [
+            if (offer.availableQty != null) ...[
+              Icon(Icons.layers_outlined, size: 12, color: c.textSecondary),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Available: ${offer.availableQty} ${offer.asset}',
+                  style: _T.available.copyWith(color: c.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (_loadingPaymentMethods)
+              _ShimBox(c: c, w: 72, h: 11, r: 3, anim: widget.shimmerAnim)
+            else if (methods.isNotEmpty)
+              Expanded(
+                child: _PaymentMethodChip(c: c, method: methods.first),
+              )
+            else if (fallback.isNotEmpty)
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.account_balance_wallet_outlined,
+                          size: 12, color: c.textSecondary),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          fallback,
+                          style: _T.caption.copyWith(color: c.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
         ),
+
+        const SizedBox(height: 10),
+
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: _ActionButton(
+                c: c,
+                label: isBuy ? 'BUY' : 'SELL',
+                color: typeColor,
+              ),
+            ),
+            if (rate != null) ...[
+              const SizedBox(width: 8),
+              _ReliabilityChip(c: c, rate: rate),
+            ],
+          ],
+        ),
+
+        if (!_loadingPaymentMethods && methods.length > 1) ...[
+          const SizedBox(height: 8),
+          _ExtraPaymentRow(c: c, methods: methods),
+        ],
       ],
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MERCHANT META
+// AVATAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MerchantMeta extends StatelessWidget {
-  const _MerchantMeta({
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.c, required this.profile});
+  final AppColor c;
+  final MerchantProfileModel? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = profile != null && profile!.displayName.isNotEmpty
+        ? profile!.displayName
+        .trim()
+        .split(' ')
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join()
+        : '?';
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: c.background,
+        shape: BoxShape.circle,
+        border: Border.all(color: c.border),
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MERCHANT INFO
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MerchantInfo extends StatelessWidget {
+  const _MerchantInfo({
     required this.c,
     required this.profile,
     required this.averageRating,
     required this.reviewCount,
     required this.loadingReviews,
     required this.shimmerAnim,
+    required this.formatCount,
   });
 
   final AppColor c;
@@ -422,828 +612,539 @@ class _MerchantMeta extends StatelessWidget {
   final int reviewCount;
   final bool loadingReviews;
   final Animation<double> shimmerAnim;
+  final String Function(int) formatCount;
 
   static const _tierLabel = {
-    MerchantTier.bronze: 'BRONZE',
-    MerchantTier.silver: 'SILVER',
-    MerchantTier.gold: 'GOLD',
-    MerchantTier.platinum: 'PLATINUM',
-    MerchantTier.diamond: 'DIAMOND',
+    MerchantTier.bronze: 'Bronze',
+    MerchantTier.silver: 'Silver',
+    MerchantTier.gold: 'Gold',
+    MerchantTier.platinum: 'Platinum',
+    MerchantTier.diamond: 'Diamond',
   };
-  Map<MerchantTier, Color> get _tierColor => {
-    MerchantTier.diamond: c.info,
-    MerchantTier.platinum: c.textSecondary,
+
+  Map<MerchantTier, Color> _tierBg(AppColor c) => {
+    MerchantTier.bronze: const Color(0xFFCD7F32).withValues(alpha: 0.14),
+    MerchantTier.silver: c.textSecondary.withValues(alpha: 0.11),
+    MerchantTier.gold: c.warning.withValues(alpha: 0.14),
+    MerchantTier.platinum: c.info.withValues(alpha: 0.11),
+    MerchantTier.diamond: c.info.withValues(alpha: 0.14),
+  };
+
+  Map<MerchantTier, Color> _tierFg(AppColor c) => {
+    MerchantTier.bronze: const Color(0xFFCD7F32),
+    MerchantTier.silver: c.textSecondary,
     MerchantTier.gold: c.warning,
-    MerchantTier.silver: c.accent,
-    MerchantTier.bronze: c.error,
-  };
-  static const _tierIcon = {
-    MerchantTier.bronze: Icons.shield_outlined,
-    MerchantTier.silver: Icons.workspace_premium_outlined,
-    MerchantTier.gold: Icons.emoji_events_outlined,
-    MerchantTier.platinum: Icons.military_tech_outlined,
-    MerchantTier.diamond: Icons.diamond_outlined,
-  };
-  Map<SellerAvailability, Color> get _availColor => {
-    SellerAvailability.available: c.success,
-    SellerAvailability.unavailable: c.textSecondary,
-    SellerAvailability.onBreak: c.warning,
-    SellerAvailability.unknown: c.textSecondary,
-  };
-  static const _availLabel = {
-    SellerAvailability.available: 'Online',
-    SellerAvailability.unavailable: 'Offline',
-    SellerAvailability.onBreak: 'On Break',
-    SellerAvailability.unknown: 'Offline',
+    MerchantTier.platinum: c.info,
+    MerchantTier.diamond: c.info,
   };
 
   @override
   Widget build(BuildContext context) {
-    final tierColor = _tierColor[profile.tier]!;
-    final availColor = _availColor[profile.availability]!;
-    final availText = _availLabel[profile.availability]!;
+    // FIX: was [profile.tier]! — replaced with null-safe fallbacks
+    final tierBg = _tierBg(c)[profile.tier] ?? c.textSecondary.withValues(alpha: 0.11);
+    final tierFg = _tierFg(c)[profile.tier] ?? c.textSecondary;
+    final tierText = _tierLabel[profile.tier] ?? 'Unknown';
+
+    final isOnline = profile.availability == SellerAvailability.available;
+    final availColor = isOnline ? c.success : c.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // Name + tier badge
+        // ── Row 1: name + tier badge ─────────────────────────────────────────
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Flexible(
               child: Text(
                 profile.displayName,
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  letterSpacing: -0.4,
-                  height: 1.2,
-                ),
+                style: _T.merchantName.copyWith(color: c.textPrimary),
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
-            const SizedBox(width: 7),
-            _Pill(
-              label: _tierLabel[profile.tier]!,
-              textColor: c.onPrimary,
-              bg: tierColor,
-              icon: _tierIcon[profile.tier],
-              fontSize: 9,
-              weight: FontWeight.w700,
-            ),
+            const SizedBox(width: 6),
+            _TierBadge(c: c, bg: tierBg, fg: tierFg, label: tierText),
           ],
         ),
 
-        const SizedBox(height: 5),
+        const SizedBox(height: 4),
 
-        // Location · Rating · Availability
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (profile.country != null && profile.country!.isNotEmpty) ...[
-              Icon(Icons.place_outlined, size: 11, color: c.textSecondary),
-              const SizedBox(width: 2),
-              Text(
-                profile.country!,
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              _MetaDot(c: c),
-            ],
-            if (loadingReviews)
-              _SkimBox(c: c, w: 42, h: 10, r: 3, anim: shimmerAnim)
-            else ...[
-              _InlineRatingStars(c: c, rating: averageRating),
-              const SizedBox(width: 2),
-              Text(
-                averageRating == null ? '--' : averageRating!.toStringAsFixed(1),
-                style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Text(
-                '(${_formatCount(reviewCount)})',
-                style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              _MetaDot(c: c),
-            ],
-            // Availability dot + label
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: availColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              availText,
-              style: TextStyle(
-                color: availColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  String _formatCount(int n) => n >= 1000
-      ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k'
-      : '$n';
-}
-
-class _MerchantSkeleton extends StatelessWidget {
-  const _MerchantSkeleton({required this.c, required this.shimmerAnim});
-  final AppColor c;
-  final Animation<double> shimmerAnim;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _SkimBox(c: c, w: 120, h: 13, r: 4, anim: shimmerAnim),
-      const SizedBox(height: 7),
-      _SkimBox(c: c, w: 80, h: 10, r: 3, anim: shimmerAnim),
-    ],
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PRICE ROW
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PriceRow extends StatelessWidget {
-  const _PriceRow({
-    required this.c,
-    required this.offer,
-    required this.typeColor,
-    required this.marketPrice,
-    required this.priceLoading,
-    required this.shimmerAnim,
-  });
-
-  final AppColor c;
-  final OfferModel offer;
-  final Color typeColor;
-  final String? marketPrice;
-  final bool priceLoading;
-  final Animation<double> shimmerAnim;
-
-  String? get _marginBadge {
-    final m = offer.marginPercent;
-    if (m == null || m == 0) return null;
-    return '${m > 0 ? '+' : ''}${m.toStringAsFixed(1)}%';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPrice = marketPrice != null;
-    final margin = _marginBadge;
-
-    // Price chip
-    final priceChip = AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: hasPrice ? typeColor : c.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: hasPrice ? typeColor : c.border),
-      ),
-      child: hasPrice
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: c.onPrimary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 112),
-                  child: Text(
-                    marketPrice!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.onPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12.5,
-                      letterSpacing: -0.2,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : priceLoading
-          ? _SkimBox(c: c, w: 72, h: 13, r: 4, anim: shimmerAnim)
-          : Text(
-              '—',
-              style: TextStyle(
-                color: c.textSecondary,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                letterSpacing: 0.5,
-              ),
-            ),
-    );
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Pair + margin badge
-              Wrap(
-                spacing: 8,
-                runSpacing: 5,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: offer.asset,
-                          style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            height: 1.1,
-                          ),
-                        ),
-                        TextSpan(
-                          text: ' / ${offer.fiatCurrency.toUpperCase()}',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (margin != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: typeColor,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        margin,
-                        style: TextStyle(
-                          color: c.onPrimary,
-                          fontSize: 9.8,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.1,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 4),
-
-              // Min · Max limits
-              Wrap(
-                spacing: 8,
-                runSpacing: 2,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _LimitText(c: c, prefix: 'Min', value: offer.minAmount),
-                  Container(
-                    width: 3,
-                    height: 3,
-                    decoration: BoxDecoration(
-                      color: c.border,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  _LimitText(c: c, prefix: 'Max', value: offer.maxAmount),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(width: 8),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 148),
-          child: priceChip,
-        ),
-      ],
-    );
-  }
-}
-
-class _LimitText extends StatelessWidget {
-  const _LimitText({
-    required this.c,
-    required this.prefix,
-    required this.value,
-  });
-  final AppColor c;
-  final String prefix;
-  final dynamic value;
-
-  @override
-  Widget build(BuildContext context) => RichText(
-    text: TextSpan(
-      children: [
-        TextSpan(
-          text: '$prefix ',
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 10.8,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        TextSpan(
-          text: value != null ? '$value' : '—',
-          style: TextStyle(
-            color: value != null ? c.textPrimary : c.textSecondary,
-            fontSize: 10.8,
-            fontWeight: FontWeight.w600,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FOOTER ROW
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _FooterRow extends StatelessWidget {
-  const _FooterRow({
-    required this.c,
-    required this.offer,
-    required this.typeColor,
-    required this.isBuy,
-    required this.loadingPaymentMethods,
-    required this.paymentMethodsMap,
-    required this.paymentNames,
-    required this.shimmerAnim,
-  });
-
-  final AppColor c;
-  final OfferModel offer;
-  final Color typeColor;
-  final bool isBuy;
-  final bool loadingPaymentMethods;
-  final Map<String, PaymentMethodModel> paymentMethodsMap;
-  final String Function(List<String>) paymentNames;
-  final Animation<double> shimmerAnim;
-
-  @override
-  Widget build(BuildContext context) {
-    final effectiveIds = paymentMethodsMap.isNotEmpty
-        ? paymentMethodsMap.keys.toList()
-        : offer.paymentMethodIds;
-    final rate = offer.successRate;
-    final successRateLabel = rate == null
-        ? null
-        : '${rate.toStringAsFixed(1)}%';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+        // ── Row 2: status · country · rating ────────────────────────────────
+        // FIX: This Row lives inside an Expanded (from _buildMerchantRow) so
+        // it already has a bounded width. The crash came from mixing bare
+        // fixed-size widgets and Flexible children without an Expanded anchor.
+        // Solution: give country flex:2 and trades-count flex:1 so Flutter
+        // can always solve the layout without any child forcing infinity.
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
-              child: Wrap(
-                spacing: 5,
-                runSpacing: 5,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _Pill(
-                    label: isBuy ? 'BUY' : 'SELL',
-                    textColor: c.onPrimary,
-                    bg: typeColor,
-                    fontSize: 10,
-                    weight: FontWeight.w800,
-                  ),
-                  if (successRateLabel != null)
-                    _InfoChip(
-                      c: c,
-                      icon: Icons.verified_rounded,
-                      iconColor: c.success,
-                      text: '$successRateLabel success',
-                    ),
-                  if (offer.availableQty != null)
-                    _InfoChip(
-                      c: c,
-                      icon: Icons.layers_outlined,
-                      iconColor: c.textSecondary,
-                      text: '${offer.availableQty} avail.',
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Chevron button
             Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: c.background,
-                borderRadius: BorderRadius.circular(7),
-                border: Border.all(color: c.border),
-              ),
-              child: Icon(
-                Icons.chevron_right_rounded,
-                size: 15,
-                color: c.textSecondary,
-              ),
+              width: 6,
+              height: 6,
+              decoration:
+              BoxDecoration(color: availColor, shape: BoxShape.circle),
             ),
+            const SizedBox(width: 5),
+
+            if (profile.country != null && profile.country!.isNotEmpty) ...[
+              Flexible(
+                flex: 2,
+                child: Text(
+                  profile.country!,
+                  style: _T.caption.copyWith(color: c.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              _Dot(c: c),
+            ],
+
+            if (loadingReviews)
+              Flexible(
+                flex: 1,
+                child: _ShimBox(c: c, w: 56, h: 10, r: 3, anim: shimmerAnim),
+              )
+            else ...[
+              Icon(Icons.star_rounded, size: 11, color: c.warning),
+              const SizedBox(width: 2),
+              Text(
+                averageRating == null
+                    ? '--'
+                    : averageRating!.toStringAsFixed(1),
+                style: _T.rating.copyWith(color: c.textPrimary),
+              ),
+              const SizedBox(width: 3),
+              Flexible(
+                flex: 1,
+                child: Text(
+                  '(${formatCount(reviewCount)} trades)',
+                  style: _T.caption.copyWith(color: c.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
           ],
         ),
-
-        if (loadingPaymentMethods || effectiveIds.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          if (loadingPaymentMethods)
-            _SkimBox(c: c, w: 110, h: 11, r: 4, anim: shimmerAnim)
-          else
-            _PaymentRow(
-              c: c,
-              methods: effectiveIds
-                  .map((id) => paymentMethodsMap[id])
-                  .whereType<PaymentMethodModel>()
-                  .toList(),
-              fallbackNames: paymentNames(effectiveIds),
-            ),
-        ],
       ],
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INFO CHIP
+// TIER BADGE
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.c,
-    required this.icon,
-    required this.iconColor,
-    required this.text,
-  });
-
+class _TierBadge extends StatelessWidget {
+  const _TierBadge(
+      {required this.c,
+        required this.bg,
+        required this.fg,
+        required this.label});
   final AppColor c;
-  final IconData icon;
-  final Color iconColor;
-  final String text;
+  final Color bg;
+  final Color fg;
+  final String label;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-    decoration: BoxDecoration(
-      color: c.background,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: c.border),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 10, color: iconColor),
-        const SizedBox(width: 3),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 116),
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 100),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: fg.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_outlined, size: 10, color: fg),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              label,
+              style: _T.micro.copyWith(color: fg),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAYMENT ROW
+// ASSET LOGO
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PaymentRow extends StatelessWidget {
-  const _PaymentRow({
-    required this.c,
-    required this.methods,
-    required this.fallbackNames,
-  });
-
+class _AssetLogo extends StatelessWidget {
+  const _AssetLogo({required this.c, required this.logoUrl});
   final AppColor c;
-  final List<PaymentMethodModel> methods;
-  final String fallbackNames;
+  final String logoUrl;
 
-  List<Color> get _logoColors => [
-    c.primary,
-    c.primary,
-    c.success,
-    c.warning,
-    c.error,
-  ];
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 36,
+    height: 36,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: c.background,
+      border: Border.all(color: c.border),
+    ),
+    child: ClipOval(
+      child: Image.network(
+        logoUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.currency_bitcoin,
+          size: 16,
+          color: c.textSecondary,
+        ),
+      ),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRICE PILL
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PricePill extends StatelessWidget {
+  const _PricePill(
+      {required this.c, required this.price, required this.color});
+  final AppColor c;
+  final String price;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 140),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      price,
+      style: _T.price.copyWith(color: c.onPrimary),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION BUTTON
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton(
+      {required this.c, required this.label, required this.color});
+  final AppColor c;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 40,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    alignment: Alignment.center,
+    child: Text(
+      label,
+      style: _T.button.copyWith(color: c.onPrimary),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RELIABILITY CHIP
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReliabilityChip extends StatelessWidget {
+  const _ReliabilityChip({required this.c, required this.rate});
+  final AppColor c;
+  final double rate;
+
+  String get _label {
+    if (rate >= 100) return 'Perfect';
+    if (rate >= 95) return 'Excellent';
+    if (rate >= 80) return 'High';
+    if (rate >= 60) return 'Medium';
+    if (rate >= 40) return 'Low';
+    return 'Poor';
+  }
+
+  Color _color(AppColor c) {
+    if (rate >= 80) return c.success;
+    if (rate >= 40) return c.warning;
+    return c.error;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hasLogos = methods.any((m) => m.logo != null && m.logo!.isNotEmpty);
-
-    if (!hasLogos) {
-      return Row(
-        mainAxisSize: MainAxisSize.max,
+    final col = _color(c);
+    final pct = rate.toStringAsFixed(rate % 1 == 0 ? 0 : 1);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: col.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: col.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 12,
-            color: c.textSecondary,
-          ),
-          const SizedBox(width: 5),
-          Expanded(
-            child: Text(
-              fallbackNames,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    const maxLogos = 3;
-    final shown = methods.take(maxLogos).toList();
-    final extra = methods.length - maxLogos;
-
-    return Row(
-      mainAxisSize: MainAxisSize.max,
-      children: [
-        // Overlapping logo stack
-        SizedBox(
-          width: shown.length * 18.0 + 6,
-          height: 24,
-          child: Stack(
-            children: shown
-                .asMap()
-                .entries
-                .map(
-                  (e) => Positioned(
-                    left: e.key * 18.0,
-                    child: _LogoAvatar(
-                      method: e.value,
-                      c: c,
-                      size: 24,
-                      fallbackColor: _logoColors[e.key % _logoColors.length],
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-
-        if (extra > 0) ...[
-          const SizedBox(width: 6),
           Text(
-            '+$extra more',
-            style: TextStyle(
+            'TRUST',
+            style: _T.micro.copyWith(
               color: c.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
             ),
           ),
-        ] else if (methods.length == 1) ...[
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              methods.first.name,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 2),
+          Text(
+            '$pct%',
+            style: _T.rating.copyWith(
+              color: col,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
-        ] else ...[
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              shown.map((m) => m.name).join(' · '),
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+          const SizedBox(height: 1),
+          Text(
+            _label,
+            style: _T.micro.copyWith(color: col, letterSpacing: 0.2),
           ),
         ],
-      ],
+      ),
     );
   }
 }
 
-class _LogoAvatar extends StatelessWidget {
-  const _LogoAvatar({
-    required this.method,
-    required this.c,
-    required this.fallbackColor,
-    this.size = 24,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT METHOD CHIP
+// ─────────────────────────────────────────────────────────────────────────────
 
-  final PaymentMethodModel method;
+class _PaymentMethodChip extends StatelessWidget {
+  const _PaymentMethodChip({required this.c, required this.method});
   final AppColor c;
-  final Color fallbackColor;
-  final double size;
+  final PaymentMethodModel method;
 
   @override
   Widget build(BuildContext context) {
     final logo = method.logo;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: logo != null && logo.isNotEmpty ? c.background : fallbackColor,
-        borderRadius: BorderRadius.circular(size * 0.35),
-        border: Border.all(color: c.surface, width: 2),
-      ),
-      child: logo != null && logo.isNotEmpty
-          ? Padding(
-              padding: EdgeInsets.all(size * 0.12),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 20,
+          height: 20,
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.background,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: c.border),
+            ),
+            child: logo != null && logo.isNotEmpty
+                ? ClipRRect(
+              borderRadius: BorderRadius.circular(4),
               child: Image.network(
                 logo,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => _fallbackText(),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 11,
+                  color: c.textSecondary,
+                ),
               ),
             )
-          : _fallbackText(),
+                : Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 11,
+              color: c.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 5),
+        // Flexible here is correct — this chip is always placed inside an
+        // Expanded in the footer row, so the constraint is always finite.
+        Flexible(
+          child: Text(
+            method.name,
+            style: _T.caption.copyWith(
+              color: c.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRA PAYMENT ROW
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ExtraPaymentRow extends StatelessWidget {
+  const _ExtraPaymentRow({required this.c, required this.methods});
+  final AppColor c;
+  final List<PaymentMethodModel> methods;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 4,
+    children: methods
+        .skip(1)
+        .take(3)
+        .map((m) => _PaymentMethodChip(c: c, method: m))
+        .toList(),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMALL CHIP  (Deal Limit / Min·Max)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SmallChip extends StatelessWidget {
+  const _SmallChip({required this.c, required this.label});
+  final AppColor c;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 180),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: c.background,
+      borderRadius: BorderRadius.circular(5),
+      border: Border.all(color: c.border),
+    ),
+    child: Text(
+      label,
+      style: _T.micro.copyWith(
+        color: c.textSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MERCHANT TYPE BADGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MerchantTypeBadge extends StatelessWidget {
+  const _MerchantTypeBadge({required this.c, required this.type});
+  final AppColor c;
+  final MerchantType type;
+
+  _BadgeStyle _resolve(AppColor c) {
+    final name = type.name.toLowerCase();
+    if (name.contains('business') || name.contains('corporate')) {
+      return _BadgeStyle(
+        label: 'Business',
+        icon: Icons.business_center_outlined,
+        bg: c.info.withValues(alpha: 0.10),
+        fg: c.info,
+      );
+    }
+    return _BadgeStyle(
+      label: 'Individual',
+      icon: Icons.person_outline_rounded,
+      bg: c.textSecondary.withValues(alpha: 0.08),
+      fg: c.textSecondary,
     );
   }
 
-  Widget _fallbackText() => Center(
-    child: Text(
-      method.name.isNotEmpty ? method.name[0].toUpperCase() : '?',
-      style: TextStyle(
-        fontSize: size * 0.40,
-        fontWeight: FontWeight.w800,
-        color: c.onPrimary,
+  @override
+  Widget build(BuildContext context) {
+    final s = _resolve(c);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: s.bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: s.fg.withValues(alpha: 0.25)),
       ),
-    ),
-  );
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(s.icon, size: 11, color: s.fg),
+          const SizedBox(width: 4),
+          Text(
+            s.label.toUpperCase(),
+            style: _T.micro.copyWith(color: s.fg, letterSpacing: 0.6),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeStyle {
+  const _BadgeStyle({
+    required this.label,
+    required this.icon,
+    required this.bg,
+    required this.fg,
+  });
+  final String label;
+  final IconData icon;
+  final Color bg;
+  final Color fg;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED ATOMS
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SolidDivider extends StatelessWidget {
-  const _SolidDivider({required this.c});
+class _Divider extends StatelessWidget {
+  const _Divider({required this.c});
   final AppColor c;
 
   @override
-  Widget build(BuildContext context) => Container(height: 1, color: c.border);
+  Widget build(BuildContext context) =>
+      Container(height: 1, color: c.border.withValues(alpha: 0.5));
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.label,
-    required this.textColor,
-    required this.bg,
-    required this.fontSize,
-    required this.weight,
-    this.icon,
-  });
-
-  final String label;
-  final Color textColor;
-  final Color bg;
-  final double fontSize;
-  final FontWeight weight;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(5),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: fontSize + 2, color: textColor),
-          const SizedBox(width: 4),
-        ],
-        Text(
-          label,
-          style: TextStyle(
-            color: textColor,
-            fontSize: fontSize,
-            fontWeight: weight,
-            letterSpacing: 0.4,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _MetaDot extends StatelessWidget {
-  const _MetaDot({required this.c});
+class _Dot extends StatelessWidget {
+  const _Dot({required this.c});
   final AppColor c;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 5),
-    child: Container(
-      width: 2.5,
-      height: 2.5,
-      decoration: BoxDecoration(color: c.border, shape: BoxShape.circle),
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Text(
+      '·',
+      style: _T.caption.copyWith(color: c.textSecondary),
     ),
   );
 }
 
-class _InlineRatingStars extends StatelessWidget {
-  const _InlineRatingStars({required this.c, required this.rating});
-
-  final AppColor c;
-  final double? rating;
-
-  @override
-  Widget build(BuildContext context) {
-    final filled = (rating ?? 0).round().clamp(0, 5);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(
-        5,
-        (i) => Padding(
-          padding: EdgeInsets.only(right: i < 4 ? 1 : 0),
-          child: Icon(
-            i < filled ? Icons.star_rounded : Icons.star_outline_rounded,
-            size: 10,
-            color: i < filled ? c.warning : c.border,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SHIMMER BOX
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SkimBox extends StatelessWidget {
-  const _SkimBox({
+class _ShimBox extends StatelessWidget {
+  const _ShimBox({
     required this.c,
     required this.w,
     required this.h,
     required this.r,
     required this.anim,
   });
-
   final AppColor c;
   final double w, h, r;
   final Animation<double> anim;
@@ -1252,12 +1153,11 @@ class _SkimBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = isDark
-        ? c.border.withValues(alpha: 0.52)
+        ? c.border.withValues(alpha: 0.5)
         : c.background.withValues(alpha: 0.98);
     final highlight = isDark
-        ? c.textPrimary.withValues(alpha: 0.20)
-        : c.onPrimary.withValues(alpha: 0.72);
-
+        ? c.textPrimary.withValues(alpha: 0.16)
+        : c.onPrimary.withValues(alpha: 0.65);
     return ClipRRect(
       borderRadius: BorderRadius.circular(r),
       child: SizedBox(
@@ -1270,16 +1170,16 @@ class _SkimBox extends StatelessWidget {
             AnimatedBuilder(
               animation: anim,
               builder: (_, __) {
-                final bandWidth = w * 0.52;
-                final travel = w + (bandWidth * 2);
-                final left = (travel * anim.value) - bandWidth;
+                final band = w * 0.5;
+                final travel = w + band * 2;
+                final left = travel * anim.value - band;
                 return Stack(
                   children: [
                     Positioned(
                       left: left,
                       top: 0,
                       bottom: 0,
-                      width: bandWidth,
+                      width: band,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(

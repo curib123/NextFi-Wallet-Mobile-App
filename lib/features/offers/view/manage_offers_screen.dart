@@ -27,7 +27,6 @@ import 'package:provider/provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANAGE OFFERS SCREEN
-// Design: Stripe-grade fintech — precise rhythm, confident type, clean density
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ManageOffersScreen extends StatefulWidget {
@@ -41,6 +40,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     with TickerProviderStateMixin {
   final _offersCore = OffersCoreService.I;
   final _paymentMethodsCore = PaymentMethodAndAccountsCoreService.I;
+
+  late final AssetVM _assetVm;
   late final PriceChartVM _xlmPriceVm;
   late final PriceChartVM _usdcPriceVm;
   late final VoidCallback _priceListener;
@@ -83,6 +84,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   void initState() {
     super.initState();
     final currency = context.read<CurrencyVM>();
+
+    // AssetVM — logos + price change % for offer tiles
+    _assetVm = AssetVM(currency);
+
     _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
     _usdcPriceVm = PriceChartVM(currency, initialToken: PriceToken.usdc);
     _priceListener = () {
@@ -90,6 +95,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     };
     _xlmPriceVm.addListener(_priceListener);
     _usdcPriceVm.addListener(_priceListener);
+    _assetVm.addListener(_priceListener);
+
     _totalQtyCtrl.addListener(_onTotalQtyChanged);
     _tabCtrl = TabController(length: 2, vsync: this);
     _pageEnterCtrl = AnimationController(
@@ -104,9 +111,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       parent: _pageEnterCtrl,
       curve: Curves.easeOutCubic,
     );
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
-        .animate(
-          CurvedAnimation(parent: _pageEnterCtrl, curve: Curves.easeOutCubic),
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+          CurvedAnimation(
+              parent: _pageEnterCtrl, curve: Curves.easeOutCubic),
         );
     _tabCtrl.addListener(() {
       if (!_tabCtrl.indexIsChanging &&
@@ -128,8 +136,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     _availableQtyTimer?.cancel();
     _xlmPriceVm.removeListener(_priceListener);
     _usdcPriceVm.removeListener(_priceListener);
+    _assetVm.removeListener(_priceListener);
     _xlmPriceVm.dispose();
     _usdcPriceVm.dispose();
+    _assetVm.dispose();
     _totalQtyCtrl.removeListener(_onTotalQtyChanged);
     _marginCtrl.dispose();
     _minCtrl.dispose();
@@ -143,6 +153,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     _tabCtrl.dispose();
     super.dispose();
   }
+
+  // ─── Price helpers ──────────────────────────────────────────────────────────
 
   bool _hasTrustedVmRates() {
     final currency = context.read<CurrencyVM>();
@@ -168,7 +180,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     final live = _hasTrustedVmRates()
         ? _rawPriceForAsset(offer.asset, fiatCode)
         : null;
-    final fallbackMarket = (offer.marketPrice != null && offer.marketPrice! > 0)
+    final fallbackMarket =
+    (offer.marketPrice != null && offer.marketPrice! > 0)
         ? offer.marketPrice
         : null;
     final base = live ?? fallbackMarket;
@@ -199,6 +212,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     if (_offerEffectivePrice(offer) != null) return true;
     return _priceLoadingFor(offer);
   }
+
+  // ─── Load ───────────────────────────────────────────────────────────────────
 
   Future<void> _load() async {
     setState(() {
@@ -248,13 +263,15 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     }
   }
 
+  // ─── Create offer ───────────────────────────────────────────────────────────
+
   Future<void> _createOffer() async {
     final paymentMethod = _selectedPaymentMethod;
     if (paymentMethod == null) {
       _snack('Select a payment method first.', error: true);
       return;
     }
-    final assets = context.read<AssetVM>().assets;
+    final assets = _assetVm.assets;
     if (assets.isEmpty) {
       _snack('No assets available.', error: true);
       return;
@@ -304,7 +321,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       return;
     }
     if (window != null && (window < 1 || window > 1440)) {
-      _snack('Payment window must be between 1 and 1440 minutes.', error: true);
+      _snack('Payment window must be between 1 and 1440 minutes.',
+          error: true);
       return;
     }
     if (isSell && addr.isEmpty) {
@@ -352,9 +370,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
           );
           return;
         }
-        effectiveAvailableQty = totalQ == null
-            ? liveAvail
-            : math.min(totalQ, liveAvail);
+        effectiveAvailableQty =
+        totalQ == null ? liveAvail : math.min(totalQ, liveAvail);
         if (_isVisible && effectiveAvailableQty <= 0) {
           _snack(
             'Available qty is zero on selected wallet. Fund wallet or set offer hidden.',
@@ -415,6 +432,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     }
   }
 
+  // ─── Pause / Resume / Cancel ────────────────────────────────────────────────
+
   Future<void> _pauseOrResume(OfferModel offer) async {
     HapticFeedback.selectionClick();
     try {
@@ -437,7 +456,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       type: AppAlertType.warning,
       title: 'Cancel Offer?',
       subtitle:
-          'This offer will be permanently cancelled and removed from the marketplace.',
+      'This offer will be permanently cancelled and removed from the marketplace.',
       primaryText: 'Cancel Offer',
       barrierDismissible: true,
       onPrimary: () => _performCancel(offer),
@@ -457,20 +476,22 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     }
   }
 
-  void _snack(String message, {required bool error}) => showFloatingSnackBar(
-    context,
-    message: message,
-    type: error ? SnackBarType.error : SnackBarType.success,
-    position: SnackBarPosition.top,
-  );
+  void _snack(String message, {required bool error}) =>
+      showFloatingSnackBar(
+        context,
+        message: message,
+        type: error ? SnackBarType.error : SnackBarType.success,
+        position: SnackBarPosition.top,
+      );
+
+  // ─── Wallet helpers ─────────────────────────────────────────────────────────
 
   Future<String?> _resolveActiveWalletAddress() async {
     try {
-      final managerAddress = await WalletManager.I.getActiveWalletAddress();
+      final managerAddress =
+      await WalletManager.I.getActiveWalletAddress();
       final trimmedManager = managerAddress?.trim() ?? '';
-      if (trimmedManager.isNotEmpty) {
-        return trimmedManager;
-      }
+      if (trimmedManager.isNotEmpty) return trimmedManager;
     } catch (_) {}
 
     final localActive = await SeedStorage.getActiveWalletMeta();
@@ -478,10 +499,12 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     return localAddress.isEmpty ? null : localAddress;
   }
 
-  String _activeWalletAddressOrEmpty() => _activeWalletAddress?.trim() ?? '';
+  String _activeWalletAddressOrEmpty() =>
+      _activeWalletAddress?.trim() ?? '';
 
   Future<String> _requireActiveWalletAddress() async {
-    final latest = (await _resolveActiveWalletAddress())?.trim() ?? '';
+    final latest =
+        (await _resolveActiveWalletAddress())?.trim() ?? '';
     if (latest.isNotEmpty) {
       if (_activeWalletAddress != latest && mounted) {
         setState(() => _activeWalletAddress = latest);
@@ -490,8 +513,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       }
       return latest;
     }
-    final cached = _activeWalletAddressOrEmpty();
-    return cached;
+    return _activeWalletAddressOrEmpty();
   }
 
   String _formatQty(double value) {
@@ -540,13 +562,13 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     if (assetUpper == 'USDC') {
       return await stellar.getUsdcBalance(accountId);
     }
-
     final balances = await stellar.getAllBalances(accountId);
     for (final b in balances) {
       final code = (b.assetCode ?? '').trim().toUpperCase();
       if (code != assetUpper) continue;
       final bal = double.tryParse(b.balance) ?? 0.0;
-      final liabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
+      final liabilities =
+          double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
       final available = bal - liabilities;
       return available > 0 ? available : 0.0;
     }
@@ -560,12 +582,13 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     if (_type != OfferType.sell) return;
     if (_loading || _submitting) return;
     if (_syncingAvailableQty) return;
-    final assets = context.read<AssetVM>().assets;
-    final selected =
-        (_selectedAssetSymbol ??
-                (assets.isNotEmpty ? assets.first.symbol.toUpperCase() : ''))
-            .trim()
-            .toUpperCase();
+    final assets = _assetVm.assets;
+    final selected = (_selectedAssetSymbol ??
+        (assets.isNotEmpty
+            ? assets.first.symbol.toUpperCase()
+            : ''))
+        .trim()
+        .toUpperCase();
     if (selected.isEmpty) return;
 
     if (silent) {
@@ -574,13 +597,12 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       setState(() => _syncingAvailableQty = true);
     }
     try {
-      final activeAddress = (await _resolveActiveWalletAddress())?.trim() ?? '';
-      if (mounted && activeAddress != _activeWalletAddressOrEmpty()) {
-        setState(
-          () => _activeWalletAddress = activeAddress.isEmpty
-              ? null
-              : activeAddress,
-        );
+      final activeAddress =
+          (await _resolveActiveWalletAddress())?.trim() ?? '';
+      if (mounted &&
+          activeAddress != _activeWalletAddressOrEmpty()) {
+        setState(() => _activeWalletAddress =
+        activeAddress.isEmpty ? null : activeAddress);
       } else if (activeAddress.isNotEmpty) {
         _activeWalletAddress = activeAddress;
       }
@@ -604,7 +626,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       _applyAutoTotalQty(qty, force: forceTotalQty);
     } catch (e) {
       if (!silent && mounted) {
-        _snack('Failed to sync live balance for available qty.', error: true);
+        _snack(
+            'Failed to sync live balance for available qty.',
+            error: true);
       }
     } finally {
       if (mounted) {
@@ -619,11 +643,13 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
 
   Future<double> _syncAvailableQtyForSubmit(String assetUpper) async {
     try {
-      final activeAddress = (await _resolveActiveWalletAddress())?.trim() ?? '';
+      final activeAddress =
+          (await _resolveActiveWalletAddress())?.trim() ?? '';
       if (activeAddress.isNotEmpty) {
         _activeWalletAddress = activeAddress;
       }
-      final qty = await _fetchLiveAvailableQty(assetUpper.toUpperCase());
+      final qty =
+      await _fetchLiveAvailableQty(assetUpper.toUpperCase());
       bool? hasUsdcTrustline = _activeWalletHasUsdcTrustline;
       if (assetUpper.toUpperCase() == 'USDC') {
         final accountId = await _requireActiveWalletAddress();
@@ -656,9 +682,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   }) async {
     final trimmed = accountId.trim();
     if (trimmed.isEmpty) {
-      if (mounted) {
-        setState(() => _activeWalletHasUsdcTrustline = null);
-      }
+      if (mounted) setState(() => _activeWalletHasUsdcTrustline = null);
       return null;
     }
     if (!silent && mounted) {
@@ -667,14 +691,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     try {
       final stellar = context.read<StellarWalletServices>();
       final has = await stellar.hasUsdcTrustline(trimmed);
-      if (mounted) {
-        setState(() => _activeWalletHasUsdcTrustline = has);
-      }
+      if (mounted) setState(() => _activeWalletHasUsdcTrustline = has);
       return has;
     } catch (_) {
-      if (mounted) {
-        setState(() => _activeWalletHasUsdcTrustline = null);
-      }
+      if (mounted) setState(() => _activeWalletHasUsdcTrustline = null);
       if (!silent && mounted) {
         _snack(
           'Unable to verify USDC trustline right now. Please try again.',
@@ -689,16 +709,19 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     }
   }
 
+  // ─── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final assets = context.select<AssetVM, List<AssetModel>>((vm) => vm.assets);
+    final assets =
+    context.select<AssetVM, List<AssetModel>>((vm) => vm.assets);
     final fiat = context.select<CurrencyVM, String>(
-      (vm) => vm.fiat.toUpperCase(),
+          (vm) => vm.fiat.toUpperCase(),
     );
-    final resolvedAsset =
-        _selectedAssetSymbol != null &&
-            assets.any((a) => a.symbol.toUpperCase() == _selectedAssetSymbol)
+    final resolvedAsset = _selectedAssetSymbol != null &&
+        assets.any(
+                (a) => a.symbol.toUpperCase() == _selectedAssetSymbol)
         ? _selectedAssetSymbol
         : (assets.isEmpty ? null : assets.first.symbol.toUpperCase());
 
@@ -708,167 +731,184 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         child: _loading
             ? const PageLoader(label: 'Loading offers…')
             : _error != null
-            ? _ErrorState(c: c, error: _error!, onRetry: _load)
+            ? _ErrorState(
+            c: c, error: _error!, onRetry: _load)
             : FadeTransition(
-                opacity: _pageAnim,
-                child: SlideTransition(
-                  position: _slideAnim,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          opacity: _pageAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header
+                _ScreenHeader(c: c, onRefresh: _load),
+
+                // ── Dashboard summary card
+                Padding(
+                  padding:
+                  const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: _DashboardCard(
+                      c: c, offers: _offers),
+                ),
+
+                // ── Warning banner
+                if (_paymentMethods.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        20, 12, 20, 0),
+                    child: _AlertBanner(
+                      c: c,
+                      icon: Icons
+                          .account_balance_wallet_outlined,
+                      title: 'No active payment method',
+                      body:
+                      'Enable at least one payment method before posting offers.',
+                      accent: c.warning,
+                    ),
+                  ),
+
+                const SizedBox(height: 20),
+
+                // ── Custom Tab Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20),
+                  child: _TabBar(
+                      c: c, controller: _tabCtrl),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Tab Views
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabCtrl,
                     children: [
-                      // ── Header
-                      _ScreenHeader(c: c, onRefresh: _load),
-
-                      // ── Dashboard summary card (always visible)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: _DashboardCard(c: c, offers: _offers),
-                      ),
-
-                      // ── Warning banner
-                      if (_paymentMethods.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                          child: _AlertBanner(
-                            c: c,
-                            icon: Icons.account_balance_wallet_outlined,
-                            title: 'No active payment method',
-                            body:
-                                'Enable at least one payment method before posting offers.',
-                            accent: c.warning,
-                          ),
-                        ),
-
-                      const SizedBox(height: 20),
-
-                      // ── Custom Tab Bar
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _TabBar(c: c, controller: _tabCtrl),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // ── Tab Views
-                      Expanded(
-                        child: TabBarView(
-                          controller: _tabCtrl,
+                      // Tab 1: Create Offer
+                      RefreshIndicator(
+                        onRefresh: _load,
+                        color: c.primary,
+                        child: ListView(
+                          padding:
+                          const EdgeInsets.fromLTRB(
+                              20, 0, 20, 40),
                           children: [
-                            // ── Tab 1: Create Offer
-                            RefreshIndicator(
-                              onRefresh: _load,
-                              color: c.primary,
-                              child: ListView(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  0,
-                                  20,
-                                  40,
-                                ),
-                                children: [
-                                  _CreateOfferCard(
-                                    c: c,
-                                    assets: assets,
-                                    selectedAssetSymbol: resolvedAsset,
-                                    fiatCode: fiat,
-                                    marginCtrl: _marginCtrl,
-                                    minCtrl: _minCtrl,
-                                    maxCtrl: _maxCtrl,
-                                    totalQtyCtrl: _totalQtyCtrl,
-                                    paymentWindowCtrl: _paymentWindowCtrl,
-                                    autoReplyCtrl: _autoReplyCtrl,
-                                    type: _type,
-                                    methods: _paymentMethods,
-                                    selectedMethod: _selectedPaymentMethod,
-                                    isVisible: _isVisible,
-                                    submitting: _submitting,
-                                    syncingAvailableQty: _syncingAvailableQty,
-                                    checkingUsdcTrustline:
-                                        _checkingUsdcTrustline,
-                                    hasUsdcTrustline:
-                                        _activeWalletHasUsdcTrustline,
-                                    onTypeChanged: (v) {
-                                      setState(() {
-                                        _type = v;
-                                        if (v == OfferType.buy) {
-                                          _syncingAvailableQty = false;
-                                          _checkingUsdcTrustline = false;
-                                          _activeWalletHasUsdcTrustline = null;
-                                        }
-                                      });
-                                      if (v == OfferType.sell) {
-                                        _syncAvailableQty(
-                                          silent: true,
-                                          forceTotalQty: true,
-                                        );
-                                      }
-                                    },
-                                    onAssetChanged: (v) {
-                                      setState(() => _selectedAssetSymbol = v);
-                                      if (_type == OfferType.sell) {
-                                        _syncAvailableQty(forceTotalQty: true);
-                                      }
-                                    },
-                                    onMethodChanged: (v) => setState(
-                                      () => _selectedPaymentMethod = v,
-                                    ),
-                                    onVisibleChanged: (v) =>
-                                        setState(() => _isVisible = v),
-                                    onSyncAvailableQty: _syncAvailableQty,
-                                    onSubmit: _createOffer,
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // ── Tab 2: My Offers
-                            RefreshIndicator(
-                              onRefresh: _load,
-                              color: c.primary,
-                              child: _offers.isEmpty
-                                  ? ListView(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        20,
-                                        0,
-                                        20,
-                                        40,
-                                      ),
-                                      children: [_EmptyOffersCard(c: c)],
-                                    )
-                                  : ListView.builder(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        20,
-                                        0,
-                                        20,
-                                        40,
-                                      ),
-                                      itemCount: _offers.length,
-                                      itemBuilder: (_, i) {
-                                        final offer = _offers[i];
-                                        return _AnimatedOfferTile(
-                                          index: i,
-                                          c: c,
-                                          offer: offer,
-                                          marketPrice: _offerEffectivePrice(
-                                            offer,
-                                          ),
-                                          priceLoading: _priceLoadingFor(offer),
-                                          enabled: _offerEnabled(offer),
-                                          shimmerAnim: _heroCtrl,
-                                          onPauseOrResume: () =>
-                                              _pauseOrResume(offer),
-                                          onCancel: () => _cancel(offer),
-                                        );
-                                      },
-                                    ),
+                            _CreateOfferCard(
+                              c: c,
+                              assets: assets,
+                              selectedAssetSymbol:
+                              resolvedAsset,
+                              fiatCode: fiat,
+                              marginCtrl: _marginCtrl,
+                              minCtrl: _minCtrl,
+                              maxCtrl: _maxCtrl,
+                              totalQtyCtrl: _totalQtyCtrl,
+                              paymentWindowCtrl:
+                              _paymentWindowCtrl,
+                              autoReplyCtrl: _autoReplyCtrl,
+                              type: _type,
+                              methods: _paymentMethods,
+                              selectedMethod:
+                              _selectedPaymentMethod,
+                              isVisible: _isVisible,
+                              submitting: _submitting,
+                              syncingAvailableQty:
+                              _syncingAvailableQty,
+                              checkingUsdcTrustline:
+                              _checkingUsdcTrustline,
+                              hasUsdcTrustline:
+                              _activeWalletHasUsdcTrustline,
+                              onTypeChanged: (v) {
+                                setState(() {
+                                  _type = v;
+                                  if (v == OfferType.buy) {
+                                    _syncingAvailableQty =
+                                    false;
+                                    _checkingUsdcTrustline =
+                                    false;
+                                    _activeWalletHasUsdcTrustline =
+                                    null;
+                                  }
+                                });
+                                if (v == OfferType.sell) {
+                                  _syncAvailableQty(
+                                    silent: true,
+                                    forceTotalQty: true,
+                                  );
+                                }
+                              },
+                              onAssetChanged: (v) {
+                                setState(() =>
+                                _selectedAssetSymbol = v);
+                                if (_type == OfferType.sell) {
+                                  _syncAvailableQty(
+                                      forceTotalQty: true);
+                                }
+                              },
+                              onMethodChanged: (v) =>
+                                  setState(() =>
+                                  _selectedPaymentMethod =
+                                      v),
+                              onVisibleChanged: (v) =>
+                                  setState(
+                                          () => _isVisible = v),
+                              onSyncAvailableQty:
+                              _syncAvailableQty,
+                              onSubmit: _createOffer,
                             ),
                           ],
+                        ),
+                      ),
+
+                      // Tab 2: My Offers
+                      RefreshIndicator(
+                        onRefresh: _load,
+                        color: c.primary,
+                        child: _offers.isEmpty
+                            ? ListView(
+                          padding:
+                          const EdgeInsets.fromLTRB(
+                              20, 0, 20, 40),
+                          children: [
+                            _EmptyOffersCard(c: c),
+                          ],
+                        )
+                            : ListView.builder(
+                          padding:
+                          const EdgeInsets.fromLTRB(
+                              20, 0, 20, 40),
+                          itemCount: _offers.length,
+                          itemBuilder: (_, i) {
+                            final offer = _offers[i];
+                            return _AnimatedOfferTile(
+                              index: i,
+                              c: c,
+                              offer: offer,
+                              assetVm: _assetVm,
+                              marketPrice:
+                              _offerEffectivePrice(
+                                  offer),
+                              priceLoading:
+                              _priceLoadingFor(
+                                  offer),
+                              enabled:
+                              _offerEnabled(offer),
+                              shimmerAnim: _heroCtrl,
+                              onPauseOrResume: () =>
+                                  _pauseOrResume(offer),
+                              onCancel: () =>
+                                  _cancel(offer),
+                            );
+                          },
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -919,7 +959,6 @@ class _ScreenHeader extends StatelessWidget {
                     color: c.textSecondary,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w400,
-                    letterSpacing: 0,
                   ),
                 ),
               ],
@@ -1021,19 +1060,23 @@ class _TabOption extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           boxShadow: active
               ? [
-                  BoxShadow(
-                    color: c.primary.withValues(alpha: 0.22),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
+            BoxShadow(
+              color: c.primary.withValues(alpha: 0.22),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ]
               : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: active ? c.onPrimary : c.textSecondary),
+            Icon(
+              icon,
+              size: 14,
+              color: active ? c.onPrimary : c.textSecondary,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1056,7 +1099,8 @@ class _TabOption extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.c, required this.icon, required this.onTap});
+  const _IconBtn(
+      {required this.c, required this.icon, required this.onTap});
   final AppColor c;
   final IconData icon;
   final VoidCallback onTap;
@@ -1070,7 +1114,8 @@ class _IconBtn extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border.withValues(alpha: 0.25)),
+        border:
+        Border.all(color: c.border.withValues(alpha: 0.25)),
       ),
       child: Icon(icon, size: 17, color: c.textSecondary),
     ),
@@ -1100,31 +1145,30 @@ class _RefreshBtnState extends State<_RefreshBtn>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        _ctrl.forward(from: 0);
-        widget.onTap();
-      },
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: widget.c.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: widget.c.border.withValues(alpha: 0.25)),
-        ),
-        child: RotationTransition(
-          turns: _ctrl,
-          child: Icon(
-            Icons.refresh_rounded,
-            size: 17,
-            color: widget.c.textSecondary,
-          ),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () {
+      _ctrl.forward(from: 0);
+      widget.onTap();
+    },
+    child: Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: widget.c.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: widget.c.border.withValues(alpha: 0.25)),
+      ),
+      child: RotationTransition(
+        turns: _ctrl,
+        child: Icon(
+          Icons.refresh_rounded,
+          size: 17,
+          color: widget.c.textSecondary,
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1138,8 +1182,10 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = offers.where((o) => o.status == OfferStatus.active).length;
-    final paused = offers.where((o) => o.status == OfferStatus.paused).length;
+    final active =
+        offers.where((o) => o.status == OfferStatus.active).length;
+    final paused =
+        offers.where((o) => o.status == OfferStatus.paused).length;
     final total = offers.length;
 
     return Container(
@@ -1160,11 +1206,13 @@ class _DashboardCard extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding:
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: c.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(7),
@@ -1226,9 +1274,11 @@ class _CountPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    padding:
+    const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
     decoration: BoxDecoration(
-      color: filled ? accent.withValues(alpha: 0.08) : c.background,
+      color:
+      filled ? accent.withValues(alpha: 0.08) : c.background,
       borderRadius: BorderRadius.circular(8),
       border: Border.all(
         color: filled
@@ -1261,6 +1311,10 @@ class _CountPill extends StatelessWidget {
     ),
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CREATE OFFER CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _CreateOfferCard extends StatelessWidget {
   const _CreateOfferCard({
@@ -1318,11 +1372,11 @@ class _CreateOfferCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedAsset = (selectedAssetSymbol ?? '').trim().toUpperCase();
+    final selectedAsset =
+    (selectedAssetSymbol ?? '').trim().toUpperCase();
     final isWalletLocked = type == OfferType.sell;
     final isUsdc = selectedAsset == 'USDC';
-    final showUsdcTrustlineWarning =
-        isWalletLocked &&
+    final showUsdcTrustlineWarning = isWalletLocked &&
         isUsdc &&
         hasUsdcTrustline == false &&
         !checkingUsdcTrustline;
@@ -1336,28 +1390,26 @@ class _CreateOfferCard extends StatelessWidget {
           BoxShadow(
             color: c.textPrimary.withValues(alpha: 0.025),
             blurRadius: 12,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Type selector
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _TypeToggle(c: c, selected: type, onChanged: onTypeChanged),
+            child: _TypeToggle(
+                c: c, selected: type, onChanged: onTypeChanged),
           ),
 
           _HDivider(c: c),
 
-          // ── Form fields
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Asset & Currency
                 _FormGroup(
                   c: c,
                   label: 'Asset & Currency',
@@ -1370,32 +1422,32 @@ class _CreateOfferCard extends StatelessWidget {
                           hint: 'Asset',
                           icon: Icons.generating_tokens_rounded,
                           items: assets
-                              .map(
-                                (a) => DropdownMenuItem(
-                                  value: a.symbol.toUpperCase(),
-                                  child: Text(a.symbol.toUpperCase()),
-                                ),
-                              )
+                              .map((a) => DropdownMenuItem(
+                            value:
+                            a.symbol.toUpperCase(),
+                            child: Text(
+                                a.symbol.toUpperCase()),
+                          ))
                               .toList(),
                           onChanged: onAssetChanged,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _FiatPicker(c: c, fiatCode: fiatCode),
+                        child: _FiatPicker(
+                            c: c, fiatCode: fiatCode),
                       ),
                     ],
                   ),
                 ),
 
-                // Margin
                 _FormGroup(
                   c: c,
                   label: 'Price Margin',
-                  child: _MarginField(c: c, controller: marginCtrl),
+                  child:
+                  _MarginField(c: c, controller: marginCtrl),
                 ),
 
-                // Trade limits
                 _FormGroup(
                   c: c,
                   label: 'Trade Limits',
@@ -1424,11 +1476,11 @@ class _CreateOfferCard extends StatelessWidget {
                   ),
                 ),
 
-                // Quantity & Window
                 _FormGroup(
                   c: c,
                   label: 'Quantity & Payment Window',
-                  sublabel: isWalletLocked ? 'Auto-synced' : 'Manual',
+                  sublabel:
+                  isWalletLocked ? 'Auto-synced' : 'Manual',
                   child: Column(
                     children: [
                       _Field(
@@ -1440,13 +1492,14 @@ class _CreateOfferCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
                         children: [
                           Text(
                             isWalletLocked
                                 ? (syncingAvailableQty
-                                      ? 'Syncing from active wallet...'
-                                      : 'Total qty defaults from active wallet balance.')
+                                ? 'Syncing from active wallet...'
+                                : 'Total qty defaults from active wallet balance.')
                                 : 'Set total quantity manually.',
                             style: TextStyle(
                               color: c.textSecondary,
@@ -1479,14 +1532,19 @@ class _CreateOfferCard extends StatelessWidget {
                                 onPressed: syncingAvailableQty
                                     ? null
                                     : () => onSyncAvailableQty(
-                                        silent: false,
-                                        forceTotalQty: true,
-                                      ),
-                                icon: const Icon(Icons.sync_rounded, size: 14),
-                                label: const Text('Sync Balance'),
+                                  silent: false,
+                                  forceTotalQty: true,
+                                ),
+                                icon: const Icon(
+                                    Icons.sync_rounded,
+                                    size: 14),
+                                label:
+                                const Text('Sync Balance'),
                                 style: TextButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(
+                                  visualDensity:
+                                  VisualDensity.compact,
+                                  padding:
+                                  const EdgeInsets.symmetric(
                                     horizontal: 8,
                                     vertical: 2,
                                   ),
@@ -1521,7 +1579,6 @@ class _CreateOfferCard extends StatelessWidget {
                   ),
                 ),
 
-                // Auto reply
                 _FormGroup(
                   c: c,
                   label: 'Auto Reply Message',
@@ -1529,13 +1586,13 @@ class _CreateOfferCard extends StatelessWidget {
                   child: _Field(
                     c: c,
                     controller: autoReplyCtrl,
-                    hint: 'Greeting shown to buyers when trade starts',
+                    hint:
+                    'Greeting shown to buyers when trade starts',
                     icon: Icons.chat_bubble_outline_rounded,
                     maxLines: 2,
                   ),
                 ),
 
-                // Payment method
                 _FormGroup(
                   c: c,
                   label: 'Payment Method',
@@ -1545,15 +1602,13 @@ class _CreateOfferCard extends StatelessWidget {
                     hint: 'Select method',
                     icon: Icons.account_balance_rounded,
                     items: methods
-                        .map(
-                          (m) => DropdownMenuItem(
-                            value: m,
-                            child: Text(
-                              '${m.name} (${m.code})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
+                        .map((m) => DropdownMenuItem(
+                      value: m,
+                      child: Text(
+                        '${m.name} (${m.code})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ))
                         .toList(),
                     onChanged: onMethodChanged,
                   ),
@@ -1564,7 +1619,6 @@ class _CreateOfferCard extends StatelessWidget {
 
           _HDivider(c: c),
 
-          // ── Visibility + submit
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
             child: Column(
@@ -1591,7 +1645,7 @@ class _CreateOfferCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FORM GROUP WRAPPER — adds consistent label + spacing
+// FORM GROUP WRAPPER
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FormGroup extends StatelessWidget {
@@ -1626,7 +1680,8 @@ class _FormGroup extends StatelessWidget {
             if (sublabel != null) ...[
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: c.textSecondary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(4),
@@ -1672,7 +1727,8 @@ class _TypeToggle extends StatelessWidget {
     decoration: BoxDecoration(
       color: c.background,
       borderRadius: BorderRadius.circular(13),
-      border: Border.all(color: c.border.withValues(alpha: 0.2)),
+      border:
+      Border.all(color: c.border.withValues(alpha: 0.2)),
     ),
     child: Row(
       children: [
@@ -1732,12 +1788,12 @@ class _TypeOption extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           boxShadow: active
               ? [
-                  BoxShadow(
-                    color: activeColor.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
+            BoxShadow(
+              color: activeColor.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ]
               : null,
         ),
         child: Center(
@@ -1749,13 +1805,17 @@ class _TypeOption extends StatelessWidget {
                 Icon(
                   icon,
                   size: 14,
-                  color: active ? c.onPrimary : c.textSecondary,
+                  color: active
+                      ? c.onPrimary
+                      : c.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 180),
                   style: TextStyle(
-                    color: active ? c.onPrimary : c.textSecondary,
+                    color: active
+                        ? c.onPrimary
+                        : c.textSecondary,
                     fontWeight: FontWeight.w700,
                     fontSize: 12.5,
                     letterSpacing: 0.3,
@@ -1799,18 +1859,23 @@ class _Field extends StatelessWidget {
       fontWeight: FontWeight.w400,
     ),
     prefixIcon: icon != null
-        ? Icon(icon, size: 16, color: c.textSecondary.withValues(alpha: 0.6))
+        ? Icon(icon,
+        size: 16,
+        color: c.textSecondary.withValues(alpha: 0.6))
         : null,
     filled: true,
     fillColor: c.background,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    contentPadding: const EdgeInsets.symmetric(
+        horizontal: 14, vertical: 13),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(11),
-      borderSide: BorderSide(color: c.border.withValues(alpha: 0.2)),
+      borderSide:
+      BorderSide(color: c.border.withValues(alpha: 0.2)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(11),
-      borderSide: BorderSide(color: c.border.withValues(alpha: 0.2)),
+      borderSide:
+      BorderSide(color: c.border.withValues(alpha: 0.2)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(11),
@@ -1821,7 +1886,8 @@ class _Field extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
-    keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+    keyboardType:
+    isNumber ? TextInputType.number : TextInputType.text,
     maxLines: maxLines,
     style: TextStyle(
       color: c.textPrimary,
@@ -1833,14 +1899,16 @@ class _Field extends StatelessWidget {
 }
 
 class _MarginField extends StatelessWidget {
-  const _MarginField({required this.c, required this.controller});
+  const _MarginField(
+      {required this.c, required this.controller});
   final AppColor c;
   final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    keyboardType: const TextInputType.numberWithOptions(
+        decimal: true),
     style: TextStyle(
       color: c.textPrimary,
       fontSize: 22,
@@ -1862,18 +1930,22 @@ class _MarginField extends StatelessWidget {
       ),
       filled: true,
       fillColor: c.background,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(color: c.border.withValues(alpha: 0.2)),
+        borderSide:
+        BorderSide(color: c.border.withValues(alpha: 0.2)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(color: c.border.withValues(alpha: 0.2)),
+        borderSide:
+        BorderSide(color: c.border.withValues(alpha: 0.2)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(color: c.primary, width: 1.5),
+        borderSide:
+        BorderSide(color: c.primary, width: 1.5),
       ),
     ),
   );
@@ -1896,50 +1968,55 @@ class _Dropdown<T> extends StatelessWidget {
   final ValueChanged<T?> onChanged;
 
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<T>(
-    value: value,
-    isExpanded: true,
-    icon: Icon(
-      Icons.keyboard_arrow_down_rounded,
-      color: c.textSecondary.withValues(alpha: 0.6),
-      size: 20,
-    ),
-    items: items,
-    onChanged: onChanged,
-    decoration: InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(
-        color: c.textSecondary.withValues(alpha: 0.5),
-        fontSize: 13,
-      ),
-      prefixIcon: Icon(
-        icon,
-        size: 16,
-        color: c.textSecondary.withValues(alpha: 0.6),
-      ),
-      filled: true,
-      fillColor: c.background,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(color: c.border.withValues(alpha: 0.2)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(color: c.border.withValues(alpha: 0.2)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(11),
-        borderSide: BorderSide(color: c.primary, width: 1.5),
-      ),
-    ),
-    style: TextStyle(
-      color: c.textPrimary,
-      fontSize: 13.5,
-      fontWeight: FontWeight.w600,
-    ),
-    dropdownColor: c.surface,
-  );
+  Widget build(BuildContext context) =>
+      DropdownButtonFormField<T>(
+        value: value,
+        isExpanded: true,
+        icon: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: c.textSecondary.withValues(alpha: 0.6),
+          size: 20,
+        ),
+        items: items,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(
+            color: c.textSecondary.withValues(alpha: 0.5),
+            fontSize: 13,
+          ),
+          prefixIcon: Icon(
+            icon,
+            size: 16,
+            color: c.textSecondary.withValues(alpha: 0.6),
+          ),
+          filled: true,
+          fillColor: c.background,
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(11),
+            borderSide: BorderSide(
+                color: c.border.withValues(alpha: 0.2)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(11),
+            borderSide: BorderSide(
+                color: c.border.withValues(alpha: 0.2)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(11),
+            borderSide:
+            BorderSide(color: c.primary, width: 1.5),
+          ),
+        ),
+        style: TextStyle(
+          color: c.textPrimary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+        ),
+        dropdownColor: c.surface,
+      );
 }
 
 class _FiatPicker extends StatelessWidget {
@@ -1959,7 +2036,8 @@ class _FiatPicker extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.background,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: c.border.withValues(alpha: 0.2)),
+        border: Border.all(
+            color: c.border.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -2009,7 +2087,9 @@ class _VisibilityRow extends StatelessWidget {
     duration: const Duration(milliseconds: 200),
     padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
     decoration: BoxDecoration(
-      color: isVisible ? c.primary.withValues(alpha: 0.05) : c.background,
+      color: isVisible
+          ? c.primary.withValues(alpha: 0.05)
+          : c.background,
       borderRadius: BorderRadius.circular(13),
       border: Border.all(
         color: isVisible
@@ -2022,7 +2102,9 @@ class _VisibilityRow extends StatelessWidget {
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
           child: Icon(
-            isVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+            isVisible
+                ? Icons.visibility_rounded
+                : Icons.visibility_off_rounded,
             key: ValueKey(isVisible),
             size: 17,
             color: isVisible ? c.primary : c.textSecondary,
@@ -2043,8 +2125,11 @@ class _VisibilityRow extends StatelessWidget {
               ),
               const SizedBox(height: 1),
               Text(
-                isVisible ? 'Visible to buyers' : 'Hidden from marketplace',
-                style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                isVisible
+                    ? 'Visible to buyers'
+                    : 'Hidden from marketplace',
+                style: TextStyle(
+                    color: c.textSecondary, fontSize: 11.5),
               ),
             ],
           ),
@@ -2093,19 +2178,20 @@ class _SubmitBtn extends StatelessWidget {
           boxShadow: submitting
               ? null
               : [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
+            BoxShadow(
+              color: color.withValues(alpha: 0.28),
+              blurRadius: 16,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         child: ElevatedButton(
           onPressed: submitting ? null : onSubmit,
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
             foregroundColor: c.onPrimary,
-            disabledBackgroundColor: color.withValues(alpha: 0.45),
+            disabledBackgroundColor:
+            color.withValues(alpha: 0.45),
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -2115,46 +2201,49 @@ class _SubmitBtn extends StatelessWidget {
             duration: const Duration(milliseconds: 180),
             child: submitting
                 ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(c.onPrimary),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Creating offer…',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14.5,
-                        ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isBuy
-                            ? Icons.south_west_rounded
-                            : Icons.north_east_rounded,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isBuy ? 'Post Buy Offer' : 'Post Sell Offer',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14.5,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(
+                        c.onPrimary),
                   ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Creating offer…',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ],
+            )
+                : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isBuy
+                      ? Icons.south_west_rounded
+                      : Icons.north_east_rounded,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isBuy
+                      ? 'Post Buy Offer'
+                      : 'Post Sell Offer',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2163,7 +2252,7 @@ class _SubmitBtn extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OFFER TILE (animated)
+// OFFER TILE (animated) — now receives assetVm
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AnimatedOfferTile extends StatefulWidget {
@@ -2171,6 +2260,7 @@ class _AnimatedOfferTile extends StatefulWidget {
     required this.index,
     required this.c,
     required this.offer,
+    required this.assetVm,
     required this.marketPrice,
     required this.priceLoading,
     required this.enabled,
@@ -2181,6 +2271,7 @@ class _AnimatedOfferTile extends StatefulWidget {
   final int index;
   final AppColor c;
   final OfferModel offer;
+  final AssetVM assetVm;
   final String? marketPrice;
   final bool priceLoading;
   final bool enabled;
@@ -2189,7 +2280,8 @@ class _AnimatedOfferTile extends StatefulWidget {
   final VoidCallback onCancel;
 
   @override
-  State<_AnimatedOfferTile> createState() => _AnimatedOfferTileState();
+  State<_AnimatedOfferTile> createState() =>
+      _AnimatedOfferTileState();
 }
 
 class _AnimatedOfferTileState extends State<_AnimatedOfferTile>
@@ -2198,19 +2290,19 @@ class _AnimatedOfferTileState extends State<_AnimatedOfferTile>
     vsync: this,
     duration: Duration(milliseconds: 380 + widget.index * 55),
   );
-  late final Animation<double> _fade = CurvedAnimation(
-    parent: _ctrl,
-    curve: Curves.easeOut,
-  );
+  late final Animation<double> _fade =
+  CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
   late final Animation<Offset> _slide = Tween<Offset>(
     begin: const Offset(0, 0.12),
     end: Offset.zero,
-  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+  ).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
 
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration(milliseconds: widget.index * 55), () {
+    Future.delayed(
+        Duration(milliseconds: widget.index * 55), () {
       if (mounted) _ctrl.forward();
     });
   }
@@ -2231,6 +2323,7 @@ class _AnimatedOfferTileState extends State<_AnimatedOfferTile>
         child: _OfferTile(
           c: widget.c,
           offer: widget.offer,
+          assetVm: widget.assetVm,
           marketPrice: widget.marketPrice,
           priceLoading: widget.priceLoading,
           enabled: widget.enabled,
@@ -2247,6 +2340,7 @@ class _OfferTile extends StatelessWidget {
   const _OfferTile({
     required this.c,
     required this.offer,
+    required this.assetVm,
     required this.marketPrice,
     required this.priceLoading,
     required this.enabled,
@@ -2256,6 +2350,7 @@ class _OfferTile extends StatelessWidget {
   });
   final AppColor c;
   final OfferModel offer;
+  final AssetVM assetVm;
   final String? marketPrice;
   final bool priceLoading;
   final bool enabled;
@@ -2265,11 +2360,9 @@ class _OfferTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canToggle =
-        offer.status == OfferStatus.active ||
+    final canToggle = offer.status == OfferStatus.active ||
         offer.status == OfferStatus.paused;
-    final canCancel =
-        offer.status == OfferStatus.active ||
+    final canCancel = offer.status == OfferStatus.active ||
         offer.status == OfferStatus.paused;
 
     return Column(
@@ -2278,6 +2371,7 @@ class _OfferTile extends StatelessWidget {
         PublicOfferTile(
           c: c,
           offer: offer,
+          assetVm: assetVm,
           marketPrice: marketPrice,
           onTap: () {},
           shimmerAnim: shimmerAnim,
@@ -2304,7 +2398,8 @@ class _OfferTile extends StatelessWidget {
                     onTap: onPauseOrResume,
                   ),
                 ),
-              if (canToggle && canCancel) const SizedBox(width: 8),
+              if (canToggle && canCancel)
+                const SizedBox(width: 8),
               if (canCancel)
                 Expanded(
                   child: _ActionBtn(
@@ -2351,7 +2446,8 @@ class _ActionBtn extends StatelessWidget {
       borderRadius: BorderRadius.circular(11),
       child: Container(
         height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(9),
@@ -2391,11 +2487,13 @@ class _EmptyOffersCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+    padding: const EdgeInsets.symmetric(
+        vertical: 36, horizontal: 24),
     decoration: BoxDecoration(
       color: c.surface,
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: c.border.withValues(alpha: 0.18)),
+      border:
+      Border.all(color: c.border.withValues(alpha: 0.18)),
     ),
     child: Column(
       children: [
@@ -2406,7 +2504,8 @@ class _EmptyOffersCard extends StatelessWidget {
             color: c.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(Icons.storefront_outlined, color: c.primary, size: 24),
+          child: Icon(Icons.storefront_outlined,
+              color: c.primary, size: 24),
         ),
         const SizedBox(height: 14),
         Text(
@@ -2422,7 +2521,10 @@ class _EmptyOffersCard extends StatelessWidget {
         Text(
           'Create your first offer above to\nstart trading on the marketplace.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5),
+          style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 13,
+              height: 1.5),
         ),
       ],
     ),
@@ -2453,7 +2555,8 @@ class _AlertBanner extends StatelessWidget {
     decoration: BoxDecoration(
       color: accent.withValues(alpha: 0.05),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: accent.withValues(alpha: 0.18)),
+      border:
+      Border.all(color: accent.withValues(alpha: 0.18)),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2542,7 +2645,8 @@ class _ErrorState extends StatelessWidget {
               color: c.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(Icons.cloud_off_rounded, color: c.error, size: 26),
+            child: Icon(Icons.cloud_off_rounded,
+                color: c.error, size: 26),
           ),
           const SizedBox(height: 18),
           Text(
@@ -2558,23 +2662,30 @@ class _ErrorState extends StatelessWidget {
           Text(
             error,
             textAlign: TextAlign.center,
-            style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5),
+            style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 13,
+                height: 1.5),
           ),
           const SizedBox(height: 22),
           SizedBox(
             height: 48,
             child: ElevatedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 16),
+              icon: const Icon(Icons.refresh_rounded,
+                  size: 16),
               label: const Text(
                 'Try Again',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.primary,
                 foregroundColor: c.onPrimary,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(13),
                 ),

@@ -34,6 +34,65 @@ class CurrencyVM extends ChangeNotifier {
   static const double _maxFxSpreadPct = 3.0;
   static const double _maxSingleSourceJumpPct = 20.0;
 
+  /// IMPORTANT (UI):
+  /// If you use a custom font like Sora and see "�" / "?" for ₱, ¥, ₩, ฿, etc,
+  /// that's a font glyph issue (not Intl). Fix it by adding font fallbacks in TextStyle/Theme.
+  ///
+  /// Example:
+  /// TextStyle(fontFamily: 'Sora', fontFamilyFallback: CurrencyVM.currencyFontFallback)
+  static const List<String> currencyFontFallback = <String>[
+    // Android / Flutter common
+    'Roboto',
+    // iOS
+    '.SF Pro Text',
+    // Windows
+    'Segoe UI',
+    'Segoe UI Symbol',
+    // Linux / general
+    'Noto Sans',
+    'Noto Sans Symbols',
+    'Noto Sans Symbols2',
+    'Arial Unicode MS',
+    'Arial',
+  ];
+
+  /// Symbol overrides for common fiats (ensures Intl oddities don't show a generic "¤")
+  /// Note: This does NOT fix missing glyphs if your font doesn't support them;
+  /// use [currencyFontFallback] for that.
+  static const Map<String, String> _symbolOverrides = <String, String>{
+    'USD': r'$',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': '¥',
+    'CNY': '¥',
+    'KRW': '₩',
+    'PHP': '₱',
+    'THB': '฿',
+    'VND': '₫',
+    'IDR': 'Rp',
+    'INR': '₹',
+    'RUB': '₽',
+    'AUD': r'$',
+    'CAD': r'$',
+    'NZD': r'$',
+    'SGD': r'$',
+    'HKD': r'$',
+    'TWD': r'$',
+    'MYR': 'RM',
+    'AED': 'د.إ',
+    'SAR': '﷼',
+    'QAR': 'ر.ق',
+    'KWD': 'د.ك',
+    'BHD': 'د.ب',
+    'OMR': 'ر.ع.',
+    'ZAR': 'R',
+    'BRL': 'R',
+    'MXN': r'$',
+    'NGN': '₦',
+    'EGP': 'E£',
+    'TRY': '₺',
+  };
+
   // ── HTTP Client ───────────────────────────────────────────────────────────
   late final IOClient _client;
   bool _disposed = false;
@@ -94,7 +153,40 @@ class CurrencyVM extends ChangeNotifier {
   // ── Public API ────────────────────────────────────────────────────────────
   String get fiat => _fiat;
   String get fiatCode => _fiat.toUpperCase();
-  String get fiatSymbol => NumberFormat.simpleCurrency(name: fiatCode).currencySymbol;
+
+  /// Robust symbol:
+  /// - Uses override for common currencies
+  /// - Falls back to Intl
+  /// - If Intl returns "¤" (generic currency sign), falls back to the code
+  /// NOTE: Glyph rendering depends on the UI font; use [currencyFontFallback].
+  String get fiatSymbol {
+    final code = fiatCode;
+
+    final override = _symbolOverrides[code];
+    if (override != null && override.trim().isNotEmpty) return override;
+
+    try {
+      final sym = NumberFormat.simpleCurrency(name: code).currencySymbol;
+      final s = sym.trim();
+
+      // Intl sometimes returns the generic currency sign for unknown codes/locales.
+      if (s.isEmpty || s == '¤') return code;
+
+      return s;
+    } catch (_) {
+      return code;
+    }
+  }
+
+  /// Optional: safer label when symbol might be missing glyph in a custom font.
+  /// Example UI use: "${fiatSymbolMaybeCode} 1,234.56"
+  String get fiatSymbolMaybeCode {
+    final s = fiatSymbol.trim();
+    // If symbol is same as code, just show code; else prefer symbol.
+    if (s.toUpperCase() == fiatCode) return fiatCode;
+    return s;
+  }
+
   bool get loading => _loading;
 
   /// True when rates could not be fetched. UI should show "—" or "N/A"
@@ -140,11 +232,11 @@ class CurrencyVM extends ChangeNotifier {
   // Cache status
   bool get hasValidRateCache =>
       _lastRateRefresh != null &&
-      DateTime.now().difference(_lastRateRefresh!) < rateCacheDuration;
+          DateTime.now().difference(_lastRateRefresh!) < rateCacheDuration;
 
   bool get hasValidHistoryCache =>
       _lastHistoryRefresh != null &&
-      DateTime.now().difference(_lastHistoryRefresh!) < historyCacheDuration;
+          DateTime.now().difference(_lastHistoryRefresh!) < historyCacheDuration;
 
   /// Set fiat currency and refresh rates
   Future<void> setFiat(String v) async {
@@ -186,6 +278,8 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   /// Centralized fiat formatter for all UI layers.
+  /// NOTE: Symbol returned by Intl may not render in your custom font.
+  /// Use [fiatSymbol] + [currencyFontFallback] in UI if needed.
   NumberFormat fiatFormatter({int? decimalDigits}) {
     return NumberFormat.simpleCurrency(
       name: fiatCode,
@@ -196,6 +290,18 @@ class CurrencyVM extends ChangeNotifier {
   String formatFiat(double amount, {int? decimalDigits}) {
     final safeAmount = amount.isFinite ? amount : 0.0;
     return fiatFormatter(decimalDigits: decimalDigits).format(safeAmount);
+  }
+
+  /// When your font cannot render the symbol (shows "?" / tofu),
+  /// use this (symbol + code) so users can still understand the currency.
+  /// Example: "₱ (PHP) 1,234.56"
+  String formatFiatWithCode(double amount, {int? decimalDigits}) {
+    final safeAmount = amount.isFinite ? amount : 0.0;
+    final formattedNumber =
+    NumberFormat.currency(name: '', symbol: '', decimalDigits: decimalDigits)
+        .format(safeAmount)
+        .trim();
+    return '$fiatSymbol (${fiatCode}) $formattedNumber';
   }
 
   String formatSignedFiat(double amount, {int? decimalDigits}) {
@@ -260,7 +366,7 @@ class CurrencyVM extends ChangeNotifier {
 
     // Subscribe to live XLM/USDC price stream
     _pairSub = _stellar.xlmUsdcPriceStream().listen(
-      (p) {
+          (p) {
         if (_disposed) return;
         if (p.usdcPerXlm > 0 && p.usdcPerXlm.isFinite) {
           final oldPrice = _lastUsdcPerXlm;
@@ -526,14 +632,14 @@ class CurrencyVM extends ChangeNotifier {
   /// Use cached rates as fallback when fetch fails
   Future<void> _useCachedRatesAsFallback() async {
     if (_lastGoodRatesCache != null) {
-      final cachedFiat = (_lastGoodRatesCache!['fiat'] as String?)
-          ?.toLowerCase();
+      final cachedFiat =
+      (_lastGoodRatesCache!['fiat'] as String?)?.toLowerCase();
       final cachedUsdcRate =
           (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
       final cachedXlmRate =
           (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
-      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)
-          ?.toDouble();
+      final cachedUsdcPerXlm =
+      (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)?.toDouble();
 
       if (cachedFiat != _fiat) {
         debugPrint(
@@ -589,7 +695,7 @@ class CurrencyVM extends ChangeNotifier {
     _usdcRate = usdc;
     _xlmRate = xlm;
     _lastUsdcPerXlm =
-        (usdcPerXlm != null && usdcPerXlm > 0 && usdcPerXlm.isFinite)
+    (usdcPerXlm != null && usdcPerXlm > 0 && usdcPerXlm.isFinite)
         ? usdcPerXlm
         : (xlm / usdc);
     _ratesUnavailable = false;
@@ -622,8 +728,8 @@ class CurrencyVM extends ChangeNotifier {
           (_lastGoodRatesCache!['xlmRate'] as num?)?.toDouble() ?? 0.0;
       final cachedUsdcRate =
           (_lastGoodRatesCache!['usdcRate'] as num?)?.toDouble() ?? 0.0;
-      final cachedUsdcPerXlm = (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)
-          ?.toDouble();
+      final cachedUsdcPerXlm =
+      (_lastGoodRatesCache!['lastUsdcPerXlm'] as num?)?.toDouble();
 
       if (cachedUsdcPerXlm != null && cachedUsdcPerXlm > 0) {
         _lastUsdcPerXlm = cachedUsdcPerXlm;
@@ -781,7 +887,7 @@ class CurrencyVM extends ChangeNotifier {
     while (guard++ < 10 && !_disposed) {
       final url = Uri.parse(
         'https://api.binance.com/api/v3/klines?symbol=XLMUSDT&interval=1d&limit=$limit'
-        '${endMs != null ? '&endTime=$endMs' : ''}',
+            '${endMs != null ? '&endTime=$endMs' : ''}',
       );
 
       final batch = await _jsonList(url);
@@ -818,7 +924,7 @@ class CurrencyVM extends ChangeNotifier {
       final start = end.subtract(const Duration(days: chunkDays));
       final url = Uri.parse(
         'https://api.exchange.coinbase.com/products/XLM-USD/candles'
-        '?granularity=86400&start=${start.toIso8601String()}&end=${end.toIso8601String()}',
+            '?granularity=86400&start=${start.toIso8601String()}&end=${end.toIso8601String()}',
       );
 
       final arr = await _jsonList(url);
@@ -854,7 +960,7 @@ class CurrencyVM extends ChangeNotifier {
       final startAt = endAt - (chunkDays * 86400);
       final url = Uri.parse(
         'https://api.kucoin.com/api/v1/market/candles?type=1day&symbol=XLM-USDT'
-        '&startAt=$startAt&endAt=$endAt',
+            '&startAt=$startAt&endAt=$endAt',
       );
 
       final m = await _json(url);
@@ -990,22 +1096,22 @@ class CurrencyVM extends ChangeNotifier {
       final end = start.add(const Duration(days: 200));
       final url = Uri.parse(
         'https://horizon.stellar.org/trade_aggregations'
-        '?base_asset_type=native'
-        '&counter_asset_type=credit_alphanum12'
-        '&counter_asset_code=USDC'
-        '&counter_asset_issuer=$issuer'
-        '&resolution=86400000'
-        '&start_time=${start.millisecondsSinceEpoch}'
-        '&end_time=${end.millisecondsSinceEpoch}'
-        '&order=asc'
-        '&limit=200',
+            '?base_asset_type=native'
+            '&counter_asset_type=credit_alphanum12'
+            '&counter_asset_code=USDC'
+            '&counter_asset_issuer=$issuer'
+            '&resolution=86400000'
+            '&start_time=${start.millisecondsSinceEpoch}'
+            '&end_time=${end.millisecondsSinceEpoch}'
+            '&order=asc'
+            '&limit=200',
       );
 
       final m = await _json(url);
       final records =
           (m['_embedded']?['records'] as List?) ??
-          (m['records'] as List?) ??
-          [];
+              (m['records'] as List?) ??
+              [];
 
       if (records.isEmpty) break;
 
@@ -1030,15 +1136,15 @@ class CurrencyVM extends ChangeNotifier {
 
     final url = Uri.parse(
       'https://horizon.stellar.org/trade_aggregations'
-      '?base_asset_type=native'
-      '&counter_asset_type=credit_alphanum12'
-      '&counter_asset_code=USDC'
-      '&counter_asset_issuer=$issuer'
-      '&resolution=86400000'
-      '&start_time=${start.millisecondsSinceEpoch}'
-      '&end_time=${now.millisecondsSinceEpoch}'
-      '&order=asc'
-      '&limit=200',
+          '?base_asset_type=native'
+          '&counter_asset_type=credit_alphanum12'
+          '&counter_asset_code=USDC'
+          '&counter_asset_issuer=$issuer'
+          '&resolution=86400000'
+          '&start_time=${start.millisecondsSinceEpoch}'
+          '&end_time=${now.millisecondsSinceEpoch}'
+          '&order=asc'
+          '&limit=200',
     );
 
     final m = await _json(url);
@@ -1157,7 +1263,7 @@ class CurrencyVM extends ChangeNotifier {
     try {
       return await Future.any(
         futures.map(
-          (f) => f.then((v) => v != null ? v : Future<T>.error('null')),
+              (f) => f.then((v) => v != null ? v : Future<T>.error('null')),
         ),
       );
     } catch (_) {
@@ -1167,9 +1273,9 @@ class CurrencyVM extends ChangeNotifier {
 
   /// Retry helper with exponential backoff
   Future<T?> _withRetry<T>(
-    Future<T?> Function() operation, {
-    int maxRetries = 3,
-  }) async {
+      Future<T?> Function() operation, {
+        int maxRetries = 3,
+      }) async {
     for (var attempt = 0; attempt < maxRetries; attempt++) {
       if (_disposed) return null;
 

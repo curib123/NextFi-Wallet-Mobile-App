@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
@@ -20,7 +19,6 @@ import 'package:next_fi/features/settings/view/settings_screen.dart';
 import 'package:next_fi/features/wallet_settings/view/wallet_screen_settings.dart';
 import 'package:next_fi/helper/link_opener/link_opener.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-
 import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/services/oath2.0/auth_service.dart';
 import 'package:next_fi/services/oath2.0/models/user_model.dart';
@@ -34,7 +32,93 @@ import 'package:next_fi/services/verification/models/verification_models.dart';
 import 'package:next_fi/services/verification/verification_core_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TTL CACHE ENTRY
+// TYPOGRAPHY TOKENS
+// ─────────────────────────────────────────────────────────────────────────────
+
+abstract class _T {
+  static const displayName = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.6,
+    height: 1.1,
+  );
+  static const handle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.3,
+  );
+  static const email = TextStyle(
+    fontSize: 11.5,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.3,
+  );
+  static const sectionLabel = TextStyle(
+    fontSize: 9.5,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.4,
+    height: 1.0,
+  );
+  static const navTitle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.2,
+    height: 1.2,
+  );
+  static const navSub = TextStyle(
+    fontSize: 11.5,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.3,
+  );
+  static const badge = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.2,
+    height: 1.0,
+  );
+  static const micro = TextStyle(
+    fontSize: 9.5,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.3,
+    height: 1.0,
+  );
+  static const tierName = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.4,
+    height: 1.1,
+  );
+  static const tierSub = TextStyle(
+    fontSize: 10.5,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1.3,
+  );
+  static const progressPct = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+    height: 1.0,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+  static const logoutLabel = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.2,
+    height: 1.0,
+  );
+  static const version = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.2,
+    height: 1.0,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TTL CACHE  (unchanged logic)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CacheEntry<T> {
@@ -43,10 +127,6 @@ class _CacheEntry<T> {
   final DateTime _at;
   bool isFresh(Duration ttl) => DateTime.now().difference(_at) < ttl;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DRAWER CACHE
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _DrawerCache {
   static const _userTtl = Duration(seconds: 30);
@@ -78,9 +158,9 @@ class _DrawerCache {
       trustStatus != null && trustStatus!.isFresh(_verificationTtl);
   static bool get hasLegalLinks =>
       termsUrl != null &&
-      termsUrl!.isFresh(_legalLinksTtl) &&
-      privacyUrl != null &&
-      privacyUrl!.isFresh(_legalLinksTtl);
+          termsUrl!.isFresh(_legalLinksTtl) &&
+          privacyUrl != null &&
+          privacyUrl!.isFresh(_legalLinksTtl);
 
   static void invalidateAll() {
     user = merchantProfile = profile = null;
@@ -90,13 +170,11 @@ class _DrawerCache {
     privacyUrl = null;
   }
 
-  static void invalidateProfile() {
-    profile = null;
-  }
+  static void invalidateProfile() => profile = null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET
+// APP DRAWER — STATE
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AppDrawer extends StatefulWidget {
@@ -110,8 +188,8 @@ class AppDrawer extends StatefulWidget {
 class _AppDrawerState extends State<AppDrawer>
     with SingleTickerProviderStateMixin {
   final _auth = AuthService();
-  final _profile = ProfileCoreService.I;
-  final _verification = VerificationCoreService.I;
+  final _profileSvc = ProfileCoreService.I;
+  final _verificationSvc = VerificationCoreService.I;
   final _merchantProfileSvc = MerchantProfileCoreService.I;
 
   bool _loggingOut = false;
@@ -131,26 +209,23 @@ class _AppDrawerState extends State<AppDrawer>
       _DrawerCache.tierProgress?.value;
   TrustStatus get _trustStatus =>
       _DrawerCache.trustStatus?.value ?? TrustStatus.unknown;
-  String get _termsAndConditionsUrl => _DrawerCache.termsUrl?.value ?? '';
-  String get _privacyPolicyUrl => _DrawerCache.privacyUrl?.value ?? '';
+  String get _termsUrl => _DrawerCache.termsUrl?.value ?? '';
+  String get _privacyUrl => _DrawerCache.privacyUrl?.value ?? '';
 
   @override
   void initState() {
     super.initState();
-
     _entryCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 560),
+      duration: const Duration(milliseconds: 500),
     );
     _fadeAnim = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(-0.06, 0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
-
-    _itemAnims = List.generate(20, (i) {
-      final start = 0.1 + i * 0.06;
-      final end = (start + 0.35).clamp(0.0, 1.0);
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(-0.04, 0), end: Offset.zero).animate(
+            CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+    _itemAnims = List.generate(22, (i) {
+      final start = (i * 0.045).clamp(0.0, 0.75);
+      final end = (start + 0.30).clamp(0.0, 1.0);
       return CurvedAnimation(
         parent: _entryCtrl,
         curve: Interval(start, end, curve: Curves.easeOutCubic),
@@ -162,7 +237,6 @@ class _AppDrawerState extends State<AppDrawer>
       _DrawerCache.invalidateProfile();
       _fetchProfile();
     });
-
     _bootstrap();
   }
 
@@ -176,8 +250,7 @@ class _AppDrawerState extends State<AppDrawer>
   Future<void> _bootstrap() async {
     _entryCtrl.forward();
     final isAuth = await _auth.isAuthenticated;
-
-    final futures = <Future<void>>[
+    await Future.wait([
       if (!_DrawerCache.hasAppInfo) _fetchAppInfo(),
       if (!_DrawerCache.hasLegalLinks) _fetchLegalLinks(),
       if (isAuth && !_DrawerCache.hasUser) _fetchUser(),
@@ -186,103 +259,86 @@ class _AppDrawerState extends State<AppDrawer>
         _fetchMerchantProfileData(),
       if (isAuth && !_DrawerCache.hasTierProgress) _fetchTierProgressData(),
       if (isAuth && !_DrawerCache.hasTrustStatus) _fetchVerification(),
-    ];
-
-    if (futures.isNotEmpty) await Future.wait(futures);
+    ]);
     if (mounted) setState(() {});
   }
 
   Future<void> _fetchUser() async {
     try {
-      final u = await _auth.currentUser;
-      _DrawerCache.user = _CacheEntry(u);
+      _DrawerCache.user = _CacheEntry(await _auth.currentUser);
       if (mounted) setState(() {});
     } catch (_) {}
   }
 
   Future<void> _fetchAppInfo() async {
     try {
-      final info = await PackageInfo.fromPlatform();
-      _DrawerCache.appInfo = _CacheEntry(info);
+      _DrawerCache.appInfo = _CacheEntry(await PackageInfo.fromPlatform());
       if (mounted) setState(() {});
     } catch (_) {}
   }
 
   Future<void> _fetchProfile() async {
     try {
-      final p = await _profile.getMe();
-      _DrawerCache.profile = _CacheEntry(p);
-      if (mounted) setState(() {});
+      _DrawerCache.profile = _CacheEntry(await _profileSvc.getMe());
     } catch (_) {
       _DrawerCache.profile = _CacheEntry(null);
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _fetchVerification() async {
     try {
-      final data = await _verification.getMe();
-      _DrawerCache.trustStatus = _CacheEntry(data.status);
-      if (mounted) setState(() {});
+      final d = await _verificationSvc.getMe();
+      _DrawerCache.trustStatus = _CacheEntry(d.status);
     } catch (_) {
       _DrawerCache.trustStatus = _CacheEntry(TrustStatus.basic);
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _fetchLegalLinks() async {
-    String publicBase = centralized_baseUrl.replaceFirst(
-      RegExp(r'/api/v1/?$'),
-      '',
-    );
-    publicBase = publicBase.replaceFirst(RegExp(r'/$'), '');
-    final fallbackDownloadUrl = '$publicBase/download';
-
+    String base = centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
+    base = base.replaceFirst(RegExp(r'/$'), '');
+    final fallback = '$base/download';
     try {
-      final uri = Uri.parse('$publicBase/download/meta');
-      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      final res = await http
+          .get(Uri.parse('$base/download/meta'))
+          .timeout(const Duration(seconds: 15));
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        final decoded = jsonDecode(res.body);
-        if (decoded is Map<String, dynamic>) {
-          final termsRaw = decoded['termsAndConditionsUrl']?.toString() ?? '';
-          final privacyRaw = decoded['privacyPolicyUrl']?.toString() ?? '';
-
-          final terms = termsRaw.trim().isNotEmpty
-              ? termsRaw.trim()
-              : fallbackDownloadUrl;
-          final privacy = privacyRaw.trim().isNotEmpty
-              ? privacyRaw.trim()
-              : fallbackDownloadUrl;
-
-          _DrawerCache.termsUrl = _CacheEntry(terms);
-          _DrawerCache.privacyUrl = _CacheEntry(privacy);
+        final d = jsonDecode(res.body);
+        if (d is Map<String, dynamic>) {
+          final t = d['termsAndConditionsUrl']?.toString().trim() ?? '';
+          final p = d['privacyPolicyUrl']?.toString().trim() ?? '';
+          _DrawerCache.termsUrl = _CacheEntry(t.isNotEmpty ? t : fallback);
+          _DrawerCache.privacyUrl = _CacheEntry(p.isNotEmpty ? p : fallback);
           if (mounted) setState(() {});
           return;
         }
       }
     } catch (_) {}
-
-    _DrawerCache.termsUrl = _CacheEntry(fallbackDownloadUrl);
-    _DrawerCache.privacyUrl = _CacheEntry(fallbackDownloadUrl);
+    _DrawerCache.termsUrl = _CacheEntry(fallback);
+    _DrawerCache.privacyUrl = _CacheEntry(fallback);
     if (mounted) setState(() {});
   }
 
   Future<void> _fetchMerchantProfileData() async {
     try {
-      final m = await _merchantProfileSvc.getMe();
-      _DrawerCache.merchantProfile = _CacheEntry(m);
-      if (mounted) setState(() {});
+      _DrawerCache.merchantProfile =
+          _CacheEntry(await _merchantProfileSvc.getMe());
     } catch (_) {
       _DrawerCache.merchantProfile = _CacheEntry(null);
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _fetchTierProgressData() async {
     try {
-      final t = await _merchantProfileSvc.getTierProgress();
-      _DrawerCache.tierProgress = _CacheEntry(t);
-      if (mounted) setState(() {});
+      _DrawerCache.tierProgress =
+          _CacheEntry(await _merchantProfileSvc.getTierProgress());
     } catch (_) {
       _DrawerCache.tierProgress = _CacheEntry(null);
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _handleLogout() async {
@@ -291,14 +347,13 @@ class _AppDrawerState extends State<AppDrawer>
     final confirm = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _LogoutConfirmationModal(),
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _LogoutModal(),
     );
     if (confirm != true || !mounted) return;
-
     setState(() => _loggingOut = true);
     await _auth.logout();
     _DrawerCache.invalidateAll();
-
     if (!mounted) return;
     Navigator.pop(context);
     widget.onLogout?.call();
@@ -308,9 +363,7 @@ class _AppDrawerState extends State<AppDrawer>
   void _redirectToLogin() {
     Navigator.pop(context);
     Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+        context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   void _redirectToPaymentAccount(bool isMerchant) {
@@ -318,125 +371,70 @@ class _AppDrawerState extends State<AppDrawer>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PaymentAccountSetupScreen(isMerchant: isMerchant),
-      ),
+          builder: (_) => PaymentAccountSetupScreen(isMerchant: isMerchant)),
     );
   }
 
   void _handleVerificationTap() {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
+    if (_user == null) return _redirectToLogin();
     _push(const VerificationFlowScreen());
   }
 
   Future<void> _handleMerchantRequestTap() async {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
+    if (_user == null) return _redirectToLogin();
     Navigator.pop(context);
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()),
-    );
+    await Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const MerchantOnboardingFlowScreen()));
     _DrawerCache.merchantProfile = null;
     _DrawerCache.tierProgress = null;
     if (mounted) await _fetchMerchantProfileData();
     if (mounted) await _fetchTierProgressData();
   }
 
+  bool get _isVerified => _trustStatus == TrustStatus.ready;
+
   void _handleMerchantOffersTap() {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
+    if (_user == null) return _redirectToLogin();
+    if (!_isVerified) return _push(const VerificationFlowScreen());
     _push(const ManageOffersScreen());
   }
 
   void _handleMerchantTradesTap() {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
+    if (_user == null) return _redirectToLogin();
+    if (!_isVerified) return _push(const VerificationFlowScreen());
     _push(const MerchantTradesScreen());
   }
 
   void _handleP2PMarketplaceTap() {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
+    if (_user == null) return _redirectToLogin();
+    if (!_isVerified) return _push(const VerificationFlowScreen());
     _push(const MarketOffersScreen(initialType: OfferType.sell));
   }
 
   void _handleTradeHistoryTap() {
-    if (_user == null) {
-      _redirectToLogin();
-      return;
-    }
-    if (!_isVerifiedForTradeAccess) {
-      _push(const VerificationFlowScreen());
-      return;
-    }
+    if (_user == null) return _redirectToLogin();
+    if (!_isVerified) return _push(const VerificationFlowScreen());
     _push(const TradeHistoryScreen());
   }
 
-  Future<void> _openLegalLink({
-    required String url,
-    required String fallbackLabel,
-  }) async {
-    await LinkOpener.open(
-      context,
-      url,
-      fallbackLabel: fallbackLabel,
-    );
-    if (!mounted) return;
-    Navigator.pop(context);
+  Future<void> _openLegal(String url, String label) async {
+    await LinkOpener.open(context, url, fallbackLabel: label);
+    if (mounted) Navigator.pop(context);
   }
-
-  Future<void> _handleTermsTap() async {
-    await _openLegalLink(
-      url: _termsAndConditionsUrl,
-      fallbackLabel: 'Terms link',
-    );
-  }
-
-  Future<void> _handlePrivacyTap() async {
-    await _openLegalLink(
-      url: _privacyPolicyUrl,
-      fallbackLabel: 'Privacy link',
-    );
-  }
-
-  bool get _isVerifiedForTradeAccess => _trustStatus == TrustStatus.ready;
 
   void _push(Widget screen) {
     Navigator.pop(context);
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
-  Widget _staggered(int index, Widget child) {
-    if (index >= _itemAnims.length) return child;
+  Widget _staggered(int i, Widget child) {
+    if (i >= _itemAnims.length) return child;
     return AnimatedBuilder(
-      animation: _itemAnims[index],
+      animation: _itemAnims[i],
       builder: (_, __) => Opacity(
-        opacity: _itemAnims[index].value,
+        opacity: _itemAnims[i].value,
         child: Transform.translate(
-          offset: Offset(0, 10 * (1 - _itemAnims[index].value)),
+          offset: Offset(0, 8 * (1 - _itemAnims[i].value)),
           child: child,
         ),
       ),
@@ -448,7 +446,6 @@ class _AppDrawerState extends State<AppDrawer>
     final c = AppColor.of(context);
     final mq = MediaQuery.of(context);
     final user = _user;
-
     final merchantApproved = _merchantProfile?.isApproved ?? false;
     final isMerchant = user != null && merchantApproved;
     final canRequestMerchant =
@@ -464,227 +461,162 @@ class _AppDrawerState extends State<AppDrawer>
           position: _slideAnim,
           child: Column(
             children: [
-              // ── Header ──────────────────────────────────────────────────
+              // ── Header ────────────────────────────────────────────────────
               if (showShimmer)
-                _ProfileShimmer(topPadding: mq.padding.top, colors: c)
+                _ProfileShimmer(topPadding: mq.padding.top, c: c)
               else if (user != null)
                 _ProfileHeader(
                   user: user,
                   profile: _cachedProfile,
                   tierProgress: _tierProgress,
                   trustStatus: _trustStatus,
-                  colors: c,
+                  c: c,
                 )
               else
                 _LoginPrompt(
-                  colors: c,
+                  c: c,
                   topPadding: mq.padding.top,
                   onTap: _redirectToLogin,
                 ),
 
-              // ── Nav list ────────────────────────────────────────────────
+              // ── Nav ───────────────────────────────────────────────────────
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    const SizedBox(height: 12),
-                    _staggered(
-                      0,
-                      _SectionLabel(label: 'P2P MARKET', colors: c),
-                    ),
-                    _staggered(
-                      1,
-                      _NavTile(
-                        icon: LucideIcons.arrowLeftRight,
-                        label: 'P2P Marketplace',
-                        description: 'Browse buy and sell offers',
-                        colors: c,
-                        accentColor: c.success, // emerald
-                        onTap: _handleP2PMarketplaceTap,
-                        requiresAuth: user == null,
-                      ),
-                    ),
-                    _staggered(
-                      2,
-                      _NavTile(
-                        icon: LucideIcons.clipboardList,
-                        label: 'My Trades',
-                        description: 'Your trade history',
-                        colors: c,
-                        accentColor: c.primary, // violet
-                        onTap: _handleTradeHistoryTap,
-                        requiresAuth: user == null,
-                      ),
-                    ),
+                    const SizedBox(height: 8),
 
-                    const SizedBox(height: 4),
-                    _staggered(3, _SectionLabel(label: 'ACCOUNT', colors: c)),
-                    _staggered(
-                      4,
-                      _NavTile(
-                        icon: LucideIcons.shieldCheck,
-                        label: 'Verification',
-                        description: 'Complete identity steps',
-                        colors: c,
-                        accentColor: c.info, // sky blue
-                        trailing: user != null
-                            ? _TrustStatusBadge(status: _trustStatus, colors: c)
-                            : null,
-                        onTap: _handleVerificationTap,
-                        requiresAuth: user == null,
-                      ),
-                    ),
-                    _staggered(
-                      5,
-                      _NavTile(
-                        icon: LucideIcons.landmark,
-                        label: 'Payment Account',
-                        description: 'Manage payment methods',
-                        colors: c,
-                        accentColor: c.info, // cyan
-                        onTap: () => _redirectToPaymentAccount(false),
-                        requiresAuth: user == null,
-                      ),
-                    ),
+                    _staggered(0, _Section(label: 'MARKET', c: c)),
+                    _staggered(1, _Tile(
+                      icon: LucideIcons.arrowLeftRight,
+                      label: 'P2P Marketplace',
+                      sub: 'Browse buy & sell offers',
+                      accent: c.success,
+                      c: c,
+                      locked: user == null,
+                      onTap: _handleP2PMarketplaceTap,
+                    )),
+                    _staggered(2, _Tile(
+                      icon: LucideIcons.clipboardList,
+                      label: 'My Trades',
+                      sub: 'Trade history',
+                      accent: c.primary,
+                      c: c,
+                      locked: user == null,
+                      onTap: _handleTradeHistoryTap,
+                    )),
+
+                    _staggered(3, _Section(label: 'ACCOUNT', c: c)),
+                    _staggered(4, _Tile(
+                      icon: LucideIcons.shieldCheck,
+                      label: 'Verification',
+                      sub: 'Identity & trust level',
+                      accent: c.info,
+                      c: c,
+                      locked: user == null,
+                      trailing: user != null
+                          ? _StatusPill(status: _trustStatus, c: c)
+                          : null,
+                      onTap: _handleVerificationTap,
+                    )),
+                    _staggered(5, _Tile(
+                      icon: LucideIcons.landmark,
+                      label: 'Payment Account',
+                      sub: 'Manage payment methods',
+                      accent: c.info,
+                      c: c,
+                      locked: user == null,
+                      onTap: () => _redirectToPaymentAccount(false),
+                    )),
 
                     if (canRequestMerchant) ...[
-                      _staggered(
-                        6,
-                        _SectionLabel(label: 'MERCHANT', colors: c),
-                      ),
-                      _staggered(
-                        7,
-                        _NavTile(
-                          icon: LucideIcons.briefcase,
-                          label: 'Merchant Request',
-                          description: 'Request merchant account access',
-                          colors: c,
-                          accentColor: c.warning, // orange
-                          trailing: merchantApproved
-                              ? _TrustStatusBadge(
-                                  status: TrustStatus.ready,
-                                  colors: c,
-                                )
-                              : null,
-                          onTap: _handleMerchantRequestTap,
-                        ),
-                      ),
+                      _staggered(6, _Section(label: 'MERCHANT', c: c)),
+                      _staggered(7, _Tile(
+                        icon: LucideIcons.briefcase,
+                        label: 'Merchant Request',
+                        sub: 'Apply for merchant access',
+                        accent: c.warning,
+                        c: c,
+                        trailing: merchantApproved
+                            ? _StatusPill(status: TrustStatus.ready, c: c)
+                            : null,
+                        onTap: _handleMerchantRequestTap,
+                      )),
                     ],
 
                     if (isMerchant) ...[
-                      if (!canRequestMerchant) ...[
-                        const SizedBox(height: 4),
-                        _staggered(
-                          8,
-                          _SectionLabel(label: 'MERCHANT', colors: c),
-                        ),
-                      ],
-                      _staggered(
-                        9,
-                        _NavTile(
-                          icon: LucideIcons.creditCard,
-                          label: 'Merchant Payment',
-                          description: 'Merchant payment account',
-                          colors: c,
-                          accentColor: c.error, // deep orange
-                          trailing: _TrustStatusBadge(
-                            status: TrustStatus.ready,
-                            colors: c,
-                          ),
-                          onTap: () => _redirectToPaymentAccount(isMerchant),
-                        ),
-                      ),
-                      _staggered(
-                        10,
-                        _NavTile(
-                          icon: LucideIcons.tag,
-                          label: 'Manage Offers',
-                          description: 'Create and edit merchant offers',
-                          colors: c,
-                          accentColor: c.warning, // amber
-                          onTap: _handleMerchantOffersTap,
-                        ),
-                      ),
-                      _staggered(
-                        11,
-                        _NavTile(
-                          icon: LucideIcons.repeat2,
-                          label: 'Merchant Trades',
-                          description: 'Incoming trades and chat inbox',
-                          colors: c,
-                          accentColor: c.accent, // purple
-                          onTap: _handleMerchantTradesTap,
-                        ),
-                      ),
+                      if (!canRequestMerchant)
+                        _staggered(8, _Section(label: 'MERCHANT', c: c)),
+                      _staggered(9, _Tile(
+                        icon: LucideIcons.tag,
+                        label: 'Manage Offers',
+                        sub: 'Create & edit offers',
+                        accent: c.warning,
+                        c: c,
+                        onTap: _handleMerchantOffersTap,
+                      )),
+                      _staggered(11, _Tile(
+                        icon: LucideIcons.repeat2,
+                        label: 'Merchant Trades',
+                        sub: 'Incoming trades & chat',
+                        accent: c.accent,
+                        c: c,
+                        onTap: _handleMerchantTradesTap,
+                      )),
                     ],
 
-                    const SizedBox(height: 4),
-                    _staggered(12, _SectionLabel(label: 'SETTINGS', colors: c)),
-                    _staggered(
-                      13,
-                      _NavTile(
-                        icon: LucideIcons.keyRound,
-                        label: 'Manage Wallet',
-                        description: 'Keys & backup',
-                        colors: c,
-                        accentColor: c.success, // teal
-                        onTap: () => _push(const WalletScreenSettings()),
-                      ),
-                    ),
-                    _staggered(
-                      14,
-                      _NavTile(
-                        icon: LucideIcons.slidersHorizontal,
-                        label: 'Preferences',
-                        description: 'App settings',
-                        colors: c,
-                        accentColor: c.textSecondary, // slate
-                        onTap: () => _push(const SettingsScreen()),
-                      ),
-                    ),
-                    _staggered(
-                      15,
-                      _NavTile(
-                        icon: LucideIcons.fileText,
-                        label: 'Terms & Conditions',
-                        description: 'Read legal terms',
-                        colors: c,
-                        accentColor: c.info,
-                        onTap: _handleTermsTap,
-                      ),
-                    ),
-                    _staggered(
-                      16,
-                      _NavTile(
-                        icon: LucideIcons.shield,
-                        label: 'Privacy Policy',
-                        description: 'Read privacy policy',
-                        colors: c,
-                        accentColor: c.accent,
-                        onTap: _handlePrivacyTap,
-                      ),
-                    ),
+                    _staggered(12, _Section(label: 'SETTINGS', c: c)),
+                    _staggered(13, _Tile(
+                      icon: LucideIcons.keyRound,
+                      label: 'Manage Wallet',
+                      sub: 'Keys & backup',
+                      accent: c.success,
+                      c: c,
+                      onTap: () => _push(const WalletScreenSettings()),
+                    )),
+                    _staggered(14, _Tile(
+                      icon: LucideIcons.slidersHorizontal,
+                      label: 'Preferences',
+                      sub: 'App settings',
+                      accent: c.textSecondary,
+                      c: c,
+                      onTap: () => _push(const SettingsScreen()),
+                    )),
+                    _staggered(15, _Tile(
+                      icon: LucideIcons.fileText,
+                      label: 'Terms & Conditions',
+                      sub: 'Legal terms',
+                      accent: c.info,
+                      c: c,
+                      onTap: () => _openLegal(_termsUrl, 'Terms'),
+                    )),
+                    _staggered(16, _Tile(
+                      icon: LucideIcons.shield,
+                      label: 'Privacy Policy',
+                      sub: 'Privacy policy',
+                      accent: c.accent,
+                      c: c,
+                      onTap: () => _openLegal(_privacyUrl, 'Privacy'),
+                    )),
 
-                    if (_appInfo != null) ...[
-                      const SizedBox(height: 24),
-                      _AppVersionInfo(info: _appInfo!, colors: c),
-                    ],
+                    const SizedBox(height: 20),
+                    if (_appInfo != null)
+                      _staggered(17, _VersionRow(info: _appInfo!, c: c)),
                     const SizedBox(height: 8),
                   ],
                 ),
               ),
 
-              // ── Logout ──────────────────────────────────────────────────
+              // ── Logout ────────────────────────────────────────────────────
               if (user != null) ...[
-                _DrawerDivider(colors: c),
-                _LogoutButton(
+                Container(height: 1, color: c.border.withValues(alpha: 0.5)),
+                _LogoutTile(
                   isLoading: _loggingOut,
-                  colors: c,
+                  c: c,
                   onTap: _handleLogout,
                 ),
               ],
-
-              SizedBox(height: mq.padding.bottom + 8),
+              SizedBox(height: mq.padding.bottom + 6),
             ],
           ),
         ),
@@ -692,6 +624,7 @@ class _AppDrawerState extends State<AppDrawer>
     );
   }
 }
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // PROFILE HEADER
@@ -703,18 +636,17 @@ class _ProfileHeader extends StatelessWidget {
     required this.profile,
     required this.tierProgress,
     required this.trustStatus,
-    required this.colors,
+    required this.c,
   });
-
   final User user;
   final ProfileModel? profile;
   final MerchantTierProgressModel? tierProgress;
   final TrustStatus trustStatus;
-  final AppColor colors;
+  final AppColor c;
 
   String? _s(String? v) {
     final t = v?.trim();
-    return (t == null || t.isEmpty) ? null : t;
+    return (t?.isEmpty ?? true) ? null : t;
   }
 
   String? get _displayName => _s(profile?.displayName);
@@ -722,47 +654,14 @@ class _ProfileHeader extends StatelessWidget {
     final u = _s(profile?.username);
     return u != null ? '@$u' : null;
   }
-
-  String? get _email => user.email.trim().isEmpty ? null : user.email.trim();
+  String? get _email =>
+      user.email.trim().isEmpty ? null : user.email.trim();
   String? get _country => _s(profile?.country);
-  String get _line1 => _displayName ?? _email ?? 'Anonymous';
-  String? get _line2 => _handle;
-  String? get _line3 {
-    final e = _email;
-    if (e == null || _line1 == e) return null;
-    return e;
-  }
-
-  Color _tierColor(MerchantTier tier) => switch (tier) {
-    MerchantTier.bronze => colors.error,
-    MerchantTier.silver => colors.accent,
-    MerchantTier.gold => colors.warning,
-    MerchantTier.platinum => colors.textSecondary,
-    MerchantTier.diamond => colors.info,
-  };
-
-  IconData _tierIcon(MerchantTier tier) => switch (tier) {
-    MerchantTier.bronze => Icons.shield_outlined,
-    MerchantTier.silver => Icons.workspace_premium_outlined,
-    MerchantTier.gold => Icons.emoji_events_outlined,
-    MerchantTier.platinum => Icons.military_tech_outlined,
-    MerchantTier.diamond => Icons.diamond_outlined,
-  };
-
-  String _tierLabel(MerchantTier tier) => switch (tier) {
-    MerchantTier.bronze => 'BRONZE',
-    MerchantTier.silver => 'SILVER',
-    MerchantTier.gold => 'GOLD',
-    MerchantTier.platinum => 'PLATINUM',
-    MerchantTier.diamond => 'DIAMOND',
-  };
+  String get _name => _displayName ?? _email ?? 'Anonymous';
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    final ctry = _country;
-    final c = colors;
-
     return Container(
       width: double.infinity,
       color: c.surface,
@@ -770,485 +669,182 @@ class _ProfileHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top accent line
+          // Thin primary accent line at very top
           Container(
-            height: 3,
+            height: 2,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [c.primary, c.primary, c.surface],
+                colors: [c.primary, c.primary.withValues(alpha: 0)],
               ),
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(20, top + 24, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: EdgeInsets.fromLTRB(18, top + 18, 18, 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Avatar row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _DrawerAvatar(user: user, colors: c),
-                    const Spacer(),
-                    // ── REDESIGNED VERIFICATION BADGE ──────────────────
-                    _VerifiedBadge(status: trustStatus, colors: c),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Display name
-                Text(
-                  _line1,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
-                    height: 1.1,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-
-                // Username handle — use primary color
-                if (_line2 != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
+                // Avatar with tier ring
+                _DrawerAvatar(user: user, c: c, tierProgress: tierProgress),
+                const SizedBox(width: 13),
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Name
                       Text(
-                        _line2!,
-                        style: TextStyle(
-                          color: c.primary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.1,
-                        ),
+                        _name,
+                        style: _T.displayName.copyWith(color: c.textPrimary),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      // Handle / email sub-line
+                      if (_handle != null)
+                        Text(
+                          _handle!,
+                          style: _T.handle.copyWith(color: c.primary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      else if (_email != null)
+                        Text(
+                          _email!,
+                          style: _T.email.copyWith(color: c.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (_handle != null &&
+                          _email != null &&
+                          _name != _email) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          _email!,
+                          style: _T.email.copyWith(color: c.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      // Meta chips row
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          _VerifiedBadge(status: trustStatus, c: c),
+                          if (_country != null) ...[
+                            const SizedBox(width: 6),
+                            _CountryChip(country: _country!, c: c),
+                          ],
+                        ],
                       ),
                     ],
                   ),
-                ],
-
-                // Email
-                if (_line3 != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    _line3!,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-
-                // Country chip
-                if (ctry != null) ...[
-                  const SizedBox(height: 10),
-                  _CountryChip(country: ctry, colors: c),
-                ],
-
-                // Merchant tier card
-                if (tierProgress != null) ...[
-                  const SizedBox(height: 14),
-                  _MerchantTierCard(
-                    tierProgress: tierProgress!,
-                    tierColor: _tierColor,
-                    tierIcon: _tierIcon,
-                    tierLabel: _tierLabel,
-                    colors: c,
-                  ),
-                ],
+                ),
               ],
             ),
           ),
-          Container(height: 1, color: c.border),
+          Container(height: 1, color: c.border.withValues(alpha: 0.5)),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ✦ REDESIGNED VERIFIED BADGE
-// Clean pill with icon + text on primary color background.
-// Text uses white (on primary) for maximum contrast & legibility.
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// TIER META
+// ═════════════════════════════════════════════════════════════════════════════
 
-class _VerifiedBadge extends StatelessWidget {
-  const _VerifiedBadge({required this.status, required this.colors});
+class _TierMeta {
+  static Color color(MerchantTier t) => switch (t) {
+    MerchantTier.bronze => const Color(0xFFCD7F32),
+    MerchantTier.silver => const Color(0xFF9CA3AF),
+    MerchantTier.gold => const Color(0xFFF59E0B),
+    MerchantTier.platinum => const Color(0xFF22D3EE),
+    MerchantTier.diamond => const Color(0xFF818CF8),
+  };
 
-  final TrustStatus status;
-  final AppColor colors;
+  static IconData icon(MerchantTier t) => switch (t) {
+    MerchantTier.bronze => Icons.shield_outlined,
+    MerchantTier.silver => Icons.workspace_premium_outlined,
+    MerchantTier.gold => Icons.emoji_events_outlined,
+    MerchantTier.platinum => Icons.military_tech_outlined,
+    MerchantTier.diamond => Icons.diamond_outlined,
+  };
 
-  @override
-  Widget build(BuildContext context) {
-    final (bgColor, fgColor, icon, label) = switch (status) {
-      TrustStatus.ready => (
-        colors.success,
-        colors.onPrimary,
-        LucideIcons.badgeCheck,
-        'Verified',
-      ),
-      TrustStatus.reviewing => (
-        colors.warning,
-        colors.onPrimary,
-        LucideIcons.clock,
-        'In Review',
-      ),
-      TrustStatus.suspended => (
-        colors.error,
-        colors.onPrimary,
-        LucideIcons.shieldOff,
-        'Suspended',
-      ),
-      TrustStatus.basic => (
-        colors.surface,
-        colors.textPrimary,
-        LucideIcons.shield,
-        'Basic',
-      ),
-      _ => (
-        colors.surface,
-        colors.textPrimary,
-        LucideIcons.shield,
-        'Unverified',
-      ),
-    };
-
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: fgColor),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: fgColor,
-              letterSpacing: 0.1,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  static String label(MerchantTier t) => switch (t) {
+    MerchantTier.bronze => 'Bronze',
+    MerchantTier.silver => 'Silver',
+    MerchantTier.gold => 'Gold',
+    MerchantTier.platinum => 'Platinum',
+    MerchantTier.diamond => 'Diamond',
+  };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TRUST STATUS BADGE (used in nav tile trailing)
-// Minimalist dot + text, no fill box — cleaner in list context
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// DRAWER AVATAR  (avatar + animated tier ring + badge below)
+// ═════════════════════════════════════════════════════════════════════════════
 
-class _TrustStatusBadge extends StatelessWidget {
-  const _TrustStatusBadge({required this.status, required this.colors});
-  final TrustStatus status;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final (
-      dotColor,
-      label,
-      textColor,
-      bgColor,
-      borderColor,
-      icon,
-    ) = switch (status) {
-      TrustStatus.ready => (
-        colors.onPrimary, // icon
-        'Verified',
-        colors.onPrimary, // text
-        colors.success, // bg
-        colors.success, // border
-        Icons.verified_rounded,
-      ),
-      TrustStatus.reviewing => (
-        colors.warning, // dot
-        'Pending',
-        colors.textPrimary, // text
-        colors.border, // bg
-        colors.warning, // border
-        Icons.hourglass_top_rounded,
-      ),
-      TrustStatus.suspended => (
-        colors.error, // dot
-        'Suspended',
-        colors.textPrimary, // text
-        colors.surface, // bg
-        colors.border, // border
-        Icons.block_rounded,
-      ),
-      _ => (
-        colors.textSecondary, // dot
-        'Basic',
-        colors.textPrimary, // text
-        colors.background, // bg
-        colors.border, // border
-        Icons.person_rounded,
-      ),
-    };
-
-    assert(
-      (bgColor.a * 255.0).round() == 0xFF &&
-          (borderColor.a * 255.0).round() == 0xFF &&
-          (textColor.a * 255.0).round() == 0xFF &&
-          (dotColor.a * 255.0).round() == 0xFF,
-      'TrustStatusBadge: all colors must be fully opaque (no opacity)',
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor, width: 1.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 11, color: dotColor),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-              letterSpacing: 0.3,
-              height: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COUNTRY CHIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CountryChip extends StatelessWidget {
-  const _CountryChip({required this.country, required this.colors});
-  final String country;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.mapPin, size: 10, color: colors.textSecondary),
-          const SizedBox(width: 5),
-          Text(
-            country,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
-              color: colors.textSecondary,
-              letterSpacing: 0.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MERCHANT TIER CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MerchantTierCard extends StatelessWidget {
-  const _MerchantTierCard({
-    required this.tierProgress,
-    required this.tierColor,
-    required this.tierIcon,
-    required this.tierLabel,
-    required this.colors,
+class _RingPainter extends CustomPainter {
+  const _RingPainter({
+    required this.progress,
+    required this.color,
+    required this.trackColor,
   });
+  final double progress;
+  final Color color;
+  final Color trackColor;
 
-  final MerchantTierProgressModel tierProgress;
-  final Color Function(MerchantTier) tierColor;
-  final IconData Function(MerchantTier) tierIcon;
-  final String Function(MerchantTier) tierLabel;
-  final AppColor colors;
+  static const _stroke = 3.0;
 
   @override
-  Widget build(BuildContext context) {
-    final currentTier = tierProgress.currentTier;
-    final currentTierColor = tierColor(currentTier);
-    final nextTier = tierProgress.nextTier;
-    final nextTierLabel = nextTier == null
-        ? 'TOP TIER'
-        : tierLabel(nextTier.tier);
-    final nextTierColor = nextTier == null
-        ? tierColor(MerchantTier.diamond)
-        : tierColor(nextTier.tier);
-    final progressPercent =
-        ((nextTier?.progress.overallPercent ?? 100).clamp(0.0, 100.0) as num)
-            .toDouble();
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = cx - _stroke / 2 - 1;
+    const startAngle = -1.5707963; // -π/2 (top)
+    const fullSweep = 6.2831853;   // 2π
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: currentTierColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  tierIcon(currentTier),
-                  size: 15,
-                  color: currentTierColor,
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Merchant Tier',
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontSize: 12.8,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      nextTier == null
-                          ? 'Top level unlocked'
-                          : 'Advance to $nextTierLabel',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.textSecondary,
-                        fontSize: 10.8,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: currentTierColor,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  tierLabel(currentTier),
-                  style: TextStyle(
-                    color: colors.onPrimary,
-                    fontSize: 9.8,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
-            decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        nextTier == null
-                            ? 'Progress'
-                            : 'Progress to $nextTierLabel',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 10.8,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${progressPercent.toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontSize: 11.8,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    minHeight: 7,
-                    value: progressPercent / 100,
-                    backgroundColor: colors.background,
-                    valueColor: AlwaysStoppedAnimation<Color>(nextTierColor),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: r),
+      startAngle,
+      fullSweep,
+      false,
+      Paint()
+        ..color = trackColor
+        ..strokeWidth = _stroke
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
     );
-  }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DRAWER AVATAR
-// ─────────────────────────────────────────────────────────────────────────────
+    if (progress > 0.01) {
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r),
+        startAngle,
+        fullSweep * progress,
+        false,
+        Paint()
+          ..color = color
+          ..strokeWidth = _stroke
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter o) =>
+      o.progress != progress || o.color != color;
+}
 
 class _DrawerAvatar extends StatefulWidget {
-  const _DrawerAvatar({required this.user, required this.colors});
+  const _DrawerAvatar({
+    required this.user,
+    required this.c,
+    this.tierProgress,
+  });
   final User user;
-  final AppColor colors;
+  final AppColor c;
+  final MerchantTierProgressModel? tierProgress;
 
   @override
   State<_DrawerAvatar> createState() => _DrawerAvatarState();
@@ -1256,643 +852,450 @@ class _DrawerAvatar extends StatefulWidget {
 
 class _DrawerAvatarState extends State<_DrawerAvatar>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-  late final Animation<double> _pulseAnim;
+  late final AnimationController _ringCtrl;
+  late final Animation<double> _ringAnim;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
+    _ringCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _pulseAnim = CurvedAnimation(parent: _pulse, curve: Curves.easeInOut);
+      duration: const Duration(milliseconds: 900),
+    );
+    _ringAnim = CurvedAnimation(parent: _ringCtrl, curve: Curves.easeOutCubic);
+    // Slight delay so it animates in after the drawer slides open
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) _ringCtrl.forward();
+    });
   }
 
   @override
   void dispose() {
-    _pulse.dispose();
+    _ringCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.colors;
-    return Stack(
-      clipBehavior: Clip.none,
+    final tp = widget.tierProgress;
+    final hasTier = tp != null;
+    final tier = tp?.currentTier;
+    final tierColor =
+    tier != null ? _TierMeta.color(tier) : widget.c.primary;
+    final tierLabel = tier != null ? _TierMeta.label(tier) : null;
+    final tierIcon = tier != null ? _TierMeta.icon(tier) : null;
+    final targetProgress = tp?.nextTier != null
+        ? (tp!.nextTier!.progress.overallPercent.clamp(0.0, 100.0) / 100.0)
+        : (hasTier ? 1.0 : 0.0);
+
+    const outerSize = 64.0;
+    const avatarSize = 52.0;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        AnimatedBuilder(
-          animation: _pulseAnim,
-          builder: (_, child) => Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: c.primary,
-                  blurRadius: 16 + _pulseAnim.value * 8,
-                ),
-              ],
-            ),
-            child: child,
-          ),
-          child: Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: c.primary),
-            padding: const EdgeInsets.all(2.5),
-            child: ClipOval(
-              child: UserAvatar(user: widget.user, radius: 27, colors: c),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 2,
-          right: 2,
+        SizedBox(
+          width: outerSize,
+          height: outerSize,
           child: Stack(
             alignment: Alignment.center,
+            clipBehavior: Clip.none,
             children: [
+              // Animated tier progress ring
+              if (hasTier)
+                AnimatedBuilder(
+                  animation: _ringAnim,
+                  builder: (_, __) => CustomPaint(
+                    size: const Size(outerSize, outerSize),
+                    painter: _RingPainter(
+                      progress: _ringAnim.value * targetProgress,
+                      color: tierColor,
+                      trackColor: tierColor.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
+              // Avatar
               Container(
-                width: 18,
-                height: 18,
+                width: avatarSize,
+                height: avatarSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: c.success,
+                  border: Border.all(
+                    color: hasTier
+                        ? tierColor.withValues(alpha: 0.35)
+                        : widget.c.border,
+                    width: 1.5,
+                  ),
+                ),
+                child: ClipOval(
+                  child: UserAvatar(
+                      user: widget.user, radius: 24, colors: widget.c),
                 ),
               ),
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: c.success,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: c.surface, width: 2),
-                  boxShadow: [BoxShadow(color: c.success, blurRadius: 6)],
+              // Online dot
+              Positioned(
+                bottom: 3,
+                right: 3,
+                child: Container(
+                  width: 11,
+                  height: 11,
+                  decoration: BoxDecoration(
+                    color: widget.c.success,
+                    shape: BoxShape.circle,
+                    border:
+                    Border.all(color: widget.c.surface, width: 2),
+                  ),
                 ),
               ),
             ],
           ),
         ),
+        // Tier badge pill below avatar
+        if (hasTier && tierLabel != null && tierIcon != null) ...[
+          const SizedBox(height: 5),
+          Container(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: tierColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+              border:
+              Border.all(color: tierColor.withValues(alpha: 0.28)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(tierIcon, size: 8, color: tierColor),
+                const SizedBox(width: 3),
+                Text(
+                  tierLabel,
+                  style: _T.micro.copyWith(
+                      color: tierColor,
+                      fontSize: 8.5,
+                      letterSpacing: 0.2),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// VERIFIED BADGE
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _VerifiedBadge extends StatelessWidget {
+  const _VerifiedBadge({required this.status, required this.c});
+  final TrustStatus status;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg, icon, label) = switch (status) {
+      TrustStatus.ready => (
+      c.success.withValues(alpha: 0.12),
+      c.success,
+      LucideIcons.badgeCheck,
+      'Verified',
+      ),
+      TrustStatus.reviewing => (
+      c.warning.withValues(alpha: 0.12),
+      c.warning,
+      LucideIcons.clock,
+      'In Review',
+      ),
+      TrustStatus.suspended => (
+      c.error.withValues(alpha: 0.12),
+      c.error,
+      LucideIcons.shieldOff,
+      'Suspended',
+      ),
+      TrustStatus.basic => (
+      c.border,
+      c.textSecondary,
+      LucideIcons.shield,
+      'Basic',
+      ),
+      _ => (
+      c.border,
+      c.textSecondary,
+      LucideIcons.shield,
+      'Unverified',
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: fg.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: fg),
+          const SizedBox(width: 4),
+          Text(label, style: _T.badge.copyWith(color: fg)),
+        ],
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STATUS PILL  (nav tile trailing)
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status, required this.c});
+  final TrustStatus status;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    final (dot, label, bg, border) = switch (status) {
+      TrustStatus.ready => (
+      c.success,
+      'Active',
+      c.success.withValues(alpha: 0.10),
+      c.success.withValues(alpha: 0.25),
+      ),
+      TrustStatus.reviewing => (
+      c.warning,
+      'Pending',
+      c.warning.withValues(alpha: 0.10),
+      c.warning.withValues(alpha: 0.25),
+      ),
+      TrustStatus.suspended => (
+      c.error,
+      'Suspended',
+      c.error.withValues(alpha: 0.10),
+      c.error.withValues(alpha: 0.25),
+      ),
+      _ => (c.textSecondary, 'Basic', c.border, c.border),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+              width: 5,
+              height: 5,
+              decoration:
+              BoxDecoration(color: dot, shape: BoxShape.circle)),
+          const SizedBox(width: 4),
+          Text(label, style: _T.micro.copyWith(color: dot)),
+        ],
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// COUNTRY CHIP
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _CountryChip extends StatelessWidget {
+  const _CountryChip({required this.country, required this.c});
+  final String country;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding:
+    const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: c.background,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: c.border),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(LucideIcons.mapPin, size: 9, color: c.textSecondary),
+        const SizedBox(width: 3),
+        Text(
+          country,
+          style: _T.micro.copyWith(color: c.textSecondary),
+        ),
+      ],
+    ),
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // LOGIN PROMPT
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _LoginPrompt extends StatelessWidget {
   const _LoginPrompt({
-    required this.colors,
+    required this.c,
     required this.topPadding,
     required this.onTap,
   });
-  final AppColor colors;
+  final AppColor c;
   final double topPadding;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: colors.surface,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 3,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [colors.primary, colors.primary, colors.primary],
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(20, topPadding + 22, 20, 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: colors.border,
-                  ),
-                  child: Icon(
-                    LucideIcons.userCircle2,
-                    color: colors.textSecondary,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: colors.textPrimary,
-                          letterSpacing: -0.8,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        'Sign in to unlock all features',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _GradientButton(
-                        label: 'Sign In',
-                        icon: Icons.login_rounded,
-                        primaryColor: colors.primary,
-                        onTap: onTap,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(height: 1, color: colors.border),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GRADIENT BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _GradientButton extends StatelessWidget {
-  const _GradientButton({
-    required this.label,
-    required this.icon,
-    required this.primaryColor,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color primaryColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [primaryColor, AppColor.of(context).primary],
-          ),
-          borderRadius: BorderRadius.circular(11),
-          boxShadow: [
-            BoxShadow(
-              color: primaryColor,
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: AppColor.of(context).onPrimary),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                color: AppColor.of(context).onPrimary,
-                letterSpacing: -0.1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SECTION LABEL
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label, required this.colors});
-  final String label;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 11,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: colors.primary,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              color: colors.textSecondary,
-              letterSpacing: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NAV TILE
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _NavTile extends StatefulWidget {
-  const _NavTile({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.colors,
-    required this.onTap,
-    this.accentColor,
-    this.trailing,
-    this.requiresAuth = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String description;
-  final AppColor colors;
-  final VoidCallback onTap;
-  final Color? accentColor;
-  final Widget? trailing;
-  final bool requiresAuth;
-
-  @override
-  State<_NavTile> createState() => _NavTileState();
-}
-
-class _NavTileState extends State<_NavTile>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pressCtrl;
-  late final Animation<double> _scaleAnim;
-  bool _isPressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _pressCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 120),
-    );
-    _scaleAnim = Tween<double>(
-      begin: 1.0,
-      end: 0.97,
-    ).animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _pressCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onTapDown(_) {
-    setState(() => _isPressed = true);
-    _pressCtrl.forward();
-  }
-
-  void _onTapUp(_) {
-    setState(() => _isPressed = false);
-    _pressCtrl.reverse();
-  }
-
-  void _onTapCancel() {
-    setState(() => _isPressed = false);
-    _pressCtrl.reverse();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.colors;
-    final accent = c.primary;
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        widget.onTap();
-      },
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      child: ScaleTransition(
-        scale: _scaleAnim,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    color: c.surface,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: 2,
           decoration: BoxDecoration(
-            color: _isPressed ? accent : widget.colors.background,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _isPressed ? accent : widget.colors.background,
-              width: 1,
-            ),
+            gradient: LinearGradient(
+                colors: [c.primary, c.primary.withValues(alpha: 0)]),
           ),
+        ),
+        Padding(
+          padding:
+          EdgeInsets.fromLTRB(18, topPadding + 18, 18, 16),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Icon container
               Container(
-                width: 40,
-                height: 40,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent, width: 1),
+                  shape: BoxShape.circle,
+                  color: c.border.withValues(alpha: 0.5),
+                  border: Border.all(color: c.border),
                 ),
-                child: Icon(widget.icon, color: c.onPrimary, size: 18),
+                child: Icon(LucideIcons.userCircle2,
+                    color: c.textSecondary, size: 24),
               ),
               const SizedBox(width: 13),
-              // Labels
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      widget.label,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: c.textPrimary,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      widget.description,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: c.textSecondary,
-                        height: 1.3,
+                    Text('Welcome back',
+                        style: _T.displayName
+                            .copyWith(color: c.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text('Sign in to trade',
+                        style: _T.navSub
+                            .copyWith(color: c.textSecondary)),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: onTap,
+                      child: Container(
+                        height: 34,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: c.primary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.login_rounded,
+                                size: 13, color: c.onPrimary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Sign In',
+                              style: _T.badge.copyWith(
+                                color: c.onPrimary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              if (widget.trailing != null)
-                widget.trailing!
-              else if (widget.requiresAuth)
-                _AuthBadge(colors: c)
-              else
-                Icon(
-                  LucideIcons.chevronRight,
-                  color: c.textSecondary,
-                  size: 15,
-                ),
             ],
           ),
         ),
-      ),
-    );
-  }
+        Container(
+            height: 1, color: c.border.withValues(alpha: 0.5)),
+      ],
+    ),
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AUTH BADGE
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION LABEL
+// ═════════════════════════════════════════════════════════════════════════════
 
-class _AuthBadge extends StatelessWidget {
-  const _AuthBadge({required this.colors});
-  final AppColor colors;
+class _Section extends StatelessWidget {
+  const _Section({required this.label, required this.c});
+  final String label;
+  final AppColor c;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colors.border,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 20, 18, 4),
+    child: Text(
+      label,
+      style: _T.sectionLabel.copyWith(
+        color: c.textSecondary.withValues(alpha: 0.6),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.lock_outline_rounded,
-            size: 10,
-            color: colors.textSecondary,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Sign in',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: colors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DRAWER DIVIDER
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// NAV TILE  — 52px min touch target, accent icon badge, press feedback
+// ═════════════════════════════════════════════════════════════════════════════
 
-class _DrawerDivider extends StatelessWidget {
-  const _DrawerDivider({required this.colors});
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 1,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      color: colors.border,
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// APP VERSION INFO
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AppVersionInfo extends StatelessWidget {
-  const _AppVersionInfo({required this.info, required this.colors});
-  final PackageInfo info;
-  final AppColor colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 20, 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(
-          color: colors.border,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.package, size: 10, color: colors.textSecondary),
-            const SizedBox(width: 5),
-            Text(
-              '${info.appName}  v${info.version}',
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: colors.textSecondary,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LOGOUT BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LogoutButton extends StatefulWidget {
-  const _LogoutButton({
-    required this.isLoading,
-    required this.colors,
+class _Tile extends StatefulWidget {
+  const _Tile({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.accent,
+    required this.c,
     required this.onTap,
+    this.trailing,
+    this.locked = false,
   });
-  final bool isLoading;
-  final AppColor colors;
+  final IconData icon;
+  final String label;
+  final String sub;
+  final Color accent;
+  final AppColor c;
   final VoidCallback onTap;
+  final Widget? trailing;
+  final bool locked;
 
   @override
-  State<_LogoutButton> createState() => _LogoutButtonState();
+  State<_Tile> createState() => _TileState();
 }
 
-class _LogoutButtonState extends State<_LogoutButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.colors;
-    return GestureDetector(
-      onTap: widget.isLoading ? null : widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: _pressed ? widget.colors.background : widget.colors.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: _pressed ? widget.colors.border : widget.colors.background,
-          ),
-        ),
-        child: Row(
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: widget.isLoading
-                  ? SizedBox(
-                      key: const ValueKey('l'),
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(c.error),
-                      ),
-                    )
-                  : Icon(
-                      key: const ValueKey('i'),
-                      LucideIcons.logOut,
-                      color: c.error,
-                      size: 18,
-                    ),
-            ),
-            const SizedBox(width: 14),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 150),
-              child: Text(
-                widget.isLoading ? 'Signing out…' : 'Sign Out',
-                key: ValueKey(widget.isLoading),
-                style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
-                  color: c.error,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ),
-            const Spacer(),
-            if (!widget.isLoading)
-              Icon(LucideIcons.chevronRight, color: c.error, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROFILE SHIMMER
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ProfileShimmer extends StatefulWidget {
-  const _ProfileShimmer({required this.topPadding, required this.colors});
-  final double topPadding;
-  final AppColor colors;
-
-  @override
-  State<_ProfileShimmer> createState() => _ProfileShimmerState();
-}
-
-class _ProfileShimmerState extends State<_ProfileShimmer>
+class _TileState extends State<_Tile>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 90),
+    reverseDuration: const Duration(milliseconds: 180),
+  );
+  late final Animation<double> _scale = Tween<double>(
+    begin: 1.0,
+    end: 0.975,
+  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
 
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-  }
+  bool _pressed = false;
 
   @override
   void dispose() {
@@ -1902,189 +1305,459 @@ class _ProfileShimmerState extends State<_ProfileShimmer>
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.colors;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final c = widget.c;
+    final accent = widget.accent;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        widget.onTap();
+      },
+      onTapDown: (_) {
+        setState(() => _pressed = true);
+        _ctrl.forward();
+      },
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        _ctrl.reverse();
+      },
+      onTapCancel: () {
+        setState(() => _pressed = false);
+        _ctrl.reverse();
+      },
+      child: ScaleTransition(
+        scale: _scale,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          margin:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 10, vertical: 8),
+          constraints: const BoxConstraints(minHeight: 52),
+          decoration: BoxDecoration(
+            color: _pressed
+                ? accent.withValues(alpha: 0.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Accent icon container — 40×40
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(widget.icon, color: accent, size: 18),
+              ),
+              const SizedBox(width: 12),
+              // Label + sub
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.label,
+                      style:
+                      _T.navTitle.copyWith(color: c.textPrimary),
+                    ),
+                    Text(
+                      widget.sub,
+                      style: _T.navSub
+                          .copyWith(color: c.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Trailing
+              if (widget.trailing != null)
+                widget.trailing!
+              else if (widget.locked)
+                _LockPill(c: c)
+              else
+                Icon(
+                  LucideIcons.chevronRight,
+                  color: c.textSecondary.withValues(alpha: 0.4),
+                  size: 14,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOCK PILL
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _LockPill extends StatelessWidget {
+  const _LockPill({required this.c});
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding:
+    const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+    decoration: BoxDecoration(
+      color: c.border.withValues(alpha: 0.6),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.lock_outline_rounded,
+            size: 9, color: c.textSecondary),
+        const SizedBox(width: 3),
+        Text('Sign in',
+            style: _T.micro.copyWith(color: c.textSecondary)),
+      ],
+    ),
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// VERSION ROW
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _VersionRow extends StatelessWidget {
+  const _VersionRow({required this.info, required this.c});
+  final PackageInfo info;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(LucideIcons.package,
+            size: 9,
+            color: c.textSecondary.withValues(alpha: 0.4)),
+        const SizedBox(width: 5),
+        Text(
+          '${info.appName}  v${info.version}',
+          style: _T.version.copyWith(
+              color: c.textSecondary.withValues(alpha: 0.4)),
+        ),
+      ],
+    ),
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOGOUT TILE
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _LogoutTile extends StatefulWidget {
+  const _LogoutTile(
+      {required this.isLoading,
+        required this.c,
+        required this.onTap});
+  final bool isLoading;
+  final AppColor c;
+  final VoidCallback onTap;
+
+  @override
+  State<_LogoutTile> createState() => _LogoutTileState();
+}
+
+class _LogoutTileState extends State<_LogoutTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.isLoading ? null : widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        constraints: const BoxConstraints(minHeight: 52),
+        decoration: BoxDecoration(
+          color: _pressed
+              ? c.error.withValues(alpha: 0.07)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: c.error.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: widget.isLoading
+                    ? SizedBox(
+                  key: const ValueKey('l'),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                    AlwaysStoppedAnimation(c.error),
+                  ),
+                )
+                    : Icon(
+                  key: const ValueKey('i'),
+                  LucideIcons.logOut,
+                  color: c.error,
+                  size: 17,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                widget.isLoading ? 'Signing out…' : 'Sign Out',
+                style:
+                _T.logoutLabel.copyWith(color: c.error),
+              ),
+            ),
+            if (!widget.isLoading)
+              Icon(
+                LucideIcons.chevronRight,
+                color: c.error.withValues(alpha: 0.45),
+                size: 13,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PROFILE SHIMMER
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _ProfileShimmer extends StatefulWidget {
+  const _ProfileShimmer(
+      {required this.topPadding, required this.c});
+  final double topPadding;
+  final AppColor c;
+
+  @override
+  State<_ProfileShimmer> createState() => _ProfileShimmerState();
+}
+
+class _ProfileShimmerState extends State<_ProfileShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
+    final base = isDark
+        ? c.border.withValues(alpha: 0.7)
+        : c.textPrimary.withValues(alpha: 0.07);
+    final shine = isDark
+        ? c.surface.withValues(alpha: 0.9)
+        : Colors.white.withValues(alpha: 0.9);
+
+    Widget box(double w, double h, {double r = 6}) => Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(r)),
+    );
+
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, __) {
-        final shimBase = isDark
-            ? c.border.withValues(alpha: 0.72)
-            : c.textPrimary.withValues(alpha: 0.10);
-        final shimHighlight = isDark
-            ? c.surface.withValues(alpha: 0.98)
-            : c.onPrimary.withValues(alpha: 0.96);
-        Widget shimBox(double w, double h, {double r = 6}) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(r),
-            color: shimBase,
-          ),
-        );
+      builder: (_, __) => LayoutBuilder(builder: (_, constraints) {
+        final tw = constraints.maxWidth;
+        final band = tw * 0.26;
+        final dx = -band + (_ctrl.value * (tw + band * 2));
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final bandWidth = constraints.maxWidth * 0.30;
-            final travel = constraints.maxWidth + (bandWidth * 2);
-            final dx = -bandWidth + (_ctrl.value * travel);
-
-            return Container(
-              color: isDark ? c.surface : c.background,
-              child: Stack(
+        return Container(
+          color: c.surface,
+          child: Stack(
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        height: 3,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [c.primary, c.primary, c.surface],
+                  Container(
+                    height: 2,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        c.primary,
+                        c.primary.withValues(alpha: 0)
+                      ]),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        18, widget.topPadding + 18, 18, 16),
+                    child: Row(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.center,
+                      children: [
+                        box(64, 64, r: 32),
+                        const SizedBox(width: 13),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                            children: [
+                              box(110, 17, r: 6),
+                              const SizedBox(height: 7),
+                              box(75, 11, r: 4),
+                              const SizedBox(height: 5),
+                              box(130, 10, r: 4),
+                              const SizedBox(height: 9),
+                              Row(children: [
+                                box(62, 22, r: 6),
+                                const SizedBox(width: 7),
+                                box(52, 22, r: 6),
+                              ]),
+                            ],
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          widget.topPadding + 22,
-                          20,
-                          20,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                shimBox(60, 60, r: 30),
-                                const Spacer(),
-                                shimBox(80, 32, r: 10),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            shimBox(130, 20, r: 8),
-                            const SizedBox(height: 8),
-                            shimBox(90, 14, r: 6),
-                            const SizedBox(height: 6),
-                            shimBox(160, 12, r: 5),
-                            const SizedBox(height: 12),
-                            shimBox(70, 24, r: 8),
-                          ],
-                        ),
-                      ),
-                      Container(height: 1, color: c.border),
-                    ],
+                      ],
+                    ),
                   ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Transform.translate(
-                        offset: Offset(dx, 0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            width: bandWidth,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [
-                                  shimHighlight.withValues(alpha: 0.0),
-                                  shimHighlight.withValues(
-                                    alpha: isDark ? 0.25 : 0.50,
-                                  ),
-                                  shimHighlight.withValues(alpha: 0.0),
-                                ],
-                              ),
-                            ),
+                  Container(
+                      height: 1,
+                      color: c.border.withValues(alpha: 0.5)),
+                ],
+              ),
+              // Shimmer sweep
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: Offset(dx, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        width: band,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              shine.withValues(alpha: 0),
+                              shine.withValues(
+                                  alpha: isDark ? 0.18 : 0.40),
+                              shine.withValues(alpha: 0),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            );
-          },
+            ],
+          ),
         );
-      },
+      }),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOGOUT CONFIRMATION MODAL
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// LOGOUT MODAL
+// ═════════════════════════════════════════════════════════════════════════════
 
-class _LogoutConfirmationModal extends StatelessWidget {
-  const _LogoutConfirmationModal();
+class _LogoutModal extends StatelessWidget {
+  const _LogoutModal();
 
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: c.textPrimary.withValues(alpha: isDark ? 0.34 : 0.10),
-            blurRadius: isDark ? 28 : 24,
-            offset: const Offset(0, -8),
-          ),
-          BoxShadow(
-            color: c.textPrimary.withValues(alpha: isDark ? 0.18 : 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
+            color: c.textPrimary.withValues(alpha: 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Handle bar
               Container(
                 width: 36,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 28),
+                margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
-                  color: c.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                    color: c.border,
+                    borderRadius: BorderRadius.circular(2)),
               ),
+              // Icon
               Container(
-                width: 72,
-                height: 72,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: c.background,
-                  border: Border.all(color: c.border, width: 1.5),
+                  color: c.error.withValues(alpha: 0.08),
+                  border: Border.all(
+                      color: c.error.withValues(alpha: 0.18),
+                      width: 1.5),
                 ),
-                child: Icon(LucideIcons.logOut, color: c.error, size: 28),
+                child:
+                Icon(LucideIcons.logOut, color: c.error, size: 22),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Text(
                 'Sign Out?',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 19,
                   fontWeight: FontWeight.w800,
                   color: c.textPrimary,
-                  letterSpacing: -0.6,
+                  letterSpacing: -0.4,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 5),
               Text(
                 "You'll need to sign in again\nto access your account.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: c.textSecondary,
-                  height: 1.55,
-                ),
+                    fontSize: 13,
+                    color: c.textSecondary,
+                    height: 1.5),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 22),
+              // Confirm button
               GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -2092,23 +1765,16 @@ class _LogoutConfirmationModal extends StatelessWidget {
                 },
                 child: Container(
                   width: double.infinity,
-                  height: 52,
+                  height: 50,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [c.error, c.error]),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: c.error.withValues(alpha: isDark ? 0.36 : 0.26),
-                        blurRadius: isDark ? 12 : 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                    color: c.error,
+                    borderRadius: BorderRadius.circular(13),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     'Yes, Sign Out',
                     style: TextStyle(
-                      fontSize: 15.5,
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w700,
                       color: c.onPrimary,
                       letterSpacing: -0.2,
@@ -2116,7 +1782,8 @@ class _LogoutConfirmationModal extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
+              // Cancel button
               GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -2124,17 +1791,17 @@ class _LogoutConfirmationModal extends StatelessWidget {
                 },
                 child: Container(
                   width: double.infinity,
-                  height: 52,
+                  height: 50,
                   decoration: BoxDecoration(
-                    color: c.border,
-                    borderRadius: BorderRadius.circular(15),
+                    color: c.border.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(13),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     'Cancel',
                     style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
                       color: c.textPrimary,
                       letterSpacing: -0.2,
                     ),
