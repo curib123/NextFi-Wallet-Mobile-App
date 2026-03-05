@@ -46,6 +46,7 @@ class UserPaymentAccountModel {
   final String? label;
   final String accountName;
   final String? accountNo;
+  final String? assetReceiverAddress;
   final String? instructions;
   final bool isActive;
   final DateTime? createdAt;
@@ -59,6 +60,7 @@ class UserPaymentAccountModel {
     this.label,
     required this.accountName,
     this.accountNo,
+    this.assetReceiverAddress,
     this.instructions,
     required this.isActive,
     this.createdAt,
@@ -79,6 +81,9 @@ class UserPaymentAccountModel {
       label: json['label']?.toString(),
       accountName: json['accountName']?.toString() ?? '',
       accountNo: json['accountNo']?.toString(),
+      assetReceiverAddress:
+          (json['assetReceiverAddress'] ?? json['asset_receiver_address'])
+              ?.toString(),
       instructions: json['instructions']?.toString(),
       isActive: json['isActive'] == true,
       createdAt: parseDate(json['createdAt']),

@@ -140,9 +140,15 @@ String _extractTradeProofFileUrl(Map<String, dynamic> row) {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 class TradeOrderScreen extends StatefulWidget {
-  const TradeOrderScreen({super.key, required this.trade, this.offer});
+  const TradeOrderScreen({
+    super.key,
+    required this.trade,
+    this.offer,
+    this.receiverAddressOverride,
+  });
   final TradeModel trade;
   final OfferModel? offer;
+  final String? receiverAddressOverride;
 
   @override
   State<TradeOrderScreen> createState() => _TradeOrderScreenState();
@@ -204,6 +210,12 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   bool get _isBuyingCrypto => _isUserCryptoReceiver;
+
+  String get _effectiveReceiverAddress {
+    final override = widget.receiverAddressOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+    return _trade.cryptoReceiverAddress.trim();
+  }
 
   bool get _locksAfterFiatSent => _trade.offerType == TradeOfferType.sell;
 
@@ -747,7 +759,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           );
         }
 
-        final recipientAddress = _trade.cryptoReceiverAddress.trim();
+        final recipientAddress = _effectiveReceiverAddress;
         if (recipientAddress.isEmpty) {
           throw Exception(
             'Wallet address is missing. Please refresh and try again.',
@@ -1002,12 +1014,91 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     if (!ok) return;
     _runAction(
       () async {
+        await _ensureEscrowLockedBeforeConfirmFiat();
         final u = await _tradesCore.confirmFiat(_trade.id);
         if (mounted) setState(() => _trade = u);
       },
       successMsg:
           'Payment confirmed. ${_trade.asset.toUpperCase()} will be released automatically.',
     );
+  }
+
+  Future<void> _ensureEscrowLockedBeforeConfirmFiat() async {
+    if (!_isUserEscrowLocker) return;
+
+    final hasEscrowId =
+        (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+    if (hasEscrowId) return;
+
+    await _refresh(silent: true);
+    if (!mounted) return;
+
+    final refreshedEscrowId =
+        (_trade.escrow?.claimableBalanceId?.trim().isNotEmpty ?? false);
+    if (refreshedEscrowId) return;
+
+    if (!_canLockAtStatus(_trade.status)) {
+      throw Exception(
+        'Escrow is not ready to lock for this trade status. Please refresh and try again.',
+      );
+    }
+
+    final stellarSvc = context.read<StellarWalletServices>();
+    final seedVM = context.read<SeedKeypairVM>();
+    final kp = await seedVM.deriveKeyPair();
+    final asset = _tradeStellarAsset(stellarSvc);
+    final liveBalance = await stellarSvc.accountService.getAssetBalance(
+      kp.accountId,
+      asset,
+    );
+    setState(() {
+      _activeAssetBalance = liveBalance;
+      _balanceError = null;
+    });
+    if (liveBalance < _trade.cryptoAmount) {
+      throw Exception(
+        'Not enough balance in your wallet. '
+        'Available: ${liveBalance.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}, '
+        'Required: ${_trade.cryptoAmount.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}.',
+      );
+    }
+
+    final recipientAddress = _effectiveReceiverAddress;
+    if (recipientAddress.isEmpty) {
+      throw Exception(
+        'Wallet address is missing. Please refresh and try again.',
+      );
+    }
+    if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
+      throw Exception('Wallet address format is not valid.');
+    }
+
+    final expiryTime = _resolveEscrowExpiryTime();
+    final txHash = await stellarSvc.claimableBalanceService
+        .createUnconditionalWithExpiry(
+          keyPair: kp,
+          asset: asset,
+          amount: _trade.cryptoAmount,
+          recipientId: recipientAddress,
+          expiryTime: expiryTime,
+        );
+
+    final cbId = await _resolveClaimableBalanceId(
+      stellarSvc: stellarSvc,
+      txHash: txHash,
+    );
+    if (cbId == null || cbId.trim().isEmpty) {
+      throw Exception(
+        'Escrow was submitted but is still indexing. Please wait a few seconds and try again.',
+      );
+    }
+
+    final updated = await _tradesCore.lockCrypto(
+      _trade.id,
+      claimableBalanceId: cbId,
+      createTxHash: txHash,
+    );
+    if (mounted) setState(() => _trade = updated);
   }
 
   Future<void> _claimCrypto() async {
@@ -1243,6 +1334,14 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
                 colors: colors,
               ),
               const SizedBox(height: 8),
+              if (_isParticipant) ...[
+                _TradeAccountsCard(
+                  trade: _trade,
+                  colors: colors,
+                  receiverAddress: _effectiveReceiverAddress,
+                ),
+                const SizedBox(height: 8),
+              ],
 
               if (_isUserEscrowLocker && _canLockAtStatus(s)) ...[
                 _EscrowSenderCard(
@@ -2370,6 +2469,94 @@ class _PaymentInstructionsCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TradeAccountsCard extends StatelessWidget {
+  const _TradeAccountsCard({
+    required this.trade,
+    required this.colors,
+    required this.receiverAddress,
+  });
+
+  final TradeModel trade;
+  final AppColor colors;
+  final String receiverAddress;
+
+  String? _readField(Map<String, dynamic>? row, List<String> keys) {
+    if (row == null) return null;
+    for (final key in keys) {
+      final value = row[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payeeAccount = trade.offerType == TradeOfferType.sell
+        ? (trade.merchantPaymentAccount ?? trade.sellerPaymentAccount)
+        : (trade.userPaymentAccount ?? trade.buyerPaymentAccount);
+    final accountName = _readField(payeeAccount, const [
+      'accountName',
+      'account_name',
+      'name',
+    ]);
+    final accountNo = _readField(payeeAccount, const [
+      'accountNo',
+      'account_no',
+      'accountNumber',
+      'account_number',
+      'iban',
+      'walletAddress',
+      'wallet_address',
+    ]);
+    final receiver = receiverAddress.trim();
+
+    return _SectionCard(
+      title: 'Trade Accounts',
+      icon: Icons.badge_rounded,
+      iconColor: AppColor.of(context).primary,
+      colors: colors,
+      children: [
+        if (accountName != null)
+          _DataRow(
+            label: 'Payment Name',
+            value: accountName,
+            copyable: true,
+            colors: colors,
+          ),
+        if (accountNo != null)
+          _DataRow(
+            label: 'Payment Account',
+            value: accountNo,
+            copyable: true,
+            mono: true,
+            colors: colors,
+          ),
+        if (accountName == null && accountNo == null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Payment account is not available yet.',
+              style: GoogleFonts.sora(
+                fontSize: 11.5,
+                color: colors.textSecondary,
+              ),
+            ),
+          ),
+        if (receiver.isNotEmpty)
+          _DataRow(
+            label: 'Receiver Address',
+            value: receiver,
+            copyable: true,
+            mono: true,
+            colors: colors,
+          ),
+      ],
     );
   }
 }
@@ -3602,20 +3789,21 @@ class _BottomActions extends StatelessWidget {
         escrowStatus == EscrowStatus.failed ||
         escrowStatus == EscrowStatus.unknown;
 
+    final bool showConfirm =
+        isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
     final bool showLock =
         isParticipant &&
         (isSellOffer ? s == TradeStatus.fiatSent : s == TradeStatus.created) &&
         isUserEscrowLocker &&
         !lockPendingVerification &&
-        canAttemptLock;
+        canAttemptLock &&
+        !showConfirm;
     final bool showMarkFiat =
         isParticipant &&
         isUserFiatPayer &&
         (isSellOffer
             ? s == TradeStatus.created
             : s == TradeStatus.cryptoLocked);
-    final bool showConfirm =
-        isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
     final bool showCancel =
         isParticipant &&
         (s == TradeStatus.created || s == TradeStatus.cryptoLocked);

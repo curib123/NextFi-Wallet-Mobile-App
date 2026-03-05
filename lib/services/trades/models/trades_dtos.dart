@@ -5,12 +5,14 @@ class CreateTradeRequest {
   final String userPaymentAccountId;
   final String cryptoAmount;
   final String fiatAmount;
+  final String? cryptoReceiverAddress;
 
   const CreateTradeRequest({
     required this.offerId,
     required this.userPaymentAccountId,
     required this.cryptoAmount,
     required this.fiatAmount,
+    this.cryptoReceiverAddress,
   });
 
   Map<String, dynamic> toJson() => {
@@ -18,6 +20,8 @@ class CreateTradeRequest {
     'userPaymentAccountId': userPaymentAccountId,
     'cryptoAmount': cryptoAmount,
     'fiatAmount': fiatAmount,
+    if (cryptoReceiverAddress != null && cryptoReceiverAddress!.isNotEmpty)
+      'cryptoReceiverAddress': cryptoReceiverAddress,
   };
 }
 

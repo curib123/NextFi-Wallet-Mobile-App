@@ -91,6 +91,7 @@ class CreateUserPaymentAccountRequest {
   final String? label;
   final String accountName;
   final String? accountNo;
+  final String? assetReceiverAddress;
   final String? instructions;
   final bool? isActive;
 
@@ -99,6 +100,7 @@ class CreateUserPaymentAccountRequest {
     this.label,
     required this.accountName,
     this.accountNo,
+    this.assetReceiverAddress,
     this.instructions,
     this.isActive,
   });
@@ -108,6 +110,8 @@ class CreateUserPaymentAccountRequest {
     if (label != null) 'label': label,
     'accountName': accountName,
     if (accountNo != null) 'accountNo': accountNo,
+    if (assetReceiverAddress != null)
+      'assetReceiverAddress': assetReceiverAddress,
     if (instructions != null) 'instructions': instructions,
     if (isActive != null) 'isActive': isActive,
   };
@@ -118,6 +122,7 @@ class UpdateUserPaymentAccountRequest {
   final String? label;
   final String? accountName;
   final String? accountNo;
+  final String? assetReceiverAddress;
   final String? instructions;
   final bool? isActive;
 
@@ -126,6 +131,7 @@ class UpdateUserPaymentAccountRequest {
     this.label,
     this.accountName,
     this.accountNo,
+    this.assetReceiverAddress,
     this.instructions,
     this.isActive,
   });
@@ -135,6 +141,8 @@ class UpdateUserPaymentAccountRequest {
     if (label != null) 'label': label,
     if (accountName != null) 'accountName': accountName,
     if (accountNo != null) 'accountNo': accountNo,
+    if (assetReceiverAddress != null)
+      'assetReceiverAddress': assetReceiverAddress,
     if (instructions != null) 'instructions': instructions,
     if (isActive != null) 'isActive': isActive,
   };

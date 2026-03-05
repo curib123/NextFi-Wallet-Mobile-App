@@ -13,6 +13,7 @@ import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_dtos.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 
 class TradeScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _TradeScreenState extends State<TradeScreen>
   final _formKey = GlobalKey<FormState>();
   final _fiatCtrl = TextEditingController();
   final _cryptoCtrl = TextEditingController();
+  final _receiverCtrl = TextEditingController();
   final _tradesCore = TradesCoreService.I;
   final _tradePaymentCore = TradePaymentAccountsCoreService.I;
   final _userAccountCore = PaymentMethodAndAccountsCoreService.I;
@@ -59,6 +61,7 @@ class _TradeScreenState extends State<TradeScreen>
 
   bool get _userIsBuyer => offer.type == OfferType.sell;
   bool get _receiverIsCurrentActor => _userIsBuyer;
+  static final RegExp _stellarAddressRegExp = RegExp(r'^G[A-Z2-7]{55}$');
 
   String _normalizeId(String? value) => value?.trim().toLowerCase() ?? '';
   String _selectedMethodId() => _normalizeId(_selectedOfferMethod?.id);
@@ -86,19 +89,22 @@ class _TradeScreenState extends State<TradeScreen>
     if (_selectedOfferMethod == null) return 'Select payment method';
     if (_filteredUserAccounts.isEmpty) return 'Add account for selected method';
     if (_selectedUserAccount == null) return 'Select your account';
+    final receiver = _receiverAddressForTradeRoom?.trim() ?? '';
+    if (receiver.isEmpty) return 'Enter receiver address';
+    if (!_stellarAddressRegExp.hasMatch(receiver)) return 'Invalid receiver address';
     return null;
   }
 
-  String? get _sellerWalletAddress {
-    final raw = offer.seller;
-    final addr = (raw?['walletAddress'] ??
-        raw?['stellarAddress'] ??
-        raw?['receiverStellarAddress'] ??
-        raw?['receiver_stellar_address'] ??
-        '')
-        .toString()
-        .trim();
-    return addr.isEmpty ? null : addr;
+  String? get _defaultReceiverAddress {
+    final active = _activeWalletAddress?.trim() ?? '';
+    if (active.isNotEmpty) return active;
+    return null;
+  }
+
+  String? get _receiverAddressForTradeRoom {
+    final typed = _receiverCtrl.text.trim();
+    if (typed.isNotEmpty) return typed;
+    return _defaultReceiverAddress;
   }
 
   double get _effectivePrice {
@@ -141,6 +147,7 @@ class _TradeScreenState extends State<TradeScreen>
     _cryptoCtrl.removeListener(_onCryptoChanged);
     _fiatCtrl.dispose();
     _cryptoCtrl.dispose();
+    _receiverCtrl.dispose();
     super.dispose();
   }
 
@@ -208,6 +215,12 @@ class _TradeScreenState extends State<TradeScreen>
         }
         _loading = false;
       });
+      if (_receiverCtrl.text.trim().isEmpty) {
+        final initialReceiver = _defaultReceiverAddress;
+        if (initialReceiver != null && initialReceiver.isNotEmpty) {
+          _receiverCtrl.text = initialReceiver;
+        }
+      }
       _refreshMerchantAccountsForMethod();
       _fadeCtrl.forward();
     } catch (e) {
@@ -305,6 +318,15 @@ class _TradeScreenState extends State<TradeScreen>
     return null;
   }
 
+  String? _validateReceiverAddress(String? v) {
+    final value = v?.trim() ?? '';
+    if (value.isEmpty) return 'Enter receiver address';
+    if (!_stellarAddressRegExp.hasMatch(value)) {
+      return 'Invalid Stellar address';
+    }
+    return null;
+  }
+
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -352,12 +374,17 @@ class _TradeScreenState extends State<TradeScreen>
           userPaymentAccountId: _selectedUserAccount!.id,
           cryptoAmount: cryptoAmount,
           fiatAmount: fiatAmount,
+          cryptoReceiverAddress: _receiverAddressForTradeRoom,
         ),
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => TradeOrderScreen(trade: trade, offer: offer),
+          builder: (_) => TradeOrderScreen(
+            trade: trade,
+            offer: offer,
+            receiverAddressOverride: _receiverAddressForTradeRoom,
+          ),
         ),
       );
     } catch (e) {
@@ -369,6 +396,185 @@ class _TradeScreenState extends State<TradeScreen>
       showFloatingSnackBar(context, message: msg, type: SnackBarType.error);
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _editSelectedUserPaymentAccount() async {
+    final selected = _selectedUserAccount;
+    if (selected == null) return;
+
+    final labelCtrl = TextEditingController(text: selected.label ?? '');
+    final nameCtrl = TextEditingController(text: selected.accountName);
+    final numberCtrl = TextEditingController(text: selected.accountNo ?? '');
+    final receiverCtrl = TextEditingController(
+      text: selected.assetReceiverAddress ?? '',
+    );
+    final instructionsCtrl = TextEditingController(
+      text: selected.instructions ?? '',
+    );
+
+    bool isSaving = false;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColor.of(context).surface,
+      builder: (ctx) {
+        final colors = AppColor.of(ctx);
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Edit Payment Account',
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _EditField(
+                      controller: labelCtrl,
+                      label: 'Label (optional)',
+                      colors: colors,
+                    ),
+                    const SizedBox(height: 10),
+                    _EditField(
+                      controller: nameCtrl,
+                      label: 'Account Name',
+                      colors: colors,
+                    ),
+                    const SizedBox(height: 10),
+                    _EditField(
+                      controller: numberCtrl,
+                      label: 'Account Number (optional)',
+                      colors: colors,
+                    ),
+                    const SizedBox(height: 10),
+                    _EditField(
+                      controller: receiverCtrl,
+                      label: 'Asset Receiver Address (optional)',
+                      colors: colors,
+                    ),
+                    const SizedBox(height: 10),
+                    _EditField(
+                      controller: instructionsCtrl,
+                      label: 'Instructions (optional)',
+                      colors: colors,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                final accountName = nameCtrl.text.trim();
+                                if (accountName.isEmpty) {
+                                  showFloatingSnackBar(
+                                    context,
+                                    message: 'Account name is required.',
+                                    type: SnackBarType.error,
+                                  );
+                                  return;
+                                }
+                                final receiver = receiverCtrl.text.trim();
+                                if (receiver.isNotEmpty &&
+                                    !_stellarAddressRegExp.hasMatch(receiver)) {
+                                  showFloatingSnackBar(
+                                    context,
+                                    message: 'Invalid Stellar receiver address.',
+                                    type: SnackBarType.error,
+                                  );
+                                  return;
+                                }
+
+                                setModal(() => isSaving = true);
+                                try {
+                                  await _userAccountCore.updateMyPaymentAccount(
+                                    selected.id,
+                                    UpdateUserPaymentAccountRequest(
+                                      label: labelCtrl.text.trim().isEmpty
+                                          ? null
+                                          : labelCtrl.text.trim(),
+                                      accountName: accountName,
+                                      accountNo: numberCtrl.text.trim().isEmpty
+                                          ? null
+                                          : numberCtrl.text.trim(),
+                                      assetReceiverAddress: receiver.isEmpty
+                                          ? null
+                                          : receiver,
+                                      instructions:
+                                          instructionsCtrl.text.trim().isEmpty
+                                              ? null
+                                              : instructionsCtrl.text.trim(),
+                                    ),
+                                  );
+                                  if (!ctx.mounted) return;
+                                  Navigator.of(ctx).pop(true);
+                                } catch (e) {
+                                  if (!ctx.mounted) return;
+                                  showFloatingSnackBar(
+                                    ctx,
+                                    message: 'Failed to update account: $e',
+                                    type: SnackBarType.error,
+                                  );
+                                  setModal(() => isSaving = false);
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: colors.onPrimary,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: isSaving
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: colors.onPrimary,
+                                ),
+                              )
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    labelCtrl.dispose();
+    nameCtrl.dispose();
+    numberCtrl.dispose();
+    receiverCtrl.dispose();
+    instructionsCtrl.dispose();
+
+    if (saved == true && mounted) {
+      await _loadData();
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Payment account updated.',
+        type: SnackBarType.success,
+      );
     }
   }
 
@@ -448,8 +654,9 @@ class _TradeScreenState extends State<TradeScreen>
               _ReceiverCard(
                 c: c,
                 receiverIsCurrentActor: _receiverIsCurrentActor,
-                activeWalletAddress: _activeWalletAddress,
-                sellerWalletAddress: _sellerWalletAddress,
+                receiverController: _receiverCtrl,
+                validator: _validateReceiverAddress,
+                defaultAddress: _defaultReceiverAddress,
               ),
               const SizedBox(height: 12),
 
@@ -460,6 +667,7 @@ class _TradeScreenState extends State<TradeScreen>
                 selected: _selectedUserAccount,
                 onChanged: (a) =>
                     setState(() => _selectedUserAccount = a),
+                onEditSelected: _editSelectedUserPaymentAccount,
               ),
               const SizedBox(height: 12),
 
@@ -1280,23 +1488,18 @@ class _ReceiverCard extends StatelessWidget {
   const _ReceiverCard({
     required this.c,
     required this.receiverIsCurrentActor,
-    required this.activeWalletAddress,
-    required this.sellerWalletAddress,
+    required this.receiverController,
+    required this.validator,
+    required this.defaultAddress,
   });
   final AppColor c;
   final bool receiverIsCurrentActor;
-  final String? activeWalletAddress;
-  final String? sellerWalletAddress;
+  final TextEditingController receiverController;
+  final FormFieldValidator<String> validator;
+  final String? defaultAddress;
 
   @override
   Widget build(BuildContext context) {
-    String? addressToShow;
-    if (receiverIsCurrentActor) {
-      addressToShow = activeWalletAddress?.trim();
-    } else if ((sellerWalletAddress ?? '').isNotEmpty) {
-      addressToShow = sellerWalletAddress;
-    }
-
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1313,80 +1516,56 @@ class _ReceiverCard extends StatelessWidget {
             title: 'Receiver address',
           ),
           const SizedBox(height: 14),
-          if ((addressToShow ?? '').isNotEmpty)
-            _AddressTile(c: c, address: addressToShow!)
-          else
-            _InlineInfo(
-              c: c,
-              message:
-              'Receiver address will be resolved after trade is created.',
+          TextFormField(
+            controller: receiverController,
+            validator: validator,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            textCapitalization: TextCapitalization.characters,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
             ),
+            decoration: InputDecoration(
+              hintText: defaultAddress ?? 'G...',
+              hintStyle: TextStyle(color: c.textSecondary, fontSize: 12.5),
+              helperText: 'Default is your active Stellar wallet public address. You can change it.',
+              helperStyle: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                height: 1.3,
+              ),
+              filled: true,
+              fillColor: c.background,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 13,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: c.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: c.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: c.primary, width: 1.5),
+              ),
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+              UpperCaseTextFormatter(),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-class _AddressTile extends StatelessWidget {
-  const _AddressTile({required this.c, required this.address});
-  final AppColor c;
-  final String address;
-
-  @override
-  Widget build(BuildContext context) {
-    final short = address.length > 16
-        ? '${address.substring(0, 8)}...${address.substring(address.length - 8)}'
-        : address;
-
-    return GestureDetector(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: address));
-        showFloatingSnackBar(context,
-            message: 'Address copied!', type: SnackBarType.success);
-      },
-      child: Container(
-        padding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: c.background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.qr_code_rounded, size: 16, color: c.textSecondary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Receiving to',
-                    style: TextStyle(
-                        color: c.textSecondary, fontSize: 11),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    short,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.copy_rounded, size: 15, color: c.textSecondary),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Your Account Card ────────────────────────────────────────────────────────
+// --- Your Account Card ────────────────────────────────────────────────────────
 
 class _YourAccountCard extends StatelessWidget {
   const _YourAccountCard({
@@ -1394,11 +1573,13 @@ class _YourAccountCard extends StatelessWidget {
     required this.accounts,
     required this.selected,
     required this.onChanged,
+    required this.onEditSelected,
   });
   final AppColor c;
   final List<UserPaymentAccountModel> accounts;
   final UserPaymentAccountModel? selected;
   final ValueChanged<UserPaymentAccountModel?> onChanged;
+  final VoidCallback onEditSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1417,6 +1598,24 @@ class _YourAccountCard extends StatelessWidget {
             icon: Icons.person_outline_rounded,
             title: 'Your payment account',
           ),
+          if (selected != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onEditSelected,
+                icon: Icon(Icons.edit_rounded, size: 16, color: c.primary),
+                label: Text(
+                  'Edit selected',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           if (accounts.isEmpty)
             _InlineWarn(
@@ -1671,37 +1870,6 @@ class _InlineWarn extends StatelessWidget {
   );
 }
 
-class _InlineInfo extends StatelessWidget {
-  const _InlineInfo({required this.c, required this.message});
-  final AppColor c;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding:
-    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: c.background,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: c.border),
-    ),
-    child: Row(
-      children: [
-        Icon(Icons.info_outline_rounded,
-            size: 15, color: c.textSecondary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            message,
-            style:
-            TextStyle(color: c.textSecondary, fontSize: 12.5),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 class _WarnCard extends StatelessWidget {
   const _WarnCard({required this.c, required this.message});
   final AppColor c;
@@ -1721,6 +1889,47 @@ class _WarnCard extends StatelessWidget {
 
 // ─── Error Body ───────────────────────────────────────────────────────────────
 
+class _EditField extends StatelessWidget {
+  const _EditField({
+    required this.controller,
+    required this.label,
+    required this.colors,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final AppColor colors;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: TextStyle(color: colors.textPrimary, fontSize: 13),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: colors.textSecondary, fontSize: 12),
+        filled: true,
+        fillColor: colors.background,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colors.primary, width: 1.4),
+        ),
+      ),
+    );
+  }
+}
 class _ErrorBody extends StatelessWidget {
   const _ErrorBody({
     required this.c,
@@ -1896,3 +2105,15 @@ class _SubmitBar extends StatelessWidget {
     );
   }
 }
+
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(text: newValue.text.toUpperCase());
+  }
+}
+
+

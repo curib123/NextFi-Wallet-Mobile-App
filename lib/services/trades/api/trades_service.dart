@@ -215,7 +215,7 @@ class TradesService {
       TradesHttp.uri(TradesEndpoints.create()),
       headers: await _headers(
         idempotencyScope:
-            'create:${req.offerId}:${req.userPaymentAccountId}:${req.cryptoAmount}:${req.fiatAmount}',
+            'create:${req.offerId}:${req.userPaymentAccountId}:${req.cryptoAmount}:${req.fiatAmount}:${req.cryptoReceiverAddress ?? ''}',
       ),
       body: jsonEncode(req.toJson()),
     );
