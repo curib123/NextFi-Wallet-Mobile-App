@@ -38,7 +38,8 @@ class StellarAccountService extends StellarBaseService {
   static const double _subentryReserve = _baseReserve;
 
   /// Minimum account balance = (2 + numSubEntries) * baseReserve
-  /// For safety, we calculate: 2 * baseReserve + numSubEntries * subentryReserve
+  /// Includes sponsorship deltas:
+  /// (2 + numSubEntries + numSponsoring - numSponsored) * baseReserve.
   double _calculateMinimumBalance(
     AccountResponse account, {
     double? baseReserve,
@@ -67,9 +68,12 @@ class StellarAccountService extends StellarBaseService {
     // For now, we'll use the subentries field if available
     final numSubentries = account.subentryCount ?? subentries;
 
-    // Minimum balance = (2 + numSubEntries) * baseReserve
-    // Using updated formula: 2 * baseReserve + numSubEntries * subentryReserve
-    final minimumBalance = (2 * base) + (numSubentries * subentry);
+    final numSponsoring = account.numSponsoring;
+    final numSponsored = account.numSponsored;
+    final effectiveSubentries = (numSubentries + numSponsoring - numSponsored)
+        .clamp(0, 1 << 30);
+
+    final minimumBalance = (2 * base) + (effectiveSubentries * subentry);
 
     return minimumBalance;
   }
@@ -102,11 +106,14 @@ class StellarAccountService extends StellarBaseService {
       subentryReserve: subentryReserve,
     );
 
-    // Spendable = Total - MinimumBalance - SellingLiabilities
-    final spendable = totalXlm - minimumBalance - sellingLiabilities;
+    // Use integer stroops math to avoid floating drift near reserve boundaries.
+    final totalStroops = toStroops(totalXlm);
+    final reserveStroops = (minimumBalance * 1e7).ceil();
+    final liabilitiesStroops = toStroops(sellingLiabilities);
+    final spendableStroops = totalStroops - reserveStroops - liabilitiesStroops;
 
     // Return 0 if negative (shouldn't happen in normal circumstances)
-    return spendable > 0 ? spendable : 0.0;
+    return spendableStroops > 0 ? fromStroops(spendableStroops) : 0.0;
   }
 
   double _parseAmount(String raw) => double.tryParse(raw.trim()) ?? 0.0;
@@ -122,7 +129,10 @@ class StellarAccountService extends StellarBaseService {
     try {
       final minActivation = await getLatestAccountActivationMinXlm();
       if (minActivation > 0) return minActivation / 2.0;
-    } catch (_) {}
+    } catch (_) {
+      final cachedMin = _cachedActivationMinXlm;
+      if (cachedMin != null && cachedMin > 0) return cachedMin / 2.0;
+    }
     return _baseReserve;
   }
 
@@ -359,7 +369,16 @@ class StellarAccountService extends StellarBaseService {
         baseReserve: baseReserve,
         subentryReserve: baseReserve,
       );
-      final spendable = totalXlm - minimumBalance - sellingLiabilities;
+      final spendable = _calculateSpendableXlm(
+        acc,
+        baseReserve: baseReserve,
+        subentryReserve: baseReserve,
+      );
+      final effectiveSubentries =
+          (acc.subentryCount + acc.numSponsoring - acc.numSponsored).clamp(
+            0,
+            1 << 30,
+          );
 
       return {
         'total': totalXlm,
@@ -367,7 +386,10 @@ class StellarAccountService extends StellarBaseService {
         'reserved': minimumBalance,
         'locked': sellingLiabilities,
         'baseReserve': baseReserve,
-        'subentries': (acc.subentryCount ?? 0).toDouble(),
+        'subentries': acc.subentryCount.toDouble(),
+        'numSponsoring': acc.numSponsoring.toDouble(),
+        'numSponsored': acc.numSponsored.toDouble(),
+        'effectiveSubentries': effectiveSubentries.toDouble(),
       };
     } catch (e) {
       fail(
@@ -795,8 +817,8 @@ class StellarAccountService extends StellarBaseService {
   /// This is the minimum balance required for an account with no subentries
   Future<double> getBaseReserve(String accountId) async {
     try {
-      // Base reserve is always 2 * baseReserve for any account
-      return 2 * _baseReserve;
+      final baseReserve = await _resolveBaseReserveOrFallback();
+      return 2 * baseReserve;
     } catch (e) {
       fail(
         'Unable to fetch base reserve',
@@ -811,13 +833,14 @@ class StellarAccountService extends StellarBaseService {
   Future<double> getTrustlineReserve(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
+      final subentryReserve = await _resolveBaseReserveOrFallback();
 
       // Count trustlines (non-native balances)
       int trustlineCount = acc.balances
           .where((b) => b.assetType != Asset.TYPE_NATIVE)
           .length;
 
-      return trustlineCount * _subentryReserve;
+      return trustlineCount * subentryReserve;
     } catch (e) {
       fail(
         'Unable to fetch trustline reserve',
@@ -832,6 +855,7 @@ class StellarAccountService extends StellarBaseService {
   Future<double> getSubentryReserve(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
+      final subentryReserve = await _resolveBaseReserveOrFallback();
 
       // Count all subentries
       int subentries = 0;
@@ -850,7 +874,7 @@ class StellarAccountService extends StellarBaseService {
       // Use subentryCount if available (includes offers)
       final numSubentries = acc.subentryCount ?? subentries;
 
-      return numSubentries * _subentryReserve;
+      return numSubentries * subentryReserve;
     } catch (e) {
       fail(
         'Unable to fetch subentry reserve',
@@ -865,6 +889,7 @@ class StellarAccountService extends StellarBaseService {
   Future<Map<String, double>> getReserveBreakdown(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
+      final subentryReserve = await _resolveBaseReserveOrFallback();
 
       // Count each type of subentry
       int trustlineCount = acc.balances
@@ -878,13 +903,19 @@ class StellarAccountService extends StellarBaseService {
       // Total subentries (may include offers not directly visible)
       final totalSubentries =
           acc.subentryCount ?? (trustlineCount + signerCount + dataEntryCount);
+      final numSponsoring = acc.numSponsoring;
+      final numSponsored = acc.numSponsored;
+      final effectiveSubentries =
+          (totalSubentries + numSponsoring - numSponsored).clamp(0, 1 << 30);
 
       // Calculate reserves
-      final baseReserve = 2 * _baseReserve;
-      final trustlineReserve = trustlineCount * _subentryReserve;
-      final signerReserve = signerCount * _subentryReserve;
-      final dataReserve = dataEntryCount * _subentryReserve;
-      final totalSubentryReserve = totalSubentries * _subentryReserve;
+      final baseReserve = 2 * subentryReserve;
+      final trustlineReserve = trustlineCount * subentryReserve;
+      final signerReserve = signerCount * subentryReserve;
+      final dataReserve = dataEntryCount * subentryReserve;
+      final sponsoringReserve = numSponsoring * subentryReserve;
+      final sponsoredOffsetReserve = numSponsored * subentryReserve;
+      final totalSubentryReserve = effectiveSubentries * subentryReserve;
       final totalMinimumBalance = baseReserve + totalSubentryReserve;
 
       return {
@@ -892,6 +923,8 @@ class StellarAccountService extends StellarBaseService {
         'trustlineReserve': trustlineReserve,
         'signerReserve': signerReserve,
         'dataReserve': dataReserve,
+        'sponsoringReserve': sponsoringReserve,
+        'sponsoredOffsetReserve': sponsoredOffsetReserve,
         'otherReserve':
             totalSubentryReserve -
             trustlineReserve -
@@ -903,6 +936,9 @@ class StellarAccountService extends StellarBaseService {
         'signerCount': signerCount.toDouble(),
         'dataEntryCount': dataEntryCount.toDouble(),
         'totalSubentries': totalSubentries.toDouble(),
+        'numSponsoring': numSponsoring.toDouble(),
+        'numSponsored': numSponsored.toDouble(),
+        'effectiveSubentries': effectiveSubentries.toDouble(),
       };
     } catch (e) {
       fail(

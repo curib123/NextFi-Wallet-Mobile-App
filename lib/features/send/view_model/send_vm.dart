@@ -351,6 +351,18 @@ class SendVM extends ChangeNotifier {
     await refreshFees();
 
     final KeyPair keyPair = await _seedVM.deriveKeyPair();
+    final expectedSender = _senderAddr.trim();
+    if (expectedSender.isNotEmpty &&
+        expectedSender.startsWith('G') &&
+        expectedSender.length == 56 &&
+        keyPair.accountId != expectedSender) {
+      throw StateError(
+        'Active wallet mismatch. '
+        'Expected sender: $expectedSender, '
+        'Active signer: ${keyPair.accountId}. '
+        'Please reopen Send from the current wallet.',
+      );
+    }
 
     if (isXlm) {
       final liveBreakdown = await _svc

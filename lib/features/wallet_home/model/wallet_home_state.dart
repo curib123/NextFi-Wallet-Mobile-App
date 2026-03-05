@@ -7,6 +7,7 @@ class WalletHomeState {
   final String? address;
   final String? walletName;
 
+  // Spendable balances (XLM reserve already excluded).
   final double xlm;
   final double usdc;
 
@@ -32,9 +33,9 @@ class WalletHomeState {
     this.walletName,
     this.xlm = 0,
     this.usdc = 0,
-    this.xlmBaseReserve = 2.0,
+    this.xlmBaseReserve = 1.0,
     this.xlmTrustlineReserve = 0.0,
-    this.xlmTotalReserve = 2.0,
+    this.xlmTotalReserve = 1.0,
     this.trustlineCount = 0,
     this.loadingWallet = false,
     this.loadingBalances = false,
@@ -47,7 +48,8 @@ class WalletHomeState {
 
   bool get hasWallet => (address != null && address!.isNotEmpty);
 
-  double get spendableXlm => (xlm - xlmTotalReserve).clamp(0.0, double.infinity);
+  // `xlm` is already spendable (total - reserve - liabilities).
+  double get spendableXlm => xlm;
 
   double get totalLockedReserve => xlmTotalReserve;
 

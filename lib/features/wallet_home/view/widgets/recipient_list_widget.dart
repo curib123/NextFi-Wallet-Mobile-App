@@ -125,6 +125,7 @@ class RecipientListWidget extends StatelessWidget {
                   colors: colors,
                   items: prov.items,
                   onSelect: onSelect,
+                  fromAddress: fromAddress,
                   xlmBalance: xlmBalance,
                   usdcBalance: usdcBalance,
                   compact: compact,
@@ -331,7 +332,11 @@ class _AddButtonState extends State<_AddButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(LucideIcons.userPlus, color: AppColor.of(context).onPrimary, size: 18),
+              Icon(
+                LucideIcons.userPlus,
+                color: AppColor.of(context).onPrimary,
+                size: 18,
+              ),
               if (!widget.compact) ...[
                 const SizedBox(width: _S.s10),
                 Text(
@@ -359,6 +364,7 @@ class _RecipientList extends StatelessWidget {
   final AppColor colors;
   final List<RecipientAddressModel> items;
   final void Function(RecipientAddressModel)? onSelect;
+  final String? fromAddress;
   final double? xlmBalance;
   final double? usdcBalance;
   final bool compact;
@@ -368,6 +374,7 @@ class _RecipientList extends StatelessWidget {
     required this.colors,
     required this.items,
     this.onSelect,
+    this.fromAddress,
     this.xlmBalance,
     this.usdcBalance,
     required this.compact,
@@ -419,9 +426,18 @@ class _RecipientList extends StatelessWidget {
                 );
                 return;
               }
+              final sender = (fromAddress ?? '').trim();
+              if (sender.isEmpty) {
+                showFloatingSnackBar(
+                  context,
+                  message: 'Sender wallet not ready',
+                  type: SnackBarType.warning,
+                );
+                return;
+              }
               await showTokenSelector(
                 context,
-                addr,
+                sender,
                 xlmBalance ?? 0,
                 usdcBalance ?? 0,
                 screenBuilder: (address, token, balance) => SendScreen(

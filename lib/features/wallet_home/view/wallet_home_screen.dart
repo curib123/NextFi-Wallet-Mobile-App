@@ -229,6 +229,7 @@ class _WalletHomeScreenState extends State<WalletHomeScreen>
                         storageKey: 'recipientsTab',
                         child: RecipientListWidget(
                           colors: colors,
+                          fromAddress: s.address,
                           xlmBalance: s.xlm,
                           usdcBalance: s.usdc,
                         ),

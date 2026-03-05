@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:next_fi/features/wallet_home/model/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/model/wallet_home_state.dart';
 import 'package:next_fi/services/secure_storage/token_storage.dart';
-import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart' as stellar
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
+    as stellar
     show PaymentOperationResponse, Asset;
 
 import 'package:next_fi/services/secure_storage/seed_storage.dart';
@@ -124,9 +125,9 @@ class WalletHomeVM extends ChangeNotifier {
     required StellarWalletServices stellar,
     required SeedKeypairVM seedVM,
     TokenStorage? tokenStorage,
-  })  : _stellar = stellar,
-        _seedVM = seedVM,
-        _tokenStorage = tokenStorage ?? TokenStorage();
+  }) : _stellar = stellar,
+       _seedVM = seedVM,
+       _tokenStorage = tokenStorage ?? TokenStorage();
 
   final StellarWalletServices _stellar;
   final SeedKeypairVM _seedVM;
@@ -142,7 +143,7 @@ class WalletHomeVM extends ChangeNotifier {
 
   // ─────────────── UI events stream (for the View) ───────────────
   final StreamController<WalletHomeUiEvent> _ui =
-  StreamController<WalletHomeUiEvent>.broadcast();
+      StreamController<WalletHomeUiEvent>.broadcast();
   Stream<WalletHomeUiEvent> get uiEvents => _ui.stream;
 
   void _emit(WalletHomeUiEvent e) {
@@ -240,11 +241,13 @@ class WalletHomeVM extends ChangeNotifier {
     final authed = await _requireAuth();
     if (!authed) return;
 
-    _emit(StartBuyFlow(
-      address: _state.address!,
-      xlm: _state.xlm,
-      usdc: _state.usdc,
-    ));
+    _emit(
+      StartBuyFlow(
+        address: _state.address!,
+        xlm: _state.xlm,
+        usdc: _state.usdc,
+      ),
+    );
   }
 
   Future<void> onSellPressed() async {
@@ -256,11 +259,13 @@ class WalletHomeVM extends ChangeNotifier {
     final authed = await _requireAuth();
     if (!authed) return;
 
-    _emit(StartSellFlow(
-      address: _state.address!,
-      xlm: _state.xlm,
-      usdc: _state.usdc,
-    ));
+    _emit(
+      StartSellFlow(
+        address: _state.address!,
+        xlm: _state.xlm,
+        usdc: _state.usdc,
+      ),
+    );
   }
 
   // ───────────────────── Binding helpers ─────────────────────
@@ -270,7 +275,17 @@ class WalletHomeVM extends ChangeNotifier {
 
     if (address.isEmpty) {
       if (_state.address != null) {
-        _set(_state.copyWith(address: null, xlm: 0, usdc: 0));
+        _set(
+          _state.copyWith(
+            address: null,
+            xlm: 0,
+            usdc: 0,
+            xlmBaseReserve: 1.0,
+            xlmTrustlineReserve: 0.0,
+            xlmTotalReserve: 1.0,
+            trustlineCount: 0,
+          ),
+        );
         _lastBoundAddress = null;
         _restartRealtime();
       }
@@ -303,15 +318,17 @@ class WalletHomeVM extends ChangeNotifier {
       final address = _seedVM.accountId;
 
       if (address == null || address.isEmpty) {
-        _set(_state.copyWith(
-          walletName: name,
-          address: null,
-          xlm: 0,
-          usdc: 0,
-          lastBalancesAt: DateTime.now(),
-          loadingWallet: false,
-          loadingBalances: false,
-        ));
+        _set(
+          _state.copyWith(
+            walletName: name,
+            address: null,
+            xlm: 0,
+            usdc: 0,
+            lastBalancesAt: DateTime.now(),
+            loadingWallet: false,
+            loadingBalances: false,
+          ),
+        );
 
         if (_bootEventsArmed) {
           _emit(const BootBalancesReady(xlm: 0, usdc: 0));
@@ -367,37 +384,34 @@ class WalletHomeVM extends ChangeNotifier {
     try {
       final addr = _state.address!;
 
-      final results = await Future.wait<double>(
-        [
-          _stellar.getXlmBalance(addr).catchError((e) {
-            debugPrint('Error fetching XLM balance: $e');
-            return 0.0;
-          }),
-          _stellar.getUsdcBalance(addr).catchError((e) {
-            debugPrint('Error fetching USDC balance: $e');
-            return 0.0;
-          }),
-        ],
-        eagerError: false,
-      );
+      final results = await Future.wait<double>([
+        _stellar.getXlmBalance(addr).catchError((e) {
+          debugPrint('Error fetching XLM balance: $e');
+          return 0.0;
+        }),
+        _stellar.getUsdcBalance(addr).catchError((e) {
+          debugPrint('Error fetching USDC balance: $e');
+          return 0.0;
+        }),
+      ], eagerError: false);
 
       final now = DateTime.now();
       _lastFetch = now;
 
-      _set(_state.copyWith(
-        xlm: results[0],
-        usdc: results[1],
-        lastBalancesAt: now,
-      ));
+      _set(
+        _state.copyWith(xlm: results[0], usdc: results[1], lastBalancesAt: now),
+      );
 
       await _fetchReserves(addr);
     } catch (e) {
       debugPrint('WalletHomeVM.refresh error: $e');
       if (force) {
-        _emit(const ShowToastEvent(
-          'Failed to refresh balances',
-          UiSeverity.warning,
-        ));
+        _emit(
+          const ShowToastEvent(
+            'Failed to refresh balances',
+            UiSeverity.warning,
+          ),
+        );
       }
     } finally {
       _balancesInFlight = false;
@@ -413,21 +427,25 @@ class WalletHomeVM extends ChangeNotifier {
     try {
       final breakdown = await _stellar.getReserveBreakdown(addr);
 
-      _set(_state.copyWith(
-        xlmBaseReserve: breakdown['baseReserve'] ?? 2.0,
-        xlmTrustlineReserve: breakdown['trustlineReserve'] ?? 0.0,
-        xlmTotalReserve: breakdown['totalMinimumBalance'] ?? 2.0,
-        trustlineCount: (breakdown['trustlineCount'] as num?)?.toInt() ?? 0,
-        lastReservesAt: DateTime.now(),
-      ));
+      _set(
+        _state.copyWith(
+          xlmBaseReserve: breakdown['baseReserve'] ?? 1.0,
+          xlmTrustlineReserve: breakdown['trustlineReserve'] ?? 0.0,
+          xlmTotalReserve: breakdown['totalMinimumBalance'] ?? 1.0,
+          trustlineCount: (breakdown['trustlineCount'] as num?)?.toInt() ?? 0,
+          lastReservesAt: DateTime.now(),
+        ),
+      );
     } catch (e) {
       debugPrint('Error fetching reserves: $e');
-      _set(_state.copyWith(
-        xlmBaseReserve: 2.0,
-        xlmTrustlineReserve: 0.0,
-        xlmTotalReserve: 2.0,
-        trustlineCount: 0,
-      ));
+      _set(
+        _state.copyWith(
+          xlmBaseReserve: 1.0,
+          xlmTrustlineReserve: 0.0,
+          xlmTotalReserve: 1.0,
+          trustlineCount: 0,
+        ),
+      );
     } finally {
       _set(_state.copyWith(loadingReserves: false));
     }
@@ -442,62 +460,64 @@ class WalletHomeVM extends ChangeNotifier {
       if (!_disposed) _kickRefreshInBackground();
     });
 
-    _incomingSub = _stellar.paymentsStream(_state.address!).listen(
+    _incomingSub = _stellar
+        .paymentsStream(_state.address!)
+        .listen(
           (op) async {
-        if (_disposed) return;
+            if (_disposed) return;
 
-        if (op.transactionSuccessful != true) return;
-        if (op.to != _state.address) return;
+            if (op.transactionSuccessful != true) return;
+            if (op.to != _state.address) return;
 
-        final id = op.transactionHash ?? '';
-        if (id.isEmpty || _seen.contains(id)) return;
+            final id = op.transactionHash ?? '';
+            if (id.isEmpty || _seen.contains(id)) return;
 
-        _seen.add(id);
-        _pruneSeenSet();
+            _seen.add(id);
+            _pruneSeenSet();
 
-        final assetCode = op.assetType == stellar.Asset.TYPE_NATIVE
-            ? 'XLM'
-            : (op.assetCode ?? 'ASSET');
+            final assetCode = op.assetType == stellar.Asset.TYPE_NATIVE
+                ? 'XLM'
+                : (op.assetCode ?? 'ASSET');
 
-        final amount = double.tryParse(op.amount ?? '0') ?? 0.0;
+            final amount = double.tryParse(op.amount ?? '0') ?? 0.0;
 
-        final hint = IncomingHint(
-          id: id,
-          from: op.from ?? '',
-          to: op.to ?? '',
-          assetCode: assetCode,
-          amount: amount,
-          at: DateTime.now(),
+            final hint = IncomingHint(
+              id: id,
+              from: op.from ?? '',
+              to: op.to ?? '',
+              assetCode: assetCode,
+              amount: amount,
+              at: DateTime.now(),
+            );
+
+            final next = [hint, ..._state.hints];
+            if (next.length > _maxHints) {
+              next.removeRange(_maxHints, next.length);
+            }
+
+            _set(_state.copyWith(hints: next));
+            _emit(IncomingHintAddedEvent(hint));
+
+            // ✅ OPTIONAL: send a push to yourself (only if logged in + throttled)
+            await _notifyMeIfAuthed(
+              title: 'Incoming $assetCode',
+              body: '+$amount $assetCode received',
+              data: const {'route': '/wallet'},
+            );
+
+            _scheduleBalanceKick(_debounceDelay);
+          },
+          onError: (e) {
+            debugPrint('Payment stream error: $e');
+          },
+          cancelOnError: false,
         );
-
-        final next = [hint, ..._state.hints];
-        if (next.length > _maxHints) {
-          next.removeRange(_maxHints, next.length);
-        }
-
-        _set(_state.copyWith(hints: next));
-        _emit(IncomingHintAddedEvent(hint));
-
-        // ✅ OPTIONAL: send a push to yourself (only if logged in + throttled)
-        await _notifyMeIfAuthed(
-          title: 'Incoming $assetCode',
-          body: '+$amount $assetCode received',
-          data: const {'route': '/wallet'},
-        );
-
-        _scheduleBalanceKick(_debounceDelay);
-      },
-      onError: (e) {
-        debugPrint('Payment stream error: $e');
-      },
-      cancelOnError: false,
-    );
   }
 
   void attachConfirmedTxStream(Stream<Map> txStream) {
     _externalTxSub?.cancel();
     _externalTxSub = txStream.listen(
-          (tx) async {
+      (tx) async {
         if (_disposed) return;
 
         final hash = (tx['hash'] ?? '').toString().trim();
@@ -506,7 +526,9 @@ class WalletHomeVM extends ChangeNotifier {
         final asset = (tx['asset'] ?? 'XLM').toString();
         final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
 
-        _emit(TransactionConfirmedEvent(hash: hash, asset: asset, amount: amount));
+        _emit(
+          TransactionConfirmedEvent(hash: hash, asset: asset, amount: amount),
+        );
 
         // ✅ OPTIONAL: self-push on confirmations too (logged-in + throttled)
         await _notifyMeIfAuthed(
@@ -592,11 +614,13 @@ class WalletHomeVM extends ChangeNotifier {
       return;
     }
 
-    _emit(StartSendFlow(
-      address: _state.address!,
-      xlm: _state.xlm,
-      usdc: _state.usdc,
-    ));
+    _emit(
+      StartSendFlow(
+        address: _state.address!,
+        xlm: _state.xlm,
+        usdc: _state.usdc,
+      ),
+    );
   }
 
   void onReceivePressed({String? initialToken}) {
@@ -605,12 +629,14 @@ class WalletHomeVM extends ChangeNotifier {
       return;
     }
 
-    _emit(StartReceiveFlow(
-      address: _state.address!,
-      xlm: _state.xlm,
-      usdc: _state.usdc,
-      initialToken: initialToken,
-    ));
+    _emit(
+      StartReceiveFlow(
+        address: _state.address!,
+        xlm: _state.xlm,
+        usdc: _state.usdc,
+        initialToken: initialToken,
+      ),
+    );
   }
 
   void onResumed() {
