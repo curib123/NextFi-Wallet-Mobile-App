@@ -13,7 +13,6 @@ import 'package:next_fi/services/trades/models/trades_dtos.dart';
 import 'package:next_fi/services/trades/trades_core_service.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
-import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_dtos.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 
 class TradeScreen extends StatefulWidget {
@@ -96,6 +95,13 @@ class _TradeScreenState extends State<TradeScreen>
   }
 
   String? get _defaultReceiverAddress {
+    // User is selling crypto (BUY offer): prefer the selected payment account
+    // settlement address configured in User Payment Accounts.
+    if (!_userIsBuyer) {
+      final fromAccount =
+          _selectedUserAccount?.assetReceiverAddress?.trim() ?? '';
+      if (fromAccount.isNotEmpty) return fromAccount;
+    }
     final active = _activeWalletAddress?.trim() ?? '';
     if (active.isNotEmpty) return active;
     return null;
@@ -252,6 +258,8 @@ class _TradeScreenState extends State<TradeScreen>
               _selectedMethodId()) {
         _selectedUserAccount = filteredUser.first;
       }
+      final resolved = _defaultReceiverAddress ?? '';
+      _receiverCtrl.text = resolved;
     });
   }
 
@@ -399,185 +407,6 @@ class _TradeScreenState extends State<TradeScreen>
     }
   }
 
-  Future<void> _editSelectedUserPaymentAccount() async {
-    final selected = _selectedUserAccount;
-    if (selected == null) return;
-
-    final labelCtrl = TextEditingController(text: selected.label ?? '');
-    final nameCtrl = TextEditingController(text: selected.accountName);
-    final numberCtrl = TextEditingController(text: selected.accountNo ?? '');
-    final receiverCtrl = TextEditingController(
-      text: selected.assetReceiverAddress ?? '',
-    );
-    final instructionsCtrl = TextEditingController(
-      text: selected.instructions ?? '',
-    );
-
-    bool isSaving = false;
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColor.of(context).surface,
-      builder: (ctx) {
-        final colors = AppColor.of(ctx);
-        return StatefulBuilder(
-          builder: (ctx, setModal) {
-            final bottom = MediaQuery.of(ctx).viewInsets.bottom;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Edit Payment Account',
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _EditField(
-                      controller: labelCtrl,
-                      label: 'Label (optional)',
-                      colors: colors,
-                    ),
-                    const SizedBox(height: 10),
-                    _EditField(
-                      controller: nameCtrl,
-                      label: 'Account Name',
-                      colors: colors,
-                    ),
-                    const SizedBox(height: 10),
-                    _EditField(
-                      controller: numberCtrl,
-                      label: 'Account Number (optional)',
-                      colors: colors,
-                    ),
-                    const SizedBox(height: 10),
-                    _EditField(
-                      controller: receiverCtrl,
-                      label: 'Asset Receiver Address (optional)',
-                      colors: colors,
-                    ),
-                    const SizedBox(height: 10),
-                    _EditField(
-                      controller: instructionsCtrl,
-                      label: 'Instructions (optional)',
-                      colors: colors,
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isSaving
-                            ? null
-                            : () async {
-                                final accountName = nameCtrl.text.trim();
-                                if (accountName.isEmpty) {
-                                  showFloatingSnackBar(
-                                    context,
-                                    message: 'Account name is required.',
-                                    type: SnackBarType.error,
-                                  );
-                                  return;
-                                }
-                                final receiver = receiverCtrl.text.trim();
-                                if (receiver.isNotEmpty &&
-                                    !_stellarAddressRegExp.hasMatch(receiver)) {
-                                  showFloatingSnackBar(
-                                    context,
-                                    message: 'Invalid Stellar receiver address.',
-                                    type: SnackBarType.error,
-                                  );
-                                  return;
-                                }
-
-                                setModal(() => isSaving = true);
-                                try {
-                                  await _userAccountCore.updateMyPaymentAccount(
-                                    selected.id,
-                                    UpdateUserPaymentAccountRequest(
-                                      label: labelCtrl.text.trim().isEmpty
-                                          ? null
-                                          : labelCtrl.text.trim(),
-                                      accountName: accountName,
-                                      accountNo: numberCtrl.text.trim().isEmpty
-                                          ? null
-                                          : numberCtrl.text.trim(),
-                                      assetReceiverAddress: receiver.isEmpty
-                                          ? null
-                                          : receiver,
-                                      instructions:
-                                          instructionsCtrl.text.trim().isEmpty
-                                              ? null
-                                              : instructionsCtrl.text.trim(),
-                                    ),
-                                  );
-                                  if (!ctx.mounted) return;
-                                  Navigator.of(ctx).pop(true);
-                                } catch (e) {
-                                  if (!ctx.mounted) return;
-                                  showFloatingSnackBar(
-                                    ctx,
-                                    message: 'Failed to update account: $e',
-                                    type: SnackBarType.error,
-                                  );
-                                  setModal(() => isSaving = false);
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colors.primary,
-                          foregroundColor: colors.onPrimary,
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: isSaving
-                            ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  color: colors.onPrimary,
-                                ),
-                              )
-                            : const Text(
-                                'Save Changes',
-                                style: TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    labelCtrl.dispose();
-    nameCtrl.dispose();
-    numberCtrl.dispose();
-    receiverCtrl.dispose();
-    instructionsCtrl.dispose();
-
-    if (saved == true && mounted) {
-      await _loadData();
-      if (!mounted) return;
-      showFloatingSnackBar(
-        context,
-        message: 'Payment account updated.',
-        type: SnackBarType.success,
-      );
-    }
-  }
-
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -665,9 +494,10 @@ class _TradeScreenState extends State<TradeScreen>
                 c: c,
                 accounts: _filteredUserAccounts,
                 selected: _selectedUserAccount,
-                onChanged: (a) =>
-                    setState(() => _selectedUserAccount = a),
-                onEditSelected: _editSelectedUserPaymentAccount,
+                onChanged: (a) => setState(() {
+                  _selectedUserAccount = a;
+                  _receiverCtrl.text = _defaultReceiverAddress ?? '';
+                }),
               ),
               const SizedBox(height: 12),
 
@@ -1520,6 +1350,7 @@ class _ReceiverCard extends StatelessWidget {
             controller: receiverController,
             validator: validator,
             autovalidateMode: AutovalidateMode.onUserInteraction,
+            readOnly: true,
             textCapitalization: TextCapitalization.characters,
             style: TextStyle(
               color: c.textPrimary,
@@ -1529,7 +1360,9 @@ class _ReceiverCard extends StatelessWidget {
             decoration: InputDecoration(
               hintText: defaultAddress ?? 'G...',
               hintStyle: TextStyle(color: c.textSecondary, fontSize: 12.5),
-              helperText: 'Default is your active Stellar wallet public address. You can change it.',
+              helperText: receiverIsCurrentActor
+                  ? 'Receiver address is your active Stellar wallet public address.'
+                  : 'Receiver address is from your selected payment account (asset receiver address) when available.',
               helperStyle: TextStyle(
                 color: c.textSecondary,
                 fontSize: 11.5,
@@ -1573,13 +1406,11 @@ class _YourAccountCard extends StatelessWidget {
     required this.accounts,
     required this.selected,
     required this.onChanged,
-    required this.onEditSelected,
   });
   final AppColor c;
   final List<UserPaymentAccountModel> accounts;
   final UserPaymentAccountModel? selected;
   final ValueChanged<UserPaymentAccountModel?> onChanged;
-  final VoidCallback onEditSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1598,24 +1429,6 @@ class _YourAccountCard extends StatelessWidget {
             icon: Icons.person_outline_rounded,
             title: 'Your payment account',
           ),
-          if (selected != null) ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onEditSelected,
-                icon: Icon(Icons.edit_rounded, size: 16, color: c.primary),
-                label: Text(
-                  'Edit selected',
-                  style: TextStyle(
-                    color: c.primary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: 14),
           if (accounts.isEmpty)
             _InlineWarn(
@@ -1889,47 +1702,6 @@ class _WarnCard extends StatelessWidget {
 
 // ─── Error Body ───────────────────────────────────────────────────────────────
 
-class _EditField extends StatelessWidget {
-  const _EditField({
-    required this.controller,
-    required this.label,
-    required this.colors,
-    this.maxLines = 1,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final AppColor colors;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      style: TextStyle(color: colors.textPrimary, fontSize: 13),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: colors.textSecondary, fontSize: 12),
-        filled: true,
-        fillColor: colors.background,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: colors.primary, width: 1.4),
-        ),
-      ),
-    );
-  }
-}
 class _ErrorBody extends StatelessWidget {
   const _ErrorBody({
     required this.c,
@@ -2115,5 +1887,7 @@ class UpperCaseTextFormatter extends TextInputFormatter {
     return newValue.copyWith(text: newValue.text.toUpperCase());
   }
 }
+
+
 
 

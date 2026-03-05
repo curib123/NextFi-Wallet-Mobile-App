@@ -30,6 +30,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
   final _accountNameCtrl = TextEditingController();
   final _accountNoCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
+  final _assetReceiverCtrl = TextEditingController();
   final _instructionsCtrl = TextEditingController(); // merchant only
 
   bool _loading = true;
@@ -63,6 +64,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     _accountNameCtrl.dispose();
     _accountNoCtrl.dispose();
     _labelCtrl.dispose();
+    _assetReceiverCtrl.dispose();
     _instructionsCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
@@ -118,6 +120,9 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
           label: _labelCtrl.text.trim().isEmpty
               ? null
               : _labelCtrl.text.trim(),
+          assetReceiverAddress: _assetReceiverCtrl.text.trim().isEmpty
+              ? null
+              : _assetReceiverCtrl.text.trim(),
           instructions: _instructionsCtrl.text.trim().isEmpty
               ? null
               : _instructionsCtrl.text.trim(),
@@ -128,6 +133,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       _accountNameCtrl.clear();
       _accountNoCtrl.clear();
       _labelCtrl.clear();
+      _assetReceiverCtrl.clear();
       _instructionsCtrl.clear();
       if (!mounted) return;
       await _loadAll();
@@ -167,6 +173,206 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       _showSnack('Failed to set active: $e');
     } finally {
       if (mounted) setState(() => _settingActive = false);
+    }
+  }
+
+  Future<void> _editAccount(_AccountItem account) async {
+    final accountNameCtrl = TextEditingController(text: account.accountName);
+    final accountNoCtrl = TextEditingController(text: account.accountNo ?? '');
+    final labelCtrl = TextEditingController(text: account.label ?? '');
+    final assetReceiverCtrl = TextEditingController(
+      text: account.assetReceiverAddress ?? '',
+    );
+    final instructionsCtrl = TextEditingController(
+      text: account.instructions ?? '',
+    );
+
+    bool saving = false;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColor.of(context).surface,
+      builder: (ctx) {
+        final c = AppColor.of(ctx);
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Edit Payment Account',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _FocusField(
+                      controller: accountNameCtrl,
+                      label: 'Account Name',
+                      hint: 'Required',
+                      icon: Icons.person_outline_rounded,
+                      required: true,
+                      action: TextInputAction.next,
+                      c: c,
+                    ),
+                    const SizedBox(height: 10),
+                    _FocusField(
+                      controller: accountNoCtrl,
+                      label: 'Account Number',
+                      hint: 'Optional',
+                      icon: Icons.tag_rounded,
+                      action: TextInputAction.next,
+                      c: c,
+                    ),
+                    const SizedBox(height: 10),
+                    _FocusField(
+                      controller: labelCtrl,
+                      label: 'Label',
+                      hint: 'Optional',
+                      icon: Icons.label_outline_rounded,
+                      action: TextInputAction.next,
+                      c: c,
+                    ),
+                    const SizedBox(height: 10),
+                    _FocusField(
+                      controller: assetReceiverCtrl,
+                      label: 'Asset Receiver Address',
+                      hint: 'Optional',
+                      icon: Icons.account_balance_wallet_outlined,
+                      action: _isMerchant
+                          ? TextInputAction.next
+                          : TextInputAction.done,
+                      c: c,
+                    ),
+                    if (_isMerchant) ...[
+                      const SizedBox(height: 10),
+                      _FocusField(
+                        controller: instructionsCtrl,
+                        label: 'Instructions',
+                        hint: 'Optional',
+                        icon: Icons.receipt_long_outlined,
+                        action: TextInputAction.done,
+                        multiline: true,
+                        c: c,
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    ElevatedButton(
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              final accountName = accountNameCtrl.text.trim();
+                              if (accountName.isEmpty) {
+                                _showSnack('Account name is required.');
+                                return;
+                              }
+                              setModal(() => saving = true);
+                              try {
+                                await _paymentCore.updateMyPaymentAccount(
+                                  account.id,
+                                  UpdateUserPaymentAccountRequest(
+                                    accountName: accountName,
+                                    accountNo: accountNoCtrl.text.trim().isEmpty
+                                        ? null
+                                        : accountNoCtrl.text.trim(),
+                                    label: labelCtrl.text.trim().isEmpty
+                                        ? null
+                                        : labelCtrl.text.trim(),
+                                    assetReceiverAddress:
+                                        assetReceiverCtrl.text.trim().isEmpty
+                                        ? null
+                                        : assetReceiverCtrl.text.trim(),
+                                    instructions:
+                                        instructionsCtrl.text.trim().isEmpty
+                                        ? null
+                                        : instructionsCtrl.text.trim(),
+                                  ),
+                                );
+                                if (!ctx.mounted) return;
+                                Navigator.of(ctx).pop(true);
+                              } catch (e) {
+                                if (!ctx.mounted) return;
+                                _showSnack('Failed to update account: $e');
+                                setModal(() => saving = false);
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: c.primary,
+                        foregroundColor: c.onPrimary,
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        saving ? 'Saving...' : 'Save Changes',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    accountNameCtrl.dispose();
+    accountNoCtrl.dispose();
+    labelCtrl.dispose();
+    assetReceiverCtrl.dispose();
+    instructionsCtrl.dispose();
+
+    if (saved == true && mounted) {
+      await _loadAll();
+      if (!mounted) return;
+      _showSnack('Payment account updated.');
+    }
+  }
+
+  Future<void> _deleteAccount(_AccountItem account) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final c = AppColor.of(ctx);
+        return AlertDialog(
+          backgroundColor: c.surface,
+          title: const Text('Delete payment account?'),
+          content: Text(
+            'This will remove ${account.accountName}.',
+            style: TextStyle(color: c.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok != true) return;
+    try {
+      await _paymentCore.deleteMyPaymentAccount(account.id);
+      if (!mounted) return;
+      await _loadAll();
+      if (!mounted) return;
+      _showSnack('Payment account deleted.');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Failed to delete account: $e');
     }
   }
 
@@ -252,6 +458,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
               accountNameCtrl: _accountNameCtrl,
               accountNoCtrl: _accountNoCtrl,
               labelCtrl: _labelCtrl,
+              assetReceiverCtrl: _assetReceiverCtrl,
               instructionsCtrl: _isMerchant ? _instructionsCtrl : null,
               setAsActive: _setAsActive,
               saving: _saving,
@@ -281,6 +488,8 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
                     activeId: _activeAccountId,
                     settingActive: _settingActive,
                     onSetActive: _setActiveAccount,
+                    onEdit: _editAccount,
+                    onDelete: _deleteAccount,
                     c: c,
                   ),
           ],
@@ -300,6 +509,8 @@ class _AccountItem {
   final String accountName;
   final String? accountNo;
   final String? label;
+  final String? assetReceiverAddress;
+  final String? instructions;
   final bool isActive;
   final PaymentMethodModel? paymentMethod;
 
@@ -308,6 +519,8 @@ class _AccountItem {
     required this.accountName,
     this.accountNo,
     this.label,
+    this.assetReceiverAddress,
+    this.instructions,
     required this.isActive,
     this.paymentMethod,
   });
@@ -317,6 +530,8 @@ class _AccountItem {
     accountName: m.accountName,
     accountNo: m.accountNo,
     label: m.label,
+    assetReceiverAddress: m.assetReceiverAddress,
+    instructions: m.instructions,
     isActive: m.isActive,
     paymentMethod: m.paymentMethod,
   );
@@ -330,6 +545,8 @@ class _AccountItem {
       else if (methodName.isNotEmpty)
         methodName,
       if (accountNo != null && accountNo!.isNotEmpty) accountNo!,
+      if (assetReceiverAddress != null && assetReceiverAddress!.isNotEmpty)
+        assetReceiverAddress!,
     ];
     return parts.join(' · ');
   }
@@ -861,6 +1078,7 @@ class _AccountForm extends StatelessWidget {
     required this.accountNameCtrl,
     required this.accountNoCtrl,
     required this.labelCtrl,
+    required this.assetReceiverCtrl,
     required this.instructionsCtrl, // null = hide field
     required this.setAsActive,
     required this.saving,
@@ -875,6 +1093,7 @@ class _AccountForm extends StatelessWidget {
   final TextEditingController accountNameCtrl;
   final TextEditingController accountNoCtrl;
   final TextEditingController labelCtrl;
+  final TextEditingController assetReceiverCtrl;
   final TextEditingController? instructionsCtrl;
   final bool setAsActive;
   final bool saving;
@@ -919,6 +1138,17 @@ class _AccountForm extends StatelessWidget {
           label: 'Label',
           hint: 'e.g. My GCash',
           icon: Icons.label_outline_rounded,
+          action: instructionsCtrl != null
+              ? TextInputAction.next
+              : TextInputAction.done,
+          c: c,
+        ),
+        const SizedBox(height: 10),
+        _FocusField(
+          controller: assetReceiverCtrl,
+          label: 'Asset Receiver Address',
+          hint: 'Optional Stellar address (G...)',
+          icon: Icons.account_balance_wallet_outlined,
           action: instructionsCtrl != null
               ? TextInputAction.next
               : TextInputAction.done,
@@ -995,12 +1225,16 @@ class _AccountList extends StatelessWidget {
     required this.activeId,
     required this.settingActive,
     required this.onSetActive,
+    required this.onEdit,
+    required this.onDelete,
     required this.c,
   });
   final List<_AccountItem> accounts;
   final String? activeId;
   final bool settingActive;
   final void Function(_AccountItem) onSetActive;
+  final void Function(_AccountItem) onEdit;
+  final void Function(_AccountItem) onDelete;
   final AppColor c;
 
   @override
@@ -1015,6 +1249,8 @@ class _AccountList extends StatelessWidget {
             isActive: isActive,
             settingActive: settingActive,
             onSetActive: () => onSetActive(a),
+            onEdit: () => onEdit(a),
+            onDelete: () => onDelete(a),
             c: c,
           ),
         );
@@ -1029,12 +1265,16 @@ class _AccountTile extends StatelessWidget {
     required this.isActive,
     required this.settingActive,
     required this.onSetActive,
+    required this.onEdit,
+    required this.onDelete,
     required this.c,
   });
   final _AccountItem account;
   final bool isActive;
   final bool settingActive;
   final VoidCallback onSetActive;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
   final AppColor c;
 
   @override
@@ -1137,6 +1377,18 @@ class _AccountTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert_rounded, size: 18, color: c.textSecondary),
+            onSelected: (value) {
+              if (value == 'edit') onEdit();
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit')),
+              PopupMenuItem(value: 'delete', child: Text('Delete')),
+            ],
+          ),
+          const SizedBox(width: 6),
           if (isActive)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
