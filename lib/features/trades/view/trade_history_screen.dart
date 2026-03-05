@@ -818,40 +818,50 @@ class _TradeCardState extends State<_TradeCard>
                   children: [
                     // Row 1: type label + time
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              isBuy ? 'Buy' : 'Sell',
-                              style: TextStyle(
-                                color: typeColor,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14,
-                                letterSpacing: -0.3,
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                isBuy ? 'Buy' : 'Sell',
+                                style: TextStyle(
+                                  color: typeColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  letterSpacing: -0.3,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              trade.asset,
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14,
-                                letterSpacing: -0.3,
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  trade.asset,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: c.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         if (timeLabel.isNotEmpty)
-                          Text(
-                            timeLabel,
-                            style: TextStyle(
-                              color: c.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Text(
+                              timeLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                       ],
@@ -861,36 +871,46 @@ class _TradeCardState extends State<_TradeCard>
                     // Row 2: amounts + status pill
                     Row(
                       children: [
-                        // Crypto amount — primary
-                        Text(
-                          '${_fmtCrypto(trade.cryptoAmount)} ${trade.asset}',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  '${_fmtCrypto(trade.cryptoAmount)} ${trade.asset}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                child: Text(
+                                  '·',
+                                  style: TextStyle(color: c.border, fontSize: 14),
+                                ),
+                              ),
+                              Flexible(
+                                child: Text(
+                                  '${trade.fiatCurrency} ${_fmtFiat(trade.fiatAmount)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Padding(
-                          padding:
-                          const EdgeInsets.symmetric(horizontal: 6),
-                          child: Text(
-                            '·',
-                            style: TextStyle(
-                                color: c.border, fontSize: 14),
-                          ),
-                        ),
-                        // Fiat amount
-                        Text(
-                          '${trade.fiatCurrency} ${_fmtFiat(trade.fiatAmount)}',
-                          style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         // Status pill
                         _StatusPill(
                           label: statusLabel,

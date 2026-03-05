@@ -122,6 +122,21 @@ class StellarSwapService extends StellarBaseService {
         opCount: opCount,
         percentile: 90,
       );
+      const safetyBufferXlm = 0.0002;
+      final totalRequiredXlm = sendAmountXlm + feeXlmNet + safetyBufferXlm;
+      if (senderXlmBal < totalRequiredXlm) {
+        fail(
+          'Not enough XLM for swap and network fees',
+          technicalError:
+              'Have: ${StellarBaseService.fmt7(senderXlmBal)} XLM | '
+              'Need: ${StellarBaseService.fmt7(totalRequiredXlm)} XLM '
+              '(send ${StellarBaseService.fmt7(sendAmountXlm)} + net fee ${StellarBaseService.fmt7(feeXlmNet)} + buffer ${StellarBaseService.fmt7(safetyBufferXlm)})',
+          advice:
+              'Keep extra XLM for network fees. '
+              'You need ${StellarBaseService.fmt7(totalRequiredXlm - senderXlmBal)} more XLM.',
+          code: 'INSUFFICIENT_BALANCE',
+        );
+      }
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
 
       final tb = TransactionBuilder(acc)
@@ -241,6 +256,22 @@ class StellarSwapService extends StellarBaseService {
         opCount: opCount,
         percentile: 90,
       );
+      final senderXlmBal = await accountService.getXlmBalance(self);
+      const safetyBufferXlm = 0.0002;
+      final requiredXlmForFees = feeXlmNet + safetyBufferXlm;
+      if (senderXlmBal < requiredXlmForFees) {
+        fail(
+          'Not enough XLM for network fees',
+          technicalError:
+              'Have: ${StellarBaseService.fmt7(senderXlmBal)} XLM | '
+              'Need: ${StellarBaseService.fmt7(requiredXlmForFees)} XLM '
+              '(net fee ${StellarBaseService.fmt7(feeXlmNet)} + buffer ${StellarBaseService.fmt7(safetyBufferXlm)})',
+          advice:
+              'USDC swaps still require XLM for network fees. '
+              'Please add at least ${StellarBaseService.fmt7(requiredXlmForFees - senderXlmBal)} XLM.',
+          code: 'INSUFFICIENT_XLM_FOR_FEES',
+        );
+      }
       final perOpStroops = (feeXlmNet * 1e7 / opCount).ceil();
 
       final tb = TransactionBuilder(acc)..setMaxOperationFee(perOpStroops);

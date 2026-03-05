@@ -136,14 +136,22 @@ class _SwapScreenState extends State<SwapScreen>
   // ── Sync helpers ──────────────────────────────────────────────────────────
 
   void _setField(TextEditingController ctl, String text, {required bool isFrom}) {
-    if (isFrom) _syncingFrom = true; else _syncingTo = true;
+    if (isFrom) {
+      _syncingFrom = true;
+    } else {
+      _syncingTo = true;
+    }
     try {
       ctl.value = TextEditingValue(
         text: text,
         selection: TextSelection.collapsed(offset: text.length),
       );
     } finally {
-      if (isFrom) _syncingFrom = false; else _syncingTo = false;
+      if (isFrom) {
+        _syncingFrom = false;
+      } else {
+        _syncingTo = false;
+      }
     }
   }
 
@@ -222,6 +230,7 @@ class _SwapScreenState extends State<SwapScreen>
     // Flush any pending input.
     await vm.onAmountChanged(
         vm.mode == AmountMode.from ? _fromCtl.text : _toCtl.text);
+    if (!mounted) return;
 
     if (!vm.hasAmount) return;
 
@@ -585,7 +594,9 @@ class _SwapScreenState extends State<SwapScreen>
 
   Widget? _buildBottomBar(SwapVM vm, dynamic s, AppColor c) {
     if ((s.loading && s.accountId == null) ||
-        (s.error != null && s.error!.isNotEmpty)) return null;
+        (s.error != null && s.error!.isNotEmpty)) {
+      return null;
+    }
 
     return SafeArea(
       top: false,

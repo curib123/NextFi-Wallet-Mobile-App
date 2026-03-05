@@ -54,10 +54,13 @@ class SwapVM extends ChangeNotifier {
   double _amount = 0.0;
   double _slippagePct = 0.01;
   double? _txFeeXlm;
+  double _trustlineReserveXlm =
+      StellarWalletServices.defaultReceiverActivationXlm / 2.0;
 
   double get amount => _amount;
   double get slippagePct => _slippagePct;
   double get txFeeXlm => _txFeeXlm ?? 0.0;
+  double get trustlineReserveXlm => _trustlineReserveXlm;
 
   double get slippagePctPercent => _roundFrac(_slippagePct * 100, 2);
   void setSlippagePctPercent(double pct) => setSlippagePct(pct / 100);
@@ -139,8 +142,9 @@ class SwapVM extends ChangeNotifier {
     if (_state.isXlmToUsdc) {
       // Reserve network fees + safety buffer. The 0.3% swap fee is deducted
       // inside the service from the send amount, so no division needed here.
-      const double safetyBuffer = 0.0002;
-      final kept = estCombinedFeeXlm + safetyBuffer;
+      final kept = _requiredXlmNonAmountBudget(
+        includeTrustlineReserve: _state.needsTrustline,
+      );
       return _floor6((_state.xlmBal - kept).clamp(0.0, double.infinity));
     }
     // USDC→XLM: full balance is sendable; service deducts its fee internally.
@@ -148,6 +152,12 @@ class SwapVM extends ChangeNotifier {
   }
 
   bool hasEnough(double amount) => amount > 0 && amount <= availableFrom + _EPS;
+  bool get _hasEnoughXlmForFees =>
+      _state.xlmBal >=
+      _requiredXlmNonAmountBudget(
+        includeTrustlineReserve: _state.needsTrustline,
+      ) -
+          _EPS;
 
   // ── Amount API ─────────────────────────────────────────────────────────────
 
@@ -217,7 +227,8 @@ class SwapVM extends ChangeNotifier {
   }
 
   bool get hasAmount => _amount > 0;
-  bool get canSwap => _amount > 0 && hasEnough(_amount) && !_state.loading;
+  bool get canSwap =>
+      _amount > 0 && hasEnough(_amount) && _hasEnoughXlmForFees && !_state.loading;
 
   // ── Quote helpers ──────────────────────────────────────────────────────────
 
@@ -349,6 +360,50 @@ class SwapVM extends ChangeNotifier {
     await _svc.ensureSwapFeeConfigLoaded(refresh: true);
 
     final kp = await _keys.deriveKeyPair();
+    final liveBreakdown = await _svc
+        .getXlmBalanceBreakdown(kp.accountId)
+        .catchError((_) => <String, double>{});
+    final liveXlmSpendable = (liveBreakdown['spendable'] ?? _state.xlmBal)
+        .toDouble();
+    final liveXlmTotal = (liveBreakdown['total'] ?? liveXlmSpendable).toDouble();
+    final liveXlmReserved = (liveBreakdown['reserved'] ?? 0).toDouble();
+    final hasUsdcTl =
+        await _svc.hasUsdcTrustline(kp.accountId).catchError((_) => true);
+    final liveNeedsTrustline = !hasUsdcTl;
+    final requiredXlm = _requiredXlmNonAmountBudget(
+      includeTrustlineReserve: liveNeedsTrustline,
+    );
+
+    if (_state.isXlmToUsdc) {
+      final totalRequiredXlm = amount + requiredXlm;
+      if (totalRequiredXlm > liveXlmSpendable + _EPS) {
+        throw StateError(
+          'Insufficient spendable XLM for swap. '
+          'Spendable: ${_floorTo(liveXlmSpendable, 7).toStringAsFixed(7)} XLM, '
+          'Required: ${_floorTo(totalRequiredXlm, 7).toStringAsFixed(7)} XLM '
+          '(swap ${_floorTo(amount, 7).toStringAsFixed(7)} + fees/reserve ${_floorTo(requiredXlm, 7).toStringAsFixed(7)}). '
+          'Total: ${_floorTo(liveXlmTotal, 7).toStringAsFixed(7)} XLM, '
+          'Reserved: ${_floorTo(liveXlmReserved, 7).toStringAsFixed(7)} XLM.',
+        );
+      }
+    } else {
+      final liveUsdc =
+          await _svc.getUsdcBalance(kp.accountId).catchError((_) => _state.usdcBal);
+      if (amount > liveUsdc + _EPS) {
+        throw StateError(
+          'Insufficient spendable USDC for swap. '
+          'Spendable: ${_floorTo(liveUsdc, 7).toStringAsFixed(7)} USDC, '
+          'Required: ${_floorTo(amount, 7).toStringAsFixed(7)} USDC.',
+        );
+      }
+      if (requiredXlm > liveXlmSpendable + _EPS) {
+        throw StateError(
+          'Insufficient spendable XLM for swap fees. '
+          'Spendable: ${_floorTo(liveXlmSpendable, 7).toStringAsFixed(7)} XLM, '
+          'Required for fees/reserve: ${_floorTo(requiredXlm, 7).toStringAsFixed(7)} XLM.',
+        );
+      }
+    }
 
     final txid = _state.isXlmToUsdc
         ? await _svc.swapXlmToUsdc(
@@ -380,6 +435,7 @@ class SwapVM extends ChangeNotifier {
     _set(_state.copyWith(loading: true, error: ''));
     try {
       await _svc.ensureSwapFeeConfigLoaded();
+      await _refreshTrustlineReserveXlm();
       await refreshBalances();
       await _wireFeeStream();
       _set(_state.copyWith(loading: false, error: ''));
@@ -418,6 +474,22 @@ class SwapVM extends ChangeNotifier {
   }
 
   // ── Quote scheduling ───────────────────────────────────────────────────────
+
+  Future<void> _refreshTrustlineReserveXlm() async {
+    try {
+      final activationMin = await _svc.getLatestReceiverActivationXlm();
+      if (activationMin > 0) {
+        _trustlineReserveXlm = activationMin / 2.0;
+      }
+    } catch (_) {}
+  }
+
+  double _requiredXlmNonAmountBudget({required bool includeTrustlineReserve}) {
+    // Keep a tiny headroom to avoid boundary rounding failures on-chain.
+    const double safetyBuffer = 0.0002;
+    final reserve = includeTrustlineReserve ? trustlineReserveXlm : 0.0;
+    return estCombinedFeeXlm + reserve + safetyBuffer;
+  }
 
   void _scheduleQuote(double amount) {
     // Fast-path: instant update from cached rate (no network round-trip).
