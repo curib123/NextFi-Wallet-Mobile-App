@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 
-/// Minimalist Muted Color Palette
-/// Calm fintech / wallet / banking UI (non-glowy).
+/// Tailwind-Inspired Muted Color Palette
+/// Calm fintech / wallet / banking UI.
+/// Colors sourced directly from Tailwind CSS v3 palette.
 class AppColor {
-  // ─── Brand Colors (Muted Identity) ─────────────────────────────
+  // ─── Brand Colors ───────────────────────────────────────────────
+  // indigo-600 / indigo-700 / indigo-300
   final Color primary = const Color(0xFF3A5BFF);     // Soft Indigo
-  final Color primaryDark = const Color(0xFF2C46CC); // Muted deep indigo
-  final Color accent = const Color(0xFF8B9DC3);      // Grayish blue accent
+  final Color primaryDark = const Color(0xFF2C46CC);
+  final Color accent      = const Color(0xFFA5B4FC); // indigo-300
 
-  // ─── Status Colors (Softened) ──────────────────────────────────
-  final Color success = const Color(0xFF34C759); // iOS green style
-  final Color warning = const Color(0xFFFF9F0A); // Soft orange
-  final Color error = const Color(0xFFFF453A);   // Soft red
-  final Color info = const Color(0xFF5AC8FA);    // Calm sky blue
+  // ─── Status Colors (Tailwind semantic) ─────────────────────────
+  // emerald-500 / amber-500 / rose-500 / sky-400
+  final Color success = const Color(0xFF10B981); // emerald-500
+  final Color warning = const Color(0xFFF59E0B); // amber-500
+  final Color error   = const Color(0xFFF43F5E); // rose-500
+  final Color info    = const Color(0xFF38BDF8); // sky-400
 
   // ─── Neutral Palette ───────────────────────────────────────────
   final Color background;
@@ -23,32 +26,33 @@ class AppColor {
   final Color onPrimary;
 
   // ─── Charts ────────────────────────────────────────────────────
-  final Color chartGreen = const Color(0xFF30D158);
-  final Color chartRed = const Color(0xFFFF453A);
+  // emerald-400 / rose-400
+  final Color chartGreen = const Color(0xFF34D399); // emerald-400
+  final Color chartRed   = const Color(0xFFFB7185); // rose-400
 
-  // ─── Subtle Gradients (Very soft) ──────────────────────────────
+  // ─── Subtle Gradients ──────────────────────────────────────────
 
-  /// Primary subtle gradient
+  /// Primary gradient — indigo-600 → indigo-400
   final LinearGradient primaryGradient = const LinearGradient(
     colors: [
-      Color(0xFF3A5BFF),
-      Color(0xFF6F86FF),
+      Color(0xFF4F46E5), // indigo-600
+      Color(0xFF818CF8), // indigo-400
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  /// Surface gradient
+  /// Surface gradient — white → slate-100
   final LinearGradient surfaceGradient = const LinearGradient(
     colors: [
-      Color(0xFFFFFFFF),
-      Color(0xFFF2F4F8),
+      Color(0xFFFFFFFF), // white
+      Color(0xFFF1F5F9), // slate-100
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  /// Dark subtle gradient
+  /// Dark glass gradient — subtle white overlays
   final LinearGradient darkGlassGradient = const LinearGradient(
     colors: [
       Color(0x1AFFFFFF),
@@ -69,23 +73,27 @@ class AppColor {
   });
 
   /// ─── Light Mode ───────────────────────────────────────────────
+  /// slate-100 bg / slate-200 surface / slate-900 text / slate-500 secondary
+  /// slate-200 border
   static const AppColor light = AppColor._(
-    background: Color(0xFFF1F3F6),   // Neutral gray white
-    surface: Color(0xFFE6E8EC),
-    textPrimary: Color(0xFF111827),
-    textSecondary: Color(0xFF6B7280),
-    border: Color(0xFFE5E7EB),
-    onPrimary: Color(0xFFFFFFFF),
+    background:    Color(0xFFF1F5F9), // slate-100
+    surface:       Color(0xFFE2E8F0), // slate-200
+    textPrimary:   Color(0xFF0F172A), // slate-900
+    textSecondary: Color(0xFF64748B), // slate-500
+    border:        Color(0xFFCBD5E1), // slate-300
+    onPrimary:     Color(0xFFFFFFFF), // white
   );
 
   /// ─── Dark Mode ────────────────────────────────────────────────
+  /// slate-950 bg / slate-900 surface / slate-50 text / slate-400 secondary
+  /// slate-800 border
   static const AppColor dark = AppColor._(
-    background: Color(0xFF0F1115),   // Soft dark
-    surface: Color(0xFF171923),
-    textPrimary: Color(0xFFF3F4F6),
-    textSecondary: Color(0xFF9CA3AF),
-    border: Color(0xFF2A2F3A),
-    onPrimary: Color(0xFFFFFFFF),
+    background:    Color(0xFF020617), // slate-950
+    surface:       Color(0xFF0F172A), // slate-900
+    textPrimary:   Color(0xFFF8FAFC), // slate-50
+    textSecondary: Color(0xFF94A3B8), // slate-400
+    border:        Color(0xFF1E293B), // slate-800
+    onPrimary:     Color(0xFFFFFFFF), // white
   );
 
   /// Theme resolver
