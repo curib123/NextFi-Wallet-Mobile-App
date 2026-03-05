@@ -65,10 +65,7 @@ class PaymentMethodAndAccountsService {
     return null;
   }
 
-  List<dynamic> _extractList(
-    dynamic data, {
-    List<String> keys = const [],
-  }) {
+  List<dynamic> _extractList(dynamic data, {List<String> keys = const []}) {
     if (data is List) return data;
     if (data is Map<String, dynamic>) {
       for (final key in keys) {
@@ -92,7 +89,10 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
-    final list = _extractList(data, keys: const ['data', 'items', 'paymentMethods']);
+    final list = _extractList(
+      data,
+      keys: const ['data', 'items', 'paymentMethods'],
+    );
 
     return list
         .whereType<Map<String, dynamic>>()
@@ -136,8 +136,10 @@ class PaymentMethodAndAccountsService {
 
     PaymentMethodAndAccountsHttp.ensureOk(res);
     final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
-    final list =
-        _extractList(data, keys: const ['data', 'items', 'paymentAccounts']);
+    final list = _extractList(
+      data,
+      keys: const ['data', 'items', 'paymentAccounts'],
+    );
 
     return list
         .whereType<Map<String, dynamic>>()
@@ -217,6 +219,33 @@ class PaymentMethodAndAccountsService {
     throw ApiException(
       res.statusCode,
       'Unexpected response for PATCH /payment-accounts/$id',
+      body: res.body,
+    );
+  }
+
+  Future<UserPaymentAccountModel> editMyPaymentAccount(
+    String id,
+    UpdateUserPaymentAccountRequest req,
+  ) async {
+    final res = await _client.put(
+      PaymentMethodAndAccountsHttp.uri(
+        PaymentMethodAndAccountsEndpoints.paymentAccountById(id),
+      ),
+      headers: await _headers(),
+      body: jsonEncode(req.toJson()),
+    );
+
+    PaymentMethodAndAccountsHttp.ensureOk(res);
+    final data = PaymentMethodAndAccountsHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data, keys: const ['data', 'paymentAccount']);
+
+    if (map != null) {
+      return UserPaymentAccountModel.fromJson(map);
+    }
+
+    throw ApiException(
+      res.statusCode,
+      'Unexpected response for PUT /payment-accounts/$id',
       body: res.body,
     );
   }

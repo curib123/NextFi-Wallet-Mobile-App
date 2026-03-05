@@ -18,8 +18,8 @@ class SendVM extends ChangeNotifier {
   SendVM({
     required StellarWalletServices service,
     required SeedKeypairVM seedVM,
-  })  : _svc = service,
-        _seedVM = seedVM;
+  }) : _svc = service,
+       _seedVM = seedVM;
 
   final StellarWalletServices _svc;
   final SeedKeypairVM _seedVM;
@@ -35,7 +35,7 @@ class SendVM extends ChangeNotifier {
   bool _configured = false;
   late SendToken _token;
   late String _senderAddr;
-  late double _senderBalToken;  // expendable balance (reserve already out)
+  late double _senderBalToken; // expendable balance (reserve already out)
   String? _prefillName;
 
   SendToken get token => _token;
@@ -147,12 +147,15 @@ class SendVM extends ChangeNotifier {
       // Estimate network fee
       try {
         _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
-            opCount: 1, percentile: 90);
+          opCount: 1,
+          percentile: 90,
+        );
       } catch (_) {
         _estNetworkFeeXlm = null;
       }
 
       _resubscribeFeeStream();
+      await _refreshLiveSenderBalance(notify: false);
 
       _loading = false;
       _err = null;
@@ -166,9 +169,7 @@ class SendVM extends ChangeNotifier {
 
   void _resubscribeFeeStream() {
     _feeSub?.cancel();
-    _feeSub = _svc
-        .feeEstimateStream(opCount: 1, percentile: 90)
-        .listen((f) {
+    _feeSub = _svc.feeEstimateStream(opCount: 1, percentile: 90).listen((f) {
       _estNetworkFeeXlm = f.totalXlm;
       _safeNotify();
     }, onError: (_) {});
@@ -195,8 +196,10 @@ class SendVM extends ChangeNotifier {
 
   void _debounceCheckTrustline() {
     _debounce?.cancel();
-    _debounce =
-        Timer(const Duration(milliseconds: 300), _checkTrustlineIfNeeded);
+    _debounce = Timer(
+      const Duration(milliseconds: 300),
+      _checkTrustlineIfNeeded,
+    );
   }
 
   bool _looksStellar(String s) =>
@@ -239,9 +242,24 @@ class SendVM extends ChangeNotifier {
     _resubscribeFeeStream();
     try {
       _estNetworkFeeXlm = await _svc.estimateNetworkFeeXlm(
-          opCount: 1, percentile: 90);
+        opCount: 1,
+        percentile: 90,
+      );
     } catch (_) {}
     _safeNotify();
+  }
+
+  Future<void> _refreshLiveSenderBalance({bool notify = true}) async {
+    final id = _accountId;
+    if (id == null || id.isEmpty) return;
+    try {
+      if (isXlm) {
+        _senderBalToken = await _svc.getXlmBalance(id);
+      } else {
+        _senderBalToken = await _svc.getUsdcBalance(id);
+      }
+    } catch (_) {}
+    if (notify) _safeNotify();
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -335,10 +353,26 @@ class SendVM extends ChangeNotifier {
     final KeyPair keyPair = await _seedVM.deriveKeyPair();
 
     if (isXlm) {
+      final liveBreakdown = await _svc
+          .getXlmBalanceBreakdown(keyPair.accountId)
+          .catchError((_) => <String, double>{});
+      final spendable = (liveBreakdown['spendable'] ?? _senderBalToken)
+          .toDouble();
+      final total = (liveBreakdown['total'] ?? spendable).toDouble();
+      final reserved = (liveBreakdown['reserved'] ?? 0).toDouble();
+      _senderBalToken = spendable;
+
       // Verify we have enough for amount + network fee
       final totalNeeded = totalDeductFromBalance;
-      if (totalNeeded > _senderBalToken + 1e-9) {
-        throw StateError('Amount + network fee exceeds XLM balance');
+      if (totalNeeded > spendable + 1e-9) {
+        _safeNotify();
+        throw StateError(
+          'Insufficient spendable XLM. '
+          'Spendable: ${_floor7(spendable).toStringAsFixed(7)} XLM, '
+          'Required (amount + fee): ${_floor7(totalNeeded).toStringAsFixed(7)} XLM. '
+          'Total: ${_floor7(total).toStringAsFixed(7)} XLM, '
+          'Reserved: ${_floor7(reserved).toStringAsFixed(7)} XLM.',
+        );
       }
 
       final txid = await _svc.sendXlm(

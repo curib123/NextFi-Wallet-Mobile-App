@@ -9,21 +9,19 @@ import 'package:next_fi/services/stellar/stellar_base_service.dart';
 /// Service for account management, balances, trustlines, and account options
 class StellarAccountService extends StellarBaseService {
   final String usdcIssuer;
+  static const double fallbackAccountActivationMinXlm = 1.0;
+  static const Duration _activationMinCacheTtl = Duration(minutes: 10);
+  double? _cachedActivationMinXlm;
+  DateTime? _cachedActivationMinAt;
 
   StellarAccountService({
     required this.usdcIssuer,
-    required StellarSDK sdk,
-    StellarSDK? sdkQuickNode,
-    String? quickNodeUrlMainnet,
-    String? quickNodeUrlTestnet,
-    Map<String, String>? quickNodeDefaultHeaders,
-  }) : super(
-    sdk: sdk,
-    sdkQuickNode: sdkQuickNode,
-    quickNodeUrlMainnet: quickNodeUrlMainnet,
-    quickNodeUrlTestnet: quickNodeUrlTestnet,
-    quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-  );
+    required super.sdk,
+    super.sdkQuickNode,
+    super.quickNodeUrlMainnet,
+    super.quickNodeUrlTestnet,
+    super.quickNodeDefaultHeaders,
+  });
 
   Asset get xlm => Asset.NATIVE;
   Asset get usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
@@ -32,25 +30,34 @@ class StellarAccountService extends StellarBaseService {
   // Reserve Calculation (Stellar Protocol)
   // ──────────────────────────────────────────────────────────────────────────
 
-  /// Base reserve required for an account (currently 1 XLM as of protocol 20)
-  /// Updated from 0.5 XLM to 1 XLM based on recent protocol changes
-  static const double _baseReserve = 1.0;
+  /// Network base reserve reference used for local reserve math.
+  /// Fallback value: 0.5 XLM base reserve => 1.0 XLM minimum account reserve.
+  static const double _baseReserve = 0.5;
 
-  /// Reserve required per subentry (trustlines, offers, signers, data entries)
-  /// Updated from 0.5 XLM to 0.5 XLM (unchanged)
-  static const double _subentryReserve = 0.5;
+  /// Each subentry (trustline/offer/signer/data) adds one base reserve.
+  static const double _subentryReserve = _baseReserve;
 
   /// Minimum account balance = (2 + numSubEntries) * baseReserve
   /// For safety, we calculate: 2 * baseReserve + numSubEntries * subentryReserve
-  double _calculateMinimumBalance(AccountResponse account) {
+  double _calculateMinimumBalance(
+    AccountResponse account, {
+    double? baseReserve,
+    double? subentryReserve,
+  }) {
+    final base = baseReserve ?? _baseReserve;
+    final subentry = subentryReserve ?? _subentryReserve;
     // Count subentries: trustlines, offers, signers (excluding master key), data entries
     int subentries = 0;
 
     // Trustlines (non-native balances)
-    subentries += account.balances.where((b) => b.assetType != Asset.TYPE_NATIVE).length;
+    subentries += account.balances
+        .where((b) => b.assetType != Asset.TYPE_NATIVE)
+        .length;
 
     // Signers (excluding master key with weight > 0)
-    subentries += account.signers.where((s) => s.key != account.accountId).length;
+    subentries += account.signers
+        .where((s) => s.key != account.accountId)
+        .length;
 
     // Data entries
     subentries += (account.data?.length ?? 0);
@@ -62,13 +69,17 @@ class StellarAccountService extends StellarBaseService {
 
     // Minimum balance = (2 + numSubEntries) * baseReserve
     // Using updated formula: 2 * baseReserve + numSubEntries * subentryReserve
-    final minimumBalance = (2 * _baseReserve) + (numSubentries * _subentryReserve);
+    final minimumBalance = (2 * base) + (numSubentries * subentry);
 
     return minimumBalance;
   }
 
   /// Calculate spendable XLM balance (total - minimum reserve - selling liabilities)
-  double _calculateSpendableXlm(AccountResponse account) {
+  double _calculateSpendableXlm(
+    AccountResponse account, {
+    double? baseReserve,
+    double? subentryReserve,
+  }) {
     // Get total XLM balance
     double totalXlm = 0.0;
     double sellingLiabilities = 0.0;
@@ -78,19 +89,41 @@ class StellarAccountService extends StellarBaseService {
         totalXlm = double.tryParse(balance.balance) ?? 0.0;
 
         // Selling liabilities are XLM locked in sell offers
-        sellingLiabilities = double.tryParse(balance.sellingLiabilities ?? '0') ?? 0.0;
+        sellingLiabilities =
+            double.tryParse(balance.sellingLiabilities ?? '0') ?? 0.0;
         break;
       }
     }
 
     // Calculate minimum balance required
-    final minimumBalance = _calculateMinimumBalance(account);
+    final minimumBalance = _calculateMinimumBalance(
+      account,
+      baseReserve: baseReserve,
+      subentryReserve: subentryReserve,
+    );
 
     // Spendable = Total - MinimumBalance - SellingLiabilities
     final spendable = totalXlm - minimumBalance - sellingLiabilities;
 
     // Return 0 if negative (shouldn't happen in normal circumstances)
     return spendable > 0 ? spendable : 0.0;
+  }
+
+  double _parseAmount(String raw) => double.tryParse(raw.trim()) ?? 0.0;
+
+  double _availableCreditBalance(Balance b) {
+    final balance = _parseAmount(b.balance);
+    final sellingLiabilities = _parseAmount(b.sellingLiabilities ?? '0');
+    final available = balance - sellingLiabilities;
+    return available > 0 ? available : 0.0;
+  }
+
+  Future<double> _resolveBaseReserveOrFallback() async {
+    try {
+      final minActivation = await getLatestAccountActivationMinXlm();
+      if (minActivation > 0) return minActivation / 2.0;
+    } catch (_) {}
+    return _baseReserve;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -101,7 +134,12 @@ class StellarAccountService extends StellarBaseService {
   Future<double> getXlmBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
-      return _calculateSpendableXlm(acc);
+      final baseReserve = await _resolveBaseReserveOrFallback();
+      return _calculateSpendableXlm(
+        acc,
+        baseReserve: baseReserve,
+        subentryReserve: baseReserve,
+      );
     } catch (e) {
       fail(
         'Unable to fetch XLM balance',
@@ -111,12 +149,94 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
+  /// Returns the latest minimum XLM needed to activate a brand-new account.
+  /// Pulls latest ledger reserve data from Horizon and falls back safely.
+  Future<double> getLatestAccountActivationMinXlm({
+    bool forceRefresh = false,
+  }) async {
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _cachedActivationMinXlm != null &&
+        _cachedActivationMinAt != null &&
+        now.difference(_cachedActivationMinAt!) < _activationMinCacheTtl) {
+      return _cachedActivationMinXlm!;
+    }
+
+    try {
+      final resp = await getWithFallback(
+        '/ledgers',
+        query: const {'order': 'desc', 'limit': '1'},
+        timeout: const Duration(seconds: 10),
+      );
+      if (resp.statusCode != 200) {
+        fail(
+          'Unable to get latest base reserve.',
+          technicalError: 'Horizon status ${resp.statusCode}',
+          advice: 'Please try again in a moment.',
+          code: 'BASE_RESERVE_FETCH_FAILED',
+        );
+      }
+
+      final data = json.decode(resp.body) as Map<String, dynamic>;
+      final records = (data['_embedded']?['records'] as List?) ?? const [];
+      if (records.isEmpty || records.first is! Map) {
+        fail(
+          'Unable to get latest base reserve.',
+          technicalError: 'Ledger response has no records',
+          advice: 'Please try again in a moment.',
+          code: 'BASE_RESERVE_MISSING',
+        );
+      }
+
+      final row = records.first as Map;
+      final stroopsRaw = row['base_reserve_in_stroops'];
+      double? minXlm;
+      if (stroopsRaw != null) {
+        final reserveStroops = int.tryParse('$stroopsRaw');
+        if (reserveStroops != null && reserveStroops > 0) {
+          // Minimum account reserve is currently 2 * base reserve.
+          minXlm = (reserveStroops * 2) / 10000000.0;
+        }
+      }
+
+      final baseReserveRaw = row['base_reserve'];
+      if ((minXlm == null || minXlm <= 0) && baseReserveRaw != null) {
+        final baseReserve = double.tryParse('$baseReserveRaw');
+        if (baseReserve != null && baseReserve > 0) {
+          minXlm = baseReserve * 2;
+        }
+      }
+
+      if (minXlm == null || minXlm <= 0) {
+        fail(
+          'Unable to get latest base reserve.',
+          technicalError: 'No valid base reserve in latest ledger',
+          advice: 'Please try again in a moment.',
+          code: 'BASE_RESERVE_INVALID',
+        );
+      }
+
+      final normalized = ((minXlm * 10000000).ceil()) / 10000000.0;
+      _cachedActivationMinXlm = normalized;
+      _cachedActivationMinAt = now;
+      return normalized;
+    } catch (e) {
+      if (e is StellarWalletError) rethrow;
+      fail(
+        'Unable to get latest base reserve.',
+        technicalError: e,
+        advice: 'Please check your internet connection and try again.',
+        code: 'BASE_RESERVE_FETCH_FAILED',
+      );
+    }
+  }
+
   /// Get total XLM balance (includes reserves - use for display purposes only)
   Future<double> getTotalXlmBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
       for (final b in acc.balances) {
-        if (b.assetType == Asset.TYPE_NATIVE) return double.parse(b.balance);
+        if (b.assetType == Asset.TYPE_NATIVE) return _parseAmount(b.balance);
       }
       return 0.0;
     } catch (e) {
@@ -132,7 +252,12 @@ class StellarAccountService extends StellarBaseService {
   Future<double> getXlmMinimumBalance(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
-      return _calculateMinimumBalance(acc);
+      final baseReserve = await _resolveBaseReserveOrFallback();
+      return _calculateMinimumBalance(
+        acc,
+        baseReserve: baseReserve,
+        subentryReserve: baseReserve,
+      );
     } catch (e) {
       fail(
         'Unable to fetch minimum balance',
@@ -150,12 +275,7 @@ class StellarAccountService extends StellarBaseService {
       final acc = await loadAccount(accountId);
       for (final b in acc.balances) {
         if (b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer) {
-          final balance = double.parse(b.balance);
-          final sellingLiabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
-
-          // Available = Balance - SellingLiabilities
-          final available = balance - sellingLiabilities;
-          return available > 0 ? available : 0.0;
+          return _availableCreditBalance(b);
         }
       }
       return 0.0;
@@ -176,18 +296,18 @@ class StellarAccountService extends StellarBaseService {
       final acc = await loadAccount(accountId);
 
       if (asset is AssetTypeNative) {
-        return _calculateSpendableXlm(acc);
+        final baseReserve = await _resolveBaseReserveOrFallback();
+        return _calculateSpendableXlm(
+          acc,
+          baseReserve: baseReserve,
+          subentryReserve: baseReserve,
+        );
       }
 
       if (asset is AssetTypeCreditAlphaNum) {
         for (final b in acc.balances) {
           if (b.assetCode == asset.code && b.assetIssuer == asset.issuerId) {
-            final balance = double.parse(b.balance);
-            final sellingLiabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
-
-            // Available = Balance - SellingLiabilities
-            final available = balance - sellingLiabilities;
-            return available > 0 ? available : 0.0;
+            return _availableCreditBalance(b);
           }
         }
         return 0.0;
@@ -227,13 +347,18 @@ class StellarAccountService extends StellarBaseService {
 
       for (final b in acc.balances) {
         if (b.assetType == Asset.TYPE_NATIVE) {
-          totalXlm = double.parse(b.balance);
-          sellingLiabilities = double.tryParse(b.sellingLiabilities ?? '0') ?? 0.0;
+          totalXlm = _parseAmount(b.balance);
+          sellingLiabilities = _parseAmount(b.sellingLiabilities ?? '0');
           break;
         }
       }
 
-      final minimumBalance = _calculateMinimumBalance(acc);
+      final baseReserve = await _resolveBaseReserveOrFallback();
+      final minimumBalance = _calculateMinimumBalance(
+        acc,
+        baseReserve: baseReserve,
+        subentryReserve: baseReserve,
+      );
       final spendable = totalXlm - minimumBalance - sellingLiabilities;
 
       return {
@@ -241,7 +366,7 @@ class StellarAccountService extends StellarBaseService {
         'spendable': spendable > 0 ? spendable : 0.0,
         'reserved': minimumBalance,
         'locked': sellingLiabilities,
-        'baseReserve': _baseReserve,
+        'baseReserve': baseReserve,
         'subentries': (acc.subentryCount ?? 0).toDouble(),
       };
     } catch (e) {
@@ -260,8 +385,9 @@ class StellarAccountService extends StellarBaseService {
   Future<bool> hasUsdcTrustline(String accountId) async {
     try {
       final acc = await loadAccount(accountId);
-      return acc.balances
-          .any((b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer);
+      return acc.balances.any(
+        (b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer,
+      );
     } catch (e) {
       fail(
         'Unable to check USDC status',
@@ -278,7 +404,7 @@ class StellarAccountService extends StellarBaseService {
       final acc = await loadAccount(accountId);
       if (asset is AssetTypeCreditAlphaNum) {
         return acc.balances.any(
-              (b) => b.assetCode == asset.code && b.assetIssuer == asset.issuerId,
+          (b) => b.assetCode == asset.code && b.assetIssuer == asset.issuerId,
         );
       }
       return false;
@@ -326,7 +452,7 @@ class StellarAccountService extends StellarBaseService {
         fail(
           'XLM is already in your wallet',
           advice:
-          'You don\'t need to add XLM - it\'s the native Stellar currency',
+              'You don\'t need to add XLM - it\'s the native Stellar currency',
           code: 'NATIVE_ASSET',
         );
       }
@@ -360,7 +486,7 @@ class StellarAccountService extends StellarBaseService {
         fail(
           'XLM cannot be removed',
           advice:
-          'XLM is the native Stellar currency and is always in your wallet',
+              'XLM is the native Stellar currency and is always in your wallet',
           code: 'NATIVE_ASSET',
         );
       }
@@ -369,9 +495,10 @@ class StellarAccountService extends StellarBaseService {
       if (balance > 0) {
         fail(
           'Can\'t remove this asset yet',
-          technicalError: 'Current balance: ${StellarBaseService.fmt7(balance)}',
+          technicalError:
+              'Current balance: ${StellarBaseService.fmt7(balance)}',
           advice:
-          'You need to send or swap all your funds before removing this asset from your wallet',
+              'You need to send or swap all your funds before removing this asset from your wallet',
           code: 'NON_ZERO_BALANCE',
         );
       }
@@ -392,27 +519,27 @@ class StellarAccountService extends StellarBaseService {
         'Unable to remove asset from your wallet',
         technicalError: e,
         advice:
-        'Please try again. If the problem persists, check your internet connection',
+            'Please try again. If the problem persists, check your internet connection',
       );
     }
   }
 
   Future<void> ensureUsdcTrustline(
-      KeyPair keyPair, {
-        String limit = '922337203685.4775807',
-        ProgressCallback? onProgress,
-      }) async {
+    KeyPair keyPair, {
+    String limit = '922337203685.4775807',
+    ProgressCallback? onProgress,
+  }) async {
     if (await hasUsdcTrustline(keyPair.accountId)) return;
     onProgress?.call('Setting up USDC in your wallet...');
     await createUsdcTrustline(keyPair: keyPair, limit: limit);
   }
 
   Future<void> ensureTrustline(
-      KeyPair keyPair,
-      Asset asset, {
-        String limit = '922337203685.4775807',
-        ProgressCallback? onProgress,
-      }) async {
+    KeyPair keyPair,
+    Asset asset, {
+    String limit = '922337203685.4775807',
+    ProgressCallback? onProgress,
+  }) async {
     if (await hasTrustline(keyPair.accountId, asset)) return;
 
     final assetName = asset is AssetTypeCreditAlphaNum ? asset.code : 'asset';
@@ -452,9 +579,7 @@ class StellarAccountService extends StellarBaseService {
 
       final tx = TransactionBuilder(acc)
           .setMaxOperationFee(100)
-          .addOperation(
-        ManageDataOperationBuilder(key, valueBytes).build(),
-      )
+          .addOperation(ManageDataOperationBuilder(key, valueBytes).build())
           .build();
       tx.sign(keyPair, network);
 
@@ -480,9 +605,7 @@ class StellarAccountService extends StellarBaseService {
 
       final tx = TransactionBuilder(acc)
           .setMaxOperationFee(100)
-          .addOperation(
-        ManageDataOperationBuilder(key, null).build(),
-      )
+          .addOperation(ManageDataOperationBuilder(key, null).build())
           .build();
       tx.sign(keyPair, network);
 
@@ -546,10 +669,9 @@ class StellarAccountService extends StellarBaseService {
       if (setFlags != null) builder.setSetFlags(setFlags);
       if (clearFlags != null) builder.setClearFlags(clearFlags);
 
-      final tx = TransactionBuilder(acc)
-          .setMaxOperationFee(100)
-          .addOperation(builder.build())
-          .build();
+      final tx = TransactionBuilder(
+        acc,
+      ).setMaxOperationFee(100).addOperation(builder.build()).build();
       tx.sign(keyPair, network);
 
       final res = await sdk.submitTransaction(tx);
@@ -570,10 +692,7 @@ class StellarAccountService extends StellarBaseService {
     required KeyPair keyPair,
     required String domain,
   }) async {
-    return setAccountOptions(
-      keyPair: keyPair,
-      homeDomain: domain,
-    );
+    return setAccountOptions(keyPair: keyPair, homeDomain: domain);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -594,7 +713,7 @@ class StellarAccountService extends StellarBaseService {
           'Destination account doesn\'t exist',
           technicalError: 'Account not found: $dest',
           advice:
-          'The destination account needs to be active on the Stellar network before you can merge',
+              'The destination account needs to be active on the Stellar network before you can merge',
           code: 'DESTINATION_NOT_FOUND',
         );
       }
@@ -604,9 +723,7 @@ class StellarAccountService extends StellarBaseService {
 
       final tx = TransactionBuilder(acc)
           .setMaxOperationFee(100)
-          .addOperation(
-        AccountMergeOperationBuilder(dest).build(),
-      )
+          .addOperation(AccountMergeOperationBuilder(dest).build())
           .build();
       tx.sign(keyPair, network);
 
@@ -621,7 +738,7 @@ class StellarAccountService extends StellarBaseService {
         'Unable to merge accounts',
         technicalError: e,
         advice:
-        'Make sure you have no active trustlines, offers, or data entries before merging',
+            'Make sure you have no active trustlines, offers, or data entries before merging',
       );
     }
   }
@@ -671,9 +788,8 @@ class StellarAccountService extends StellarBaseService {
     }
   }
 
-
   // Add these new methods to your StellarAccountService class
-// Insert them after the getXlmMinimumBalance method
+  // Insert them after the getXlmMinimumBalance method
 
   /// Get the base reserve amount (2 * baseReserve)
   /// This is the minimum balance required for an account with no subentries
@@ -721,7 +837,9 @@ class StellarAccountService extends StellarBaseService {
       int subentries = 0;
 
       // Trustlines
-      subentries += acc.balances.where((b) => b.assetType != Asset.TYPE_NATIVE).length;
+      subentries += acc.balances
+          .where((b) => b.assetType != Asset.TYPE_NATIVE)
+          .length;
 
       // Signers (excluding master key)
       subentries += acc.signers.where((s) => s.key != acc.accountId).length;
@@ -753,15 +871,13 @@ class StellarAccountService extends StellarBaseService {
           .where((b) => b.assetType != Asset.TYPE_NATIVE)
           .length;
 
-      int signerCount = acc.signers
-          .where((s) => s.key != acc.accountId)
-          .length;
+      int signerCount = acc.signers.where((s) => s.key != acc.accountId).length;
 
       int dataEntryCount = acc.data?.length ?? 0;
 
       // Total subentries (may include offers not directly visible)
-      final totalSubentries = acc.subentryCount ??
-          (trustlineCount + signerCount + dataEntryCount);
+      final totalSubentries =
+          acc.subentryCount ?? (trustlineCount + signerCount + dataEntryCount);
 
       // Calculate reserves
       final baseReserve = 2 * _baseReserve;
@@ -776,7 +892,11 @@ class StellarAccountService extends StellarBaseService {
         'trustlineReserve': trustlineReserve,
         'signerReserve': signerReserve,
         'dataReserve': dataReserve,
-        'otherReserve': totalSubentryReserve - trustlineReserve - signerReserve - dataReserve,
+        'otherReserve':
+            totalSubentryReserve -
+            trustlineReserve -
+            signerReserve -
+            dataReserve,
         'totalSubentryReserve': totalSubentryReserve,
         'totalMinimumBalance': totalMinimumBalance,
         'trustlineCount': trustlineCount.toDouble(),
@@ -792,6 +912,4 @@ class StellarAccountService extends StellarBaseService {
       );
     }
   }
-
 }
-

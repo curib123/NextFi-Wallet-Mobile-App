@@ -173,8 +173,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   int _unreadMessages = 0;
   bool _hasAutoOpenedProofModal = false;
   bool _autoSettlementInProgress = false;
-  DateTime? _lastAutoSettlementAttemptAt;
-  String? _lastAutoSettlementSignature;
+  Timer? _autoSettlementRetryTimer;
   double? _activeAssetBalance;
   bool _balanceLoading = false;
   String? _balanceError;
@@ -336,6 +335,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     _startConnectivityMonitor();
     _startCountdown();
     _startPolling();
+    _startAutoSettlementRetryLoop();
     _loadCurrentUserId();
     unawaited(_loadProofs(silent: true));
     unawaited(_refreshUnreadMessages(silent: true));
@@ -404,6 +404,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     _connectivitySub.cancel();
     _countdownTimer?.cancel();
     _pollTimer?.cancel();
+    _autoSettlementRetryTimer?.cancel();
     super.dispose();
   }
 
@@ -490,6 +491,15 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     });
   }
 
+  void _startAutoSettlementRetryLoop() {
+    _autoSettlementRetryTimer?.cancel();
+    _autoSettlementRetryTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted) return;
+      if (!_trade.status.isActive) return;
+      unawaited(_maybeAutoSettleEscrow());
+    });
+  }
+
   Future<void> _refresh({bool silent = false}) async {
     if (_refreshing) return;
     if (!silent) setState(() => _refreshing = true);
@@ -547,20 +557,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final cbId = _trade.escrow?.claimableBalanceId?.trim() ?? '';
     if (cbId.isEmpty) return;
 
-    final signature =
-        '$action:$cbId:${_trade.status.name}:${_trade.escrow?.status?.name ?? 'none'}';
-    final now = DateTime.now();
-    if (!force &&
-        signature == _lastAutoSettlementSignature &&
-        _lastAutoSettlementAttemptAt != null &&
-        now.difference(_lastAutoSettlementAttemptAt!) <
-            const Duration(seconds: 20)) {
-      return;
-    }
-
     _autoSettlementInProgress = true;
-    _lastAutoSettlementSignature = signature;
-    _lastAutoSettlementAttemptAt = now;
 
     try {
       final stellarSvc = context.read<StellarWalletServices>();
@@ -581,6 +578,12 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
       if (!mounted) return;
       setState(() => _trade = updated);
+      if (updated.status != TradeStatus.completed &&
+          updated.status != TradeStatus.expired &&
+          updated.status != TradeStatus.cancelled) {
+        // Backend can be eventually consistent right after settlement write.
+        unawaited(_refresh(silent: true));
+      }
       showFloatingSnackBar(
         context,
         message: action == 'claim'
@@ -743,6 +746,33 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         final seedVM = context.read<SeedKeypairVM>();
         final kp = await seedVM.deriveKeyPair();
         final asset = _tradeStellarAsset(stellarSvc);
+        final activationAmount = await stellarSvc
+            .getLatestReceiverActivationXlm();
+        final recipientAddress = _effectiveReceiverAddress;
+        if (recipientAddress.isEmpty) {
+          throw Exception(
+            'Wallet address is missing. Please refresh and try again.',
+          );
+        }
+        if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
+          throw Exception('Wallet address format is not valid.');
+        }
+
+        final activated = await stellarSvc.ensureReceiverReadyForClaimable(
+          senderKeyPair: kp,
+          receiverId: recipientAddress,
+          tradeAsset: asset,
+          activationXlmAmount: activationAmount,
+        );
+        if (activated && mounted) {
+          showFloatingSnackBar(
+            context,
+            message:
+                'Receiver wallet was activated with ${activationAmount.toStringAsFixed(7)} XLM.',
+            type: SnackBarType.info,
+          );
+        }
+
         final liveBalance = await stellarSvc.accountService.getAssetBalance(
           kp.accountId,
           asset,
@@ -752,21 +782,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           _balanceError = null;
         });
         if (liveBalance < _trade.cryptoAmount) {
+          if (activated && asset is AssetTypeNative) {
+            throw Exception(
+              'Receiver was activated with '
+              '${activationAmount.toStringAsFixed(7)} XLM, '
+              'so your remaining balance is ${liveBalance.toStringAsFixed(6)} XLM. '
+              'This trade still requires ${_trade.cryptoAmount.toStringAsFixed(6)} XLM to lock. '
+              'Please top up or use a smaller trade amount.',
+            );
+          }
           throw Exception(
             'Not enough balance in your wallet. '
             'Available: ${liveBalance.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}, '
             'Required: ${_trade.cryptoAmount.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}.',
           );
-        }
-
-        final recipientAddress = _effectiveReceiverAddress;
-        if (recipientAddress.isEmpty) {
-          throw Exception(
-            'Wallet address is missing. Please refresh and try again.',
-          );
-        }
-        if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
-          throw Exception('Wallet address format is not valid.');
         }
 
         final expiryTime = _resolveEscrowExpiryTime();
@@ -1047,6 +1076,32 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     final seedVM = context.read<SeedKeypairVM>();
     final kp = await seedVM.deriveKeyPair();
     final asset = _tradeStellarAsset(stellarSvc);
+    final activationAmount = await stellarSvc.getLatestReceiverActivationXlm();
+    final recipientAddress = _effectiveReceiverAddress;
+    if (recipientAddress.isEmpty) {
+      throw Exception(
+        'Wallet address is missing. Please refresh and try again.',
+      );
+    }
+    if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
+      throw Exception('Wallet address format is not valid.');
+    }
+
+    final activated = await stellarSvc.ensureReceiverReadyForClaimable(
+      senderKeyPair: kp,
+      receiverId: recipientAddress,
+      tradeAsset: asset,
+      activationXlmAmount: activationAmount,
+    );
+    if (activated && mounted) {
+      showFloatingSnackBar(
+        context,
+        message:
+            'Receiver wallet was activated with ${activationAmount.toStringAsFixed(7)} XLM.',
+        type: SnackBarType.info,
+      );
+    }
+
     final liveBalance = await stellarSvc.accountService.getAssetBalance(
       kp.accountId,
       asset,
@@ -1056,21 +1111,20 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       _balanceError = null;
     });
     if (liveBalance < _trade.cryptoAmount) {
+      if (activated && asset is AssetTypeNative) {
+        throw Exception(
+          'Receiver was activated with '
+          '${activationAmount.toStringAsFixed(7)} XLM, '
+          'so your remaining balance is ${liveBalance.toStringAsFixed(6)} XLM. '
+          'This trade still requires ${_trade.cryptoAmount.toStringAsFixed(6)} XLM to lock. '
+          'Please top up or use a smaller trade amount.',
+        );
+      }
       throw Exception(
         'Not enough balance in your wallet. '
         'Available: ${liveBalance.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}, '
         'Required: ${_trade.cryptoAmount.toStringAsFixed(6)} ${_trade.asset.toUpperCase()}.',
       );
-    }
-
-    final recipientAddress = _effectiveReceiverAddress;
-    if (recipientAddress.isEmpty) {
-      throw Exception(
-        'Wallet address is missing. Please refresh and try again.',
-      );
-    }
-    if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(recipientAddress)) {
-      throw Exception('Wallet address format is not valid.');
     }
 
     final expiryTime = _resolveEscrowExpiryTime();
@@ -1102,6 +1156,14 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   Future<void> _claimCrypto() async {
+    if (_trade.status == TradeStatus.completed) {
+      showFloatingSnackBar(
+        context,
+        message: 'This trade is already completed.',
+        type: SnackBarType.info,
+      );
+      return;
+    }
     final cbId = _trade.escrow?.claimableBalanceId;
     if (cbId == null || cbId.trim().isEmpty) {
       showFloatingSnackBar(
@@ -1111,22 +1173,84 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       );
       return;
     }
+    final seedVM = context.read<SeedKeypairVM>();
+    final kp = await seedVM.deriveKeyPair();
+    if (!mounted) return;
+    final stellarSvc = context.read<StellarWalletServices>();
+    final asset = _tradeStellarAsset(stellarSvc);
+    final activeWallet = kp.accountId.trim();
+    final expectedReceiver = _effectiveReceiverAddress.trim();
+    if (expectedReceiver.isEmpty) {
+      showFloatingSnackBar(
+        context,
+        message: 'Receiver wallet is missing for this trade. Please refresh.',
+        type: SnackBarType.error,
+      );
+      return;
+    }
+    if (activeWallet != expectedReceiver) {
+      final expiry = _trade.expiresAt;
+      final expiryText = expiry == null
+          ? 'before trade expiry'
+          : 'before ${_formatDateTime(expiry)}';
+      showFloatingSnackBar(
+        context,
+        message:
+            'This wallet cannot claim now. Switch to receiver wallet (${_shortAddress(expectedReceiver)}). '
+            'Receiver can claim $expiryText; after expiry funds return to locker wallet.',
+        type: SnackBarType.warning,
+      );
+      return;
+    }
+    if (asset is! AssetTypeNative) {
+      final hasTrustline = await stellarSvc.accountService.hasTrustline(
+        activeWallet,
+        asset,
+      );
+      if (!mounted) return;
+      if (!hasTrustline) {
+        final code = asset is AssetTypeCreditAlphaNum
+            ? asset.code.toUpperCase()
+            : _trade.asset.toUpperCase();
+        showFloatingSnackBar(
+          context,
+          message:
+              'Your wallet does not have a $code trustline yet. Add $code first, then claim again.',
+          type: SnackBarType.warning,
+        );
+        return;
+      }
+    }
     final ok = await _showConfirm(
       title: 'Receive Your ${_trade.asset.toUpperCase()}',
       body:
-          'Receive ${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} in your wallet.',
+          'Receive ${_trade.cryptoAmount.toStringAsFixed(4)} ${_trade.asset} in your wallet.\n\n'
+          'Receiver wallet: ${_shortAddress(expectedReceiver)}\n'
+          'Full address: $expectedReceiver\n'
+          'Claim window: until ${_formatDateTime(_trade.expiresAt ?? DateTime.now().add(const Duration(hours: 24)))}\n'
+          'After expiry, funds return to the locker wallet.',
       confirmLabel: 'Receive ${_trade.asset.toUpperCase()}',
     );
     if (!ok) return;
     _runAction(() async {
-      final stellarSvc = context.read<StellarWalletServices>();
-      final seedVM = context.read<SeedKeypairVM>();
-      final kp = await seedVM.deriveKeyPair();
       final claimTx = await stellarSvc.claimableBalanceService
           .claimClaimableBalance(keyPair: kp, balanceId: cbId);
       final u = await _tradesCore.claimCrypto(_trade.id, claimTxHash: claimTx);
       if (mounted) setState(() => _trade = u);
     }, successMsg: '${_trade.asset.toUpperCase()} received in your wallet.');
+  }
+
+  String _shortAddress(String value) {
+    final v = value.trim();
+    if (v.length <= 12) return v;
+    return '${v.substring(0, 6)}...${v.substring(v.length - 6)}';
+  }
+
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
   }
 
   Future<void> _refundCrypto() async {
@@ -3791,6 +3915,13 @@ class _BottomActions extends StatelessWidget {
 
     final bool showConfirm =
         isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
+    final bool showClaim =
+        isParticipant &&
+        s == TradeStatus.fiatConfirmed &&
+        isUserCryptoReceiver &&
+        hasEscrowId &&
+        escrowStatus != EscrowStatus.cbClaimed &&
+        escrowStatus != EscrowStatus.cbRefunded;
     final bool showLock =
         isParticipant &&
         (isSellOffer ? s == TradeStatus.fiatSent : s == TradeStatus.created) &&
@@ -3807,7 +3938,7 @@ class _BottomActions extends StatelessWidget {
     final bool showCancel =
         isParticipant &&
         (s == TradeStatus.created || s == TradeStatus.cryptoLocked);
-    final hasPrimary = showLock || showMarkFiat || showConfirm;
+    final hasPrimary = showLock || showMarkFiat || showConfirm || showClaim;
 
     if (!hasPrimary && !showCancel && !s.isActive) {
       return const SizedBox.shrink();
@@ -3847,6 +3978,14 @@ class _BottomActions extends StatelessWidget {
               accent: colors.success,
               loading: loading,
               onTap: onConfirmFiat,
+            ),
+          if (showClaim)
+            _ActionBtn(
+              label: 'Receive ${trade.asset.toUpperCase()}',
+              icon: Icons.account_balance_wallet_rounded,
+              accent: colors.success,
+              loading: loading,
+              onTap: onClaimCrypto,
             ),
           if (hasPrimary) const SizedBox(height: 10),
           if (showCancel || s.isActive || showUploadFiatProof)

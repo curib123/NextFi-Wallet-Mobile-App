@@ -712,7 +712,7 @@ class _SendScreenState extends State<SendScreen> {
               Icon(LucideIcons.wallet, size: 13, color: t.labelColor),
               const SizedBox(width: 5),
               Text(
-                '${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr',
+                'Spendable: ${_fmtAmount(vm.senderBalanceToken, decimals: vm.isXlm ? 4 : 2)} $tokenStr',
                 style: TextStyle(
                   color: t.labelColor,
                   fontSize: 12.5,

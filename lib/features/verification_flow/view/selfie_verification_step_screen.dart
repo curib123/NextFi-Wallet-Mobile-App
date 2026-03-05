@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
@@ -24,10 +24,12 @@ class SelfieVerificationStepScreen extends StatefulWidget {
 enum _ImageSlot { selfie, idFront, idBack }
 
 class _SelfieVerificationStepScreenState
-    extends State<SelfieVerificationStepScreen> {
+    extends State<SelfieVerificationStepScreen>
+    with WidgetsBindingObserver {
   static final RegExp _phonePattern = RegExp(r'^\+?[0-9][0-9\s\-\(\)]{7,17}$');
   static final RegExp _idNoPattern = RegExp(r'^[A-Z0-9\-]{4,32}$');
   static final RegExp _postalPattern = RegExp(r'^[A-Z0-9\-\s]{3,12}$');
+  static const int _maxImageBytes = 8 * 1024 * 1024;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -64,6 +66,8 @@ class _SelfieVerificationStepScreenState
   bool _submitting = false;
   bool _loadingPayment = false;
   bool _loadingVerification = false;
+  bool _recoveringLostData = false;
+  _ImageSlot? _pendingCaptureSlot;
 
   String? _activePaymentAccountId;
   String? _activePaymentLabel;
@@ -72,12 +76,22 @@ class _SelfieVerificationStepScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadActivePaymentAccount();
     _loadCurrentVerification();
+    _recoverLostCapture();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _recoverLostCapture();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _phoneCtrl.dispose();
     _fullLegalNameCtrl.dispose();
     _nationalityCtrl.dispose();
@@ -159,57 +173,127 @@ class _SelfieVerificationStepScreenState
     });
   }
 
-  Future<String> _applyMirrorIfNeeded(_ImageSlot slot, String imagePath) async {
-    if (slot != _ImageSlot.selfie) return imagePath;
+  Future<void> _recoverLostCapture() async {
+    if (_recoveringLostData) return;
+    _recoveringLostData = true;
+    try {
+      final lost = await _picker.retrieveLostData();
+      if (!mounted || lost.isEmpty) return;
+
+      final recovered = lost.file;
+      if (recovered == null || !_isSupportedImagePath(recovered.path)) return;
+      final recoveredFile = File(recovered.path);
+      final captureError = await _validateCapturedFile(recoveredFile);
+      if (captureError != null) {
+        _showSnack(captureError);
+        return;
+      }
+
+      final slot = _pendingCaptureSlot ?? _ImageSlot.selfie;
+      _assignSlot(slot, recoveredFile);
+      _showSnack('Recovered your last camera capture.');
+    } catch (_) {
+      // Best-effort recovery only.
+    } finally {
+      _recoveringLostData = false;
+    }
+  }
+
+  Future<XFile?> _pickImageWithFallback(_ImageSlot slot) async {
+    final preferred = slot == _ImageSlot.selfie
+        ? CameraDevice.front
+        : CameraDevice.rear;
+
+    Future<XFile?> pick({CameraDevice? device}) {
+      return _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 82,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        preferredCameraDevice: device ?? preferred,
+        requestFullMetadata: false,
+      );
+    }
 
     try {
-      final file = File(imagePath);
-      final bytes = await file.readAsBytes();
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) return imagePath;
+      return await pick().timeout(const Duration(seconds: 45));
+    } on PlatformException {
+      // Some devices fail with explicit camera selection; retry with defaults.
+      return pick(
+        device: CameraDevice.rear,
+      ).timeout(const Duration(seconds: 45));
+    }
+  }
 
-      final mirrored = img.flipHorizontal(decoded);
-      final lower = imagePath.toLowerCase();
-      final encoded = lower.endsWith('.png')
-          ? img.encodePng(mirrored)
-          : img.encodeJpg(mirrored, quality: 92);
-
-      await file.writeAsBytes(encoded, flush: true);
-      return imagePath;
+  Future<String?> _validateCapturedFile(File file) async {
+    try {
+      if (!await file.exists()) return 'Captured image file is missing.';
+      final size = await file.length();
+      if (size <= 0) return 'Captured image is empty. Please retake.';
+      if (size > _maxImageBytes) {
+        return 'Captured image is too large. Please retake with better lighting.';
+      }
+      return null;
     } catch (_) {
-      return imagePath;
+      return 'Could not read captured image. Please retake.';
     }
   }
 
   Future<void> _pickForSlot(_ImageSlot slot) async {
     if (_picking || _submitting) return;
     HapticFeedback.lightImpact();
-    setState(() => _picking = true);
+    setState(() {
+      _picking = true;
+      _pendingCaptureSlot = slot;
+    });
     try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 90,
-        preferredCameraDevice: slot == _ImageSlot.selfie
-            ? CameraDevice.front
-            : CameraDevice.rear,
-      );
+      final xFile = await _pickImageWithFallback(slot);
       if (!mounted) return;
       if (xFile == null) {
-        setState(() => _picking = false);
+        setState(() {
+          _picking = false;
+          _pendingCaptureSlot = null;
+        });
         return;
       }
       if (!_isSupportedImagePath(xFile.path)) {
-        setState(() => _picking = false);
+        setState(() {
+          _picking = false;
+          _pendingCaptureSlot = null;
+        });
         _showSnack('Unsupported image type. Use JPG, PNG, or WEBP.');
         return;
       }
 
-      final processedPath = await _applyMirrorIfNeeded(slot, xFile.path);
-      _assignSlot(slot, File(processedPath));
-      setState(() => _picking = false);
+      final captureFile = File(xFile.path);
+      final captureError = await _validateCapturedFile(captureFile);
+      if (captureError != null) {
+        setState(() {
+          _picking = false;
+          _pendingCaptureSlot = null;
+        });
+        _showSnack(captureError);
+        return;
+      }
+
+      _assignSlot(slot, captureFile);
+      setState(() {
+        _picking = false;
+        _pendingCaptureSlot = null;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _picking = false;
+        _pendingCaptureSlot = null;
+      });
+      _showSnack('Camera timed out. Please try again.');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _picking = false);
+      setState(() {
+        _picking = false;
+        _pendingCaptureSlot = null;
+      });
       _showSnack('Failed to pick image: $e');
     }
   }
@@ -252,7 +336,7 @@ class _SelfieVerificationStepScreenState
     if (picked != null) onPicked(picked);
   }
 
-  String? _validateBeforeSubmit() {
+  Future<String?> _validateBeforeSubmit() async {
     final phone = _phoneCtrl.text.trim();
     final fullName = _fullLegalNameCtrl.text.trim();
     final nationality = _nationalityCtrl.text.trim();
@@ -291,7 +375,8 @@ class _SelfieVerificationStepScreenState
     }
 
     if (_selectedIssuingCountry == null) return 'Issuing country is required.';
-    if (_governmentIdType == null || _governmentIdType == GovernmentIdType.unknown) {
+    if (_governmentIdType == null ||
+        _governmentIdType == GovernmentIdType.unknown) {
       return 'ID type is required.';
     }
     if (idNumber.isEmpty) return 'ID number is required.';
@@ -311,11 +396,17 @@ class _SelfieVerificationStepScreenState
         !_isSupportedImagePath(_idBack!.path)) {
       return 'Only JPG, PNG, or WEBP images are supported.';
     }
+    final selfieError = await _validateCapturedFile(_selfie!);
+    if (selfieError != null) return 'Selfie: $selfieError';
+    final idFrontError = await _validateCapturedFile(_idFront!);
+    if (idFrontError != null) return 'ID front: $idFrontError';
+    final idBackError = await _validateCapturedFile(_idBack!);
+    if (idBackError != null) return 'ID back: $idBackError';
     return null;
   }
 
   Future<void> _submit() async {
-    final error = _validateBeforeSubmit();
+    final error = await _validateBeforeSubmit();
     if (error != null) {
       _showSnack(error);
       return;

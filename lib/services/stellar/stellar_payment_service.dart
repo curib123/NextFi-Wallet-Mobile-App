@@ -16,12 +16,12 @@ class StellarPaymentService extends StellarBaseService {
     String? quickNodeUrlTestnet,
     Map<String, String>? quickNodeDefaultHeaders,
   }) : super(
-    sdk: sdk,
-    sdkQuickNode: sdkQuickNode,
-    quickNodeUrlMainnet: quickNodeUrlMainnet,
-    quickNodeUrlTestnet: quickNodeUrlTestnet,
-    quickNodeDefaultHeaders: quickNodeDefaultHeaders,
-  );
+         sdk: sdk,
+         sdkQuickNode: sdkQuickNode,
+         quickNodeUrlMainnet: quickNodeUrlMainnet,
+         quickNodeUrlTestnet: quickNodeUrlTestnet,
+         quickNodeDefaultHeaders: quickNodeDefaultHeaders,
+       );
 
   Asset get xlm => accountService.xlm;
   Asset get usdc => accountService.usdc;
@@ -60,19 +60,18 @@ class StellarPaymentService extends StellarBaseService {
 
       if (destExists) {
         tb.addOperation(
-          PaymentOperationBuilder(dest, xlm, StellarBaseService.fmt7(amount)).build(),
+          PaymentOperationBuilder(
+            dest,
+            xlm,
+            StellarBaseService.fmt7(amount),
+          ).build(),
         );
       } else {
-        if (amount < 1.0) {
-          fail(
-            'Cannot create new account with this amount',
-            technicalError: 'Need 1 XLM minimum, but only ${StellarBaseService.fmt7(amount)} XLM provided',
-            advice: 'New Stellar accounts need at least 1 XLM. Try sending 1 XLM or more',
-            code: 'INSUFFICIENT_FOR_ACCOUNT_CREATION',
-          );
-        }
         tb.addOperation(
-          CreateAccountOperationBuilder(dest, StellarBaseService.fmt7(amount)).build(),
+          CreateAccountOperationBuilder(
+            dest,
+            StellarBaseService.fmt7(amount),
+          ).build(),
         );
       }
 
@@ -123,48 +122,16 @@ class StellarPaymentService extends StellarBaseService {
       onProgress?.call('Validating address...');
       final dest = toClassicAccountId(destination);
 
-      onProgress?.call('Checking destination account...');
-      if (!await accountExists(dest)) {
-        fail(
-          'Recipient doesn\'t have a Stellar account yet',
-          technicalError: 'Account not found: $dest',
-          advice:
-          'The recipient needs to create their Stellar account first. They can do this by receiving XLM from another wallet or using an exchange',
-          code: 'DESTINATION_NOT_FOUND',
-        );
-      }
-
-      await accountService.ensureUsdcTrustline(keyPair, onProgress: onProgress);
-
-      onProgress?.call('Checking recipient USDC setup...');
-      if (!await accountService.hasUsdcTrustline(dest)) {
-        fail(
-          'Recipient can\'t receive USDC yet',
-          technicalError: 'No USDC trustline for: $dest',
-          advice:
-          'The recipient needs to add USDC to their wallet first. This is a one-time setup they can do in their Stellar wallet settings',
-          code: 'NO_DESTINATION_TRUSTLINE',
-        );
-      }
-
-      onProgress?.call('Checking balances...');
-      final senderUsdcBal = await accountService.getUsdcBalance(keyPair.accountId);
-      if (senderUsdcBal < usdcAmount) {
-        fail(
-          'Not enough USDC in your wallet',
-          technicalError: 'Have: ${StellarBaseService.fmt7(senderUsdcBal)} USDC, Need: ${StellarBaseService.fmt7(usdcAmount)} USDC',
-          advice:
-          'You need ${StellarBaseService.fmt7(usdcAmount - senderUsdcBal)} more USDC to complete this transaction',
-          code: 'INSUFFICIENT_USDC',
-        );
-      }
-
       onProgress?.call('Preparing transaction...');
       final acc = await loadAccount(keyPair.accountId);
 
       final tb = TransactionBuilder(acc)
         ..addOperation(
-          PaymentOperationBuilder(dest, usdc, StellarBaseService.fmt7(usdcAmount)).build(),
+          PaymentOperationBuilder(
+            dest,
+            usdc,
+            StellarBaseService.fmt7(usdcAmount),
+          ).build(),
         );
 
       if (memoText?.isNotEmpty == true) {

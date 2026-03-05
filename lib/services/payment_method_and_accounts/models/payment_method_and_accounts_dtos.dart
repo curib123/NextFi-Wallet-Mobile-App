@@ -1,11 +1,8 @@
-﻿class PaymentMethodsQuery {
+class PaymentMethodsQuery {
   final bool? activeOnly;
   final String? q;
 
-  const PaymentMethodsQuery({
-    this.activeOnly,
-    this.q,
-  });
+  const PaymentMethodsQuery({this.activeOnly, this.q});
 
   Map<String, String> toQueryMap() => {
     if (activeOnly != null) 'activeOnly': activeOnly.toString(),
@@ -71,11 +68,15 @@ class PaymentAccountsQuery {
   final bool? activeOnly;
   final String? q;
   final String? paymentMethodId;
+  final int? page;
+  final int? limit;
 
   const PaymentAccountsQuery({
     this.activeOnly,
     this.q,
     this.paymentMethodId,
+    this.page,
+    this.limit,
   });
 
   Map<String, String> toQueryMap() => {
@@ -83,6 +84,8 @@ class PaymentAccountsQuery {
     if (q != null && q!.trim().isNotEmpty) 'q': q!.trim(),
     if (paymentMethodId != null && paymentMethodId!.trim().isNotEmpty)
       'paymentMethodId': paymentMethodId!.trim(),
+    if (page != null && page! > 0) 'page': page!.toString(),
+    if (limit != null && limit! > 0) 'limit': limit!.toString(),
   };
 }
 
@@ -105,14 +108,20 @@ class CreateUserPaymentAccountRequest {
     this.isActive,
   });
 
+  static String? _trim(String? v) {
+    if (v == null) return null;
+    final t = v.trim();
+    return t.isEmpty ? null : t;
+  }
+
   Map<String, dynamic> toJson() => {
-    'paymentMethodId': paymentMethodId,
-    if (label != null) 'label': label,
-    'accountName': accountName,
-    if (accountNo != null) 'accountNo': accountNo,
-    if (assetReceiverAddress != null)
-      'assetReceiverAddress': assetReceiverAddress,
-    if (instructions != null) 'instructions': instructions,
+    'paymentMethodId': paymentMethodId.trim(),
+    if (_trim(label) != null) 'label': _trim(label),
+    'accountName': accountName.trim(),
+    if (_trim(accountNo) != null) 'accountNo': _trim(accountNo),
+    if (_trim(assetReceiverAddress) != null)
+      'assetReceiverAddress': _trim(assetReceiverAddress),
+    if (_trim(instructions) != null) 'instructions': _trim(instructions),
     if (isActive != null) 'isActive': isActive,
   };
 }
@@ -136,14 +145,21 @@ class UpdateUserPaymentAccountRequest {
     this.isActive,
   });
 
+  static String? _trim(String? v) {
+    if (v == null) return null;
+    final t = v.trim();
+    return t.isEmpty ? null : t;
+  }
+
   Map<String, dynamic> toJson() => {
-    if (paymentMethodId != null) 'paymentMethodId': paymentMethodId,
-    if (label != null) 'label': label,
-    if (accountName != null) 'accountName': accountName,
-    if (accountNo != null) 'accountNo': accountNo,
-    if (assetReceiverAddress != null)
-      'assetReceiverAddress': assetReceiverAddress,
-    if (instructions != null) 'instructions': instructions,
+    if (_trim(paymentMethodId) != null)
+      'paymentMethodId': _trim(paymentMethodId),
+    if (_trim(label) != null) 'label': _trim(label),
+    if (_trim(accountName) != null) 'accountName': _trim(accountName),
+    if (_trim(accountNo) != null) 'accountNo': _trim(accountNo),
+    if (_trim(assetReceiverAddress) != null)
+      'assetReceiverAddress': _trim(assetReceiverAddress),
+    if (_trim(instructions) != null) 'instructions': _trim(instructions),
     if (isActive != null) 'isActive': isActive,
   };
 }

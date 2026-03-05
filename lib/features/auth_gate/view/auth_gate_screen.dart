@@ -64,6 +64,9 @@ class _AuthGateScreenState extends State<AuthGateScreen>
           type: auto.success ? SnackBarType.success : SnackBarType.error,
         );
       }
+      if (auto?.success == true) {
+        _onSuccessNavigate();
+      }
     });
   }
 
@@ -88,7 +91,12 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _vm.refreshLockout();
-      _vm.maybeAutoBiometric();
+      _vm.maybeAutoBiometric().then((auto) {
+        if (!mounted) return;
+        if (auto?.success == true) {
+          _onSuccessNavigate();
+        }
+      });
     }
   }
 
@@ -146,8 +154,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
           PinStatus.mismatch ||
           PinStatus.invalid ||
           PinStatus.storageError ||
-          PinStatus.error =>
-          SnackBarType.error,
+          PinStatus.error => SnackBarType.error,
           PinStatus.lockedOut => SnackBarType.warning,
         },
       );
@@ -190,8 +197,8 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         : "Enter PIN";
     final subhead = s.isNewUser
         ? (s.firstPinEntry == null
-        ? "Set a 6-digit PIN to secure your wallet"
-        : "Please enter your PIN again")
+              ? "Set a 6-digit PIN to secure your wallet"
+              : "Please enter your PIN again")
         : "Enter your PIN to unlock";
 
     return WillPopScope(
@@ -229,10 +236,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           // Lock icon
-                          _LockIcon(
-                            unlocked: s.unlockedVisual,
-                            colors: colors,
-                          ),
+                          _LockIcon(unlocked: s.unlockedVisual, colors: colors),
 
                           const SizedBox(height: 32),
 
@@ -266,7 +270,9 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                           if (isLockedOut) ...[
                             const SizedBox(height: 20),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                              ),
                               child: LockoutBanner(
                                 remaining: s.lockoutRemaining!,
                                 colors: colors,
@@ -286,7 +292,9 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                                   : (1 - shake) * 20;
                               return Transform.translate(
                                 offset: Offset(
-                                  shake > 0 ? (offset - 10) * (shake < 0.5 ? 1 : -1) : 0,
+                                  shake > 0
+                                      ? (offset - 10) * (shake < 0.5 ? 1 : -1)
+                                      : 0,
                                   0,
                                 ),
                                 child: child,
@@ -309,7 +317,8 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                     onBackspacePressed: _onBackspacePressed,
                     colors: colors,
                     enabled: !isLockedOut && !s.submitting,
-                    showBiometric: !s.isNewUser &&
+                    showBiometric:
+                        !s.isNewUser &&
                         s.deviceSupportsBiometrics &&
                         s.biometricsEnabled &&
                         !isLockedOut,
@@ -342,10 +351,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
 
 /// Modern lock icon with animation
 class _LockIcon extends StatelessWidget {
-  const _LockIcon({
-    required this.unlocked,
-    required this.colors,
-  });
+  const _LockIcon({required this.unlocked, required this.colors});
 
   final bool unlocked;
   final AppColor colors;
@@ -366,13 +372,19 @@ class _LockIcon extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                (unlocked ? colors.success : colors.primary).withValues(alpha: .15),
-                (unlocked ? colors.success : colors.primary).withValues(alpha: .05),
+                (unlocked ? colors.success : colors.primary).withValues(
+                  alpha: .15,
+                ),
+                (unlocked ? colors.success : colors.primary).withValues(
+                  alpha: .05,
+                ),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: (unlocked ? colors.success : colors.primary).withValues(alpha: .2),
+                color: (unlocked ? colors.success : colors.primary).withValues(
+                  alpha: .2,
+                ),
                 blurRadius: 30,
                 spreadRadius: 5,
               ),
@@ -429,12 +441,12 @@ class _PinDotsDisplay extends StatelessWidget {
               ),
               boxShadow: isFilled
                   ? [
-                BoxShadow(
-                  color: colors.primary.withValues(alpha: .4),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ]
+                      BoxShadow(
+                        color: colors.primary.withValues(alpha: .4),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
                   : null,
             ),
           ),
@@ -475,11 +487,7 @@ class _NumericKeyboard extends StatelessWidget {
           const SizedBox(height: 16),
           _buildRow(['7', '8', '9']),
           const SizedBox(height: 16),
-          _buildRow([
-            showBiometric ? 'biometric' : '',
-            '0',
-            'backspace'
-          ]),
+          _buildRow([showBiometric ? 'biometric' : '', '0', 'backspace']),
         ],
       ),
     );
@@ -564,10 +572,12 @@ class _KeyButtonState extends State<_KeyButton>
 
     return GestureDetector(
       onTapDown: widget.enabled ? (_) => _controller.forward() : null,
-      onTapUp: widget.enabled ? (_) {
-        _controller.reverse();
-        widget.onPressed();
-      } : null,
+      onTapUp: widget.enabled
+          ? (_) {
+              _controller.reverse();
+              widget.onPressed();
+            }
+          : null,
       onTapCancel: () => _controller.reverse(),
       child: AnimatedBuilder(
         animation: _controller,
@@ -579,27 +589,31 @@ class _KeyButtonState extends State<_KeyButton>
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.colors.primary.withValues(alpha: _controller.value * 0.15),
+                color: widget.colors.primary.withValues(
+                  alpha: _controller.value * 0.15,
+                ),
               ),
               child: Center(
                 child: isBackspace
                     ? Icon(
-                  Icons.backspace_outlined,
-                  size: 24,
-                  color: widget.enabled
-                      ? widget.colors.textPrimary
-                      : widget.colors.textSecondary.withValues(alpha: .5),
-                )
+                        Icons.backspace_outlined,
+                        size: 24,
+                        color: widget.enabled
+                            ? widget.colors.textPrimary
+                            : widget.colors.textSecondary.withValues(alpha: .5),
+                      )
                     : Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: widget.enabled
-                        ? widget.colors.textPrimary
-                        : widget.colors.textSecondary.withValues(alpha: .5),
-                  ),
-                ),
+                        widget.label,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: widget.enabled
+                              ? widget.colors.textPrimary
+                              : widget.colors.textSecondary.withValues(
+                                  alpha: .5,
+                                ),
+                        ),
+                      ),
               ),
             ),
           );
@@ -642,10 +656,12 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: widget.enabled ? (_) => _controller.forward() : null,
-      onTapUp: widget.enabled ? (_) {
-        _controller.reverse();
-        widget.onPressed();
-      } : null,
+      onTapUp: widget.enabled
+          ? (_) {
+              _controller.reverse();
+              widget.onPressed();
+            }
+          : null,
       onTapCancel: () => _controller.reverse(),
       child: AnimatedBuilder(
         animation: _controller,
@@ -657,7 +673,9 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.colors.primary.withValues(alpha: _controller.value * 0.15),
+                color: widget.colors.primary.withValues(
+                  alpha: _controller.value * 0.15,
+                ),
               ),
               child: Center(
                 child: Icon(
@@ -678,10 +696,7 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
 
 /// Biometric quick action button (deprecated - now integrated into keyboard)
 class _BiometricButton extends StatelessWidget {
-  const _BiometricButton({
-    required this.colors,
-    required this.onPressed,
-  });
+  const _BiometricButton({required this.colors, required this.onPressed});
 
   final AppColor colors;
   final VoidCallback onPressed;
@@ -703,11 +718,7 @@ class _BiometricButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.fingerprint,
-              size: 20,
-              color: colors.primary,
-            ),
+            Icon(Icons.fingerprint, size: 20, color: colors.primary),
             const SizedBox(width: 8),
             Text(
               'Use Biometrics',

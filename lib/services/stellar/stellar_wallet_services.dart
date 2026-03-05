@@ -34,6 +34,8 @@ export 'package:next_fi/services/stellar/stellar_base_service.dart'
 /// - Error handling with actionable advice
 /// - Transaction history and audit trail
 class StellarWalletServices {
+  static const double defaultReceiverActivationXlm =
+      StellarAccountService.fallbackAccountActivationMinXlm;
   // Sub-services
   final StellarWalletManager walletManager;
   final StellarAccountService accountService;
@@ -620,6 +622,102 @@ class StellarWalletServices {
     accountId: accountId,
     balanceId: balanceId,
   );
+
+  /// Ensures a receiver is ready for trade claimable settlement.
+  ///
+  /// Rules:
+  /// - XLM trades: if receiver account is brand-new, activate it first by
+  ///   sending a small XLM amount.
+  /// - Token trades (USDC/other): receiver account must already exist and must
+  ///   have the token trustline; no auto-activation for token flow.
+  ///
+  /// Returns `true` when activation payment was sent in this call.
+  Future<bool> ensureReceiverReadyForClaimable({
+    required KeyPair senderKeyPair,
+    required String receiverId,
+    required Asset tradeAsset,
+    double? activationXlmAmount,
+    ProgressCallback? onProgress,
+  }) async {
+    final receiver = receiverId.trim();
+    if (receiver.isEmpty) {
+      throw StellarWalletError(
+        'Receiver wallet address is missing.',
+        advice: 'Please refresh and try again.',
+        code: 'RECEIVER_EMPTY',
+      );
+    }
+
+    final exists = await accountService.accountExists(receiver);
+
+    if (tradeAsset is AssetTypeNative) {
+      if (exists) return false;
+      final activationAmount =
+          activationXlmAmount != null && activationXlmAmount > 0
+          ? activationXlmAmount
+          : await accountService.getLatestAccountActivationMinXlm();
+      onProgress?.call('Activating receiver account...');
+      await paymentService.sendXlm(
+        keyPair: senderKeyPair,
+        destination: receiver,
+        amount: activationAmount,
+        memoText: 'Trade receiver activation',
+      );
+      onProgress?.call('Verifying receiver activation...');
+      var activated = false;
+      for (var attempt = 0; attempt < 6; attempt++) {
+        if (await accountService.accountExists(receiver)) {
+          activated = true;
+          break;
+        }
+        await Future.delayed(Duration(milliseconds: 900 + (attempt * 300)));
+      }
+      if (!activated) {
+        throw StellarWalletError(
+          'Receiver activation is not confirmed yet.',
+          advice:
+              '1 XLM activation was not confirmed in time, so claimable lock was not sent. Please try Lock again in a few seconds.',
+          code: 'RECEIVER_ACTIVATION_UNCONFIRMED',
+        );
+      }
+      return true;
+    }
+
+    if (!exists) {
+      throw StellarWalletError(
+        'Receiver account is not activated yet.',
+        advice:
+            'Activate the receiver wallet with at least 1 XLM first, then add ${_assetCodeLabel(tradeAsset)} trustline.',
+        code: 'RECEIVER_NOT_ACTIVATED',
+      );
+    }
+
+    final hasTrustline = await accountService.hasTrustline(
+      receiver,
+      tradeAsset,
+    );
+    if (!hasTrustline) {
+      throw StellarWalletError(
+        'Receiver wallet cannot receive ${_assetCodeLabel(tradeAsset)} yet.',
+        advice:
+            'Please add ${_assetCodeLabel(tradeAsset)} trustline on the receiver wallet, then try again.',
+        code: 'RECEIVER_TRUSTLINE_MISSING',
+      );
+    }
+
+    return false;
+  }
+
+  String _assetCodeLabel(Asset asset) {
+    if (asset is AssetTypeNative) return 'XLM';
+    if (asset is AssetTypeCreditAlphaNum) return asset.code.toUpperCase();
+    return 'this asset';
+  }
+
+  Future<double> getLatestReceiverActivationXlm({bool forceRefresh = false}) =>
+      accountService.getLatestAccountActivationMinXlm(
+        forceRefresh: forceRefresh,
+      );
 
   // ══════════════════════════════════════════════════════════════════════════
   // DEX TRADING

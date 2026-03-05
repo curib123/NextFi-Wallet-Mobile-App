@@ -36,6 +36,7 @@ class AuthGateVM extends ChangeNotifier {
 
   final LocalAuthentication _localAuth = LocalAuthentication();
   Timer? _lockoutTimer;
+  bool _biometricInProgress = false;
 
   void _set(AuthGateState s) {
     _state = s;
@@ -45,12 +46,15 @@ class AuthGateVM extends ChangeNotifier {
   Future<void> init() async {
     final ready = await SecurityStorage.ensureReady();
     if (!ready) {
-      _set(_state.copyWith(
-        isNewUser: true,
-        deviceSupportsBiometrics: false,
-        biometricsEnabled: false,
-        initWarning: "Secure storage unavailable; PIN cannot be saved on this environment.",
-      ));
+      _set(
+        _state.copyWith(
+          isNewUser: true,
+          deviceSupportsBiometrics: false,
+          biometricsEnabled: false,
+          initWarning:
+              "Secure storage unavailable; PIN cannot be saved on this environment.",
+        ),
+      );
       return;
     }
 
@@ -72,13 +76,16 @@ class AuthGateVM extends ChangeNotifier {
     final bioEnabled = await SecurityStorage.isBiometricsEnabled();
     final rem = await SecurityStorage.lockoutRemaining();
 
-    _set(_state.copyWith(
-      isNewUser: !hasPin,
-      deviceSupportsBiometrics: (canCheck || isSupported) && available.isNotEmpty,
-      biometricsEnabled: bioEnabled,
-      lockoutRemaining: rem,
-      initWarning: null,
-    ));
+    _set(
+      _state.copyWith(
+        isNewUser: !hasPin,
+        deviceSupportsBiometrics:
+            (canCheck || isSupported) && available.isNotEmpty,
+        biometricsEnabled: bioEnabled,
+        lockoutRemaining: rem,
+        initWarning: null,
+      ),
+    );
 
     _startOrStopLockoutTimer(rem);
   }
@@ -89,9 +96,12 @@ class AuthGateVM extends ChangeNotifier {
       final canCheck = await _localAuth.canCheckBiometrics;
       final isSupported = await _localAuth.isDeviceSupported();
       final available = await _localAuth.getAvailableBiometrics();
-      _set(_state.copyWith(
-        deviceSupportsBiometrics: (canCheck || isSupported) && available.isNotEmpty,
-      ));
+      _set(
+        _state.copyWith(
+          deviceSupportsBiometrics:
+              (canCheck || isSupported) && available.isNotEmpty,
+        ),
+      );
     } catch (_) {
       _set(_state.copyWith(deviceSupportsBiometrics: false));
     }
@@ -140,9 +150,13 @@ class AuthGateVM extends ChangeNotifier {
 
   bool get isLockedOut =>
       _state.lockoutRemaining != null &&
-          _state.lockoutRemaining! > Duration.zero;
+      _state.lockoutRemaining! > Duration.zero;
 
   Future<BioResult> authenticateWithBiometrics() async {
+    if (_biometricInProgress) {
+      return const BioResult(success: false);
+    }
+    _biometricInProgress = true;
     try {
       final ok = await _localAuth.authenticate(
         localizedReason: 'Authenticate to continue',
@@ -155,20 +169,30 @@ class AuthGateVM extends ChangeNotifier {
       if (ok) {
         await SecurityStorage.markSuccessfulAuth();
         _set(_state.copyWith(unlockedVisual: true));
-        return const BioResult(success: true, message: "Authentication successful");
+        return const BioResult(
+          success: true,
+          message: "Authentication successful",
+        );
       }
-      return const BioResult(success: false, message: "Biometric authentication failed");
+      return const BioResult(
+        success: false,
+        message: "Biometric authentication failed",
+      );
     } on PlatformException catch (e) {
       final code = e.code;
       // If device is misconfigured (no enrollment / no passcode), disable toggle to avoid loop.
       if (_state.biometricsEnabled &&
-          (code == 'NotEnrolled' || code == 'NotAvailable' || code == 'PasscodeNotSet')) {
+          (code == 'NotEnrolled' ||
+              code == 'NotAvailable' ||
+              code == 'PasscodeNotSet')) {
         await SecurityStorage.setBiometricsEnabled(false);
         _set(_state.copyWith(biometricsEnabled: false));
       }
       return BioResult(success: false, message: "Biometric error: $code");
     } catch (e) {
       return BioResult(success: false, message: "Biometric error: $e");
+    } finally {
+      _biometricInProgress = false;
     }
   }
 
@@ -184,7 +208,10 @@ class AuthGateVM extends ChangeNotifier {
 
     final pin = raw.replaceAll(RegExp(r'\D'), '');
     if (pin.length != 6) {
-      return const PinResult(PinStatus.error, message: "PIN must be exactly 6 digits");
+      return const PinResult(
+        PinStatus.error,
+        message: "PIN must be exactly 6 digits",
+      );
     }
 
     _set(_state.copyWith(submitting: true));
@@ -215,24 +242,33 @@ class AuthGateVM extends ChangeNotifier {
           _set(_state.copyWith(submitting: false));
           return const PinResult(
             PinStatus.storageError,
-            message: "Couldn’t persist PIN. Try again (or disable private mode).",
+            message:
+                "Couldn’t persist PIN. Try again (or disable private mode).",
           );
         }
 
-        _set(_state.copyWith(
-          isNewUser: false,
-          firstPinEntry: null,
-          submitting: false,
-          unlockedVisual: true,
-        ));
-        return const PinResult(PinStatus.saved, message: "PIN saved successfully");
+        _set(
+          _state.copyWith(
+            isNewUser: false,
+            firstPinEntry: null,
+            submitting: false,
+            unlockedVisual: true,
+          ),
+        );
+        return const PinResult(
+          PinStatus.saved,
+          message: "PIN saved successfully",
+        );
       }
 
       // Existing user
       final ok = await SecurityStorage.verifyPin(pin);
       if (ok) {
         _set(_state.copyWith(submitting: false, unlockedVisual: true));
-        return const PinResult(PinStatus.verified, message: "PIN verified successfully");
+        return const PinResult(
+          PinStatus.verified,
+          message: "PIN verified successfully",
+        );
       }
 
       // Wrong pin → refresh lockout

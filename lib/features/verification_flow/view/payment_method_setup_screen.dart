@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/alert/AppAlert.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/verification_result_modal.dart';
@@ -91,19 +92,31 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showSnack('Failed to load payment setup: $e');
+      _showAlert(
+        AppAlertType.error,
+        title: 'Load Failed',
+        subtitle: e.toString(),
+      );
     }
   }
 
   Future<void> _createAccount() async {
     final method = _selectedMethod;
     if (method == null) {
-      _showSnack('Please select a payment method.');
+      _showAlert(
+        AppAlertType.warning,
+        title: 'Missing Payment Method',
+        subtitle: 'Please select a payment method.',
+      );
       return;
     }
     final accountName = _accountNameCtrl.text.trim();
     if (accountName.isEmpty) {
-      _showSnack('Account name is required.');
+      _showAlert(
+        AppAlertType.warning,
+        title: 'Missing Account Name',
+        subtitle: 'Account name is required.',
+      );
       return;
     }
 
@@ -117,9 +130,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
           accountNo: _accountNoCtrl.text.trim().isEmpty
               ? null
               : _accountNoCtrl.text.trim(),
-          label: _labelCtrl.text.trim().isEmpty
-              ? null
-              : _labelCtrl.text.trim(),
+          label: _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim(),
           assetReceiverAddress: _assetReceiverCtrl.text.trim().isEmpty
               ? null
               : _assetReceiverCtrl.text.trim(),
@@ -170,13 +181,29 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       await _loadAll();
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Failed to set active: $e');
+      _showAlert(
+        AppAlertType.error,
+        title: 'Set Active Failed',
+        subtitle: e.toString(),
+      );
     } finally {
       if (mounted) setState(() => _settingActive = false);
     }
   }
 
-  Future<void> _editAccount(_AccountItem account) async {
+  void _editAccount(_AccountItem account) {
+    showAppAlert(
+      context,
+      type: AppAlertType.info,
+      title: 'Edit Payment Account',
+      subtitle: 'Update details for ${account.accountName}.',
+      primaryText: 'Continue',
+      barrierDismissible: true,
+      onPrimary: () => _openEditAccountSheet(account),
+    );
+  }
+
+  Future<void> _openEditAccountSheet(_AccountItem account) async {
     final accountNameCtrl = TextEditingController(text: account.accountName);
     final accountNoCtrl = TextEditingController(text: account.accountNo ?? '');
     final labelCtrl = TextEditingController(text: account.label ?? '');
@@ -270,7 +297,11 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
                           : () async {
                               final accountName = accountNameCtrl.text.trim();
                               if (accountName.isEmpty) {
-                                _showSnack('Account name is required.');
+                                _showAlert(
+                                  AppAlertType.warning,
+                                  title: 'Missing Account Name',
+                                  subtitle: 'Account name is required.',
+                                );
                                 return;
                               }
                               setModal(() => saving = true);
@@ -299,7 +330,11 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
                                 Navigator.of(ctx).pop(true);
                               } catch (e) {
                                 if (!ctx.mounted) return;
-                                _showSnack('Failed to update account: $e');
+                                _showAlert(
+                                  AppAlertType.error,
+                                  title: 'Update Failed',
+                                  subtitle: e.toString(),
+                                );
                                 setModal(() => saving = false);
                               }
                             },
@@ -334,56 +369,57 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     if (saved == true && mounted) {
       await _loadAll();
       if (!mounted) return;
-      _showSnack('Payment account updated.');
+      _showAlert(
+        AppAlertType.success,
+        title: 'Updated',
+        subtitle: 'Payment account updated.',
+      );
     }
   }
 
   Future<void> _deleteAccount(_AccountItem account) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        final c = AppColor.of(ctx);
-        return AlertDialog(
-          backgroundColor: c.surface,
-          title: const Text('Delete payment account?'),
-          content: Text(
-            'This will remove ${account.accountName}.',
-            style: TextStyle(color: c.textSecondary),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
+    showAppAlert(
+      context,
+      type: AppAlertType.warning,
+      title: 'Delete Payment Account?',
+      subtitle: 'This will remove ${account.accountName}.',
+      primaryText: 'Delete',
+      barrierDismissible: true,
+      onPrimary: () async {
+        try {
+          await _paymentCore.deleteMyPaymentAccount(account.id);
+          if (!mounted) return;
+          await _loadAll();
+          if (!mounted) return;
+          _showAlert(
+            AppAlertType.success,
+            title: 'Deleted',
+            subtitle: 'Payment account deleted.',
+          );
+        } catch (e) {
+          if (!mounted) return;
+          _showAlert(
+            AppAlertType.error,
+            title: 'Delete Failed',
+            subtitle: e.toString(),
+          );
+        }
       },
     );
-    if (ok != true) return;
-    try {
-      await _paymentCore.deleteMyPaymentAccount(account.id);
-      if (!mounted) return;
-      await _loadAll();
-      if (!mounted) return;
-      _showSnack('Payment account deleted.');
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack('Failed to delete account: $e');
-    }
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      ),
+  void _showAlert(
+    AppAlertType type, {
+    required String title,
+    String? subtitle,
+  }) {
+    if (!mounted) return;
+    showAppAlert(
+      context,
+      type: type,
+      title: title,
+      subtitle: subtitle,
+      barrierDismissible: true,
     );
   }
 
@@ -1378,7 +1414,11 @@ class _AccountTile extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded, size: 18, color: c.textSecondary),
+            icon: Icon(
+              Icons.more_vert_rounded,
+              size: 18,
+              color: c.textSecondary,
+            ),
             onSelected: (value) {
               if (value == 'edit') onEdit();
               if (value == 'delete') onDelete();
@@ -1462,7 +1502,29 @@ class _FocusField extends StatefulWidget {
 }
 
 class _FocusFieldState extends State<_FocusField> {
+  late final FocusNode _focusNode;
   bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (!mounted) return;
+    final next = _focusNode.hasFocus;
+    if (_focused == next) return;
+    setState(() => _focused = next);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1480,71 +1542,69 @@ class _FocusFieldState extends State<_FocusField> {
       ),
     );
 
-    return Focus(
-      onFocusChange: (v) => setState(() => _focused = v),
-      child: TextFormField(
-        controller: widget.controller,
-        textInputAction: widget.action,
-        minLines: widget.multiline ? 2 : 1,
-        maxLines: widget.multiline ? 4 : 1,
-        style: TextStyle(
-          color: c.textPrimary,
-          fontSize: 14.5,
+    return TextFormField(
+      controller: widget.controller,
+      focusNode: _focusNode,
+      keyboardType: widget.multiline
+          ? TextInputType.multiline
+          : TextInputType.text,
+      textInputAction: widget.multiline
+          ? TextInputAction.newline
+          : widget.action,
+      minLines: widget.multiline ? 2 : 1,
+      maxLines: widget.multiline ? 4 : 1,
+      style: TextStyle(
+        color: c.textPrimary,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w500,
+      ),
+      decoration: InputDecoration(
+        labelText: widget.required ? '${widget.label} *' : widget.label,
+        hintText: widget.hint,
+        hintStyle: TextStyle(
+          color: c.textSecondary.withValues(alpha: 0.4),
+          fontSize: 13.5,
+        ),
+        labelStyle: TextStyle(
+          color: active ? c.primary : c.textSecondary,
+          fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
-        decoration: InputDecoration(
-          labelText: widget.required ? '${widget.label} *' : widget.label,
-          hintText: widget.hint,
-          hintStyle: TextStyle(
-            color: c.textSecondary.withValues(alpha: 0.4),
-            fontSize: 13.5,
+        floatingLabelStyle: TextStyle(
+          color: active ? c.primary : c.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 12, right: 8),
+          child: Icon(
+            widget.icon,
+            size: 17,
+            color: active ? c.primary : c.textSecondary.withValues(alpha: 0.5),
           ),
-          labelStyle: TextStyle(
-            color: active ? c.primary : c.textSecondary,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w500,
+        ),
+        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+        filled: true,
+        fillColor: active
+            ? c.primary.withValues(alpha: 0.03)
+            : c.border.withValues(alpha: 0.05),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: widget.multiline ? 14 : 0,
+        ),
+        border: idleBorder,
+        enabledBorder: idleBorder,
+        focusedBorder: activeBorder,
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(
+            color: c.error.withValues(alpha: 0.6),
+            width: 1.2,
           ),
-          floatingLabelStyle: TextStyle(
-            color: active ? c.primary : c.textSecondary,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 12, right: 8),
-            child: Icon(
-              widget.icon,
-              size: 17,
-              color: active
-                  ? c.primary
-                  : c.textSecondary.withValues(alpha: 0.5),
-            ),
-          ),
-          prefixIconConstraints: const BoxConstraints(
-            minWidth: 0,
-            minHeight: 0,
-          ),
-          filled: true,
-          fillColor: active
-              ? c.primary.withValues(alpha: 0.03)
-              : c.border.withValues(alpha: 0.05),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: widget.multiline ? 14 : 0,
-          ),
-          border: idleBorder,
-          enabledBorder: idleBorder,
-          focusedBorder: activeBorder,
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(
-              color: c.error.withValues(alpha: 0.6),
-              width: 1.2,
-            ),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.error, width: 1.5),
-          ),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: BorderSide(color: c.error, width: 1.5),
         ),
       ),
     );
