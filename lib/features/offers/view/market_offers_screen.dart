@@ -11,6 +11,8 @@ import 'package:next_fi/features/price_chart/view_model/price_chart_vm.dart';
 import 'package:next_fi/reusable_view_model/asset_vm.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 import 'package:next_fi/reusable_view_model/currency_vm.dart';
+import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
+import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
 import 'package:next_fi/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/services/offers/models/offers_models.dart';
 import 'package:next_fi/services/offers/offers_core_service.dart';
@@ -137,6 +139,7 @@ class MarketOffersScreen extends StatefulWidget {
 class _MarketOffersScreenState extends State<MarketOffersScreen>
     with TickerProviderStateMixin {
   final _offersCore = OffersCoreService.I;
+  final _paymentCore = PaymentMethodAndAccountsCoreService.I;
 
   late final AssetVM _assetVm;
   late final PriceChartVM _xlmPriceVm;
@@ -147,6 +150,8 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   String? _error;
   OfferType _selectedType = OfferType.buy;
   List<OfferModel> _offers = const [];
+  List<PaymentMethodModel> _paymentMethods = const [];
+  _MarketOfferFilters _filters = const _MarketOfferFilters();
 
   SeedKeypairVM? _seedVm;
   StellarWalletServices? _stellarSvc;
@@ -254,9 +259,11 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     });
     try {
       final hasUsdc = await _activeAddressHasUsdcTrustline();
+      final paymentMethods = await _paymentCore.listPaymentMethods(
+        activeOnly: true,
+      );
       final offers = await _offersCore.listPublic(
-        query: OffersListQuery(
-            type: _selectedType, page: '1', limit: '50'),
+        query: _filters.toQuery(type: _selectedType),
       );
       final filtered = offers.where((o) {
         final asset = o.asset.trim().toUpperCase();
@@ -264,6 +271,7 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
       }).toList();
       if (!mounted) return;
       setState(() {
+        _paymentMethods = paymentMethods;
         _offers = filtered;
         _loading = false;
       });
@@ -288,6 +296,273 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     HapticFeedback.selectionClick();
     setState(() => _selectedType = type);
     _load();
+  }
+
+  Future<void> _openFilters() async {
+    final qCtrl = TextEditingController(text: _filters.q ?? '');
+    final fiatCtrl = TextEditingController(text: _filters.fiatCurrency ?? '');
+    final amountCtrl = TextEditingController(text: _filters.amount ?? '');
+    final minAmountCtrl = TextEditingController(text: _filters.minAmount ?? '');
+    final maxAmountCtrl = TextEditingController(text: _filters.maxAmount ?? '');
+    final sellerCtrl = TextEditingController(text: _filters.sellerId ?? '');
+    final receiverCtrl = TextEditingController(
+      text: _filters.receiverStellarAddress ?? '',
+    );
+    var nextFilters = _filters;
+
+    final result = await showModalBottomSheet<_MarketOfferFilters>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColor.of(context).surface,
+      builder: (ctx) {
+        final c = AppColor.of(ctx);
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            Widget gap() => const SizedBox(height: 12);
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                18,
+                20,
+                MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Marketplace Filters',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Applies the `/offers` filters from the backend module spec.',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    gap(),
+                    _FilterTextField(
+                      controller: qCtrl,
+                      label: 'Search',
+                      hint: 'Asset, fiat, seller name, email',
+                      c: c,
+                    ),
+                    gap(),
+                    _ChoiceRow<String>(
+                      label: 'Asset',
+                      value: nextFilters.asset,
+                      options: const ['XLM', 'USDC'],
+                      labelBuilder: (v) => v,
+                      onChanged: (value) {
+                        setModal(() {
+                          nextFilters = nextFilters.copyWith(asset: value);
+                        });
+                      },
+                      c: c,
+                    ),
+                    gap(),
+                    _FilterTextField(
+                      controller: fiatCtrl,
+                      label: 'Fiat Currency',
+                      hint: 'PHP, USD, SGD',
+                      textCapitalization: TextCapitalization.characters,
+                      c: c,
+                    ),
+                    gap(),
+                    _FilterTextField(
+                      controller: amountCtrl,
+                      label: 'Amount',
+                      hint: 'Match offers where min <= amount <= max',
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      c: c,
+                    ),
+                    gap(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _FilterTextField(
+                            controller: minAmountCtrl,
+                            label: 'Min Amount',
+                            hint: 'Range overlap min',
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            c: c,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _FilterTextField(
+                            controller: maxAmountCtrl,
+                            label: 'Max Amount',
+                            hint: 'Range overlap max',
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            c: c,
+                          ),
+                        ),
+                      ],
+                    ),
+                    gap(),
+                    _DropdownField<String?>(
+                      label: 'Payment Method',
+                      value: nextFilters.paymentMethodId,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All payment methods'),
+                        ),
+                        ..._paymentMethods.map(
+                          (method) => DropdownMenuItem<String?>(
+                            value: method.id,
+                            child: Text(method.name),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setModal(() {
+                          nextFilters =
+                              nextFilters.copyWith(paymentMethodId: value);
+                        });
+                      },
+                      c: c,
+                    ),
+                    gap(),
+                    _DropdownField<OfferSortBy?>(
+                      label: 'Sort By',
+                      value: nextFilters.sortBy,
+                      items: [
+                        const DropdownMenuItem<OfferSortBy?>(
+                          value: null,
+                          child: Text('Backend default'),
+                        ),
+                        ...OfferSortBy.values.map(
+                          (sort) => DropdownMenuItem<OfferSortBy?>(
+                            value: sort,
+                            child: Text(_sortLabel(sort)),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setModal(() {
+                          nextFilters = nextFilters.copyWith(sortBy: value);
+                        });
+                      },
+                      c: c,
+                    ),
+                    gap(),
+                    _ChoiceRow<OfferSortOrder>(
+                      label: 'Sort Order',
+                      value: nextFilters.sortOrder,
+                      options: OfferSortOrder.values,
+                      labelBuilder: (v) => v.name.toUpperCase(),
+                      onChanged: (value) {
+                        setModal(() {
+                          nextFilters = nextFilters.copyWith(sortOrder: value);
+                        });
+                      },
+                      c: c,
+                    ),
+                    gap(),
+                    _FilterTextField(
+                      controller: sellerCtrl,
+                      label: 'Seller ID',
+                      hint: 'Optional exact seller filter',
+                      c: c,
+                    ),
+                    gap(),
+                    _FilterTextField(
+                      controller: receiverCtrl,
+                      label: 'Receiver Stellar Address',
+                      hint: 'Optional exact receiver address',
+                      c: c,
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(ctx).pop(
+                                const _MarketOfferFilters(),
+                              );
+                            },
+                            child: const Text('Reset'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(ctx).pop(
+                                nextFilters.copyWith(
+                                  q: qCtrl.text.trim(),
+                                  fiatCurrency: fiatCtrl.text.trim(),
+                                  amount: amountCtrl.text.trim(),
+                                  minAmount: minAmountCtrl.text.trim(),
+                                  maxAmount: maxAmountCtrl.text.trim(),
+                                  sellerId: sellerCtrl.text.trim(),
+                                  receiverStellarAddress:
+                                      receiverCtrl.text.trim(),
+                                ).normalized(),
+                              );
+                            },
+                            child: const Text('Apply Filters'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    qCtrl.dispose();
+    fiatCtrl.dispose();
+    amountCtrl.dispose();
+    minAmountCtrl.dispose();
+    maxAmountCtrl.dispose();
+    sellerCtrl.dispose();
+    receiverCtrl.dispose();
+
+    if (result == null || result == _filters) return;
+    setState(() => _filters = result);
+    _load();
+  }
+
+  String _sortLabel(OfferSortBy sort) {
+    switch (sort) {
+      case OfferSortBy.best:
+        return 'Best';
+      case OfferSortBy.newest:
+        return 'Newest';
+      case OfferSortBy.oldest:
+        return 'Oldest';
+      case OfferSortBy.successRate:
+        return 'Success Rate';
+      case OfferSortBy.minAmount:
+        return 'Min Amount';
+      case OfferSortBy.maxAmount:
+        return 'Max Amount';
+      case OfferSortBy.marginPercent:
+        return 'Margin Percent';
+    }
   }
 
   bool _hasTrustedVmRates() {
@@ -405,6 +680,16 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
                 c: c,
                 selected: _selectedType,
                 onChanged: _onTypeChanged,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _FilterBar(
+                c: c,
+                activeCount: _filters.activeCount,
+                summary: _filters.summary(_paymentMethods, _sortLabel),
+                onTap: _openFilters,
               ),
             ),
             if (!_loading && _error == null && _offers.isNotEmpty) ...[
@@ -883,6 +1168,393 @@ class _ToggleTab extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.c,
+    required this.activeCount,
+    required this.summary,
+    required this.onTap,
+  });
+
+  final AppColor c;
+  final int activeCount;
+  final String summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: c.border.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: activeCount > 0
+                    ? c.primary.withValues(alpha: 0.12)
+                    : c.background,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.tune_rounded,
+                color: activeCount > 0 ? c.primary : c.textSecondary,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activeCount > 0
+                        ? 'Filters Applied ($activeCount)'
+                        : 'Marketplace Filters',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.keyboard_arrow_right_rounded,
+              color: c.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterTextField extends StatelessWidget {
+  const _FilterTextField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.c,
+    this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final AppColor c;
+  final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      textCapitalization: textCapitalization,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: c.background,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.primary),
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownField<T> extends StatelessWidget {
+  const _DropdownField({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    required this.c,
+  });
+
+  final String label;
+  final T value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: c.background,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c.border),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChoiceRow<T> extends StatelessWidget {
+  const _ChoiceRow({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.labelBuilder,
+    required this.onChanged,
+    required this.c,
+  });
+
+  final String label;
+  final T? value;
+  final List<T> options;
+  final String Function(T) labelBuilder;
+  final ValueChanged<T> onChanged;
+  final AppColor c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((option) {
+            final active = option == value;
+            return ChoiceChip(
+              label: Text(labelBuilder(option)),
+              selected: active,
+              onSelected: (_) => onChanged(option),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _MarketOfferFilters {
+  final String? q;
+  final String? asset;
+  final String? fiatCurrency;
+  final String? paymentMethodId;
+  final String? amount;
+  final String? minAmount;
+  final String? maxAmount;
+  final String? sellerId;
+  final String? receiverStellarAddress;
+  final OfferSortBy? sortBy;
+  final OfferSortOrder? sortOrder;
+
+  const _MarketOfferFilters({
+    this.q,
+    this.asset,
+    this.fiatCurrency,
+    this.paymentMethodId,
+    this.amount,
+    this.minAmount,
+    this.maxAmount,
+    this.sellerId,
+    this.receiverStellarAddress,
+    this.sortBy,
+    this.sortOrder,
+  });
+
+  _MarketOfferFilters copyWith({
+    String? q,
+    String? asset,
+    String? fiatCurrency,
+    String? paymentMethodId,
+    String? amount,
+    String? minAmount,
+    String? maxAmount,
+    String? sellerId,
+    String? receiverStellarAddress,
+    OfferSortBy? sortBy,
+    OfferSortOrder? sortOrder,
+  }) {
+    return _MarketOfferFilters(
+      q: q ?? this.q,
+      asset: asset ?? this.asset,
+      fiatCurrency: fiatCurrency ?? this.fiatCurrency,
+      paymentMethodId: paymentMethodId ?? this.paymentMethodId,
+      amount: amount ?? this.amount,
+      minAmount: minAmount ?? this.minAmount,
+      maxAmount: maxAmount ?? this.maxAmount,
+      sellerId: sellerId ?? this.sellerId,
+      receiverStellarAddress:
+          receiverStellarAddress ?? this.receiverStellarAddress,
+      sortBy: sortBy ?? this.sortBy,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  _MarketOfferFilters normalized() {
+    String? clean(String? value) {
+      final trimmed = value?.trim();
+      return trimmed == null || trimmed.isEmpty ? null : trimmed;
+    }
+
+    return _MarketOfferFilters(
+      q: clean(q),
+      asset: clean(asset),
+      fiatCurrency: clean(fiatCurrency),
+      paymentMethodId: clean(paymentMethodId),
+      amount: clean(amount),
+      minAmount: clean(minAmount),
+      maxAmount: clean(maxAmount),
+      sellerId: clean(sellerId),
+      receiverStellarAddress: clean(receiverStellarAddress),
+      sortBy: sortBy,
+      sortOrder: sortOrder,
+    );
+  }
+
+  OffersListQuery toQuery({required OfferType type}) => OffersListQuery(
+    type: type,
+    q: q,
+    asset: asset,
+    fiatCurrency: fiatCurrency,
+    paymentMethodId: paymentMethodId,
+    amount: amount,
+    minAmount: minAmount,
+    maxAmount: maxAmount,
+    sellerId: sellerId,
+    receiverStellarAddress: receiverStellarAddress,
+    sortBy: sortBy,
+    sortOrder: sortOrder,
+    page: '1',
+    limit: '50',
+  );
+
+  int get activeCount {
+    var count = 0;
+    if ((q ?? '').isNotEmpty) count++;
+    if ((asset ?? '').isNotEmpty) count++;
+    if ((fiatCurrency ?? '').isNotEmpty) count++;
+    if ((paymentMethodId ?? '').isNotEmpty) count++;
+    if ((amount ?? '').isNotEmpty) count++;
+    if ((minAmount ?? '').isNotEmpty || (maxAmount ?? '').isNotEmpty) count++;
+    if ((sellerId ?? '').isNotEmpty) count++;
+    if ((receiverStellarAddress ?? '').isNotEmpty) count++;
+    if (sortBy != null) count++;
+    if (sortOrder != null) count++;
+    return count;
+  }
+
+  String summary(
+    List<PaymentMethodModel> methods,
+    String Function(OfferSortBy sort) sortLabel,
+  ) {
+    final parts = <String>[];
+    if ((q ?? '').isNotEmpty) parts.add('Search');
+    if ((asset ?? '').isNotEmpty) parts.add(asset!);
+    if ((fiatCurrency ?? '').isNotEmpty) parts.add(fiatCurrency!.toUpperCase());
+    if ((amount ?? '').isNotEmpty) parts.add('Amount $amount');
+    if ((minAmount ?? '').isNotEmpty || (maxAmount ?? '').isNotEmpty) {
+      parts.add('Range');
+    }
+    if ((paymentMethodId ?? '').isNotEmpty) {
+      PaymentMethodModel? method;
+      for (final item in methods) {
+        if (item.id == paymentMethodId) {
+          method = item;
+          break;
+        }
+      }
+      parts.add(method?.name ?? 'Payment method');
+    }
+    if (sortBy != null) parts.add('Sort ${sortLabel(sortBy!)}');
+    if ((sellerId ?? '').isNotEmpty) parts.add('Seller');
+    if ((receiverStellarAddress ?? '').isNotEmpty) parts.add('Receiver');
+    return parts.isEmpty ? 'Search, amount, payment method, sort' : parts.join(' • ');
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _MarketOfferFilters &&
+        other.q == q &&
+        other.asset == asset &&
+        other.fiatCurrency == fiatCurrency &&
+        other.paymentMethodId == paymentMethodId &&
+        other.amount == amount &&
+        other.minAmount == minAmount &&
+        other.maxAmount == maxAmount &&
+        other.sellerId == sellerId &&
+        other.receiverStellarAddress == receiverStellarAddress &&
+        other.sortBy == sortBy &&
+        other.sortOrder == sortOrder;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    q,
+    asset,
+    fiatCurrency,
+    paymentMethodId,
+    amount,
+    minAmount,
+    maxAmount,
+    sellerId,
+    receiverStellarAddress,
+    sortBy,
+    sortOrder,
   );
 }
 

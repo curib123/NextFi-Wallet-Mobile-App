@@ -8,6 +8,7 @@ import 'package:next_fi/common/components/modal/verification_result_modal.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_dtos.dart';
 import 'package:next_fi/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/services/wallet/wallet_manager.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN
@@ -27,6 +28,7 @@ class PaymentAccountSetupScreen extends StatefulWidget {
 class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
     with SingleTickerProviderStateMixin {
   final _paymentCore = PaymentMethodAndAccountsCoreService.I;
+  final _walletManager = WalletManager.I;
 
   final _accountNameCtrl = TextEditingController();
   final _accountNoCtrl = TextEditingController();
@@ -43,6 +45,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
   List<_AccountItem> _accounts = const [];
   PaymentMethodModel? _selectedMethod;
   String? _activeAccountId;
+  String? _activeWalletAddress;
 
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
@@ -79,13 +82,25 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       final methods = await _paymentCore.listPaymentMethods(activeOnly: true);
       final raw = await _paymentCore.listMyPaymentAccounts();
       final accounts = raw.map(_AccountItem.fromUser).toList();
+      final activeWalletAddress = await _walletManager.getActiveWalletAddress();
 
       if (!mounted) return;
       setState(() {
         _methods = methods;
         _accounts = accounts;
         _selectedMethod = methods.isNotEmpty ? methods.first : null;
-        _activeAccountId = accounts.firstWhereOrNull((a) => a.isActive)?.id;
+        _activeAccountId = (() {
+          for (final account in accounts) {
+            if (account.isActive) return account.id;
+          }
+          return null;
+        })();
+        _activeWalletAddress = activeWalletAddress?.trim();
+        if (_assetReceiverCtrl.text.trim().isEmpty &&
+            activeWalletAddress != null &&
+            activeWalletAddress.trim().isNotEmpty) {
+          _assetReceiverCtrl.text = activeWalletAddress.trim();
+        }
         _loading = false;
       });
       _fadeCtrl.forward(from: 0);
@@ -110,15 +125,24 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       );
       return;
     }
-    final accountName = _accountNameCtrl.text.trim();
-    if (accountName.isEmpty) {
+    _seedAssetReceiverFromActiveWallet();
+
+    final validationError = _validateAccountFields(
+      accountName: _accountNameCtrl.text,
+      accountNo: _accountNoCtrl.text,
+      label: _labelCtrl.text,
+      assetReceiverAddress: _assetReceiverCtrl.text,
+      instructions: _isMerchant ? _instructionsCtrl.text : null,
+    );
+    if (validationError != null) {
       _showAlert(
         AppAlertType.warning,
-        title: 'Missing Account Name',
-        subtitle: 'Account name is required.',
+        title: validationError.$1,
+        subtitle: validationError.$2,
       );
       return;
     }
+    final accountName = _accountNameCtrl.text.trim();
 
     HapticFeedback.mediumImpact();
     setState(() => _saving = true);
@@ -127,16 +151,10 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
         CreateUserPaymentAccountRequest(
           paymentMethodId: method.id,
           accountName: accountName,
-          accountNo: _accountNoCtrl.text.trim().isEmpty
-              ? null
-              : _accountNoCtrl.text.trim(),
-          label: _labelCtrl.text.trim().isEmpty ? null : _labelCtrl.text.trim(),
-          assetReceiverAddress: _assetReceiverCtrl.text.trim().isEmpty
-              ? null
-              : _assetReceiverCtrl.text.trim(),
-          instructions: _instructionsCtrl.text.trim().isEmpty
-              ? null
-              : _instructionsCtrl.text.trim(),
+          accountNo: _accountNoCtrl.text.trim(),
+          label: _labelCtrl.text.trim(),
+          assetReceiverAddress: _assetReceiverCtrl.text.trim(),
+          instructions: _instructionsCtrl.text.trim(),
           isActive: _setAsActive,
         ),
       );
@@ -199,172 +217,27 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       subtitle: 'Update details for ${account.accountName}.',
       primaryText: 'Continue',
       barrierDismissible: true,
-      onPrimary: () => _openEditAccountSheet(account),
+      onPrimary: () {
+        Navigator.of(context, rootNavigator: true).maybePop();
+        Future<void>.microtask(() => _openEditAccountSheet(account));
+      },
     );
   }
 
   Future<void> _openEditAccountSheet(_AccountItem account) async {
-    final accountNameCtrl = TextEditingController(text: account.accountName);
-    final accountNoCtrl = TextEditingController(text: account.accountNo ?? '');
-    final labelCtrl = TextEditingController(text: account.label ?? '');
-    final assetReceiverCtrl = TextEditingController(
-      text: account.assetReceiverAddress ?? '',
-    );
-    final instructionsCtrl = TextEditingController(
-      text: account.instructions ?? '',
-    );
-
-    bool saving = false;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColor.of(context).surface,
-      builder: (ctx) {
-        final c = AppColor.of(ctx);
-        return StatefulBuilder(
-          builder: (ctx, setModal) {
-            final bottom = MediaQuery.of(ctx).viewInsets.bottom;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Edit Payment Account',
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _FocusField(
-                      controller: accountNameCtrl,
-                      label: 'Account Name',
-                      hint: 'Required',
-                      icon: Icons.person_outline_rounded,
-                      required: true,
-                      action: TextInputAction.next,
-                      c: c,
-                    ),
-                    const SizedBox(height: 10),
-                    _FocusField(
-                      controller: accountNoCtrl,
-                      label: 'Account Number',
-                      hint: 'Optional',
-                      icon: Icons.tag_rounded,
-                      action: TextInputAction.next,
-                      c: c,
-                    ),
-                    const SizedBox(height: 10),
-                    _FocusField(
-                      controller: labelCtrl,
-                      label: 'Label',
-                      hint: 'Optional',
-                      icon: Icons.label_outline_rounded,
-                      action: TextInputAction.next,
-                      c: c,
-                    ),
-                    const SizedBox(height: 10),
-                    _FocusField(
-                      controller: assetReceiverCtrl,
-                      label: 'Asset Receiver Address',
-                      hint: 'Optional',
-                      icon: Icons.account_balance_wallet_outlined,
-                      action: _isMerchant
-                          ? TextInputAction.next
-                          : TextInputAction.done,
-                      c: c,
-                    ),
-                    if (_isMerchant) ...[
-                      const SizedBox(height: 10),
-                      _FocusField(
-                        controller: instructionsCtrl,
-                        label: 'Instructions',
-                        hint: 'Optional',
-                        icon: Icons.receipt_long_outlined,
-                        action: TextInputAction.done,
-                        multiline: true,
-                        c: c,
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    ElevatedButton(
-                      onPressed: saving
-                          ? null
-                          : () async {
-                              final accountName = accountNameCtrl.text.trim();
-                              if (accountName.isEmpty) {
-                                _showAlert(
-                                  AppAlertType.warning,
-                                  title: 'Missing Account Name',
-                                  subtitle: 'Account name is required.',
-                                );
-                                return;
-                              }
-                              setModal(() => saving = true);
-                              try {
-                                await _paymentCore.updateMyPaymentAccount(
-                                  account.id,
-                                  UpdateUserPaymentAccountRequest(
-                                    accountName: accountName,
-                                    accountNo: accountNoCtrl.text.trim().isEmpty
-                                        ? null
-                                        : accountNoCtrl.text.trim(),
-                                    label: labelCtrl.text.trim().isEmpty
-                                        ? null
-                                        : labelCtrl.text.trim(),
-                                    assetReceiverAddress:
-                                        assetReceiverCtrl.text.trim().isEmpty
-                                        ? null
-                                        : assetReceiverCtrl.text.trim(),
-                                    instructions:
-                                        instructionsCtrl.text.trim().isEmpty
-                                        ? null
-                                        : instructionsCtrl.text.trim(),
-                                  ),
-                                );
-                                if (!ctx.mounted) return;
-                                Navigator.of(ctx).pop(true);
-                              } catch (e) {
-                                if (!ctx.mounted) return;
-                                _showAlert(
-                                  AppAlertType.error,
-                                  title: 'Update Failed',
-                                  subtitle: e.toString(),
-                                );
-                                setModal(() => saving = false);
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: c.primary,
-                        foregroundColor: c.onPrimary,
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        saving ? 'Saving...' : 'Save Changes',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (ctx) => _EditPaymentAccountSheet(
+        account: account,
+        isMerchant: _isMerchant,
+        activeWalletAddress: _activeWalletAddress,
+        paymentCore: _paymentCore,
+        validateAccountFields: _validateAccountFields,
+        showAlert: _showAlert,
+      ),
     );
-
-    accountNameCtrl.dispose();
-    accountNoCtrl.dispose();
-    labelCtrl.dispose();
-    assetReceiverCtrl.dispose();
-    instructionsCtrl.dispose();
 
     if (saved == true && mounted) {
       await _loadAll();
@@ -533,6 +406,46 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
       ),
     );
   }
+
+  void _seedAssetReceiverFromActiveWallet() {
+    final walletAddress = _activeWalletAddress?.trim();
+    if (_assetReceiverCtrl.text.trim().isEmpty &&
+        walletAddress != null &&
+        walletAddress.isNotEmpty) {
+      _assetReceiverCtrl.text = walletAddress;
+    }
+  }
+
+  (String, String)? _validateAccountFields({
+    required String accountName,
+    required String accountNo,
+    required String label,
+    required String assetReceiverAddress,
+    String? instructions,
+  }) {
+    if (accountName.trim().isEmpty) {
+      return ('Missing Account Name', 'Account name is required.');
+    }
+    if (accountNo.trim().isEmpty) {
+      return ('Missing Account Number', 'Account number is required.');
+    }
+    if (label.trim().isEmpty) {
+      return ('Missing Label', 'Label is required.');
+    }
+    if (assetReceiverAddress.trim().isEmpty) {
+      return (
+        'Missing Asset Receiver Address',
+        'Asset receiver address is required and should point to your active wallet.',
+      );
+    }
+    if (instructions != null && instructions.trim().isEmpty) {
+      return (
+        'Missing Instructions',
+        'Instructions are required so the other party knows how to use this account.',
+      );
+    }
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -542,6 +455,7 @@ class _PaymentAccountSetupScreenState extends State<PaymentAccountSetupScreen>
 
 class _AccountItem {
   final String id;
+  final String paymentMethodId;
   final String accountName;
   final String? accountNo;
   final String? label;
@@ -552,6 +466,7 @@ class _AccountItem {
 
   const _AccountItem({
     required this.id,
+    required this.paymentMethodId,
     required this.accountName,
     this.accountNo,
     this.label,
@@ -563,6 +478,7 @@ class _AccountItem {
 
   factory _AccountItem.fromUser(UserPaymentAccountModel m) => _AccountItem(
     id: m.id,
+    paymentMethodId: m.paymentMethodId,
     accountName: m.accountName,
     accountNo: m.accountNo,
     label: m.label,
@@ -1163,8 +1079,9 @@ class _AccountForm extends StatelessWidget {
         _FocusField(
           controller: accountNoCtrl,
           label: 'Account Number',
-          hint: 'Optional',
+          hint: 'Required',
           icon: Icons.tag_rounded,
+          required: true,
           action: TextInputAction.next,
           c: c,
         ),
@@ -1174,6 +1091,7 @@ class _AccountForm extends StatelessWidget {
           label: 'Label',
           hint: 'e.g. My GCash',
           icon: Icons.label_outline_rounded,
+          required: true,
           action: instructionsCtrl != null
               ? TextInputAction.next
               : TextInputAction.done,
@@ -1183,8 +1101,11 @@ class _AccountForm extends StatelessWidget {
         _FocusField(
           controller: assetReceiverCtrl,
           label: 'Asset Receiver Address',
-          hint: 'Optional Stellar address (G...)',
+          hint: 'Auto-filled from active wallet',
           icon: Icons.account_balance_wallet_outlined,
+          required: true,
+          helper:
+              'Used as the receiving wallet address for crypto settlement. It defaults to your active wallet address.',
           action: instructionsCtrl != null
               ? TextInputAction.next
               : TextInputAction.done,
@@ -1195,8 +1116,11 @@ class _AccountForm extends StatelessWidget {
           _FocusField(
             controller: instructionsCtrl!,
             label: 'Instructions',
-            hint: 'Optional payment instructions for buyers',
+            hint: 'Payment instructions for buyers',
             icon: Icons.receipt_long_outlined,
+            required: true,
+            helper:
+                'Shown to the other party so they know where and how to use this payment account.',
             action: TextInputAction.done,
             multiline: true,
             c: c,
@@ -1291,6 +1215,223 @@ class _AccountList extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _EditPaymentAccountSheet extends StatefulWidget {
+  const _EditPaymentAccountSheet({
+    required this.account,
+    required this.isMerchant,
+    required this.activeWalletAddress,
+    required this.paymentCore,
+    required this.validateAccountFields,
+    required this.showAlert,
+  });
+
+  final _AccountItem account;
+  final bool isMerchant;
+  final String? activeWalletAddress;
+  final PaymentMethodAndAccountsCoreService paymentCore;
+  final (String, String)? Function({
+    required String accountName,
+    required String accountNo,
+    required String label,
+    required String assetReceiverAddress,
+    String? instructions,
+  }) validateAccountFields;
+  final void Function(
+    AppAlertType type, {
+    required String title,
+    String? subtitle,
+  }) showAlert;
+
+  @override
+  State<_EditPaymentAccountSheet> createState() => _EditPaymentAccountSheetState();
+}
+
+class _EditPaymentAccountSheetState extends State<_EditPaymentAccountSheet> {
+  late final TextEditingController _accountNameCtrl;
+  late final TextEditingController _accountNoCtrl;
+  late final TextEditingController _labelCtrl;
+  late final TextEditingController _assetReceiverCtrl;
+  late final TextEditingController _instructionsCtrl;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final account = widget.account;
+    _accountNameCtrl = TextEditingController(text: account.accountName);
+    _accountNoCtrl = TextEditingController(text: account.accountNo ?? '');
+    _labelCtrl = TextEditingController(text: account.label ?? '');
+    _assetReceiverCtrl = TextEditingController(
+      text: (account.assetReceiverAddress?.trim().isNotEmpty ?? false)
+          ? account.assetReceiverAddress!
+          : (widget.activeWalletAddress ?? ''),
+    );
+    _instructionsCtrl = TextEditingController(text: account.instructions ?? '');
+  }
+
+  @override
+  void dispose() {
+    _accountNameCtrl.dispose();
+    _accountNoCtrl.dispose();
+    _labelCtrl.dispose();
+    _assetReceiverCtrl.dispose();
+    _instructionsCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _close([bool? result]) async {
+    FocusScope.of(context).unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  Future<void> _save() async {
+    final validationError = widget.validateAccountFields(
+      accountName: _accountNameCtrl.text,
+      accountNo: _accountNoCtrl.text,
+      label: _labelCtrl.text,
+      assetReceiverAddress: _assetReceiverCtrl.text,
+      instructions: widget.isMerchant ? _instructionsCtrl.text : null,
+    );
+    if (validationError != null) {
+      widget.showAlert(
+        AppAlertType.warning,
+        title: validationError.$1,
+        subtitle: validationError.$2,
+      );
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _saving = true);
+    try {
+      await widget.paymentCore.editMyPaymentAccount(
+        widget.account.id,
+        UpdateUserPaymentAccountRequest(
+          paymentMethodId:
+              widget.account.paymentMethod?.id ?? widget.account.paymentMethodId,
+          accountName: _accountNameCtrl.text.trim(),
+          accountNo: _accountNoCtrl.text.trim(),
+          label: _labelCtrl.text.trim(),
+          assetReceiverAddress: _assetReceiverCtrl.text.trim(),
+          instructions: _instructionsCtrl.text.trim(),
+        ),
+      );
+      if (!mounted) return;
+      await _close(true);
+    } catch (e) {
+      if (!mounted) return;
+      widget.showAlert(
+        AppAlertType.error,
+        title: 'Update Failed',
+        subtitle: e.toString(),
+      );
+      setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit Payment Account',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _FocusField(
+              controller: _accountNameCtrl,
+              label: 'Account Name',
+              hint: 'Required',
+              icon: Icons.person_outline_rounded,
+              required: true,
+              action: TextInputAction.next,
+              c: c,
+            ),
+            const SizedBox(height: 10),
+            _FocusField(
+              controller: _accountNoCtrl,
+              label: 'Account Number',
+              hint: 'Required',
+              icon: Icons.tag_rounded,
+              required: true,
+              action: TextInputAction.next,
+              c: c,
+            ),
+            const SizedBox(height: 10),
+            _FocusField(
+              controller: _labelCtrl,
+              label: 'Label',
+              hint: 'Required',
+              icon: Icons.label_outline_rounded,
+              required: true,
+              action: TextInputAction.next,
+              c: c,
+            ),
+            const SizedBox(height: 10),
+            _FocusField(
+              controller: _assetReceiverCtrl,
+              label: 'Asset Receiver Address',
+              hint: 'Auto-filled from active wallet',
+              icon: Icons.account_balance_wallet_outlined,
+              required: true,
+              helper:
+                  'Used as the receiving wallet address for crypto settlement. It defaults to your active wallet address.',
+              action: widget.isMerchant
+                  ? TextInputAction.next
+                  : TextInputAction.done,
+              c: c,
+            ),
+            if (widget.isMerchant) ...[
+              const SizedBox(height: 10),
+              _FocusField(
+                controller: _instructionsCtrl,
+                label: 'Instructions',
+                hint: 'Required',
+                icon: Icons.receipt_long_outlined,
+                required: true,
+                helper:
+                    'Shown to the other party so they know where and how to use this payment account.',
+                action: TextInputAction.done,
+                multiline: true,
+                c: c,
+              ),
+            ],
+            const SizedBox(height: 14),
+            ElevatedButton(
+              onPressed: _saving ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.primary,
+                foregroundColor: c.onPrimary,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                _saving ? 'Saving...' : 'Save Changes',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1487,6 +1628,7 @@ class _FocusField extends StatefulWidget {
     required this.c,
     this.required = false,
     this.multiline = false,
+    this.helper,
   });
   final TextEditingController controller;
   final String label;
@@ -1496,6 +1638,7 @@ class _FocusField extends StatefulWidget {
   final AppColor c;
   final bool required;
   final bool multiline;
+  final String? helper;
 
   @override
   State<_FocusField> createState() => _FocusFieldState();
@@ -1574,6 +1717,13 @@ class _FocusFieldState extends State<_FocusField> {
           color: active ? c.primary : c.textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
+        ),
+        helperText: widget.helper,
+        helperMaxLines: 3,
+        helperStyle: TextStyle(
+          color: c.textSecondary.withValues(alpha: 0.82),
+          fontSize: 11.5,
+          height: 1.35,
         ),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 12, right: 8),
@@ -1708,12 +1858,3 @@ class _CreateButton extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // EXTENSIONS
 // ─────────────────────────────────────────────────────────────────────────────
-
-extension _IterableX<T> on Iterable<T> {
-  T? firstWhereOrNull(bool Function(T) test) {
-    for (final e in this) {
-      if (test(e)) return e;
-    }
-    return null;
-  }
-}

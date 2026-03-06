@@ -2,6 +2,18 @@ enum OfferType { buy, sell }
 
 enum OfferStatus { active, paused, completed, cancelled }
 
+enum OfferSortBy {
+  best,
+  newest,
+  oldest,
+  successRate,
+  minAmount,
+  maxAmount,
+  marginPercent,
+}
+
+enum OfferSortOrder { asc, desc }
+
 String _normalizeUpper(String value) => value.trim().toUpperCase();
 
 String _offerTypeWire(OfferType value) =>
@@ -19,6 +31,28 @@ String _offerStatusWire(OfferStatus value) {
       return 'CANCELLED';
   }
 }
+
+String _offerSortByWire(OfferSortBy value) {
+  switch (value) {
+    case OfferSortBy.best:
+      return 'best';
+    case OfferSortBy.newest:
+      return 'newest';
+    case OfferSortBy.oldest:
+      return 'oldest';
+    case OfferSortBy.successRate:
+      return 'successRate';
+    case OfferSortBy.minAmount:
+      return 'minAmount';
+    case OfferSortBy.maxAmount:
+      return 'maxAmount';
+    case OfferSortBy.marginPercent:
+      return 'marginPercent';
+  }
+}
+
+String _offerSortOrderWire(OfferSortOrder value) =>
+    value == OfferSortOrder.asc ? 'asc' : 'desc';
 
 List<String> _cleanPaymentMethodIds(List<String> ids) {
   final seen = <String>{};
@@ -41,10 +75,13 @@ class OffersListQuery {
   final String? fiatCurrency;
   final String? sellerId;
   final String? paymentMethodId;
+  final String? amount;
   final String? visibleOnly;
   final String? minAmount;
   final String? maxAmount;
   final String? receiverStellarAddress;
+  final OfferSortBy? sortBy;
+  final OfferSortOrder? sortOrder;
   final String? page;
   final String? limit;
 
@@ -56,10 +93,13 @@ class OffersListQuery {
     this.fiatCurrency,
     this.sellerId,
     this.paymentMethodId,
+    this.amount,
     this.visibleOnly,
     this.minAmount,
     this.maxAmount,
     this.receiverStellarAddress,
+    this.sortBy,
+    this.sortOrder,
     this.page,
     this.limit,
   });
@@ -74,6 +114,7 @@ class OffersListQuery {
     if (sellerId != null && sellerId!.trim().isNotEmpty) 'sellerId': sellerId!.trim(),
     if (paymentMethodId != null && paymentMethodId!.trim().isNotEmpty)
       'paymentMethodId': paymentMethodId!.trim(),
+    if (amount != null && amount!.trim().isNotEmpty) 'amount': amount!.trim(),
     if (visibleOnly != null && visibleOnly!.trim().isNotEmpty)
       'visibleOnly': visibleOnly!.trim(),
     if (minAmount != null && minAmount!.trim().isNotEmpty)
@@ -83,6 +124,8 @@ class OffersListQuery {
     if (receiverStellarAddress != null &&
         receiverStellarAddress!.trim().isNotEmpty)
       'receiverStellarAddress': receiverStellarAddress!.trim(),
+    if (sortBy != null) 'sortBy': _offerSortByWire(sortBy!),
+    if (sortOrder != null) 'sortOrder': _offerSortOrderWire(sortOrder!),
     if (page != null && page!.trim().isNotEmpty) 'page': page!.trim(),
     if (limit != null && limit!.trim().isNotEmpty) 'limit': limit!.trim(),
   };
