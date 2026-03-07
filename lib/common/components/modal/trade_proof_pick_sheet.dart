@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 import 'package:next_fi/common/components/modal/trade_sheet_base.dart';
 
 class TradeProofPickSheet extends StatelessWidget {
@@ -23,7 +23,7 @@ class TradeProofPickSheet extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             forceUpload ? 'Upload Payment Proof' : 'Attach Payment Proof?',
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 16,
               fontWeight: FontWeight.w800,
               color: colors.textPrimary,
@@ -35,7 +35,7 @@ class TradeProofPickSheet extends StatelessWidget {
                 ? 'Upload a screenshot or receipt now.'
                 : 'Optionally attach a screenshot of your payment confirmation.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+            style: AppFonts.sora(fontSize: 13, color: colors.textSecondary),
           ),
           const SizedBox(height: 24),
           GestureDetector(
@@ -58,7 +58,7 @@ class TradeProofPickSheet extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     'Choose from Gallery',
-                    style: GoogleFonts.sora(
+                    style: AppFonts.sora(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: AppColor.of(context).onPrimary,
@@ -83,7 +83,7 @@ class TradeProofPickSheet extends StatelessWidget {
                 child: Center(
                   child: Text(
                     'Skip for Now',
-                    style: GoogleFonts.sora(
+                    style: AppFonts.sora(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: colors.textSecondary,
@@ -98,3 +98,4 @@ class TradeProofPickSheet extends StatelessWidget {
     );
   }
 }
+

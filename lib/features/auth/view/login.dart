@@ -1,11 +1,17 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/loader/page_loader.dart';
 import 'package:next_fi/common/components/modal/login_success_modal.dart';
+import 'package:next_fi/helper/link_opener/link_opener.dart';
 import 'package:next_fi/features/auth/view_model/login_vm.dart';
 import 'package:next_fi/features/wallet_home/view_model/recipient_address_vm.dart';
 import 'package:next_fi/services/oath2.0/models/auth_exception.dart';
+import 'package:http/http.dart' as http;
+import 'package:next_fi/services/base_url/base_url.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
 import 'package:next_fi/services/wallet/wallet_manager.dart';
 import 'package:provider/provider.dart';
@@ -28,9 +34,14 @@ class _LoginScreenState extends State<LoginScreen>
 
   bool _googleLoading = false;
   bool _facebookLoading = false;
+  bool _postLoginLoading = false;
   bool _visible = false;
+  String _termsUrl = '';
+  String _privacyUrl = '';
 
   late final AnimationController _bgCtrl;
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
 
   @override
   void initState() {
@@ -40,6 +51,9 @@ class _LoginScreenState extends State<LoginScreen>
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
+    _termsRecognizer = TapGestureRecognizer()..onTap = _openTerms;
+    _privacyRecognizer = TapGestureRecognizer()..onTap = _openPrivacy;
+    _fetchLegalLinks();
 
     Future.delayed(const Duration(milliseconds: 150), () {
       if (mounted) setState(() => _visible = true);
@@ -48,6 +62,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     _bgCtrl.dispose();
     super.dispose();
   }
@@ -78,13 +94,17 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (!mounted) return;
 
-      setState(() => _googleLoading = false);
-
       if (user != null) {
         HapticFeedback.mediumImpact();
+        setState(() {
+          _googleLoading = false;
+          _postLoginLoading = true;
+        });
         await _autoSyncWalletsAfterLogin();
         await _refreshRecipientAddressBook();
         if (!mounted) return;
+
+        setState(() => _postLoginLoading = false);
 
         // Show success modal
         await showLoginSuccessModal(context, user: user);
@@ -97,11 +117,15 @@ class _LoginScreenState extends State<LoginScreen>
         // Navigate back
         Navigator.pop(context, true);
       } else {
+        setState(() => _googleLoading = false);
         _snack('Login was cancelled or failed');
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _googleLoading = false);
+        setState(() {
+          _googleLoading = false;
+          _postLoginLoading = false;
+        });
         _snack(e.toString());
       }
     }
@@ -118,13 +142,17 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (!mounted) return;
 
-      setState(() => _facebookLoading = false);
-
       if (user != null) {
         HapticFeedback.mediumImpact();
+        setState(() {
+          _facebookLoading = false;
+          _postLoginLoading = true;
+        });
         await _autoSyncWalletsAfterLogin();
         await _refreshRecipientAddressBook();
         if (!mounted) return;
+
+        setState(() => _postLoginLoading = false);
 
         // Show success modal
         await showLoginSuccessModal(context, user: user);
@@ -137,16 +165,23 @@ class _LoginScreenState extends State<LoginScreen>
         // Navigate back
         Navigator.pop(context, true);
       } else {
+        setState(() => _facebookLoading = false);
         _snack('Login was cancelled or failed');
       }
     } on AuthException catch (e) {
       if (mounted) {
-        setState(() => _facebookLoading = false);
+        setState(() {
+          _facebookLoading = false;
+          _postLoginLoading = false;
+        });
         _snack(e.message);
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _facebookLoading = false);
+        setState(() {
+          _facebookLoading = false;
+          _postLoginLoading = false;
+        });
         _snack('Something went wrong');
       }
     }
@@ -183,6 +218,45 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<void> _fetchLegalLinks() async {
+    String base = centralized_baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
+    base = base.replaceFirst(RegExp(r'/$'), '');
+    final fallback = '$base/download';
+
+    try {
+      final res = await http
+          .get(Uri.parse('$base/download/meta'))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body);
+        if (data is Map<String, dynamic>) {
+          final terms = data['termsAndConditionsUrl']?.toString().trim() ?? '';
+          final privacy = data['privacyPolicyUrl']?.toString().trim() ?? '';
+          if (!mounted) return;
+          setState(() {
+            _termsUrl = terms.isNotEmpty ? terms : fallback;
+            _privacyUrl = privacy.isNotEmpty ? privacy : fallback;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      _termsUrl = fallback;
+      _privacyUrl = fallback;
+    });
+  }
+
+  Future<void> _openTerms() async {
+    await LinkOpener.open(context, _termsUrl, fallbackLabel: 'Terms');
+  }
+
+  Future<void> _openPrivacy() async {
+    await LinkOpener.open(context, _privacyUrl, fallbackLabel: 'Privacy');
+  }
+
   // ── Build ────────────────────────────────────────────────────────
 
   @override
@@ -194,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen>
     final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
 
     // ✅ Show loading overlay when any auth is in progress
-    final isLoading = _googleLoading || _facebookLoading;
+    final isLoading = _googleLoading || _facebookLoading || _postLoginLoading;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -271,7 +345,7 @@ class _LoginScreenState extends State<LoginScreen>
                 color: colors.textPrimary.withValues(alpha: 0.5),
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.all(32),
+                    padding: const EdgeInsets.fromLTRB(28, 20, 28, 24),
                     decoration: BoxDecoration(
                       color: colors.surface,
                       borderRadius: BorderRadius.circular(20),
@@ -283,35 +357,12 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ],
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation(colors.primary),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Signing you in...',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: colors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Please wait',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
+                    child: PageLoader(
+                      label: _postLoginLoading
+                          ? 'Preparing your wallet...'
+                          : 'Signing you in...',
+                      color: colors.primary,
+                      size: 7,
                     ),
                   ),
                 ),
@@ -457,6 +508,7 @@ class _LoginScreenState extends State<LoginScreen>
                 color: colors.primary.withValues(alpha: 0.85),
                 fontWeight: FontWeight.w500,
               ),
+              recognizer: _termsRecognizer,
             ),
             const TextSpan(text: ' and '),
             TextSpan(
@@ -465,6 +517,7 @@ class _LoginScreenState extends State<LoginScreen>
                 color: colors.primary.withValues(alpha: 0.85),
                 fontWeight: FontWeight.w500,
               ),
+              recognizer: _privacyRecognizer,
             ),
           ],
         ),

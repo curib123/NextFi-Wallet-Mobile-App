@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
-
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 
 class TradeProofPickResult {
   const TradeProofPickResult({
@@ -101,7 +100,7 @@ class _UploadDisputeEvidenceModalState
                 ),
                 Text(
                   'Upload Files for Support Review',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: colors.textPrimary,
@@ -111,7 +110,7 @@ class _UploadDisputeEvidenceModalState
                 Text(
                   'Choose file type and upload screenshots or photos.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 13,
                     color: colors.textSecondary,
                   ),
@@ -158,7 +157,7 @@ class _UploadDisputeEvidenceModalState
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _error!,
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 11.5,
                         color: colors.error,
                         fontWeight: FontWeight.w600,
@@ -195,7 +194,7 @@ class _UploadDisputeEvidenceModalState
                     ),
                     child: Text(
                       'Close',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: colors.textSecondary,
@@ -240,7 +239,7 @@ class _ProofTypeChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.sora(
+          style: AppFonts.sora(
             fontSize: 12.5,
             fontWeight: FontWeight.w700,
             color: selected ? colors.onPrimary : colors.textSecondary,
@@ -273,10 +272,10 @@ class _ProofField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: TextField(
         controller: controller,
-        style: GoogleFonts.sora(fontSize: 13, color: colors.textPrimary),
+        style: AppFonts.sora(fontSize: 13, color: colors.textPrimary),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: GoogleFonts.sora(
+          hintStyle: AppFonts.sora(
             fontSize: 12.5,
             color: colors.textSecondary,
           ),
@@ -320,7 +319,7 @@ class _SourceOption extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: GoogleFonts.sora(
+              style: AppFonts.sora(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
                 color: colors.textPrimary,
@@ -332,3 +331,4 @@ class _SourceOption extends StatelessWidget {
     );
   }
 }
+

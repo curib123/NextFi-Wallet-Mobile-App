@@ -181,7 +181,7 @@ class SeedPhraseVM extends ChangeNotifier {
       final publicAddress = await _svc.getAccountIdFromMnemonic(phrase);
 
       // Add as a new wallet and make it active (does NOT overwrite existing).
-      await SeedStorage.addWallet(
+      final localId = await SeedStorage.addWallet(
         phrase,
         publicAddress: publicAddress,
         makeActive: true,
@@ -209,8 +209,9 @@ class SeedPhraseVM extends ChangeNotifier {
       }
 
       try {
-        await WalletManager.I.saveAddressIfMissing(
-          publicAddress: publicAddress,
+        await WalletManager.I.ensureLocalWalletSaved(
+          localId: localId,
+          setActiveIfCurrent: true,
         );
       } catch (_) {
         // Best effort: wallet_home_screen will retry auto-save later.

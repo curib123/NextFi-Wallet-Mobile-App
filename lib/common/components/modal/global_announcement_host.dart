@@ -112,10 +112,10 @@ class _GlobalAnnouncementHostState extends State<GlobalAnnouncementHost>
       for (final item in queue) {
         if (!mounted) return;
         if (item.id.isEmpty) continue;
-        if (_shownIds.contains(item.id)) continue;
+        if (_shownIds.contains(item.displayKey)) continue;
         if (item.acknowledged) continue;
 
-        _shownIds.add(item.id);
+        _shownIds.add(item.displayKey);
 
         final forceBlocking =
             item.isForceUpdate ||

@@ -299,6 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 SliverToBoxAdapter(
                   child: SizedBox(height: mq.padding.top + kToolbarHeight),
                 ),
+                const SliverToBoxAdapter(child: SizedBox(height: 6)),
 
                 // Hero
                 SliverToBoxAdapter(
@@ -385,26 +386,40 @@ class _PAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) => AppBar(
-    backgroundColor: c.background.withValues(alpha: 0.94),
+    backgroundColor: c.background.withValues(alpha: 0.90),
     elevation: 0,
     scrolledUnderElevation: 0,
     surfaceTintColor: Colors.transparent,
     centerTitle: false,
     titleSpacing: 20,
-    title: Text('Profile', style: TextStyle(
-      color: c.textPrimary, fontSize: 18,
-      fontWeight: FontWeight.w900, letterSpacing: -0.6,
-    )),
+    title: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Profile', style: TextStyle(
+          color: c.textPrimary, fontSize: 18,
+          fontWeight: FontWeight.w900, letterSpacing: -0.6,
+        )),
+        Text(
+          'Identity, verification, and merchant standing',
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
     actions: [
       GestureDetector(
         onTap: onRefresh,
         child: Container(
           margin: const EdgeInsets.only(right: 16),
-          width: 34, height: 34,
+          width: 38, height: 38,
           decoration: BoxDecoration(
             color: c.surface,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: c.border),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: c.border.withValues(alpha: 0.75)),
           ),
           child: Icon(Icons.refresh_rounded, color: c.textSecondary, size: 16),
         ),
@@ -479,15 +494,15 @@ class _HeroCardState extends State<_HeroCard>
           Container(
             decoration: BoxDecoration(
               color: c.surface,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(26),
               border: Border.all(color: accent.withValues(alpha: 0.20), width: 1.5),
               boxShadow: [BoxShadow(
                 color: accent.withValues(alpha: 0.08),
-                blurRadius: 24, offset: const Offset(0, 8),
+                blurRadius: 28, offset: const Offset(0, 10),
               )],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(21),
+              borderRadius: BorderRadius.circular(25),
               child: Stack(
                 children: [
                   // Gradient wash
@@ -500,8 +515,8 @@ class _HeroCardState extends State<_HeroCard>
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            grad[0].withValues(alpha: 0.13),
-                            grad[1].withValues(alpha: 0.05),
+                            grad[0].withValues(alpha: 0.16),
+                            grad[1].withValues(alpha: 0.06),
                           ],
                         ),
                       ),
@@ -533,10 +548,30 @@ class _HeroCardState extends State<_HeroCard>
                   ),
                   // Content
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                tier != null ? '${_TierMeta.label(tier)} profile' : 'Wallet identity',
+                                style: TextStyle(
+                                  color: accent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -599,11 +634,11 @@ class _HeroCardState extends State<_HeroCard>
           _TapTarget(
             onTap: widget.onEdit,
             child: Container(
-              width: double.infinity, height: 46,
+              width: double.infinity, height: 48,
               decoration: BoxDecoration(
                 color: c.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: c.border),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: c.border.withValues(alpha: 0.75)),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.edit_outlined, size: 14, color: c.textSecondary),
@@ -841,8 +876,8 @@ class _BigStat extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withValues(alpha: 0.78)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -893,7 +928,16 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 14),
     child: Row(children: [
-      Icon(icon, size: 11, color: c.textSecondary.withValues(alpha: 0.5)),
+      Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: c.border.withValues(alpha: 0.7)),
+        ),
+        child: Icon(icon, size: 11, color: c.textSecondary.withValues(alpha: 0.7)),
+      ),
       const SizedBox(width: 6),
       Text(label, style: _T.sectionLabel
           .copyWith(color: c.textSecondary.withValues(alpha: 0.6))),
@@ -925,8 +969,8 @@ class _InfoCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.border.withValues(alpha: 0.78)),
         ),
         child: Column(children: rows.map((r) => _InfoRow(row: r)).toList()),
       ),
@@ -1002,8 +1046,8 @@ class _VerificationCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: c.border.withValues(alpha: 0.78)),
         ),
         child: Column(
           children: [
@@ -1012,7 +1056,7 @@ class _VerificationCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
               decoration: BoxDecoration(
                 color: sc.withValues(alpha: 0.06),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(21)),
                 border: Border(bottom: BorderSide(color: sc.withValues(alpha: 0.12))),
               ),
               child: Row(
@@ -1127,7 +1171,7 @@ class _TierCardState extends State<_TierCard>
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(color: tc.withValues(alpha: 0.22), width: 1.5),
           boxShadow: [BoxShadow(
             color: tc.withValues(alpha: 0.10),

@@ -109,7 +109,7 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen>
 
             // ── Filter Tabs ──────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: _FilterRow(
                 c: c,
                 selected: _activeFilter,
@@ -125,16 +125,29 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen>
             // ── Section Label ─────────────────────────────────────────────
             if (!_loading && _error == null && filteredTrades.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
                 child: Row(
                   children: [
                     Text(
                       '${filteredTrades.length} trade${filteredTrades.length == 1 ? '' : 's'}',
                       style: TextStyle(
                         color: c.textSecondary,
-                        fontSize: 12,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _activeFilter == true
+                          ? 'Needs attention'
+                          : _activeFilter == false
+                              ? 'Archived'
+                              : 'Recent activity',
+                      style: TextStyle(
+                        color: c.textSecondary.withValues(alpha: 0.7),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -153,7 +166,7 @@ class _MerchantTradesScreenState extends State<MerchantTradesScreen>
                 child: filteredTrades.isEmpty
                     ? _EmptyState(c: c, filter: _activeFilter)
                     : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                   itemCount: filteredTrades.length,
                   itemBuilder: (_, i) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -184,7 +197,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
       child: Row(
         children: [
           // Back button — only shown when there's a route to pop
@@ -201,22 +214,40 @@ class _Header extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: c.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: c.primary.withValues(alpha: 0.12)),
+                  ),
+                  child: Text(
+                    'MERCHANT DESK',
+                    style: TextStyle(
+                      color: c.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Text(
                   'Trades',
                   style: TextStyle(
                     color: c.textPrimary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 26,
+                    fontSize: 24,
                     letterSpacing: -0.8,
                     height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
-                  'Your merchant activity',
+                  'Manage buyer requests and order flow',
                   style: TextStyle(
                     color: c.textSecondary,
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w400,
                     letterSpacing: -0.1,
                   ),
@@ -245,12 +276,19 @@ class _IconBtn extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 38,
-      height: 38,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: c.border.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: c.textPrimary.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Icon(icon, size: 17, color: c.textSecondary),
     ),
@@ -275,19 +313,26 @@ class _SummaryStrip extends StatelessWidget {
     final currency = trades.isNotEmpty ? trades.first.fiatCurrency : '';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: c.border.withValues(alpha: 0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: c.textPrimary.withValues(alpha: 0.04),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            _StatCell(c: c, label: 'Active', value: '$active', accent: c.warning),
+            _StatCell(c: c, label: 'Open', value: '$active', accent: c.warning),
             _VSep(c: c),
-            _StatCell(c: c, label: 'Done', value: '$completed', accent: c.success),
+            _StatCell(c: c, label: 'Settled', value: '$completed', accent: c.success),
             _VSep(c: c),
             _StatCell(
               c: c,
@@ -314,14 +359,14 @@ class _StatCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
     child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 11),
       child: Column(
         children: [
           Text(
             value,
             style: TextStyle(
               color: accent,
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
               height: 1,
@@ -332,7 +377,7 @@ class _StatCell extends StatelessWidget {
             label,
             style: TextStyle(
               color: c.textSecondary,
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: FontWeight.w500,
               letterSpacing: 0.2,
             ),
@@ -370,11 +415,11 @@ class _FilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 40,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(13),
         border: Border.all(color: c.border.withValues(alpha: 0.2)),
       ),
       child: Row(
@@ -417,9 +462,9 @@ class _FilterChip extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? c.primary : c.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: active
-              ? [BoxShadow(color: c.primary.withValues(alpha: 0.2), blurRadius: 6, offset: const Offset(0, 2))]
+              ? [BoxShadow(color: c.primary.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))]
               : null,
         ),
         child: Row(
@@ -430,7 +475,7 @@ class _FilterChip extends StatelessWidget {
               label,
               style: TextStyle(
                 color: active ? c.onPrimary : c.textSecondary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 fontSize: 12,
                 letterSpacing: -0.2,
               ),
@@ -502,16 +547,23 @@ class _TradeTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 13),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isActive
                 ? meta.color.withValues(alpha: 0.3)
                 : c.border.withValues(alpha: 0.18),
             width: isActive ? 1.5 : 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: c.textPrimary.withValues(alpha: 0.035),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -521,7 +573,7 @@ class _TradeTile extends StatelessWidget {
               children: [
                 // Asset pill
                 _AssetBadge(c: c, asset: trade.asset),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
 
                 // Pair + time
                 Expanded(
@@ -533,18 +585,18 @@ class _TradeTile extends StatelessWidget {
                         style: TextStyle(
                           color: c.textPrimary,
                           fontWeight: FontWeight.w700,
-                          fontSize: 14.5,
+                          fontSize: 14,
                           letterSpacing: -0.4,
                           height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         _timeAgo(trade.createdAt),
                         style: TextStyle(
                           color: c.textSecondary,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -556,14 +608,14 @@ class _TradeTile extends StatelessWidget {
               ],
             ),
 
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
 
             // ── Amounts Row ─────────────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: c.background,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: c.border.withValues(alpha: 0.12)),
               ),
               child: Row(
@@ -604,27 +656,46 @@ class _TradeTile extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 11),
 
-            // ── Footer Row ──────────────────────────────────────────────────
             Row(
               children: [
-                Text(
-                  _shortId(trade.id),
-                  style: TextStyle(
-                    color: c.textSecondary.withValues(alpha: 0.45),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.3,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: c.background,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: c.border.withValues(alpha: 0.14)),
+                  ),
+                  child: Text(
+                    _shortId(trade.id),
+                    style: TextStyle(
+                      color: c.textSecondary.withValues(alpha: 0.6),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isActive ? 'In progress' : 'Closed trade',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.textSecondary.withValues(alpha: 0.75),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
                 Text(
                   'View details',
                   style: TextStyle(
                     color: c.primary,
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.1,
                   ),
@@ -666,8 +737,8 @@ class _AssetBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = asset.length > 4 ? asset.substring(0, 4) : asset;
     return Container(
-      width: 42,
-      height: 42,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -677,7 +748,7 @@ class _AssetBadge extends StatelessWidget {
             c.primary.withValues(alpha: 0.05),
           ],
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(13),
         border: Border.all(color: c.primary.withValues(alpha: 0.15)),
       ),
       child: Center(
@@ -686,7 +757,7 @@ class _AssetBadge extends StatelessWidget {
           style: TextStyle(
             color: c.primary,
             fontWeight: FontWeight.w800,
-            fontSize: label.length > 3 ? 9.5 : 11,
+            fontSize: label.length > 3 ? 9 : 10.5,
             letterSpacing: 0.2,
           ),
         ),
@@ -705,7 +776,7 @@ class _StatusBadge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
       color: meta.color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(999),
       border: Border.all(color: meta.color.withValues(alpha: 0.2)),
     ),
     child: Row(
@@ -721,7 +792,7 @@ class _StatusBadge extends StatelessWidget {
           meta.label,
           style: TextStyle(
             color: meta.color,
-            fontSize: 11,
+            fontSize: 10.5,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.1,
           ),
@@ -755,7 +826,7 @@ class _AmountBlock extends StatelessWidget {
         label,
         style: TextStyle(
           color: c.textSecondary,
-          fontSize: 10,
+          fontSize: 9.5,
           fontWeight: FontWeight.w500,
           letterSpacing: 0.3,
         ),
@@ -768,7 +839,7 @@ class _AmountBlock extends StatelessWidget {
               text: value,
               style: TextStyle(
                 color: valueColor,
-                fontSize: 14,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -778,7 +849,7 @@ class _AmountBlock extends StatelessWidget {
               text: '  $unit',
               style: TextStyle(
                 color: valueColor.withValues(alpha: 0.6),
-                fontSize: 10.5,
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),
             ),

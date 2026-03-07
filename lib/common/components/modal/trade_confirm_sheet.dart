@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 import 'package:next_fi/common/components/modal/trade_sheet_base.dart';
 
 class TradeConfirmSheet extends StatelessWidget {
@@ -29,7 +29,7 @@ class TradeConfirmSheet extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 17,
               fontWeight: FontWeight.w800,
               color: colors.textPrimary,
@@ -39,7 +39,7 @@ class TradeConfirmSheet extends StatelessWidget {
           Text(
             body,
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 13.5,
               color: colors.textSecondary,
               height: 1.5,
@@ -61,7 +61,7 @@ class TradeConfirmSheet extends StatelessWidget {
                     child: Center(
                       child: Text(
                         'Go Back',
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: colors.textSecondary,
@@ -84,7 +84,7 @@ class TradeConfirmSheet extends StatelessWidget {
                     child: Center(
                       child: Text(
                         confirmLabel,
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: AppColor.of(context).onPrimary,
@@ -101,3 +101,4 @@ class TradeConfirmSheet extends StatelessWidget {
     );
   }
 }
+

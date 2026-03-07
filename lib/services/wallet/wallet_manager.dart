@@ -273,6 +273,8 @@ class WalletManager {
       final wallet = wallets.firstWhereOrNull((w) => w.localId == localId);
       if (wallet?.backendId != null) {
         await _api.setActive(walletId: wallet!.backendId!);
+      } else {
+        await ensureLocalWalletSaved(localId: localId, setActiveIfCurrent: true);
       }
     } catch (e) {
       print('[WalletManager] Backend setActive failed: $e');
@@ -285,6 +287,43 @@ class WalletManager {
   Future<WalletViewModel?> getActiveWallet() async {
     final wallets = await listWallets();
     return wallets.firstWhereOrNull((w) => w.isActive);
+  }
+
+  /// Ensure a local wallet has a backend record without requiring the switcher
+  /// to open first. This is safe to call repeatedly.
+  Future<WalletAddress?> ensureLocalWalletSaved({
+    String? localId,
+    bool setActiveIfCurrent = true,
+    String network = 'stellar',
+  }) async {
+    final localWallets = await SeedStorage.listWallets();
+    final localMeta = (localId == null || localId.trim().isEmpty)
+        ? await SeedStorage.getActiveWalletMeta()
+        : localWallets.firstWhereOrNull((w) => w.id == localId);
+
+    final publicAddress = localMeta?.publicAddress?.trim();
+    if (localMeta == null || publicAddress == null || publicAddress.isEmpty) {
+      return null;
+    }
+
+    final backendWallet = await saveAddressIfMissing(
+      publicAddress: publicAddress,
+      label: localMeta.name,
+      network: network,
+    );
+
+    if (setActiveIfCurrent) {
+      final activeId = await SeedStorage.getActiveWalletId();
+      if (activeId == localMeta.id) {
+        try {
+          await _api.setActive(walletId: backendWallet.id);
+        } catch (e) {
+          print('[WalletManager] Backend setActive failed after save: $e');
+        }
+      }
+    }
+
+    return backendWallet;
   }
 
   /// Get the active wallet's public address (for escrow/receiver)

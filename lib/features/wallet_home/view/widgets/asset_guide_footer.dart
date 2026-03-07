@@ -3,8 +3,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/announcements/announcements_service.dart';
 
 class AssetGuideFooter extends StatefulWidget {
   const AssetGuideFooter({
@@ -340,8 +342,10 @@ final List<TipBlueprint> _TIP_CATALOG = <TipBlueprint>[
 class _AssetGuideFooterState extends State<AssetGuideFooter> {
   late final math.Random _rng =
   widget.rngSeed == null ? math.Random() : math.Random(widget.rngSeed);
+  final AnnouncementsService _announcementsService = AnnouncementsService();
 
   List<GuideTip> _tips = const [];
+  List<GuideTip> _announcementTips = const [];
   int _index = 0;
 
   Timer? _timer;
@@ -351,6 +355,7 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   void initState() {
     super.initState();
     _assembleTips();
+    _loadAnnouncementTips();
     _startTimer();
   }
 
@@ -376,6 +381,7 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   @override
   void dispose() {
     _timer?.cancel();
+    _announcementsService.dispose();
     super.dispose();
   }
 
@@ -414,20 +420,9 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
       lowXlmThreshold: widget.lowXlmThreshold,
     );
 
-    final List<GuideTip> built = [];
-    for (final bp in _TIP_CATALOG) {
-      if (bp.when == null || bp.when!(ctx)) {
-        // Tag filters
-        if (widget.includeTags.isNotEmpty &&
-            bp.tip.tags.intersection(widget.includeTags).isEmpty) {
-          continue;
-        }
-        if (bp.tip.tags.intersection(widget.excludeTags).isNotEmpty) {
-          continue;
-        }
-        built.add(bp.tip);
-      }
-    }
+    final List<GuideTip> built = _announcementTips.isNotEmpty
+        ? _announcementTips.where(_passesTagFilters).toList()
+        : _catalogTipsFor(ctx);
 
     // Add extras and dedupe by id
     final seen = <String>{};
@@ -445,6 +440,122 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
         _index = _index.clamp(0, _tips.length - 1);
       }
     });
+  }
+
+  Future<void> _loadAnnouncementTips() async {
+    try {
+      final appVersion = (await PackageInfo.fromPlatform()).version;
+      final announcements = await _announcementsService.getActiveForCurrentUser(
+        appVersion: appVersion,
+      );
+      final mapped = announcements
+          .map(_tipFromAnnouncement)
+          .whereType<GuideTip>()
+          .toList(growable: false);
+      if (!mounted) return;
+      _announcementTips = mapped;
+      _assembleTips();
+    } catch (_) {
+      if (!mounted) return;
+      _announcementTips = const [];
+      _assembleTips();
+    }
+  }
+
+  List<GuideTip> _catalogTipsFor(TipContext ctx) {
+    final built = <GuideTip>[];
+    for (final bp in _TIP_CATALOG) {
+      if (bp.when == null || bp.when!(ctx)) {
+        if (_passesTagFilters(bp.tip)) {
+          built.add(bp.tip);
+        }
+      }
+    }
+    return built;
+  }
+
+  bool _passesTagFilters(GuideTip tip) {
+    if (widget.includeTags.isNotEmpty &&
+        tip.tags.intersection(widget.includeTags).isEmpty) {
+      return false;
+    }
+    if (tip.tags.intersection(widget.excludeTags).isNotEmpty) {
+      return false;
+    }
+    return true;
+  }
+
+  GuideTip? _tipFromAnnouncement(AnnouncementItem item) {
+    final title = item.title.trim();
+    final message = item.message.trim();
+    final text = _composeAnnouncementText(title: title, message: message);
+    if (text.isEmpty) return null;
+
+    return GuideTip(
+      id: 'announcement_${item.displayKey}',
+      icon: _iconForAnnouncement(item),
+      text: text,
+      tags: _tagsForAnnouncement(item, text),
+    );
+  }
+
+  String _composeAnnouncementText({
+    required String title,
+    required String message,
+  }) {
+    final safeTitle = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final safeMessage = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (safeTitle.isEmpty) return safeMessage;
+    if (safeMessage.isEmpty) return safeTitle;
+    if (safeMessage.toLowerCase().startsWith(safeTitle.toLowerCase())) {
+      return safeMessage;
+    }
+    return '$safeTitle\n$safeMessage';
+  }
+
+  IconData _iconForAnnouncement(AnnouncementItem item) {
+    switch (item.type) {
+      case AnnouncementType.maintenance:
+        return Icons.build_rounded;
+      case AnnouncementType.update:
+        return Icons.system_update_alt_rounded;
+      case AnnouncementType.announcement:
+        return Icons.campaign_rounded;
+    }
+  }
+
+  Set<String> _tagsForAnnouncement(AnnouncementItem item, String text) {
+    final normalized = text.toLowerCase();
+    final tags = <String>{
+      switch (item.type) {
+        AnnouncementType.maintenance => 'warning',
+        AnnouncementType.update => 'info',
+        AnnouncementType.announcement => 'tip',
+      },
+      'announcement',
+    };
+
+    if (normalized.contains('xlm') || normalized.contains('stellar')) {
+      tags.add('xlm');
+    }
+    if (normalized.contains('usdc')) {
+      tags.add('usdc');
+    }
+    if (normalized.contains('secure') ||
+        normalized.contains('security') ||
+        normalized.contains('scam') ||
+        normalized.contains('phishing')) {
+      tags.add('security');
+    }
+    if (normalized.contains('required') ||
+        normalized.contains('important') ||
+        normalized.contains('urgent')) {
+      tags.add('warning');
+    }
+    if (item.actionUrl != null && item.actionUrl!.trim().isNotEmpty) {
+      tags.add('action');
+    }
+    return tags;
   }
 
   // Accent color heuristic by tags

@@ -261,7 +261,7 @@ class _MenuButtonState extends State<_MenuButton>
                 : widget.colors.border.withValues(alpha: isDark ? 0.08 : 0.05),
           ),
           child: Icon(
-            LucideIcons.menu,
+            Icons.widgets_rounded,
             size: 20,
             color: widget.colors.textPrimary,
           ),

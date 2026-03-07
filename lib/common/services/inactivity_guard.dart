@@ -2,19 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class InactivityGuard extends StatefulWidget {
   const InactivityGuard({
     super.key,
     required this.child,
     this.idleTimeout = const Duration(minutes: 2),
-    this.warningDuration = const Duration(seconds: 20),
   });
 
   final Widget child;
   final Duration idleTimeout;
-  final Duration warningDuration;
 
   @override
   State<InactivityGuard> createState() => _InactivityGuardState();
@@ -23,18 +21,14 @@ class InactivityGuard extends StatefulWidget {
 class _InactivityGuardState extends State<InactivityGuard>
     with WidgetsBindingObserver {
   Timer? _idleTimer;
-  Timer? _warningTimer;
-  AppAlertController? _alertController;
   bool _isWarningVisible = false;
   late DateTime _lastActivityAt;
-  late int _secondsLeft;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _lastActivityAt = DateTime.now();
-    _secondsLeft = widget.warningDuration.inSeconds;
     _scheduleIdleTimer(widget.idleTimeout);
   }
 
@@ -42,9 +36,6 @@ class _InactivityGuardState extends State<InactivityGuard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _idleTimer?.cancel();
-    _warningTimer?.cancel();
-    _alertController?.close();
-    _alertController = null;
     super.dispose();
   }
 
@@ -87,61 +78,46 @@ class _InactivityGuardState extends State<InactivityGuard>
 
   Future<void> _showExitWarningDialog() async {
     _isWarningVisible = true;
-    _secondsLeft = widget.warningDuration.inSeconds;
-    _alertController?.close();
-    _alertController = showAppAlert(
-      context,
-      type: AppAlertType.warning,
-      title: 'Inactive Session',
-      subtitle:
-          'No activity detected. The app will close in $_secondsLeft seconds.',
-      primaryText: 'Cancel',
-      onPrimary: _cancelExit,
+
+    final shouldExit = await showDialog<bool>(
+      context: context,
       barrierDismissible: false,
+      builder: (dialogContext) {
+        final colors = AppColor.of(dialogContext);
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          title: const Text('Inactive Session'),
+          content: const Text(
+            'No activity detected. Exit the app?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
     );
 
-    _warningTimer?.cancel();
-    _warningTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || !_isWarningVisible) {
-        timer.cancel();
-        return;
-      }
-
-      if (_secondsLeft <= 1) {
-        timer.cancel();
-        _exitApp();
-      } else {
-        _secondsLeft -= 1;
-        _alertController?.update(
-          AppAlertType.warning,
-          title: 'Inactive Session',
-          subtitle:
-              'No activity detected. The app will close in $_secondsLeft seconds.',
-          primaryText: 'Cancel',
-          onPrimary: _cancelExit,
-        );
-      }
-    });
-  }
-
-  void _cancelExit() {
-    _warningTimer?.cancel();
-    if (!_isWarningVisible) return;
-
     _isWarningVisible = false;
-    _lastActivityAt = DateTime.now();
-    _alertController?.close();
-    _alertController = null;
+    if (!mounted) return;
 
+    if (shouldExit == true) {
+      _exitApp();
+      return;
+    }
+
+    _lastActivityAt = DateTime.now();
     _scheduleIdleTimer(widget.idleTimeout);
   }
 
   void _exitApp() {
-    _warningTimer?.cancel();
     _isWarningVisible = false;
-    _alertController?.close();
-    _alertController = null;
-
     SystemNavigator.pop();
   }
 

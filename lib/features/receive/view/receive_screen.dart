@@ -42,10 +42,11 @@ class ReceiveScreen extends StatelessWidget {
         initialToken: initialToken,
       ),
       child: Scaffold(
-        backgroundColor: c.surface,
+        backgroundColor: c.background,
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: c.surface,
+          backgroundColor: c.background,
+          surfaceTintColor: Colors.transparent,
           leading: IconButton(
             icon: Icon(LucideIcons.arrowLeft, color: c.textPrimary),
             onPressed: () => Navigator.pop(context),
@@ -63,16 +64,17 @@ class ReceiveScreen extends StatelessWidget {
             // fiat (currency.fiat) is available here if you want to show it alongside chart/balances
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
               children: [
-                TokenSwitch(
-                  xlmSelected: s.xlmSelected,
+                _ReceiveHeroCard(
+                  token: token,
                   onSelectXLM: receiveVM.selectXLM,
                   onSelectUSDC: receiveVM.selectUSDC,
+                  xlmSelected: s.xlmSelected,
                 ),
                 const SizedBox(height: 12),
                 PriceChartCard(
-                  title: token.toUpperCase(),
+                  title: '$token Market',
                   token: token.toUpperCase(),
                 ),
                 const SizedBox(height: 12),
@@ -82,12 +84,20 @@ class ReceiveScreen extends StatelessWidget {
                   onTap: () => showReceiveQrModal(context, s),
                 ),
                 const SizedBox(height: 16),
-
+                _SectionLabel(
+                  title: '$token Wallet Address',
+                  subtitle: 'Use this address to receive on Stellar.',
+                ),
+                const SizedBox(height: 10),
                 AddressRow(address: s.address),
                 const SizedBox(height: 16),
+                _SectionLabel(
+                  title: 'Federation',
+                  subtitle: 'Optional human-readable receive aliases.',
+                ),
+                const SizedBox(height: 10),
                 _buildFederationSection(context, receiveVM),
                 const SizedBox(height: 16),
-
                 SafetyNote(text: receiveVM.safetyNote),
               ],
             );
@@ -345,6 +355,126 @@ class ReceiveScreen extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _ReceiveHeroCard extends StatelessWidget {
+  const _ReceiveHeroCard({
+    required this.token,
+    required this.xlmSelected,
+    required this.onSelectXLM,
+    required this.onSelectUSDC,
+  });
+
+  final String token;
+  final bool xlmSelected;
+  final VoidCallback onSelectXLM;
+  final VoidCallback onSelectUSDC;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            c.surface,
+            c.surface.withValues(alpha: 0.96),
+            c.primary.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: c.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(LucideIcons.qrCode, color: c.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Receive $token',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Share your QR code or wallet address. Network and wallet logic stay unchanged.',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TokenSwitch(
+            xlmSelected: xlmSelected,
+            onSelectXLM: onSelectXLM,
+            onSelectUSDC: onSelectUSDC,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: c.textSecondary,
+            fontSize: 12.5,
+            height: 1.3,
+          ),
+        ),
+      ],
     );
   }
 }

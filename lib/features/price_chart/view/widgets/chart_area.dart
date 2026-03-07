@@ -97,11 +97,17 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
-          stops: const [0.0, 0.4, 1.0],
-          colors: [c.surface, c.surface.withValues(alpha: 0.98), c.surface.withValues(alpha: 0.94)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.45, 1.0],
+          colors: [
+            c.surface.withValues(alpha: 0.98),
+            c.surface.withValues(alpha: 0.95),
+            (widget.positive ? c.primary : c.error).withValues(alpha: 0.035),
+          ],
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.outlineVariant.withValues(alpha: 0.14)),
       ),
       child: LayoutBuilder(
         builder: (ctx, box) {

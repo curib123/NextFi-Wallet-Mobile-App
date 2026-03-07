@@ -132,9 +132,9 @@ class ImportWalletVM extends ChangeNotifier {
       }
 
       try {
-        await WalletManager.I.saveAddressIfMissing(
-          publicAddress: publicAddress,
-          label: 'Imported Wallet',
+        await WalletManager.I.ensureLocalWalletSaved(
+          localId: newId,
+          setActiveIfCurrent: true,
         );
       } catch (_) {
         // Best effort: wallet_home_screen will retry auto-save later.

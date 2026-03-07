@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
 import 'package:next_fi/services/chat/crypto/chat_envelope_codec.dart';
@@ -270,7 +270,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
         children: [
           Text(
             'Trade Chat',
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: colors.textPrimary,
@@ -281,7 +281,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
             widget.trade.id.length > 16
                 ? '${widget.trade.id.substring(0, 12)}…'
                 : widget.trade.id,
-            style: GoogleFonts.sora(fontSize: 9.5, color: colors.textSecondary),
+            style: AppFonts.sora(fontSize: 9.5, color: colors.textSecondary),
           ),
         ],
       ),
@@ -772,7 +772,7 @@ class _MessageBubble extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   _isUploadingProof ? 'Uploading...' : 'Upload failed',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 11,
                     color: isMe
                         ? colors.onPrimary.withValues(alpha: 0.85)
@@ -786,7 +786,7 @@ class _MessageBubble extends StatelessWidget {
             if (_text.isNotEmpty && !hideProofUrlText)
               Text(
                 sanitizedText,
-                style: GoogleFonts.sora(
+                style: AppFonts.sora(
                   fontSize: 12.5,
                   color: isMe ? colors.onPrimary : colors.textPrimary,
                   height: 1.35,
@@ -796,7 +796,7 @@ class _MessageBubble extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               _timeStr,
-              style: GoogleFonts.sora(
+              style: AppFonts.sora(
                 fontSize: 9.5,
                 color: isMe
                     ? colors.onPrimary.withValues(alpha: 0.7)
@@ -844,7 +844,7 @@ class _SystemMessage extends StatelessWidget {
           child: Text(
             text,
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 10, color: colors.textSecondary),
+            style: AppFonts.sora(fontSize: 10, color: colors.textSecondary),
             softWrap: true,
           ),
         ),
@@ -873,7 +873,7 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           'No messages yet',
-          style: GoogleFonts.sora(
+          style: AppFonts.sora(
             fontSize: 14.5,
             fontWeight: FontWeight.w600,
             color: colors.textSecondary,
@@ -882,7 +882,7 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Updates and messages will show up here',
-          style: GoogleFonts.sora(
+          style: AppFonts.sora(
             fontSize: 11.5,
             color: colors.textSecondary.withValues(alpha: 0.7),
           ),
@@ -941,10 +941,10 @@ class _InputBar extends StatelessWidget {
             child: TextField(
               controller: controller,
               enabled: enabled,
-              style: GoogleFonts.sora(fontSize: 13, color: colors.textPrimary),
+              style: AppFonts.sora(fontSize: 13, color: colors.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Write a message…',
-                hintStyle: GoogleFonts.sora(
+                hintStyle: AppFonts.sora(
                   fontSize: 12.5,
                   color: colors.textSecondary,
                 ),
@@ -992,3 +992,4 @@ class _InputBar extends StatelessWidget {
 }
 
 // ─── Proof source picker sheet ────────────────────────────────────────────────
+

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/features/auth_gate/view/widgets/lock_out_banner.dart';
 import 'package:next_fi/features/auth_gate/view_model/auth_gate_vm.dart';
 import 'package:next_fi/features/wallet_creation/view/widgets/fintech_background.dart';
+import 'package:next_fi/services/app_cover/app_cover_service.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
@@ -22,6 +24,8 @@ class _AuthGateScreenState extends State<AuthGateScreen>
   Timer? _smallVisualDelay;
   String _currentPin = '';
   late AuthGateVM _vm;
+  final AppCoverService _appCoverService = AppCoverService();
+  String? _coverImageUrl;
 
   // Animation controllers
   late final AnimationController _bgCtrl = AnimationController(
@@ -46,6 +50,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
     _scaleCtrl.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _loadAppCover();
       await _vm.init();
       if (!mounted) return;
 
@@ -81,6 +86,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
     WidgetsBinding.instance.removeObserver(this);
     _vm.disposeTimers();
     _smallVisualDelay?.cancel();
+    _appCoverService.dispose();
     _bgCtrl.dispose();
     _scaleCtrl.dispose();
     _shakeCtrl.dispose();
@@ -111,6 +117,19 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         Navigator.pushReplacementNamed(context, "/home");
       }
     });
+  }
+
+  Future<void> _loadAppCover() async {
+    try {
+      final config = await _appCoverService.getCurrent();
+      if (!mounted) return;
+      setState(() {
+        _coverImageUrl = config?.hasUsableImage == true ? config!.imageUrl : null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _coverImageUrl = null);
+    }
   }
 
   void _onNumberPressed(String number) {
@@ -207,7 +226,7 @@ class _AuthGateScreenState extends State<AuthGateScreen>
         backgroundColor: colors.background,
         body: Stack(
           children: [
-            // Animated background
+            // Animated fallback background
             Positioned.fill(
               child: IgnorePointer(
                 child: AnimatedBuilder(
@@ -217,6 +236,43 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                     colors: colors,
                     devicePixelRatio: dpr,
                     topBandFraction: .55,
+                  ),
+                ),
+              ),
+            ),
+            if (_coverImageUrl != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CachedNetworkImage(
+                    imageUrl: _coverImageUrl!,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    fadeInDuration: const Duration(milliseconds: 220),
+                    fadeOutDuration: const Duration(milliseconds: 120),
+                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                    placeholder: (_, __) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[
+                        Colors.black.withValues(
+                          alpha: _coverImageUrl != null ? 0.40 : 0.18,
+                        ),
+                        Colors.black.withValues(
+                          alpha: _coverImageUrl != null ? 0.24 : 0.08,
+                        ),
+                        colors.background.withValues(
+                          alpha: _coverImageUrl != null ? 0.68 : 0.16,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

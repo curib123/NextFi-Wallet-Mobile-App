@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/features/settings/view_model/settings_vm.dart';
 import 'package:next_fi/firebase_options.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 import 'package:next_fi/services/device_meta/devices_meta.dart';
 import 'package:next_fi/services/fcm_notification/fcm_notification_core.dart';
 import 'package:next_fi/services/fcm_notification/fcm_bootstrap.dart';
@@ -70,22 +71,6 @@ Future<void> _loadInitialThemeMode() async {
 // ───────────────────────── Currency glyph fallback ─────────────────────────
 // If Sora can't render ₱/₹/฿/﷼ etc, Flutter will fallback to these fonts.
 // IMPORTANT: Font family names MUST match exactly.
-const List<String> _currencyFallback = <String>[
-  // Android
-  'Roboto',
-  // iOS
-  '.SF Pro Text',
-  // Windows
-  'Segoe UI',
-  'Segoe UI Symbol',
-  // Google Noto families (names are important!)
-  'Noto Sans',
-  'Noto Sans Symbols',
-  'Noto Sans Symbols2', // ✅ correct (NO SPACE)
-  // Common unicode fallbacks
-  'Arial Unicode MS',
-  'Arial',
-];
 // ───────────────────────── FCM background handler ─────────────────────────
 // Must be top-level
 @pragma('vm:entry-point')
@@ -395,10 +380,10 @@ class _MyAppState extends State<MyApp> {
             final mq = MediaQuery.of(context);
             return MediaQuery(
               data: mq.copyWith(textScaler: _kClampedTextScaler),
-              child: GlobalAnnouncementHost(
-                child: InactivityGuard(
-                  child: InternetLossGuard(
-                    child: NetworkStatusOverlay(
+              child: NetworkStatusOverlay(
+                child: GlobalAnnouncementHost(
+                  child: InactivityGuard(
+                    child: InternetLossGuard(
                       child: child ?? const SizedBox.shrink(),
                     ),
                   ),
@@ -415,14 +400,12 @@ class _MyAppState extends State<MyApp> {
   final ThemeData _lightTheme = ThemeData(
     useMaterial3: true,
     fontFamily: GoogleFonts
-        .inter()
+        .sora()
         .fontFamily,
     scaffoldBackgroundColor: AppColor.light.background,
     canvasColor: AppColor.light.surface,
-    textTheme: GoogleFonts.interTextTheme().apply(
-        fontFamilyFallback: _currencyFallback),
-    primaryTextTheme: GoogleFonts.interTextTheme().apply(
-        fontFamilyFallback: _currencyFallback),
+    textTheme: AppFonts.soraTextTheme(),
+    primaryTextTheme: AppFonts.soraTextTheme(),
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColor.light.primary,
       surface: AppColor.light.surface,
@@ -433,18 +416,16 @@ class _MyAppState extends State<MyApp> {
   final ThemeData _darkTheme = ThemeData(
     useMaterial3: true,
     fontFamily: GoogleFonts
-        .inter()
+        .sora()
         .fontFamily,
     scaffoldBackgroundColor: AppColor.dark.background,
     canvasColor: AppColor.dark.surface,
-    textTheme: GoogleFonts.interTextTheme(ThemeData
+    textTheme: AppFonts.soraTextTheme(ThemeData
         .dark()
-        .textTheme)
-        .apply(fontFamilyFallback: _currencyFallback),
-    primaryTextTheme: GoogleFonts.interTextTheme(ThemeData
+        .textTheme),
+    primaryTextTheme: AppFonts.soraTextTheme(ThemeData
         .dark()
-        .textTheme)
-        .apply(fontFamilyFallback: _currencyFallback),
+        .textTheme),
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColor.dark.primary,
       surface: AppColor.dark.surface,

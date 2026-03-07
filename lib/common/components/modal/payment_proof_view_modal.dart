@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 
 Future<void> showPaymentProofViewModal(
   BuildContext context, {
@@ -61,7 +61,7 @@ class PaymentProofViewModal extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: colors.textPrimary,
@@ -97,7 +97,7 @@ class PaymentProofViewModal extends StatelessWidget {
                         child: Text(
                           'Image cannot be previewed.',
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 12.5,
                             color: colors.textSecondary,
                           ),
@@ -114,3 +114,4 @@ class PaymentProofViewModal extends StatelessWidget {
     );
   }
 }
+

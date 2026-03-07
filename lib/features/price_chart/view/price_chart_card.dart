@@ -104,10 +104,21 @@ class _PriceChartView extends StatelessWidget {
     String fmtPrice(double v) =>
         NumberFormat.simpleCurrency(name: vm.fiatCode).format(v);
 
-    return Card(
-      elevation: 0,
-      color: c.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.outlineVariant.withValues(alpha: 0.22)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            c.surface,
+            c.surface.withValues(alpha: 0.98),
+            (vm.isUp ? c.primary : c.error).withValues(alpha: 0.035),
+          ],
+        ),
+      ),
       child: Padding(
         padding: pad,
         child: Column(
@@ -127,9 +138,10 @@ class _PriceChartView extends StatelessWidget {
                             child: Text(
                               displayTitle,
                               style: TextStyle(
-                                color: c.onSurface.withValues(alpha: 0.8),
-                                fontWeight: FontWeight.w600,
+                                color: c.onSurface.withValues(alpha: 0.72),
+                                fontWeight: FontWeight.w700,
                                 fontSize: compact ? 12 : 13,
+                                letterSpacing: 0.1,
                               ),
                             ),
                           ),
@@ -144,6 +156,15 @@ class _PriceChartView extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 6),
+                      Text(
+                        'Live market view',
+                        style: TextStyle(
+                          color: c.onSurface.withValues(alpha: 0.48),
+                          fontWeight: FontWeight.w600,
+                          fontSize: compact ? 10.5 : 11,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 250),
                         child: Text(
@@ -151,8 +172,9 @@ class _PriceChartView extends StatelessWidget {
                           key: ValueKey('${vm.token.code}_${shown}_${vm.fiatCode}'),
                           style: TextStyle(
                             fontSize: compact ? 20 : 24,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             color: c.onSurface,
+                            letterSpacing: -0.5,
                           ),
                         ),
                       ),

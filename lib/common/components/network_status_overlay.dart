@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
 /// App-level overlay that wraps the entire widget tree and shows an animated
-/// bottom banner when the device goes offline, then auto-closes on reconnect.
+/// bottom banner while the device is offline, then briefly confirms reconnect.
 class NetworkStatusOverlay extends StatelessWidget {
   const NetworkStatusOverlay({super.key, required this.child});
 
@@ -98,7 +98,7 @@ class _NetworkBanner extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Connection restored. Closing automatically...',
+                          'Connection restored.',
                           style: TextStyle(
                             color: textColor.withValues(alpha: ((204) / 255.0)),
                             fontSize: 11.5,
@@ -124,7 +124,7 @@ class _NetworkBanner extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Waiting to reconnect... Retrying automatically.',
+                          'You are offline. Some wallet data may be unavailable.',
                           style: TextStyle(
                             color: textColor.withValues(alpha: ((178) / 255.0)),
                             fontSize: 11.5,

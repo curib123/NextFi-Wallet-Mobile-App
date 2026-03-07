@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/theme/app_fonts.dart';
 import 'package:next_fi/common/components/modal/payment_proof_view_modal.dart';
 import 'package:next_fi/common/components/modal/trade_confirm_sheet.dart';
 import 'package:next_fi/common/components/modal/trade_proof_pick_sheet.dart';
@@ -58,6 +58,7 @@ IconData _statusIcon(TradeStatus s) => switch (s) {
 String _statusLabel(
   TradeStatus s, {
   required TradeOfferType offerType,
+  required bool isUserSeller,
   required bool isUserEscrowLocker,
   required bool isUserFiatPayer,
   required bool isUserCryptoReceiver,
@@ -1629,7 +1630,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
         children: [
           Text(
             'Trade Room',
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: colors.textPrimary,
@@ -1640,7 +1641,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
             _trade.id.length > 16
                 ? '${_trade.id.substring(0, 12)}…${_trade.id.substring(_trade.id.length - 4)}'
                 : _trade.id,
-            style: GoogleFonts.sora(fontSize: 10, color: colors.textSecondary),
+            style: AppFonts.sora(fontSize: 10, color: colors.textSecondary),
           ),
         ],
       ),
@@ -1702,7 +1703,7 @@ class _HeaderCountdownChip extends StatelessWidget {
               '$label $value',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.sora(
+              style: AppFonts.sora(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 color: colors.textPrimary,
@@ -1779,7 +1780,7 @@ class _ConnectivityBanner extends StatelessWidget {
               children: [
                 Text(
                   'No Connection',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: amber,
@@ -1787,7 +1788,7 @@ class _ConnectivityBanner extends StatelessWidget {
                 ),
                 Text(
                   'Trade is safe. Updates resume when reconnected.',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 10.5,
                     color: colors.textSecondary,
                   ),
@@ -1868,12 +1869,13 @@ class _HeroCard extends StatelessWidget {
                         _statusLabel(
                           trade.status,
                           offerType: trade.offerType,
+                          isUserSeller: isUserSeller,
                           isUserEscrowLocker: isUserEscrowLocker,
                           isUserFiatPayer: isUserFiatPayer,
                           isUserCryptoReceiver: isUserCryptoReceiver,
                           assetCode: trade.asset,
                         ),
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: colors.textPrimary,
@@ -1893,7 +1895,7 @@ class _HeroCard extends StatelessWidget {
                           children: [
                             Text(
                               'ID: ',
-                              style: GoogleFonts.sora(
+                              style: AppFonts.sora(
                                 fontSize: 9,
                                 color: colors.textSecondary,
                               ),
@@ -1902,7 +1904,7 @@ class _HeroCard extends StatelessWidget {
                               trade.id.length > 14
                                   ? '${trade.id.substring(0, 10)}…'
                                   : trade.id,
-                              style: GoogleFonts.sora(
+                              style: AppFonts.sora(
                                 fontSize: 9.5,
                                 color: colors.textSecondary,
                               ),
@@ -1931,7 +1933,7 @@ class _HeroCard extends StatelessWidget {
                   ),
                   child: Text(
                     isBuyingCrypto ? 'BUYING' : 'SELLING',
-                    style: GoogleFonts.sora(
+                    style: AppFonts.sora(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppColor.of(context).onPrimary,
@@ -1956,7 +1958,7 @@ class _HeroCard extends StatelessWidget {
                     children: [
                       Text(
                         isBuyingCrypto ? 'YOU RECEIVE' : 'YOU SEND',
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
                           color: colors.textSecondary,
@@ -1969,7 +1971,7 @@ class _HeroCard extends StatelessWidget {
                         children: [
                           Text(
                             trade.cryptoAmount.toStringAsFixed(4),
-                            style: GoogleFonts.sora(
+                            style: AppFonts.sora(
                               fontSize: 24,
                               fontWeight: FontWeight.w700,
                               color: colors.textPrimary,
@@ -1981,7 +1983,7 @@ class _HeroCard extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: 3),
                             child: Text(
                               trade.asset,
-                              style: GoogleFonts.sora(
+                              style: AppFonts.sora(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: colors.textSecondary,
@@ -1999,7 +2001,7 @@ class _HeroCard extends StatelessWidget {
                   children: [
                     Text(
                       isBuyingCrypto ? 'YOU PAY' : 'YOU RECEIVE',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w700,
                         color: colors.textSecondary,
@@ -2009,7 +2011,7 @@ class _HeroCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       trade.fiatAmount.toStringAsFixed(2),
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: colors.textPrimary,
@@ -2017,7 +2019,7 @@ class _HeroCard extends StatelessWidget {
                     ),
                     Text(
                       trade.fiatCurrency.toUpperCase(),
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                         color: colors.textSecondary,
@@ -2108,7 +2110,7 @@ class _EscrowSenderCard extends StatelessWidget {
                     children: [
                       Text(
                         'Your Action Required',
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: colors.textPrimary,
@@ -2116,7 +2118,7 @@ class _EscrowSenderCard extends StatelessWidget {
                       ),
                       Text(
                         headerSubtitle,
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 11,
                           color: colors.textSecondary,
                         ),
@@ -2135,7 +2137,7 @@ class _EscrowSenderCard extends StatelessWidget {
                   ),
                   child: Text(
                     badgeLabel,
-                    style: GoogleFonts.sora(
+                    style: AppFonts.sora(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: AppColor.of(context).onPrimary,
@@ -2191,7 +2193,7 @@ class _EscrowSenderCard extends StatelessWidget {
                           const SizedBox(width: 6),
                           Text(
                             'Your Active Wallet Balance',
-                            style: GoogleFonts.sora(
+                            style: AppFonts.sora(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                               color: colors.textSecondary,
@@ -2213,7 +2215,7 @@ class _EscrowSenderCard extends StatelessWidget {
                       if (hasBalance)
                         Text(
                           '${activeBalance!.toStringAsFixed(6)} ${trade.asset.toUpperCase()}',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: balanceAccent,
@@ -2222,7 +2224,7 @@ class _EscrowSenderCard extends StatelessWidget {
                       else if (balanceError != null && balanceError!.isNotEmpty)
                         Text(
                           'Unable to fetch live balance.',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 12,
                             color: colors.error,
                           ),
@@ -2230,7 +2232,7 @@ class _EscrowSenderCard extends StatelessWidget {
                       else
                         Text(
                           'Fetching live balance...',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 12,
                             color: colors.textSecondary,
                           ),
@@ -2238,7 +2240,7 @@ class _EscrowSenderCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         'Required: ${trade.cryptoAmount.toStringAsFixed(6)} ${trade.asset.toUpperCase()}',
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 11.5,
                           color: colors.textSecondary,
                         ),
@@ -2247,7 +2249,7 @@ class _EscrowSenderCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           'XLM available balance already excludes reserve.',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 10.5,
                             color: colors.textSecondary,
                           ),
@@ -2257,7 +2259,7 @@ class _EscrowSenderCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           'Not enough balance to lock this trade.',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 11.5,
                             color: colors.error,
                             fontWeight: FontWeight.w600,
@@ -2270,7 +2272,7 @@ class _EscrowSenderCard extends StatelessWidget {
                           onTap: balanceLoading ? null : onRefreshBalance,
                           child: Text(
                             'Retry balance sync',
-                            style: GoogleFonts.sora(
+                            style: AppFonts.sora(
                               fontSize: 11.5,
                               color: colors.primary,
                               fontWeight: FontWeight.w700,
@@ -2313,7 +2315,7 @@ class _EscrowSenderCard extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 Text(
                                   'Lock ${trade.asset.toUpperCase()}',
-                                  style: GoogleFonts.sora(
+                                  style: AppFonts.sora(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
                                     color: AppColor.of(context).onPrimary,
@@ -2357,7 +2359,7 @@ class _EscrowStep extends StatelessWidget {
         child: Center(
           child: Text(
             num,
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: AppColor.of(context).onPrimary,
@@ -2369,7 +2371,7 @@ class _EscrowStep extends StatelessWidget {
       Expanded(
         child: Text(
           text,
-          style: GoogleFonts.sora(
+          style: AppFonts.sora(
             fontSize: 13,
             color: colors.textSecondary,
             height: 1.4,
@@ -2415,7 +2417,7 @@ class _WaitingForEscrowCard extends StatelessWidget {
               children: [
                 Text(
                   'Waiting for Lock',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: colors.textPrimary,
@@ -2425,7 +2427,7 @@ class _WaitingForEscrowCard extends StatelessWidget {
                 Text(
                   'The other person is locking ${trade.cryptoAmount.toStringAsFixed(4)} '
                   '${trade.asset.toUpperCase()}. Once locked, you can send payment using the account details shown here.',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 12,
                     color: colors.textSecondary,
                     height: 1.5,
@@ -2524,7 +2526,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Send Payment To ${payeeLabel == 'seller' ? 'Seller' : 'Buyer'}',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: colors.textPrimary,
@@ -2542,7 +2544,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                   ),
                   child: Text(
                     'STEP 2',
-                    style: GoogleFonts.sora(
+                    style: AppFonts.sora(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                       color: AppColor.of(context).onPrimary,
@@ -2592,7 +2594,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             instructions,
-                            style: GoogleFonts.sora(
+                            style: AppFonts.sora(
                               fontSize: 11.5,
                               color: colors.textSecondary,
                             ),
@@ -2605,7 +2607,7 @@ class _PaymentInstructionsCard extends StatelessWidget {
                 if (accountName == null && accountNo == null)
                   Text(
                     'Payment details not found. Contact the $payeeLabel via trade chat.',
-                    style: GoogleFonts.sora(
+                    style: AppFonts.sora(
                       fontSize: 12,
                       color: colors.textSecondary,
                     ),
@@ -2688,7 +2690,7 @@ class _TradeAccountsCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               'Payment account is not available yet.',
-              style: GoogleFonts.sora(
+              style: AppFonts.sora(
                 fontSize: 11.5,
                 color: colors.textSecondary,
               ),
@@ -2749,7 +2751,7 @@ class _PaymentProofCard extends StatelessWidget {
               hasProof
                   ? 'Payment screenshot uploaded. You can upload a new one anytime.'
                   : 'Upload your payment screenshot now. You can still add it later.',
-              style: GoogleFonts.sora(
+              style: AppFonts.sora(
                 fontSize: 11.5,
                 color: colors.textPrimary,
                 height: 1.35,
@@ -2778,7 +2780,7 @@ class _PaymentProofCard extends StatelessWidget {
                       )
                     : Text(
                         hasProof ? 'Re-upload' : 'Upload Proof',
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: AppColor.of(context).onPrimary,
@@ -2842,7 +2844,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
                   children: [
                     Text(
                       'Payment Has Been Sent',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: colors.textPrimary,
@@ -2855,7 +2857,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
                                 'Next step: lock ${trade.asset.toUpperCase()} in escrow to continue this trade.'
                           : 'The ${isBuyerFiatSender ? 'buyer' : 'seller'} has marked payment as sent. '
                                 'Please verify receipt in your payment account and confirm below.',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 12,
                         color: colors.textSecondary,
                         height: 1.5,
@@ -2883,7 +2885,7 @@ class _FiatSentNoticeCard extends StatelessWidget {
                       'Support review will start automatically if not confirmed within '
                       '${dueAt.difference(DateTime.now()).inMinutes} min. '
                       'Check your account and confirm receipt now.',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 11.5,
                         color: red,
                         height: 1.4,
@@ -2948,7 +2950,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                   children: [
                     Text(
                       'Waiting for Confirmation',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: colors.textPrimary,
@@ -2958,7 +2960,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                     Text(
                       'The ${isSellerVerifier ? 'seller' : 'buyer'} is checking your payment. '
                       'After confirmation, your ${trade.asset.toUpperCase()} will be released automatically.',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 12,
                         color: colors.textSecondary,
                         height: 1.5,
@@ -2988,7 +2990,7 @@ class _WaitingConfirmationCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'If this is not confirmed before the deadline, support will review and resolve it.',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 11.5,
                         color: colors.textSecondary,
                       ),
@@ -3185,7 +3187,7 @@ class _TimelineCard extends StatelessWidget {
                 ),
                 child: Text(
                   'Escrow: $escrowLabel',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                     color: isEscrowNeutral
@@ -3217,7 +3219,7 @@ class _TimelineCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Text(
                           'View Proof',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
                             color: colors.textPrimary,
@@ -3304,7 +3306,7 @@ class _TimelineCard extends StatelessWidget {
                     children: [
                       Text(
                         step.$2,
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 13.5,
                           fontWeight: isCurrent
                               ? FontWeight.w700
@@ -3317,7 +3319,7 @@ class _TimelineCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         step.$3,
-                        style: GoogleFonts.sora(
+                        style: AppFonts.sora(
                           fontSize: 11.5,
                           color: colors.textSecondary,
                         ),
@@ -3384,7 +3386,7 @@ class _SectionCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   title,
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: colors.textSecondary,
@@ -3449,7 +3451,7 @@ class _DataRowState extends State<_DataRow> {
             width: 98,
             child: Text(
               widget.label,
-              style: GoogleFonts.sora(
+              style: AppFonts.sora(
                 fontSize: 11.5,
                 color: widget.colors.textSecondary,
               ),
@@ -3466,12 +3468,12 @@ class _DataRowState extends State<_DataRow> {
                       widget.value,
                       textAlign: TextAlign.right,
                       style: widget.mono
-                          ? GoogleFonts.sora(
+                          ? AppFonts.sora(
                               fontSize: 11.5,
                               color: widget.colors.textPrimary,
                               fontWeight: FontWeight.w500,
                             )
-                          : GoogleFonts.sora(
+                          : AppFonts.sora(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: widget.colors.textPrimary,
@@ -3532,7 +3534,7 @@ class _ErrorBanner extends StatelessWidget {
         Expanded(
           child: Text(
             message,
-            style: GoogleFonts.sora(fontSize: 12, color: colors.error),
+            style: AppFonts.sora(fontSize: 12, color: colors.error),
           ),
         ),
       ],
@@ -3692,7 +3694,7 @@ class _CompletedCardState extends State<_CompletedCard> {
           const SizedBox(height: 16),
           Text(
             'Trade Completed!',
-            style: GoogleFonts.sora(
+            style: AppFonts.sora(
               fontSize: 20,
               fontWeight: FontWeight.w800,
               color: colors.textPrimary,
@@ -3704,13 +3706,13 @@ class _CompletedCardState extends State<_CompletedCard> {
                 ? '${widget.trade.cryptoAmount.toStringAsFixed(6)} ${widget.trade.asset} released to your wallet'
                 : '${widget.trade.fiatAmount.toStringAsFixed(2)} ${widget.trade.fiatCurrency.toUpperCase()} received',
             textAlign: TextAlign.center,
-            style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+            style: AppFonts.sora(fontSize: 13, color: colors.textSecondary),
           ),
           const SizedBox(height: 20),
           _checkingReview
               ? Text(
                   'Checking review status...',
-                  style: GoogleFonts.sora(
+                  style: AppFonts.sora(
                     fontSize: 13,
                     color: colors.textSecondary,
                     fontWeight: FontWeight.w600,
@@ -3724,7 +3726,7 @@ class _CompletedCardState extends State<_CompletedCard> {
                     const SizedBox(width: 8),
                     Text(
                       'Merchant view: ratings are read-only',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 13,
                         color: green,
                         fontWeight: FontWeight.w600,
@@ -3740,7 +3742,7 @@ class _CompletedCardState extends State<_CompletedCard> {
                     const SizedBox(width: 8),
                     Text(
                       'Review submitted — thank you!',
-                      style: GoogleFonts.sora(
+                      style: AppFonts.sora(
                         fontSize: 13,
                         color: green,
                         fontWeight: FontWeight.w600,
@@ -3764,7 +3766,7 @@ class _CompletedCardState extends State<_CompletedCard> {
                         const SizedBox(width: 8),
                         Text(
                           'Rate This Trade',
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: green,
@@ -3811,7 +3813,7 @@ class _CancelledCard extends StatelessWidget {
         const SizedBox(height: 14),
         Text(
           'Trade Cancelled',
-          style: GoogleFonts.sora(
+          style: AppFonts.sora(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: colors.textPrimary,
@@ -3821,7 +3823,7 @@ class _CancelledCard extends StatelessWidget {
         Text(
           'All locked funds have been released back.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+          style: AppFonts.sora(fontSize: 13, color: colors.textSecondary),
         ),
       ],
     ),
@@ -3859,7 +3861,7 @@ class _DisputedCard extends StatelessWidget {
         const SizedBox(height: 14),
         Text(
           'Support Is Reviewing',
-          style: GoogleFonts.sora(
+          style: AppFonts.sora(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: colors.textPrimary,
@@ -3869,7 +3871,7 @@ class _DisputedCard extends StatelessWidget {
         Text(
           'Our support team is reviewing this trade. We will resolve it within 24 hours.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.sora(fontSize: 13, color: colors.textSecondary),
+          style: AppFonts.sora(fontSize: 13, color: colors.textSecondary),
         ),
       ],
     ),
@@ -4147,7 +4149,7 @@ class _ActionBtn extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.sora(
+                          style: AppFonts.sora(
                             fontSize: compact ? 11 : 13.5,
                             fontWeight: FontWeight.w700,
                             color: fg,
@@ -4168,7 +4170,7 @@ class _ActionBtn extends StatelessWidget {
                           ),
                           child: Text(
                             badgeCount > 99 ? '99+' : '$badgeCount',
-                            style: GoogleFonts.sora(
+                            style: AppFonts.sora(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               color: AppColor.of(context).onPrimary,
@@ -4191,3 +4193,4 @@ class _ActionBtn extends StatelessWidget {
 }
 
 // ─── Bottom sheet base ────────────────────────────────────────────────────────
+

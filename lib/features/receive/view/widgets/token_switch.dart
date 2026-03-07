@@ -17,12 +17,20 @@ class TokenSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    return Row(
-      children: [
-        Expanded(child: _SegmentButton(label: 'XLM', selected: xlmSelected, onTap: onSelectXLM, color: c)),
-        const SizedBox(width: 8),
-        Expanded(child: _SegmentButton(label: 'USDC', selected: !xlmSelected, onTap: onSelectUSDC, color: c)),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _SegmentButton(label: 'XLM', selected: xlmSelected, onTap: onSelectXLM, color: c)),
+          const SizedBox(width: 8),
+          Expanded(child: _SegmentButton(label: 'USDC', selected: !xlmSelected, onTap: onSelectUSDC, color: c)),
+        ],
+      ),
     );
   }
 }
@@ -33,7 +41,7 @@ class _SegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? color.primary : color.primary.withValues(alpha: 0.06);
+    final bg = selected ? color.primary : Colors.transparent;
     final fg = selected ? color.onPrimary : color.textSecondary;
 
     return AnimatedContainer(
@@ -41,10 +49,18 @@ class _SegmentButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.primary.withValues(alpha: selected ? 0.0 : 0.15)),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: color.primary.withValues(alpha: 0.18),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
       ),
       child: Material(
-        color: color.surface,
+        color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
