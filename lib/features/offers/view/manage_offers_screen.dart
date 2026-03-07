@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -70,6 +69,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   final _autoReplyCtrl = TextEditingController();
 
   OfferType _type = OfferType.sell;
+  OfferLimitType _limitType = OfferLimitType.fiat;
   PaymentMethodModel? _selectedPaymentMethod;
   String? _selectedAssetSymbol;
   bool _isVisible = true;
@@ -117,15 +117,13 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
               parent: _pageEnterCtrl, curve: Curves.easeOutCubic),
         );
     _tabCtrl.addListener(() {
-      if (!_tabCtrl.indexIsChanging &&
-          _tabCtrl.index == 0 &&
-          _type == OfferType.sell) {
+      if (!_tabCtrl.indexIsChanging && _tabCtrl.index == 0) {
         _syncAvailableQty(silent: true);
       }
     });
     _load();
     _availableQtyTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (_tabCtrl.index == 0 && _type == OfferType.sell) {
+      if (_tabCtrl.index == 0) {
         _syncAvailableQty(silent: true);
       }
     });
@@ -249,7 +247,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         _offers = offers;
         _loading = false;
       });
-      if (_type == OfferType.sell) {
+      if (_tabCtrl.index == 0) {
         _syncAvailableQty(silent: true, forceTotalQty: true);
       }
       _pageEnterCtrl.forward(from: 0);
@@ -283,10 +281,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     final margin = double.tryParse(_marginCtrl.text.trim());
     final minAmt = double.tryParse(_minCtrl.text.trim());
     final maxAmt = double.tryParse(_maxCtrl.text.trim());
-    final totalQ = double.tryParse(_totalQtyCtrl.text.trim());
     final window = int.tryParse(_paymentWindowCtrl.text.trim());
     final addr = (await _resolveActiveWalletAddress())?.trim() ?? '';
-    final isSell = _type == OfferType.sell;
 
     if (asset.isEmpty || fiat.isEmpty) {
       _snack('Asset and fiat are required.', error: true);
@@ -308,14 +304,6 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       _snack('Min and max amounts must be 0 or higher.', error: true);
       return;
     }
-    if (_totalQtyCtrl.text.trim().isNotEmpty && totalQ == null) {
-      _snack('Enter a valid total quantity.', error: true);
-      return;
-    }
-    if (totalQ != null && totalQ < 0) {
-      _snack('Total quantity must be 0 or higher.', error: true);
-      return;
-    }
     if (_paymentWindowCtrl.text.trim().isNotEmpty && window == null) {
       _snack('Enter a valid payment window (minutes).', error: true);
       return;
@@ -325,21 +313,21 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
           error: true);
       return;
     }
-    if (isSell && addr.isEmpty) {
+    if (addr.isEmpty) {
       _snack(
         'No active wallet address found. Set an active wallet to continue.',
         error: true,
       );
       return;
     }
-    if (isSell && !RegExp(r'^G[A-Z2-7]{55}$').hasMatch(addr)) {
+    if (!RegExp(r'^G[A-Z2-7]{55}$').hasMatch(addr)) {
       _snack('Invalid active wallet Stellar address format.', error: true);
       return;
     }
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
     try {
-      if (isSell && asset == 'USDC') {
+      if (_type == OfferType.sell && asset == 'USDC') {
         final hasTrustline = await _syncUsdcTrustlineStatus(
           accountId: addr,
           silent: false,
@@ -353,8 +341,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
         }
       }
 
-      double? effectiveAvailableQty;
-      if (isSell) {
+      if (_type == OfferType.sell) {
         final liveAvail = await _syncAvailableQtyForSubmit(asset);
         if (liveAvail <= 0) {
           _snack(
@@ -363,29 +350,9 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
           );
           return;
         }
-        if (totalQ != null && totalQ > liveAvail) {
+        if (_isVisible && liveAvail <= 0) {
           _snack(
-            'Total qty cannot exceed active wallet balance (${_formatQty(liveAvail)} $asset). Tap Sync Balance.',
-            error: true,
-          );
-          return;
-        }
-        effectiveAvailableQty =
-        totalQ == null ? liveAvail : math.min(totalQ, liveAvail);
-        if (_isVisible && effectiveAvailableQty <= 0) {
-          _snack(
-            'Available qty is zero on selected wallet. Fund wallet or set offer hidden.',
-            error: true,
-          );
-          return;
-        }
-      } else {
-        effectiveAvailableQty = totalQ;
-        if (_isVisible &&
-            effectiveAvailableQty != null &&
-            effectiveAvailableQty <= 0) {
-          _snack(
-            'Available qty must be above zero for a visible offer.',
+            'Receiver wallet balance is zero for this asset. Fund the wallet or hide the offer.',
             error: true,
           );
           return;
@@ -397,12 +364,11 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
           type: _type,
           asset: asset,
           fiatCurrency: fiat,
-          receiverStellarAddress: null,
+          receiverStellarAddress: addr,
           marginPercent: margin,
+          limitType: _limitType,
           minAmount: minAmt,
           maxAmount: maxAmt,
-          totalQty: totalQ,
-          availableQty: effectiveAvailableQty,
           paymentWindowMinutes: window,
           autoReply: _autoReplyCtrl.text.trim().isEmpty
               ? null
@@ -414,7 +380,6 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       _marginCtrl.text = '0';
       _minCtrl.text = '0';
       _maxCtrl.text = '0';
-      _totalQtyCtrl.clear();
       _availableQtyCtrl.clear();
       _totalQtyTouched = false;
       _lastAutoTotalQty = null;
@@ -579,7 +544,6 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
     bool silent = false,
     bool forceTotalQty = false,
   }) async {
-    if (_type != OfferType.sell) return;
     if (_loading || _submitting) return;
     if (_syncingAvailableQty) return;
     final assets = _assetVm.assets;
@@ -802,11 +766,13 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                               marginCtrl: _marginCtrl,
                               minCtrl: _minCtrl,
                               maxCtrl: _maxCtrl,
-                              totalQtyCtrl: _totalQtyCtrl,
+                              liveAvailableQty: _liveAvailableQty,
+                              activeWalletAddress: _activeWalletAddress,
                               paymentWindowCtrl:
                               _paymentWindowCtrl,
                               autoReplyCtrl: _autoReplyCtrl,
                               type: _type,
+                              limitType: _limitType,
                               methods: _paymentMethods,
                               selectedMethod:
                               _selectedPaymentMethod,
@@ -821,29 +787,18 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
                               onTypeChanged: (v) {
                                 setState(() {
                                   _type = v;
-                                  if (v == OfferType.buy) {
-                                    _syncingAvailableQty =
-                                    false;
-                                    _checkingUsdcTrustline =
-                                    false;
-                                    _activeWalletHasUsdcTrustline =
-                                    null;
-                                  }
                                 });
-                                if (v == OfferType.sell) {
-                                  _syncAvailableQty(
-                                    silent: true,
-                                    forceTotalQty: true,
-                                  );
-                                }
+                                _syncAvailableQty(
+                                  silent: true,
+                                  forceTotalQty: true,
+                                );
                               },
+                              onLimitTypeChanged: (v) =>
+                                  setState(() => _limitType = v),
                               onAssetChanged: (v) {
                                 setState(() =>
                                 _selectedAssetSymbol = v);
-                                if (_type == OfferType.sell) {
-                                  _syncAvailableQty(
-                                      forceTotalQty: true);
-                                }
+                                _syncAvailableQty(forceTotalQty: true);
                               },
                               onMethodChanged: (v) =>
                                   setState(() =>
@@ -1325,10 +1280,12 @@ class _CreateOfferCard extends StatelessWidget {
     required this.marginCtrl,
     required this.minCtrl,
     required this.maxCtrl,
-    required this.totalQtyCtrl,
+    required this.liveAvailableQty,
+    required this.activeWalletAddress,
     required this.paymentWindowCtrl,
     required this.autoReplyCtrl,
     required this.type,
+    required this.limitType,
     required this.methods,
     required this.selectedMethod,
     required this.isVisible,
@@ -1337,6 +1294,7 @@ class _CreateOfferCard extends StatelessWidget {
     required this.checkingUsdcTrustline,
     required this.hasUsdcTrustline,
     required this.onTypeChanged,
+    required this.onLimitTypeChanged,
     required this.onAssetChanged,
     required this.onMethodChanged,
     required this.onVisibleChanged,
@@ -1351,10 +1309,12 @@ class _CreateOfferCard extends StatelessWidget {
   final TextEditingController marginCtrl;
   final TextEditingController minCtrl;
   final TextEditingController maxCtrl;
-  final TextEditingController totalQtyCtrl;
+  final double? liveAvailableQty;
+  final String? activeWalletAddress;
   final TextEditingController paymentWindowCtrl;
   final TextEditingController autoReplyCtrl;
   final OfferType type;
+  final OfferLimitType limitType;
   final List<PaymentMethodModel> methods;
   final PaymentMethodModel? selectedMethod;
   final bool isVisible;
@@ -1363,6 +1323,7 @@ class _CreateOfferCard extends StatelessWidget {
   final bool checkingUsdcTrustline;
   final bool? hasUsdcTrustline;
   final ValueChanged<OfferType> onTypeChanged;
+  final ValueChanged<OfferLimitType> onLimitTypeChanged;
   final ValueChanged<String?> onAssetChanged;
   final ValueChanged<PaymentMethodModel?> onMethodChanged;
   final ValueChanged<bool> onVisibleChanged;
@@ -1380,6 +1341,12 @@ class _CreateOfferCard extends StatelessWidget {
         isUsdc &&
         hasUsdcTrustline == false &&
         !checkingUsdcTrustline;
+    final limitUnit = limitType == OfferLimitType.asset
+        ? selectedAsset
+        : fiatCode;
+    final balanceSnapshot = liveAvailableQty == null
+        ? 'Unavailable'
+        : '${liveAvailableQty!.toStringAsFixed(liveAvailableQty! < 1 ? 4 : 2)} $selectedAsset';
 
     return Container(
       decoration: BoxDecoration(
@@ -1451,25 +1418,76 @@ class _CreateOfferCard extends StatelessWidget {
                 _FormGroup(
                   c: c,
                   label: 'Trade Limits',
+                  sublabel: limitType == OfferLimitType.asset
+                      ? 'Asset-based'
+                      : 'Fiat-based',
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _LimitTypeChip(
+                              c: c,
+                              label: 'Fiat',
+                              unit: fiatCode,
+                              selected: limitType == OfferLimitType.fiat,
+                              onTap: () => onLimitTypeChanged(OfferLimitType.fiat),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _LimitTypeChip(
+                              c: c,
+                              label: 'Asset',
+                              unit: selectedAsset.isEmpty ? 'Asset' : selectedAsset,
+                              selected: limitType == OfferLimitType.asset,
+                              onTap: () => onLimitTypeChanged(OfferLimitType.asset),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _Field(
+                              c: c,
+                              controller: minCtrl,
+                              hint: 'Min $limitUnit',
+                              icon: Icons.south_rounded,
+                              isNumber: true,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Field(
+                              c: c,
+                              controller: maxCtrl,
+                              hint: 'Max $limitUnit',
+                              icon: Icons.north_rounded,
+                              isNumber: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                _FormGroup(
+                  c: c,
+                  label: 'Receiver Wallet',
+                  sublabel: 'Watcher synced',
                   child: Row(
                     children: [
                       Expanded(
-                        child: _Field(
+                        child: _ReadOnlyField(
                           c: c,
-                          controller: minCtrl,
-                          hint: 'Min amount',
-                          icon: Icons.south_rounded,
-                          isNumber: true,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _Field(
-                          c: c,
-                          controller: maxCtrl,
-                          hint: 'Max amount',
-                          icon: Icons.north_rounded,
-                          isNumber: true,
+                          icon: Icons.wallet_outlined,
+                          title: activeWalletAddress?.isNotEmpty == true
+                              ? activeWalletAddress!
+                              : 'No active wallet selected',
+                          subtitle: 'Offer liquidity is synced from this Stellar address.',
                         ),
                       ),
                     ],
@@ -1478,17 +1496,17 @@ class _CreateOfferCard extends StatelessWidget {
 
                 _FormGroup(
                   c: c,
-                  label: 'Quantity & Payment Window',
-                  sublabel:
-                  isWalletLocked ? 'Auto-synced' : 'Manual',
+                  label: 'Liquidity Snapshot & Payment Window',
+                  sublabel: 'UI only',
                   child: Column(
                     children: [
-                      _Field(
+                      _ReadOnlyField(
                         c: c,
-                        controller: totalQtyCtrl,
-                        hint: 'Total qty',
-                        icon: Icons.inventory_2_outlined,
-                        isNumber: true,
+                        icon: Icons.stacked_line_chart_rounded,
+                        title: balanceSnapshot,
+                        subtitle: isWalletLocked
+                            ? 'Watcher keeps available quantity synced from your receiver wallet.'
+                            : 'Backend will use this receiver wallet as the balance reference for the offer.',
                       ),
                       const SizedBox(height: 8),
                       Column(
@@ -1496,11 +1514,9 @@ class _CreateOfferCard extends StatelessWidget {
                         CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isWalletLocked
-                                ? (syncingAvailableQty
-                                ? 'Syncing from active wallet...'
-                                : 'Total qty defaults from active wallet balance.')
-                                : 'Set total quantity manually.',
+                            syncingAvailableQty
+                                ? 'Refreshing wallet balance snapshot...'
+                                : 'Manual quantity entry is removed. The backend owns available quantity.',
                             style: TextStyle(
                               color: c.textSecondary,
                               fontSize: 11,
@@ -1525,32 +1541,26 @@ class _CreateOfferCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                           ],
-                          if (isWalletLocked)
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: syncingAvailableQty
-                                    ? null
-                                    : () => onSyncAvailableQty(
-                                  silent: false,
-                                  forceTotalQty: true,
-                                ),
-                                icon: const Icon(
-                                    Icons.sync_rounded,
-                                    size: 14),
-                                label:
-                                const Text('Sync Balance'),
-                                style: TextButton.styleFrom(
-                                  visualDensity:
-                                  VisualDensity.compact,
-                                  padding:
-                                  const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: syncingAvailableQty
+                                  ? null
+                                  : () => onSyncAvailableQty(
+                                        silent: false,
+                                        forceTotalQty: true,
+                                      ),
+                              icon: const Icon(Icons.sync_rounded, size: 14),
+                              label: const Text('Refresh Snapshot'),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
                                 ),
                               ),
                             ),
+                          ),
                         ],
                       ),
                       if (showUsdcTrustlineWarning) ...[
@@ -1709,6 +1719,128 @@ class _FormGroup extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPE TOGGLE
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _LimitTypeChip extends StatelessWidget {
+  const _LimitTypeChip({
+    required this.c,
+    required this.label,
+    required this.unit,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppColor c;
+  final String label;
+  final String unit;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(12),
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: selected ? c.primary.withValues(alpha: 0.1) : c.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selected ? c.primary : c.border.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            selected ? Icons.radio_button_checked : Icons.radio_button_off,
+            size: 16,
+            color: selected ? c.primary : c.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  unit,
+                  style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ReadOnlyField extends StatelessWidget {
+  const _ReadOnlyField({
+    required this.c,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final AppColor c;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    decoration: BoxDecoration(
+      color: c.background,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: c.border.withValues(alpha: 0.2)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: c.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 class _TypeToggle extends StatelessWidget {
   const _TypeToggle({

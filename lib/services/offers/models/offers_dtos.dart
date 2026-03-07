@@ -2,6 +2,8 @@ enum OfferType { buy, sell }
 
 enum OfferStatus { active, paused, completed, cancelled }
 
+enum OfferLimitType { fiat, asset }
+
 enum OfferSortBy {
   best,
   newest,
@@ -31,6 +33,9 @@ String _offerStatusWire(OfferStatus value) {
       return 'CANCELLED';
   }
 }
+
+String _offerLimitTypeWire(OfferLimitType value) =>
+    value == OfferLimitType.asset ? 'ASSET' : 'FIAT';
 
 String _offerSortByWire(OfferSortBy value) {
   switch (value) {
@@ -79,6 +84,7 @@ class OffersListQuery {
   final String? visibleOnly;
   final String? minAmount;
   final String? maxAmount;
+  final OfferLimitType? limitType;
   final String? receiverStellarAddress;
   final OfferSortBy? sortBy;
   final OfferSortOrder? sortOrder;
@@ -97,6 +103,7 @@ class OffersListQuery {
     this.visibleOnly,
     this.minAmount,
     this.maxAmount,
+    this.limitType,
     this.receiverStellarAddress,
     this.sortBy,
     this.sortOrder,
@@ -121,6 +128,7 @@ class OffersListQuery {
       'minAmount': minAmount!.trim(),
     if (maxAmount != null && maxAmount!.trim().isNotEmpty)
       'maxAmount': maxAmount!.trim(),
+    if (limitType != null) 'limitType': _offerLimitTypeWire(limitType!),
     if (receiverStellarAddress != null &&
         receiverStellarAddress!.trim().isNotEmpty)
       'receiverStellarAddress': receiverStellarAddress!.trim(),
@@ -135,12 +143,11 @@ class CreateOfferRequest {
   final OfferType type;
   final String asset;
   final String fiatCurrency;
-  final String? receiverStellarAddress;
+  final String receiverStellarAddress;
   final num marginPercent;
+  final OfferLimitType limitType;
   final num minAmount;
   final num maxAmount;
-  final num? totalQty;
-  final num? availableQty;
   final int? paymentWindowMinutes;
   final String? autoReply;
   final bool? isVisible;
@@ -150,12 +157,11 @@ class CreateOfferRequest {
     required this.type,
     required this.asset,
     required this.fiatCurrency,
-    this.receiverStellarAddress,
+    required this.receiverStellarAddress,
     required this.marginPercent,
+    required this.limitType,
     required this.minAmount,
     required this.maxAmount,
-    this.totalQty,
-    this.availableQty,
     this.paymentWindowMinutes,
     this.autoReply,
     this.isVisible,
@@ -170,21 +176,23 @@ class CreateOfferRequest {
 
   Map<String, dynamic> toJson() {
     final methods = _cleanPaymentMethodIds(paymentMethodIds);
+    final receiver = _trim(receiverStellarAddress);
     if (methods.isEmpty) {
       throw ArgumentError('paymentMethodIds must not be empty');
+    }
+    if (receiver == null) {
+      throw ArgumentError('receiverStellarAddress must not be empty');
     }
 
     return {
       'type': _offerTypeWire(type),
       'asset': _normalizeUpper(asset),
       'fiatCurrency': _normalizeUpper(fiatCurrency),
-      if (_trim(receiverStellarAddress) != null)
-        'receiverStellarAddress': _trim(receiverStellarAddress),
+      'receiverStellarAddress': receiver,
       'marginPercent': marginPercent,
+      'limitType': _offerLimitTypeWire(limitType),
       'minAmount': minAmount,
       'maxAmount': maxAmount,
-      if (totalQty != null) 'totalQty': totalQty,
-      if (availableQty != null) 'availableQty': availableQty,
       if (paymentWindowMinutes != null)
         'paymentWindowMinutes': paymentWindowMinutes,
       if (_trim(autoReply) != null) 'autoReply': _trim(autoReply),
@@ -198,12 +206,11 @@ class UpdateOfferRequest {
   final OfferType? type;
   final String? asset;
   final String? fiatCurrency;
+  final OfferLimitType? limitType;
   final String? receiverStellarAddress;
   final num? marginPercent;
   final num? minAmount;
   final num? maxAmount;
-  final num? totalQty;
-  final num? availableQty;
   final int? paymentWindowMinutes;
   final String? autoReply;
   final bool? isVisible;
@@ -213,12 +220,11 @@ class UpdateOfferRequest {
     this.type,
     this.asset,
     this.fiatCurrency,
+    this.limitType,
     this.receiverStellarAddress,
     this.marginPercent,
     this.minAmount,
     this.maxAmount,
-    this.totalQty,
-    this.availableQty,
     this.paymentWindowMinutes,
     this.autoReply,
     this.isVisible,
@@ -244,13 +250,12 @@ class UpdateOfferRequest {
       if (_trim(asset) != null) 'asset': _normalizeUpper(asset!),
       if (_trim(fiatCurrency) != null)
         'fiatCurrency': _normalizeUpper(fiatCurrency!),
+      if (limitType != null) 'limitType': _offerLimitTypeWire(limitType!),
       if (_trim(receiverStellarAddress) != null)
         'receiverStellarAddress': _trim(receiverStellarAddress),
       if (marginPercent != null) 'marginPercent': marginPercent,
       if (minAmount != null) 'minAmount': minAmount,
       if (maxAmount != null) 'maxAmount': maxAmount,
-      if (totalQty != null) 'totalQty': totalQty,
-      if (availableQty != null) 'availableQty': availableQty,
       if (paymentWindowMinutes != null)
         'paymentWindowMinutes': paymentWindowMinutes,
       if (_trim(autoReply) != null) 'autoReply': _trim(autoReply),

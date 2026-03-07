@@ -39,6 +39,8 @@ class TradesCoreService {
 
   Future<TradeModel> markFiatSent(String id) => _api.markFiatSent(id);
 
+  Future<TradeModel> confirmRequest(String id) => _api.confirmRequest(id);
+
   Future<TradeModel> confirmFiat(String id, {String? fiatRefNo}) =>
       _api.confirmFiat(id, fiatRefNo: fiatRefNo);
 

@@ -277,6 +277,22 @@ class TradesService {
     );
   }
 
+  Future<TradeModel> confirmRequest(String id) async {
+    final res = await _client.post(
+      TradesHttp.uri(TradesEndpoints.confirmRequest(id)),
+      headers: await _headers(idempotencyScope: 'confirm-request:$id'),
+      body: jsonEncode({}),
+    );
+    TradesHttp.ensureOk(res);
+    final data = TradesHttp.decodeJson<dynamic>(res);
+    final map = _extractMap(data);
+    if (map != null) return TradeModel.fromJson(map);
+    throw TradeApiException(
+      res.statusCode,
+      'Unexpected response for confirm-request',
+    );
+  }
+
   Future<TradeModel> confirmFiat(String id, {String? fiatRefNo}) async {
     final res = await _client.post(
       TradesHttp.uri(TradesEndpoints.confirmFiat(id)),

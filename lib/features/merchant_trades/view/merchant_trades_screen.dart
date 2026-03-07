@@ -472,6 +472,7 @@ class _TradeTile extends StatelessWidget {
   final VoidCallback onTap;
 
   _StatusMeta _meta(TradeStatus s) => switch (s) {
+    TradeStatus.starting       => _StatusMeta('Request', c.textSecondary),
     TradeStatus.created        => _StatusMeta('Pending', c.textSecondary),
     TradeStatus.cryptoLocked   => _StatusMeta('Locked', c.warning),
     TradeStatus.fiatSent       => _StatusMeta('Fiat Sent', c.warning),

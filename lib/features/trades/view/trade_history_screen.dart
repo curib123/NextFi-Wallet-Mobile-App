@@ -723,6 +723,7 @@ class _TradeCardState extends State<_TradeCard>
   Color _statusColor(TradeStatus s) {
     final c = widget.c;
     return switch (s) {
+      TradeStatus.starting => c.textSecondary,
       TradeStatus.completed => c.success,
       TradeStatus.cancelled => c.error,
       TradeStatus.expired => c.error,
@@ -736,6 +737,7 @@ class _TradeCardState extends State<_TradeCard>
   }
 
   String _statusLabel(TradeStatus s) => switch (s) {
+    TradeStatus.starting => 'Requesting',
     TradeStatus.completed => 'Completed',
     TradeStatus.cancelled => 'Cancelled',
     TradeStatus.expired => 'Expired',

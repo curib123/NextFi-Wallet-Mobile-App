@@ -419,14 +419,27 @@ class _TradeScreenState extends State<TradeScreen>
 
   // ── Validators ─────────────────────────────────────────────────────────────
 
+  bool get _limitsUseAsset => offer.limitType == OfferLimitType.asset;
+
+  String _formatLimitValue(double value) => _limitsUseAsset
+      ? '${value.toStringAsFixed(value < 1 ? 4 : 2)} ${offer.asset}'
+      : '${offer.fiatCurrency} ${value.toStringAsFixed(2)}';
+
   String? _validateFiat(String? v) {
     if (v == null || v.trim().isEmpty) return 'Enter an amount';
     final parsed = double.tryParse(v.trim());
     if (parsed == null || parsed <= 0) return 'Invalid amount';
     final min = offer.minAmount;
     final max = offer.maxAmount;
-    if (min != null && parsed < min) return 'Min is ${offer.fiatCurrency} $min';
-    if (max != null && parsed > max) return 'Max is ${offer.fiatCurrency} $max';
+    if (!_limitsUseAsset) {
+      if (min != null && parsed < min) return 'Min is ${_formatLimitValue(min)}';
+      if (max != null && parsed > max) return 'Max is ${_formatLimitValue(max)}';
+      return null;
+    }
+    if (_effectivePrice <= 0) return null;
+    final crypto = parsed / _effectivePrice;
+    if (min != null && crypto < min) return 'Min is ${_formatLimitValue(min)}';
+    if (max != null && crypto > max) return 'Max is ${_formatLimitValue(max)}';
     return null;
   }
 
@@ -434,16 +447,15 @@ class _TradeScreenState extends State<TradeScreen>
     if (v == null || v.trim().isEmpty) return 'Enter an amount';
     final parsed = double.tryParse(v.trim());
     if (parsed == null || parsed <= 0) return 'Invalid amount';
-    if (_effectivePrice > 0) {
+    final min = offer.minAmount;
+    final max = offer.maxAmount;
+    if (_limitsUseAsset) {
+      if (min != null && parsed < min) return 'Below min ${_formatLimitValue(min)}';
+      if (max != null && parsed > max) return 'Above max ${_formatLimitValue(max)}';
+    } else if (_effectivePrice > 0) {
       final fiat = parsed * _effectivePrice;
-      final min = offer.minAmount;
-      final max = offer.maxAmount;
-      if (min != null && fiat < min) {
-        return 'Below min ${offer.fiatCurrency} ${min.toStringAsFixed(2)}';
-      }
-      if (max != null && fiat > max) {
-        return 'Above max ${offer.fiatCurrency} ${max.toStringAsFixed(2)}';
-      }
+      if (min != null && fiat < min) return 'Below min ${_formatLimitValue(min)}';
+      if (max != null && fiat > max) return 'Above max ${_formatLimitValue(max)}';
     }
     if (offer.availableQty != null && parsed > offer.availableQty!) {
       return 'Max available: ${offer.availableQty} ${offer.asset}';
@@ -864,10 +876,10 @@ class _HeroBanner extends StatelessWidget {
                   c: c,
                   icon: Icons.swap_vert_rounded,
                   label: offer.minAmount != null && offer.maxAmount != null
-                      ? '${offer.fiatCurrency} ${_fmt(offer.minAmount!)}–${_fmt(offer.maxAmount!)}'
+                      ? '${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} ${_fmt(offer.minAmount!)}-${_fmt(offer.maxAmount!)}'
                       : offer.maxAmount != null
-                      ? 'Max ${offer.fiatCurrency} ${_fmt(offer.maxAmount!)}'
-                      : 'Min ${offer.fiatCurrency} ${_fmt(offer.minAmount!)}',
+                      ? 'Max ${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} ${_fmt(offer.maxAmount!)}'
+                      : 'Min ${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} ${_fmt(offer.minAmount!)}',
                 ),
               ],
             ],
@@ -1052,9 +1064,7 @@ class _AmountCard extends StatelessWidget {
           ),
 
           // Min/max hint
-          if (offer.minAmount != null &&
-              offer.maxAmount != null &&
-              enterFiatMode) ...[
+          if (offer.minAmount != null && offer.maxAmount != null) ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -1065,7 +1075,7 @@ class _AmountCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  'Limits: ${offer.fiatCurrency} ${offer.minAmount!.toStringAsFixed(0)} – ${offer.maxAmount!.toStringAsFixed(0)}',
+                  'Limits: ${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} ${offer.minAmount!.toStringAsFixed(offer.limitType == OfferLimitType.asset ? 4 : 0)} - ${offer.maxAmount!.toStringAsFixed(offer.limitType == OfferLimitType.asset ? 4 : 0)}',
                   style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                 ),
               ],

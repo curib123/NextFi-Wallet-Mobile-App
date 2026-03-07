@@ -285,6 +285,7 @@ class _WalletSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = walletName.trim().isEmpty ? 'My Wallet' : walletName.trim();
+    const subtitle = 'Non-Custodial Stellar Wallet';
     return Material(
       color: AppColor.of(context).surface,
       child: InkWell(
@@ -345,6 +346,19 @@ class _WalletSwitcher extends StatelessWidget {
                           fontSize: 12.9,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.1,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 10.2,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.05,
+                          height: 1.1,
                         ),
                       ),
                     ],

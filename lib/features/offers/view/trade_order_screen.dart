@@ -30,6 +30,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 // ─── Status accent colors ─────────────────────────────────────────────────────
 
 Color _statusAccent(TradeStatus s, AppColor colors) => switch (s) {
+  TradeStatus.starting => colors.textSecondary,
   TradeStatus.created => colors.warning,
   TradeStatus.cryptoLocked => colors.primary,
   TradeStatus.fiatSent => colors.warning,
@@ -42,6 +43,7 @@ Color _statusAccent(TradeStatus s, AppColor colors) => switch (s) {
 };
 
 IconData _statusIcon(TradeStatus s) => switch (s) {
+  TradeStatus.starting => Icons.schedule_rounded,
   TradeStatus.created => Icons.hourglass_empty_rounded,
   TradeStatus.cryptoLocked => Icons.lock_clock_rounded,
   TradeStatus.fiatSent => Icons.north_east_rounded,
@@ -63,6 +65,8 @@ String _statusLabel(
 }) {
   final isSellOffer = offerType == TradeOfferType.sell;
   switch (s) {
+    case TradeStatus.starting:
+      return isUserSeller ? 'Review Request' : 'Waiting for Merchant';
     case TradeStatus.created:
       if (isSellOffer) {
         return isUserFiatPayer ? 'Send Payment Now' : 'Waiting for Payment';
@@ -1052,6 +1056,23 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
     );
   }
 
+  Future<void> _confirmRequest() async {
+    final ok = await _showConfirm(
+      title: 'Confirm Trade Request',
+      body:
+          'This will accept the request and move the trade from pending request to active trade.',
+      confirmLabel: 'Confirm request',
+    );
+    if (!ok) return;
+    _runAction(
+      () async {
+        final updated = await _tradesCore.confirmRequest(_trade.id);
+        if (mounted) setState(() => _trade = updated);
+      },
+      successMsg: 'Trade request confirmed.',
+    );
+  }
+
   Future<void> _ensureEscrowLockedBeforeConfirmFiat() async {
     if (!_isUserEscrowLocker) return;
 
@@ -1563,6 +1584,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           loading: _actionLoading,
           onLockCrypto: _lockCrypto,
           onMarkFiatSent: _markFiatSent,
+          onConfirmRequest: _confirmRequest,
           onConfirmFiat: _confirmFiat,
           onClaimCrypto: _claimCrypto,
           onCancel: _cancelTrade,
@@ -3048,6 +3070,7 @@ class _TimelineCard extends StatelessWidget {
 
     if (isSellOffer) {
       return [
+        (TradeStatus.starting, 'Request Sent', actingAsBuyer ? 'Waiting for merchant confirmation' : 'Review and confirm this request'),
         (TradeStatus.created, 'Trade Started', createdDesc),
         (TradeStatus.fiatSent, fiatSentTitle, fiatSentDesc),
         (TradeStatus.fiatConfirmed, '$asset Locked', fiatConfirmedDesc),
@@ -3056,6 +3079,7 @@ class _TimelineCard extends StatelessWidget {
     }
 
     return [
+      (TradeStatus.starting, 'Request Sent', actingAsBuyer ? 'Waiting for merchant confirmation' : 'Review and confirm this request'),
       (TradeStatus.created, 'Trade Started', createdDesc),
       (TradeStatus.cryptoLocked, '$asset Locked', lockedDesc),
       (TradeStatus.fiatSent, fiatSentTitle, fiatSentDesc),
@@ -3864,6 +3888,7 @@ class _BottomActions extends StatelessWidget {
     required this.loading,
     required this.onLockCrypto,
     required this.onMarkFiatSent,
+    required this.onConfirmRequest,
     required this.onConfirmFiat,
     required this.onClaimCrypto,
     required this.onCancel,
@@ -3886,6 +3911,7 @@ class _BottomActions extends StatelessWidget {
   final bool loading;
   final VoidCallback onLockCrypto;
   final VoidCallback onMarkFiatSent;
+  final VoidCallback onConfirmRequest;
   final VoidCallback onConfirmFiat;
   final VoidCallback onClaimCrypto;
   final VoidCallback onCancel;
@@ -3913,6 +3939,8 @@ class _BottomActions extends StatelessWidget {
         escrowStatus == EscrowStatus.failed ||
         escrowStatus == EscrowStatus.unknown;
 
+    final bool showConfirmRequest =
+        isParticipant && isUserSeller && s == TradeStatus.starting;
     final bool showConfirm =
         isParticipant && s == TradeStatus.fiatSent && !isUserFiatPayer;
     final bool showClaim =
@@ -3935,10 +3963,9 @@ class _BottomActions extends StatelessWidget {
         (isSellOffer
             ? s == TradeStatus.created
             : s == TradeStatus.cryptoLocked);
-    final bool showCancel =
-        isParticipant &&
-        (s == TradeStatus.created || s == TradeStatus.cryptoLocked);
-    final hasPrimary = showLock || showMarkFiat || showConfirm || showClaim;
+    final bool showCancel = isParticipant && isUserBuyer && s == TradeStatus.starting;
+    final hasPrimary =
+        showConfirmRequest || showLock || showMarkFiat || showConfirm || showClaim;
 
     if (!hasPrimary && !showCancel && !s.isActive) {
       return const SizedBox.shrink();
@@ -3955,6 +3982,16 @@ class _BottomActions extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (showConfirmRequest)
+            _ActionBtn(
+              label: 'Confirm Request',
+              icon: Icons.verified_user_rounded,
+              accent: colors.primary,
+              loading: loading,
+              onTap: onConfirmRequest,
+            ),
+          if (showConfirmRequest && (showLock || showMarkFiat || showConfirm || showClaim))
+            const SizedBox(height: 10),
           if (showLock)
             _ActionBtn(
               label: 'Lock ${trade.asset.toUpperCase()}',

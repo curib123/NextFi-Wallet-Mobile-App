@@ -118,6 +118,31 @@ class AssetWidget extends StatelessWidget {
     return coinPriceNow - prev;
   }
 
+  List<double> _miniSeriesFor(
+    CurrencyVM cur,
+    String symbolUpper,
+    PriceWindow window,
+  ) {
+    switch (symbolUpper) {
+      case 'XLM':
+        return switch (window) {
+          PriceWindow.h24 => cur.xlmHistory24h,
+          PriceWindow.d7 => cur.xlmHistory7,
+          PriceWindow.d30 => cur.xlmHistory30,
+          PriceWindow.y1 => cur.xlmHistory365,
+        };
+      case 'USDC':
+        return switch (window) {
+          PriceWindow.h24 => cur.usdcHistory24h,
+          PriceWindow.d7 => cur.usdcHistory7,
+          PriceWindow.d30 => cur.usdcHistory30,
+          PriceWindow.y1 => cur.usdcHistory365,
+        };
+      default:
+        return const <double>[];
+    }
+  }
+
   String formatTokenAmount(
     double v, {
     int bigMaxDecimals = 4,
@@ -131,6 +156,9 @@ class AssetWidget extends StatelessWidget {
       final fmt = NumberFormat('#,##0.${'#' * bigMaxDecimals}');
       return _trimZeros(fmt.format(v));
     } else {
+      if (v.abs() < 0.01) {
+        return v.toStringAsFixed(4);
+      }
       final fmt = NumberFormat('0.${'#' * smallMaxDecimals}');
       return _trimZeros(fmt.format(v));
     }
@@ -219,38 +247,10 @@ class AssetWidget extends StatelessWidget {
     final listView = ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8, bottom: 120),
-      itemCount: assets.length + 2, // +2 for horizontal controls row and footer
+      itemCount: assets.length + 1,
       itemBuilder: (context, index) {
-        if (index == 0) {
-          // Horizontal row with Price Window (left) and Reserve Balance (right)
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  // Price Window Selector - Left side
-                  Expanded(
-                    child: _PriceWindowSelector(
-                      colors: colors,
-                      selectedWindow: window,
-                      windowLabel: _windowShortLabel(window),
-                      onWindowChanged: (newWindow) {
-                        homeVM?.setPriceWindow(newWindow);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Reserve Balance Card - Right side
-                  Expanded(
-                    child: _ReserveBalanceCard(colors: colors, money: money),
-                  ),
-                ],
-              ),
-            ),
-          );
-        } else if (index <= assets.length) {
-          final a = assets[index - 1];
+        if (index < assets.length) {
+          final a = assets[index];
           final balance = _liveBalance(
             context,
             a.symbol.toUpperCase(),
@@ -271,22 +271,23 @@ class AssetWidget extends StatelessWidget {
               coinPriceNow: coinPrice,
               fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), balance),
               priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
+              miniSeries: _miniSeriesFor(cur, a.symbol.toUpperCase(), window),
               money: money,
               onTap: () => _openReceive(context, a),
               formatTokenAmount: formatTokenAmount,
               formatSignedMoney: _formatSignedMoney,
             ),
           );
-        } else {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: AssetGuideFooter(
-              colors: AppColor.of(context),
-              xlmBalance: _liveBalance(context, 'XLM', reactive: true),
-              usdcBalance: _liveBalance(context, 'USDC', reactive: true),
-            ),
-          );
         }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: AssetGuideFooter(
+            colors: AppColor.of(context),
+            xlmBalance: _liveBalance(context, 'XLM', reactive: true),
+            usdcBalance: _liveBalance(context, 'USDC', reactive: true),
+          ),
+        );
       },
     );
 
@@ -490,12 +491,12 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Price Window ${widget.windowLabel}',
+                        'Wallet Value Trend • ${widget.windowLabel}',
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 12.6,
+                          fontWeight: FontWeight.w700,
                           color: widget.colors.textPrimary,
-                          letterSpacing: -0.2,
+                          letterSpacing: -0.1,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -637,12 +638,12 @@ class _ReserveBalanceCardState extends State<_ReserveBalanceCard>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Reserve ${state.xlmTotalReserve.toStringAsFixed(1)} XLM',
+                        'Network Reserve: ${state.xlmTotalReserve.toStringAsFixed(1)} XLM',
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 12.6,
+                          fontWeight: FontWeight.w700,
                           color: widget.colors.textPrimary,
-                          letterSpacing: -0.2,
+                          letterSpacing: -0.1,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),

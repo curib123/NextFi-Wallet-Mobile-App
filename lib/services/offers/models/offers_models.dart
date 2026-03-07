@@ -23,6 +23,18 @@ OfferStatus? _readOfferStatus(dynamic value) {
   }
 }
 
+OfferLimitType? _readOfferLimitType(dynamic value) {
+  final v = value?.toString().trim().toUpperCase();
+  switch (v) {
+    case 'FIAT':
+      return OfferLimitType.fiat;
+    case 'ASSET':
+      return OfferLimitType.asset;
+    default:
+      return null;
+  }
+}
+
 class OfferModel {
   final String id;
   final OfferType? type;
@@ -30,6 +42,7 @@ class OfferModel {
   final String asset;
   final String fiatCurrency;
   final String? receiverStellarAddress;
+  final OfferLimitType? limitType;
   final double? marginPercent;
   final double? successRate;
   final double? marketPrice; // Price in fiat per unit of crypto (e.g., PHP 1.00 per XLM)
@@ -54,6 +67,7 @@ class OfferModel {
     required this.asset,
     required this.fiatCurrency,
     this.receiverStellarAddress,
+    this.limitType,
     this.marginPercent,
     this.successRate,
     this.marketPrice,
@@ -177,6 +191,7 @@ class OfferModel {
         ]);
         return text.isEmpty ? null : text;
       })(),
+      limitType: _readOfferLimitType(json['limitType'] ?? json['limit_type']),
       marginPercent: readDouble(const ['marginPercent', 'margin_percent']),
       successRate: readDouble(const ['successRate', 'success_rate']),
       marketPrice: readDouble(const ['marketPrice', 'market_price', 'price']),

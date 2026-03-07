@@ -1,4 +1,5 @@
 enum TradeStatus {
+  starting,
   created,
   cryptoLocked,
   fiatSent,
@@ -11,6 +12,8 @@ enum TradeStatus {
 
   static TradeStatus fromString(String? v) {
     switch (v?.toUpperCase().replaceAll('_', '').replaceAll('-', '')) {
+      case 'STARTING':
+        return TradeStatus.starting;
       case 'CREATED':
         return TradeStatus.created;
       case 'CRYPTOLOCKED':
@@ -45,6 +48,8 @@ enum TradeStatus {
     switch (this) {
       case TradeStatus.created:
         return 'Waiting for Escrow';
+      case TradeStatus.starting:
+        return 'Waiting for Merchant';
       case TradeStatus.cryptoLocked:
         return 'Ready to Pay';
       case TradeStatus.fiatSent:
@@ -67,6 +72,8 @@ enum TradeStatus {
   /// Returns the icon for this status
   String get iconName {
     switch (this) {
+      case TradeStatus.starting:
+        return 'schedule';
       case TradeStatus.created:
         return 'hourglass_empty';
       case TradeStatus.cryptoLocked:
@@ -89,6 +96,7 @@ enum TradeStatus {
   }
 
   bool get isActive =>
+      this == TradeStatus.starting ||
       this == TradeStatus.created ||
       this == TradeStatus.cryptoLocked ||
       this == TradeStatus.fiatSent ||
@@ -477,6 +485,8 @@ class TradeModel {
       expiresAt: readDate(const [
         'expiresAt',
         'expires_at',
+        'startingExpiresAt',
+        'starting_expires_at',
         'paymentDeadline',
         'payment_deadline',
       ]),

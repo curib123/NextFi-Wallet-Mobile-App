@@ -438,7 +438,10 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                 spacing: 5,
                 runSpacing: 4,
                 children: [
-                  _SmallChip(c: c, label: 'Deal Limit'),
+                    _SmallChip(
+                      c: c,
+                      label: '${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} limits',
+                    ),
                   if (offer.minAmount != null || offer.maxAmount != null)
                     _SmallChip(
                       c: c,
@@ -485,7 +488,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  'Available: ${offer.availableQty} ${offer.asset}',
+                  'Watcher sync: ${offer.availableQty} ${offer.asset}',
                   style: _T.available.copyWith(color: c.textSecondary),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,

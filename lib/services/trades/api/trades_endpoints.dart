@@ -7,6 +7,7 @@ class TradesEndpoints {
   static String getOne(String id) => '$base/$id';
 
   // Trade actions
+  static String confirmRequest(String id) => '$base/$id/confirm-request';
   static String markFiatSent(String id) => '$base/$id/mark-fiat-sent';
   static String confirmFiat(String id) => '$base/$id/confirm-fiat';
   static String cancel(String id) => '$base/$id/cancel';
