@@ -142,9 +142,10 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       duration: const Duration(milliseconds: 80),
       reverseDuration: const Duration(milliseconds: 150),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.97).animate(
-      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut),
-    );
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: 0.97,
+    ).animate(CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut));
     _loadData();
   }
 
@@ -171,8 +172,10 @@ class _PublicOfferTileState extends State<PublicOfferTile>
     await Future.wait([_loadReviews(), _loadPaymentMethods()]);
   }
 
-  List<String> _resolveSellerIds(OfferModel offer,
-      {MerchantProfileModel? profile}) {
+  List<String> _resolveSellerIds(
+    OfferModel offer, {
+    MerchantProfileModel? profile,
+  }) {
     final ids = <String>[];
     void add(dynamic raw) {
       final v = raw?.toString().trim() ?? '';
@@ -227,8 +230,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       final summary = await _reviewsCore.getOfferRatingSummary(offerId);
       if (mounted) {
         setState(() {
-          _averageRating =
-              summary.averageRating ?? _merchantProfile?.avgRating;
+          _averageRating = summary.averageRating ?? _merchantProfile?.avgRating;
           _reviewCount = summary.reviewCount;
           _loadingReviews = false;
         });
@@ -245,8 +247,9 @@ class _PublicOfferTileState extends State<PublicOfferTile>
 
   Future<void> _loadPaymentMethods() async {
     try {
-      final methods =
-      await _offerPaymentCore.getPaymentMethodsForOffer(widget.offer.id);
+      final methods = await _offerPaymentCore.getPaymentMethodsForOffer(
+        widget.offer.id,
+      );
       if (mounted) {
         setState(() {
           _paymentMethodsMap = {for (final m in methods) m.id: m};
@@ -261,8 +264,9 @@ class _PublicOfferTileState extends State<PublicOfferTile>
   bool get _isBuy => widget.offer.type == OfferType.sell;
   Color get _typeColor => _isBuy ? widget.c.success : widget.c.error;
 
-  String _formatCount(int n) =>
-      n >= 1000 ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k' : '$n';
+  String _formatCount(int n) => n >= 1000
+      ? '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k'
+      : '$n';
 
   List<PaymentMethodModel> get _resolvedMethods {
     final ids = _paymentMethodsMap.isNotEmpty
@@ -295,9 +299,9 @@ class _PublicOfferTileState extends State<PublicOfferTile>
       onTapDown: widget.enabled ? (_) => _pressCtrl.forward() : null,
       onTapUp: widget.enabled
           ? (_) {
-        _pressCtrl.reverse();
-        widget.onTap();
-      }
+              _pressCtrl.reverse();
+              widget.onTap();
+            }
           : null,
       onTapCancel: widget.enabled ? () => _pressCtrl.reverse() : null,
       child: ScaleTransition(
@@ -323,12 +327,6 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (!_loadingMerchant && _merchantProfile != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _MerchantTypeBadge(
-                          c: c, type: _merchantProfile!.type),
-                    ),
                   _buildMerchantRow(c),
                   const SizedBox(height: 12),
                   _Divider(c: c),
@@ -364,30 +362,41 @@ class _PublicOfferTileState extends State<PublicOfferTile>
         Expanded(
           child: _loadingMerchant
               ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ShimBox(
-                  c: c, w: 120, h: 12, r: 4, anim: widget.shimmerAnim),
-              const SizedBox(height: 6),
-              _ShimBox(
-                  c: c, w: 80, h: 10, r: 3, anim: widget.shimmerAnim),
-            ],
-          )
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ShimBox(
+                      c: c,
+                      w: 120,
+                      h: 12,
+                      r: 4,
+                      anim: widget.shimmerAnim,
+                    ),
+                    const SizedBox(height: 6),
+                    _ShimBox(
+                      c: c,
+                      w: 80,
+                      h: 10,
+                      r: 3,
+                      anim: widget.shimmerAnim,
+                    ),
+                  ],
+                )
               : _merchantProfile != null
               ? _MerchantInfo(
-            c: c,
-            profile: _merchantProfile!,
-            averageRating: _averageRating,
-            reviewCount: _reviewCount,
-            loadingReviews: _loadingReviews,
-            shimmerAnim: widget.shimmerAnim,
-            formatCount: _formatCount,
-          )
+                  c: c,
+                  profile: _merchantProfile!,
+                  merchantType: _merchantProfile!.type,
+                  averageRating: _averageRating,
+                  reviewCount: _reviewCount,
+                  loadingReviews: _loadingReviews,
+                  shimmerAnim: widget.shimmerAnim,
+                  formatCount: _formatCount,
+                )
               : Text(
-            'Unknown merchant',
-            style: _T.caption.copyWith(color: c.textSecondary),
-          ),
+                  'Unknown merchant',
+                  style: _T.caption.copyWith(color: c.textSecondary),
+                ),
         ),
       ],
     );
@@ -438,15 +447,16 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                 spacing: 5,
                 runSpacing: 4,
                 children: [
-                    _SmallChip(
-                      c: c,
-                      label: '${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} limits',
-                    ),
+                  _SmallChip(
+                    c: c,
+                    label:
+                        '${offer.limitType == OfferLimitType.asset ? offer.asset : offer.fiatCurrency} limits',
+                  ),
                   if (offer.minAmount != null || offer.maxAmount != null)
                     _SmallChip(
                       c: c,
                       label:
-                      'Min: ${offer.minAmount ?? "—"} · Max: ${offer.maxAmount ?? "—"}',
+                          'Min: ${offer.minAmount ?? "—"} · Max: ${offer.maxAmount ?? "—"}',
                     ),
                 ],
               ),
@@ -467,7 +477,11 @@ class _PublicOfferTileState extends State<PublicOfferTile>
   // ── FOOTER ──────────────────────────────────────────────────────────────────
 
   Widget _buildFooter(
-      AppColor c, OfferModel offer, Color typeColor, bool isBuy) {
+    AppColor c,
+    OfferModel offer,
+    Color typeColor,
+    bool isBuy,
+  ) {
     final methods = _resolvedMethods;
     final fallback = _fallbackPaymentNames();
     final rate = offer.successRate;
@@ -503,24 +517,27 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                 child: _PaymentMethodChip(c: c, method: methods.first),
               )
             else if (fallback.isNotEmpty)
-                Expanded(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.account_balance_wallet_outlined,
-                          size: 12, color: c.textSecondary),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          fallback,
-                          style: _T.caption.copyWith(color: c.textSecondary),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
+              Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 12,
+                      color: c.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        fallback,
+                        style: _T.caption.copyWith(color: c.textSecondary),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
           ],
         ),
 
@@ -565,11 +582,11 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final initials = profile != null && profile!.displayName.isNotEmpty
         ? profile!.displayName
-        .trim()
-        .split(' ')
-        .take(2)
-        .map((w) => w[0].toUpperCase())
-        .join()
+              .trim()
+              .split(' ')
+              .take(2)
+              .map((w) => w[0].toUpperCase())
+              .join()
         : '?';
     return Container(
       width: 44,
@@ -602,6 +619,7 @@ class _MerchantInfo extends StatelessWidget {
   const _MerchantInfo({
     required this.c,
     required this.profile,
+    required this.merchantType,
     required this.averageRating,
     required this.reviewCount,
     required this.loadingReviews,
@@ -611,6 +629,7 @@ class _MerchantInfo extends StatelessWidget {
 
   final AppColor c;
   final MerchantProfileModel profile;
+  final MerchantType merchantType;
   final double? averageRating;
   final int reviewCount;
   final bool loadingReviews;
@@ -644,7 +663,8 @@ class _MerchantInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // FIX: was [profile.tier]! — replaced with null-safe fallbacks
-    final tierBg = _tierBg(c)[profile.tier] ?? c.textSecondary.withValues(alpha: 0.11);
+    final tierBg =
+        _tierBg(c)[profile.tier] ?? c.textSecondary.withValues(alpha: 0.11);
     final tierFg = _tierFg(c)[profile.tier] ?? c.textSecondary;
     final tierText = _tierLabel[profile.tier] ?? 'Unknown';
 
@@ -659,7 +679,7 @@ class _MerchantInfo extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Flexible(
+            Expanded(
               child: Text(
                 profile.displayName,
                 style: _T.merchantName.copyWith(color: c.textPrimary),
@@ -669,6 +689,8 @@ class _MerchantInfo extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             _TierBadge(c: c, bg: tierBg, fg: tierFg, label: tierText),
+            const SizedBox(width: 5),
+            _MerchantTypeBadge(c: c, type: merchantType),
           ],
         ),
 
@@ -686,8 +708,10 @@ class _MerchantInfo extends StatelessWidget {
             Container(
               width: 6,
               height: 6,
-              decoration:
-              BoxDecoration(color: availColor, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: availColor,
+                shape: BoxShape.circle,
+              ),
             ),
             const SizedBox(width: 5),
 
@@ -741,11 +765,12 @@ class _MerchantInfo extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TierBadge extends StatelessWidget {
-  const _TierBadge(
-      {required this.c,
-        required this.bg,
-        required this.fg,
-        required this.label});
+  const _TierBadge({
+    required this.c,
+    required this.bg,
+    required this.fg,
+    required this.label,
+  });
   final AppColor c;
   final Color bg;
   final Color fg;
@@ -802,11 +827,8 @@ class _AssetLogo extends StatelessWidget {
       child: Image.network(
         logoUrl,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Icon(
-          Icons.currency_bitcoin,
-          size: 16,
-          color: c.textSecondary,
-        ),
+        errorBuilder: (_, __, ___) =>
+            Icon(Icons.currency_bitcoin, size: 16, color: c.textSecondary),
       ),
     ),
   );
@@ -817,8 +839,7 @@ class _AssetLogo extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PricePill extends StatelessWidget {
-  const _PricePill(
-      {required this.c, required this.price, required this.color});
+  const _PricePill({required this.c, required this.price, required this.color});
   final AppColor c;
   final String price;
   final Color color;
@@ -845,8 +866,11 @@ class _PricePill extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton(
-      {required this.c, required this.label, required this.color});
+  const _ActionButton({
+    required this.c,
+    required this.label,
+    required this.color,
+  });
   final AppColor c;
   final String label;
   final Color color;
@@ -859,10 +883,7 @@ class _ActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
     ),
     alignment: Alignment.center,
-    child: Text(
-      label,
-      style: _T.button.copyWith(color: c.onPrimary),
-    ),
+    child: Text(label, style: _T.button.copyWith(color: c.onPrimary)),
   );
 }
 
@@ -960,22 +981,22 @@ class _PaymentMethodChip extends StatelessWidget {
             ),
             child: logo != null && logo.isNotEmpty
                 ? ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Image.network(
-                logo,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 11,
-                  color: c.textSecondary,
-                ),
-              ),
-            )
+                    borderRadius: BorderRadius.circular(4),
+                    child: Image.network(
+                      logo,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 11,
+                        color: c.textSecondary,
+                      ),
+                    ),
+                  )
                 : Icon(
-              Icons.account_balance_wallet_outlined,
-              size: 11,
-              color: c.textSecondary,
-            ),
+                    Icons.account_balance_wallet_outlined,
+                    size: 11,
+                    color: c.textSecondary,
+                  ),
           ),
         ),
         const SizedBox(width: 5),
@@ -1063,15 +1084,15 @@ class _MerchantTypeBadge extends StatelessWidget {
       return _BadgeStyle(
         label: 'Business',
         icon: Icons.business_center_outlined,
-        bg: c.info.withValues(alpha: 0.10),
-        fg: c.info,
+        bg: c.info,
+        fg: c.onPrimary,
       );
     }
     return _BadgeStyle(
       label: 'Individual',
       icon: Icons.person_outline_rounded,
-      bg: c.textSecondary.withValues(alpha: 0.08),
-      fg: c.textSecondary,
+      bg: c.primaryDark,
+      fg: c.onPrimary,
     );
   }
 
@@ -1079,20 +1100,23 @@ class _MerchantTypeBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = _resolve(c);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: s.bg,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: s.fg.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(s.icon, size: 11, color: s.fg),
-          const SizedBox(width: 4),
+          Icon(s.icon, size: 9.5, color: s.fg),
+          const SizedBox(width: 3),
           Text(
             s.label.toUpperCase(),
-            style: _T.micro.copyWith(color: s.fg, letterSpacing: 0.6),
+            style: _T.micro.copyWith(
+              color: s.fg,
+              fontSize: 8.6,
+              letterSpacing: 0.35,
+            ),
           ),
         ],
       ),
@@ -1133,10 +1157,7 @@ class _Dot extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 4),
-    child: Text(
-      '·',
-      style: _T.caption.copyWith(color: c.textSecondary),
-    ),
+    child: Text('·', style: _T.caption.copyWith(color: c.textSecondary)),
   );
 }
 

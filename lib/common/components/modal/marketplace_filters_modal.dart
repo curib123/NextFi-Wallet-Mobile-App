@@ -155,7 +155,9 @@ class MarketOfferFilters {
     if (sortBy != null) parts.add('Sort ${_sortLabel(sortBy!)}');
     if ((sellerId ?? '').isNotEmpty) parts.add('Seller');
     if ((receiverStellarAddress ?? '').isNotEmpty) parts.add('Receiver');
-    return parts.isEmpty ? 'Search, amount, payment method, sort' : parts.join(' | ');
+    return parts.isEmpty
+        ? 'Search, amount, payment method, sort'
+        : parts.join(' | ');
   }
 
   @override
@@ -272,15 +274,17 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
 
   void _apply() {
     _close(
-      _filters.copyWith(
-        q: _qCtrl.text,
-        fiatCurrency: _filters.fiatCurrency,
-        amount: _amountCtrl.text,
-        minAmount: _minAmountCtrl.text,
-        maxAmount: _maxAmountCtrl.text,
-        sellerId: _sellerCtrl.text,
-        receiverStellarAddress: _receiverCtrl.text,
-      ).normalized(),
+      _filters
+          .copyWith(
+            q: _qCtrl.text,
+            fiatCurrency: _filters.fiatCurrency,
+            amount: _amountCtrl.text,
+            minAmount: _minAmountCtrl.text,
+            maxAmount: _maxAmountCtrl.text,
+            sellerId: _sellerCtrl.text,
+            receiverStellarAddress: _receiverCtrl.text,
+          )
+          .normalized(),
     );
   }
 
@@ -288,233 +292,422 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final activeCount = _filters
+        .copyWith(
+          q: _qCtrl.text,
+          amount: _amountCtrl.text,
+          minAmount: _minAmountCtrl.text,
+          maxAmount: _maxAmountCtrl.text,
+          sellerId: _sellerCtrl.text,
+          receiverStellarAddress: _receiverCtrl.text,
+        )
+        .normalized()
+        .activeCount;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 16),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Marketplace Filters',
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Narrow the list to offers that match how you want to trade.',
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 12.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _SectionLabel(label: 'QUICK MATCH', c: c),
-            const SizedBox(height: 10),
-            _ModalField(
-              controller: _qCtrl,
-              label: 'Search',
-              hint: 'Asset, fiat, seller name, email',
-              icon: Icons.search_rounded,
-              action: TextInputAction.next,
-              helper:
-                  'Search by asset, currency, or seller details to find offers faster.',
-              c: c,
-            ),
-            const SizedBox(height: 10),
-            _SegmentRow<String>(
-              label: 'Asset',
-              value: _filters.asset,
-              options: const ['XLM', 'USDC'],
-              labelBuilder: (value) => value,
-              onChanged: (value) => setState(() {
-                _filters = _filters.copyWith(asset: value);
-              }),
-              c: c,
-            ),
-            const SizedBox(height: 10),
-            _ModalDropdown<String?>(
-              value: _filters.fiatCurrency,
-              label: 'Fiat Currency',
-              icon: Icons.payments_outlined,
-              helper:
-                  'Starts with your current app currency and can be changed for this search.',
-              c: c,
-              items: [
-                ...kFiatOptions.map(
-                  (fiat) => DropdownMenuItem<String?>(
-                    value: fiat.code.toUpperCase(),
-                    child: Text('${fiat.flag} ${fiat.code.toUpperCase()}'),
-                  ),
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: c.border.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-              ],
-              onChanged: (value) => setState(() {
-                _filters = _filters.copyWith(fiatCurrency: value);
-              }),
+              ),
             ),
-            const SizedBox(height: 10),
-            _ModalField(
-              controller: _amountCtrl,
-              label: 'Amount',
-              hint: 'Match min <= amount <= max',
-              icon: Icons.calculate_outlined,
-              action: TextInputAction.next,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              helper:
-                  'Show offers that can handle the amount you plan to trade.',
-              c: c,
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: _ModalField(
-                    controller: _minAmountCtrl,
-                    label: 'Min Amount',
-                    hint: 'Range overlap start',
-                    icon: Icons.south_west_rounded,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Marketplace Filters',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Refine offers by asset, amount, payment method, and seller details.',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 13,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: activeCount > 0
+                        ? c.primary.withValues(alpha: 0.10)
+                        : c.border.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: activeCount > 0
+                          ? c.primary.withValues(alpha: 0.20)
+                          : c.border.withValues(alpha: 0.65),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        '$activeCount',
+                        style: TextStyle(
+                          color: activeCount > 0 ? c.primary : c.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      Text(
+                        activeCount == 1 ? 'filter' : 'filters',
+                        style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _FilterSectionCard(
+              c: c,
+              label: 'DISCOVER',
+              title: 'Find matching offers quickly',
+              description:
+                  'Start with what you know most: search terms, asset, fiat currency, and amount.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ModalField(
+                    controller: _qCtrl,
+                    label: 'Search',
+                    hint: 'Asset, fiat, seller name, email',
+                    icon: Icons.search_rounded,
                     action: TextInputAction.next,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    helper:
+                        'Search by asset, currency, or seller details to find offers faster.',
                     c: c,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _ModalField(
-                    controller: _maxAmountCtrl,
-                    label: 'Max Amount',
-                    hint: 'Range overlap end',
-                    icon: Icons.north_east_rounded,
-                    action: TextInputAction.next,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                  const SizedBox(height: 14),
+                  _SegmentRow<String>(
+                    label: 'Asset',
+                    value: _filters.asset,
+                    options: const ['XLM', 'USDC'],
+                    labelBuilder: (value) => value,
+                    onChanged: (value) => setState(() {
+                      _filters = _filters.copyWith(asset: value);
+                    }),
                     c: c,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _SectionLabel(label: 'PAYMENT & SORT', c: c),
-            const SizedBox(height: 10),
-            _ModalDropdown<String?>(
-              value: _filters.paymentMethodId,
-              label: 'Payment Method',
-              icon: Icons.account_balance_outlined,
-              c: c,
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('All payment methods'),
-                ),
-                ...widget.paymentMethods.map(
-                  (method) => DropdownMenuItem<String?>(
-                    value: method.id,
-                    child: Text(method.name),
+                  const SizedBox(height: 14),
+                  _ModalDropdown<String?>(
+                    value: _filters.fiatCurrency,
+                    label: 'Fiat Currency',
+                    icon: Icons.payments_outlined,
+                    helper:
+                        'Starts with your current app currency and can be changed for this search.',
+                    c: c,
+                    items: [
+                      ...kFiatOptions.map(
+                        (fiat) => DropdownMenuItem<String?>(
+                          value: fiat.code.toUpperCase(),
+                          child: Text(
+                            '${fiat.flag} ${fiat.code.toUpperCase()}',
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() {
+                      _filters = _filters.copyWith(fiatCurrency: value);
+                    }),
                   ),
-                ),
-              ],
-              onChanged: (value) => setState(() {
-                _filters = _filters.copyWith(paymentMethodId: value);
-              }),
-            ),
-            const SizedBox(height: 10),
-            _ModalDropdown<OfferSortBy?>(
-              value: _filters.sortBy,
-              label: 'Sort By',
-              icon: Icons.sort_rounded,
-              c: c,
-              items: [
-                const DropdownMenuItem<OfferSortBy?>(
-                  value: null,
-                  child: Text('Recommended default'),
-                ),
-                ...OfferSortBy.values.map(
-                  (sort) => DropdownMenuItem<OfferSortBy?>(
-                    value: sort,
-                    child: Text(_sortLabel(sort)),
+                  const SizedBox(height: 14),
+                  _ModalField(
+                    controller: _amountCtrl,
+                    label: 'Amount',
+                    hint: 'Match min <= amount <= max',
+                    icon: Icons.calculate_outlined,
+                    action: TextInputAction.next,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    helper:
+                        'Show offers that can handle the amount you plan to trade.',
+                    c: c,
                   ),
-                ),
-              ],
-              onChanged: (value) => setState(() {
-                _filters = _filters.copyWith(sortBy: value);
-              }),
-            ),
-            const SizedBox(height: 10),
-            _SegmentRow<OfferSortOrder>(
-              label: 'Sort Order',
-              value: _filters.sortOrder,
-              options: OfferSortOrder.values,
-              labelBuilder: (value) => value.name.toUpperCase(),
-              onChanged: (value) => setState(() {
-                _filters = _filters.copyWith(sortOrder: value);
-              }),
-              c: c,
-            ),
-            const SizedBox(height: 10),
-            _SectionLabel(label: 'ADVANCED', c: c),
-            const SizedBox(height: 10),
-            _ModalField(
-              controller: _sellerCtrl,
-              label: 'Seller ID',
-              hint: 'Only show one seller',
-              icon: Icons.storefront_outlined,
-              action: TextInputAction.next,
-              helper:
-                  'Use this when you already know the seller you want to trade with.',
-              c: c,
-            ),
-            const SizedBox(height: 10),
-            _ModalField(
-              controller: _receiverCtrl,
-              label: 'Receiver Stellar Address',
-              hint: 'Only show one receiver address',
-              icon: Icons.account_balance_wallet_outlined,
-              action: TextInputAction.done,
-              helper:
-                  'Useful when you want offers linked to a specific wallet address.',
-              c: c,
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ModalField(
+                          controller: _minAmountCtrl,
+                          label: 'Min Amount',
+                          hint: 'Range overlap start',
+                          icon: Icons.south_west_rounded,
+                          action: TextInputAction.next,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          c: c,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ModalField(
+                          controller: _maxAmountCtrl,
+                          label: 'Max Amount',
+                          hint: 'Range overlap end',
+                          icon: Icons.north_east_rounded,
+                          action: TextInputAction.next,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          c: c,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _close(const MarketOfferFilters()),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+            _FilterSectionCard(
+              c: c,
+              label: 'PREFERENCE',
+              title: 'Choose how offers are ranked',
+              description:
+                  'Focus on the payment method you can use and the order you want to browse results.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ModalDropdown<String?>(
+                    value: _filters.paymentMethodId,
+                    label: 'Payment Method',
+                    icon: Icons.account_balance_outlined,
+                    c: c,
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('All payment methods'),
                       ),
-                    ),
-                    child: const Text('Reset'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _apply,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: c.primary,
-                      foregroundColor: c.onPrimary,
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      ...widget.paymentMethods.map(
+                        (method) => DropdownMenuItem<String?>(
+                          value: method.id,
+                          child: Text(method.name),
+                        ),
                       ),
-                    ),
-                    child: const Text(
-                      'Apply Filters',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    ],
+                    onChanged: (value) => setState(() {
+                      _filters = _filters.copyWith(paymentMethodId: value);
+                    }),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  _ModalDropdown<OfferSortBy?>(
+                    value: _filters.sortBy,
+                    label: 'Sort By',
+                    icon: Icons.sort_rounded,
+                    c: c,
+                    items: [
+                      const DropdownMenuItem<OfferSortBy?>(
+                        value: null,
+                        child: Text('Recommended default'),
+                      ),
+                      ...OfferSortBy.values.map(
+                        (sort) => DropdownMenuItem<OfferSortBy?>(
+                          value: sort,
+                          child: Text(_sortLabel(sort)),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() {
+                      _filters = _filters.copyWith(sortBy: value);
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  _SegmentRow<OfferSortOrder>(
+                    label: 'Sort Order',
+                    value: _filters.sortOrder,
+                    options: OfferSortOrder.values,
+                    labelBuilder: (value) =>
+                        value.name[0].toUpperCase() + value.name.substring(1),
+                    onChanged: (value) => setState(() {
+                      _filters = _filters.copyWith(sortOrder: value);
+                    }),
+                    c: c,
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(height: 14),
+            _FilterSectionCard(
+              c: c,
+              label: 'ADVANCED',
+              title: 'Target a specific seller or wallet',
+              description:
+                  'Use these only when you want to narrow results to a known seller or receiver address.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ModalField(
+                    controller: _sellerCtrl,
+                    label: 'Seller ID',
+                    hint: 'Only show one seller',
+                    icon: Icons.storefront_outlined,
+                    action: TextInputAction.next,
+                    helper:
+                        'Use this when you already know the seller you want to trade with.',
+                    c: c,
+                  ),
+                  const SizedBox(height: 14),
+                  _ModalField(
+                    controller: _receiverCtrl,
+                    label: 'Receiver Stellar Address',
+                    hint: 'Only show one receiver address',
+                    icon: Icons.account_balance_wallet_outlined,
+                    action: TextInputAction.done,
+                    helper:
+                        'Useful when you want offers linked to a specific wallet address.',
+                    c: c,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: c.border.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: c.border.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _close(const MarketOfferFilters()),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 52),
+                        side: BorderSide(
+                          color: c.border.withValues(alpha: 0.85),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Reset',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _apply,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: c.primary,
+                        foregroundColor: c.onPrimary,
+                        elevation: 0,
+                        minimumSize: const Size(double.infinity, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        activeCount > 0
+                            ? 'Apply $activeCount Filters'
+                            : 'Apply Filters',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FilterSectionCard extends StatelessWidget {
+  const _FilterSectionCard({
+    required this.c,
+    required this.label,
+    required this.title,
+    required this.description,
+    required this.child,
+  });
+
+  final AppColor c;
+  final String label;
+  final String title;
+  final String description;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionLabel(label: label, c: c),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            description,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.5,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
       ),
     );
   }
@@ -622,7 +815,9 @@ class _ModalFieldState extends State<_ModalField> {
           child: Icon(
             widget.icon,
             size: 17,
-            color: _focused ? c.primary : c.textSecondary.withValues(alpha: 0.5),
+            color: _focused
+                ? c.primary
+                : c.textSecondary.withValues(alpha: 0.5),
           ),
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
@@ -670,7 +865,11 @@ class _ModalDropdown<T> extends StatelessWidget {
         ),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: 12, right: 8),
-          child: Icon(icon, size: 17, color: c.textSecondary.withValues(alpha: 0.5)),
+          child: Icon(
+            icon,
+            size: 17,
+            color: c.textSecondary.withValues(alpha: 0.5),
+          ),
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
         filled: true,
@@ -775,7 +974,10 @@ class _SegmentRow<T> extends StatelessWidget {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
                   color: active ? c.primary : c.surface,
                   borderRadius: BorderRadius.circular(11),

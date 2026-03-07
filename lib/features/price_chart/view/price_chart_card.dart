@@ -19,6 +19,7 @@ class PriceChartCard extends StatefulWidget {
     this.compact = false,
     this.isForDashboard = false,
     this.token = 'XLM',
+    this.accentColor,
     this.onTokenChanged,
   });
 
@@ -26,6 +27,7 @@ class PriceChartCard extends StatefulWidget {
   final bool compact;
   final bool isForDashboard;
   final String token; // "XLM" | "USDC"
+  final Color? accentColor;
   final ValueChanged<String>? onTokenChanged;
 
   @override
@@ -67,6 +69,7 @@ class _PriceChartCardState extends State<PriceChartCard> {
         title: widget.title,
         compact: widget.compact,
         isForDashboard: widget.isForDashboard,
+        accentColor: widget.accentColor,
         onTokenChanged: widget.onTokenChanged,
       ),
     );
@@ -78,12 +81,14 @@ class _PriceChartView extends StatelessWidget {
     required this.title,
     required this.compact,
     required this.isForDashboard,
+    required this.accentColor,
     required this.onTokenChanged,
   });
 
   final String title;
   final bool compact;
   final bool isForDashboard;
+  final Color? accentColor;
   final ValueChanged<String>? onTokenChanged;
 
   @override
@@ -91,6 +96,7 @@ class _PriceChartView extends StatelessWidget {
     final vm = context.watch<PriceChartVM>();
     final c = Theme.of(context).colorScheme;
     final pad = compact ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
+    final chartAccent = accentColor ?? (vm.isUp ? c.primary : c.error);
 
     final displayTitle = title == 'XLM Price' ? '${vm.token.code} Price' : title;
 
@@ -115,7 +121,7 @@ class _PriceChartView extends StatelessWidget {
           colors: [
             c.surface,
             c.surface.withValues(alpha: 0.98),
-            (vm.isUp ? c.primary : c.error).withValues(alpha: 0.035),
+            chartAccent.withValues(alpha: 0.05),
           ],
         ),
       ),
@@ -192,6 +198,7 @@ class _PriceChartView extends StatelessWidget {
               child: ChartArea(
                 series: displaySeries,
                 positive: vm.isUp,
+                accentColor: chartAccent,
 
                 // VM computes hoveredPrice from its own displaySeries
                 onHoverIndex: vm.setHoverIndex,

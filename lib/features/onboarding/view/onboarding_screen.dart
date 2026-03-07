@@ -654,7 +654,7 @@ class _OnboardingFooter extends StatelessWidget {
                               style: AppFonts.sora(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14.5,
-                              ),
+                               ),
                             ),
                           ),
                         ),

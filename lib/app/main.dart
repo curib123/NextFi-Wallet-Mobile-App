@@ -399,13 +399,11 @@ class _MyAppState extends State<MyApp> {
 
   final ThemeData _lightTheme = ThemeData(
     useMaterial3: true,
-    fontFamily: GoogleFonts
-        .sora()
-        .fontFamily,
+    fontFamily: GoogleFonts.inter().fontFamily,
     scaffoldBackgroundColor: AppColor.light.background,
     canvasColor: AppColor.light.surface,
-    textTheme: AppFonts.soraTextTheme(),
-    primaryTextTheme: AppFonts.soraTextTheme(),
+    textTheme: AppFonts.interTextTheme(),
+    primaryTextTheme: AppFonts.interTextTheme(),
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColor.light.primary,
       surface: AppColor.light.surface,
@@ -415,15 +413,13 @@ class _MyAppState extends State<MyApp> {
 
   final ThemeData _darkTheme = ThemeData(
     useMaterial3: true,
-    fontFamily: GoogleFonts
-        .sora()
-        .fontFamily,
+    fontFamily: GoogleFonts.inter().fontFamily,
     scaffoldBackgroundColor: AppColor.dark.background,
     canvasColor: AppColor.dark.surface,
-    textTheme: AppFonts.soraTextTheme(ThemeData
+    textTheme: AppFonts.interTextTheme(ThemeData
         .dark()
         .textTheme),
-    primaryTextTheme: AppFonts.soraTextTheme(ThemeData
+    primaryTextTheme: AppFonts.interTextTheme(ThemeData
         .dark()
         .textTheme),
     colorScheme: ColorScheme.fromSeed(

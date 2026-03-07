@@ -98,7 +98,9 @@ class _ModernAssetTileState extends State<ModernAssetTile>
   Widget build(BuildContext context) {
     final trendUp = widget.priceDelta >= 0;
     final trendColor = trendUp ? widget.colors.success : widget.colors.error;
-    final pctColor = widget.pct >= 0 ? widget.colors.success : widget.colors.error;
+    final pctColor = widget.pct >= 0
+        ? widget.colors.success
+        : widget.colors.error;
     final symbol = widget.asset.symbol.toUpperCase();
 
     return Padding(
@@ -115,12 +117,16 @@ class _ModernAssetTileState extends State<ModernAssetTile>
             curve: Curves.easeOut,
             padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
             decoration: BoxDecoration(
-              color: _isPressed ? widget.colors.background : widget.colors.surface,
+              color: _isPressed
+                  ? widget.colors.background
+                  : widget.colors.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: widget.colors.border, width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.045),
+                  color: AppColor.of(
+                    context,
+                  ).textPrimary.withValues(alpha: 0.045),
                   blurRadius: _isPressed ? 4 : 10,
                   offset: Offset(0, _isPressed ? 1 : 3),
                 ),
@@ -143,44 +149,30 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                       Row(
                         children: [
                           Expanded(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    widget.asset.name,
-                                    style: TextStyle(
-                                      fontSize: 14.8,
-                                      fontWeight: FontWeight.w800,
-                                      color: widget.colors.textPrimary,
-                                      letterSpacing: -0.2,
-                                      height: 1.05,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                _TypeBadge(
-                                  label: _volatilityLabel,
-                                  color: widget.isNative
-                                      ? widget.colors.primary
-                                      : widget.colors.success,
-                                ),
-                              ],
+                            child: Text(
+                              '${widget.formatTokenAmount(widget.balance)} $symbol',
+                              style: TextStyle(
+                                fontSize: 14.8,
+                                fontWeight: FontWeight.w800,
+                                color: widget.colors.textPrimary,
+                                letterSpacing: -0.2,
+                                height: 1.05,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${widget.formatTokenAmount(widget.balance)} $symbol',
+                        widget.asset.name,
                         style: TextStyle(
                           fontSize: 13.1,
                           fontWeight: FontWeight.w700,
-                          color: widget.colors.textPrimary,
-                          letterSpacing: -0.1,
-                          height: 1.1,
+                          color: widget.colors.textSecondary,
+                          letterSpacing: -0.05,
+                          height: 1.15,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -208,7 +200,10 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                 ),
                 const SizedBox(width: 10),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 104, maxWidth: 132),
+                  constraints: const BoxConstraints(
+                    minWidth: 104,
+                    maxWidth: 132,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
@@ -252,9 +247,12 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 5),
                       Text(
-                        widget.formatSignedMoney(widget.money, widget.priceDelta),
+                        widget.formatSignedMoney(
+                          widget.money,
+                          widget.priceDelta,
+                        ),
                         textAlign: TextAlign.right,
                         style: TextStyle(
                           fontSize: 11.5,
@@ -265,6 +263,13 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      _TypeBadge(
+                        label: _volatilityLabel,
+                        color: widget.isNative
+                            ? widget.colors.primary
+                            : widget.colors.success,
                       ),
                     ],
                   ),
@@ -362,10 +367,7 @@ class _PctBadge extends StatelessWidget {
 }
 
 class _MiniSparkline extends StatelessWidget {
-  const _MiniSparkline({
-    required this.series,
-    required this.color,
-  });
+  const _MiniSparkline({required this.series, required this.color});
 
   final List<double> series;
   final Color color;
@@ -381,20 +383,14 @@ class _MiniSparkline extends StatelessWidget {
       width: 36,
       height: 22,
       child: CustomPaint(
-        painter: _MiniSparklinePainter(
-          series: valid,
-          color: color,
-        ),
+        painter: _MiniSparklinePainter(series: valid, color: color),
       ),
     );
   }
 }
 
 class _MiniSparklinePainter extends CustomPainter {
-  const _MiniSparklinePainter({
-    required this.series,
-    required this.color,
-  });
+  const _MiniSparklinePainter({required this.series, required this.color});
 
   final List<double> series;
   final Color color;
@@ -444,10 +440,7 @@ class _MiniSparklinePainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            color.withValues(alpha: 0.18),
-            color.withValues(alpha: 0.0),
-          ],
+          colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.0)],
         ).createShader(Offset.zero & size),
     );
 

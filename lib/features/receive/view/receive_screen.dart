@@ -6,8 +6,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/modal/edit_federation_modal.dart';
 import 'package:next_fi/common/components/modal/receive_qr_modal.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
-import 'package:next_fi/reusable_view_model/currency_vm.dart';
-import 'package:next_fi/features/price_chart/view/price_chart_card.dart';
 import 'package:next_fi/features/receive/view_model/receive_vm.dart';
 import 'package:provider/provider.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -57,11 +55,10 @@ class ReceiveScreen extends StatelessWidget {
             style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800),
           ),
         ),
-        body: Consumer2<ReceiveVM, CurrencyVM>(
-          builder: (context, receiveVM, currencyVM, _) {
+        body: Consumer<ReceiveVM>(
+          builder: (context, receiveVM, _) {
             final s = receiveVM.state; // ReceiveState
             final token = s.token; // 'XLM' or 'USDC'
-            // fiat (currency.fiat) is available here if you want to show it alongside chart/balances
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
@@ -71,11 +68,6 @@ class ReceiveScreen extends StatelessWidget {
                   onSelectXLM: receiveVM.selectXLM,
                   onSelectUSDC: receiveVM.selectUSDC,
                   xlmSelected: s.xlmSelected,
-                ),
-                const SizedBox(height: 12),
-                PriceChartCard(
-                  title: '$token Market',
-                  token: token.toUpperCase(),
                 ),
                 const SizedBox(height: 12),
                 QrPreviewCard(
@@ -468,11 +460,7 @@ class _SectionLabel extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           subtitle,
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 12.5,
-            height: 1.3,
-          ),
+          style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.3),
         ),
       ],
     );

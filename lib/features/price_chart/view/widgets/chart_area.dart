@@ -12,6 +12,7 @@ class ChartArea extends StatefulWidget {
     required this.series,
     required this.positive,
     required this.onHoverIndex,
+    this.accentColor,
 
     /// Format a numeric value into display text (e.g., with fiat symbol).
     this.formatPrice,
@@ -30,6 +31,7 @@ class ChartArea extends StatefulWidget {
   final List<double> series;
   final bool positive;
   final ValueChanged<int?> onHoverIndex;
+  final Color? accentColor;
   final String Function(double v)? formatPrice;
   final double? currentPrice;
   final List<String>? timeLabels;
@@ -88,6 +90,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
+    final chartAccent = widget.accentColor ?? (widget.positive ? c.primary : c.error);
 
     // Fast guard
     if (widget.series.length < 2 || !_isFiniteList(widget.series)) {
@@ -103,7 +106,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
           colors: [
             c.surface.withValues(alpha: 0.98),
             c.surface.withValues(alpha: 0.95),
-            (widget.positive ? c.primary : c.error).withValues(alpha: 0.035),
+            chartAccent.withValues(alpha: 0.045),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
@@ -175,7 +178,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                       CustomPaint(
                         painter: LineChartPainter(
                           points: points,
-                          color: widget.positive ? c.primary : c.error,
+                          color: chartAccent,
                           gridColor: c.outlineVariant.withValues(alpha: 0.25),
                           hoverIndex: hover,
                         ),
@@ -191,7 +194,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           painter: _HoverOverlayPainter(
                             points: points,
                             index: hover,
-                            color: widget.positive ? c.primary : c.error,
+                            color: chartAccent,
                             lineColor: c.outline.withValues(alpha: 0.35),
                             coreColor: c.onPrimary,
                           ),
@@ -205,7 +208,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           y: points[hover].dy,
                           width: box.maxWidth,
                           height: box.maxHeight,
-                          color: widget.positive ? c.primary : c.error,
+                          color: chartAccent,
                           background: c.surface.withValues(alpha: 0.98),
                           textColor: c.onSurface,
                           value: series[hover],
@@ -220,7 +223,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                         CustomPaint(
                           painter: _DotOnlyPainter(
                             point: points.last,
-                            color: widget.positive ? c.primary : c.error,
+                            color: chartAccent,
                             coreColor: c.onPrimary,
                           ),
                           size: Size.infinite,
@@ -230,7 +233,7 @@ class _ChartAreaState extends State<ChartArea> with SingleTickerProviderStateMix
                           y: points.last.dy,
                           width: box.maxWidth,
                           height: box.maxHeight,
-                          color: widget.positive ? c.primary : c.error,
+                          color: chartAccent,
                           background: c.surface.withValues(alpha: 0.98),
                           textColor: c.onSurface,
                           value: nowValue,

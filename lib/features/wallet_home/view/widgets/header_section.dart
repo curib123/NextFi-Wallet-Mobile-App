@@ -201,12 +201,14 @@ class _HeaderSectionState extends State<HeaderSection> {
                             icon: LucideIcons.scanLine,
                             onTap: widget.onSwap,
                           ),
-                          const SizedBox(width: 8),
-                          _DeltaPill(
-                            amount: widget.chartDeltaFiat,
-                            fmt: widget.currencyFmt,
-                            colors: widget.colors,
-                          ),
+                          if (hasChartData) ...[
+                            const SizedBox(width: 8),
+                            _DeltaPill(
+                              amount: widget.chartDeltaFiat,
+                              fmt: widget.currencyFmt,
+                              colors: widget.colors,
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -237,24 +239,25 @@ class _HeaderSectionState extends State<HeaderSection> {
                         ),
                       ),
                       SizedBox(height: hasChartData ? 74 : 18),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: PriceWindow.values.map((window) {
-                          final isSelected = widget.selectedWindow == window;
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              left: window == PriceWindow.h24 ? 0 : 4,
-                            ),
-                            child: _RangePill(
-                              label: _rangeLabel(window),
-                              selected: isSelected,
-                              colors: widget.colors,
-                              onTap: () => widget.onWindowChanged(window),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 10),
+                      if (hasChartData)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: PriceWindow.values.map((window) {
+                            final isSelected = widget.selectedWindow == window;
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                left: window == PriceWindow.h24 ? 0 : 4,
+                              ),
+                              child: _RangePill(
+                                label: _rangeLabel(window),
+                                selected: isSelected,
+                                colors: widget.colors,
+                                onTap: () => widget.onWindowChanged(window),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      if (hasChartData) const SizedBox(height: 10),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: ConstrainedBox(
@@ -262,7 +265,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                           child: _MicroInfo(
                             colors: widget.colors,
                             icon: LucideIcons.lock,
-                            label: 'Locked XLM ${widget.reserveXlm.toStringAsFixed(1)}',
+                            label:
+                                '${widget.reserveXlm.toStringAsFixed(1)} XLM kept for wallet fees',
                             onTap: () {
                               showReserveBalanceModal(
                                 context,
