@@ -35,7 +35,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
   void initState() {
     super.initState();
     final current = context.read<CurrencyVM>().fiat.toLowerCase();
-    _selected = _kFiats.any((f) => f.code == current) ? current : 'usd';
+    _selected = kFiatOptions.any((f) => f.code == current) ? current : 'usd';
 
     _animController = AnimationController(
       vsync: this,
@@ -61,10 +61,10 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
     super.dispose();
   }
 
-  List<_Fiat> get _filteredFiats {
-    if (_searchQuery.isEmpty) return _kFiats;
+  List<FiatOption> get _filteredFiats {
+    if (_searchQuery.isEmpty) return kFiatOptions;
     final query = _searchQuery.toLowerCase();
-    return _kFiats.where((f) {
+    return kFiatOptions.where((f) {
       return f.code.toLowerCase().contains(query) ||
           f.name.toLowerCase().contains(query);
     }).toList();
@@ -160,7 +160,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${_kFiats.length} currencies available',
+                            '${kFiatOptions.length} currencies available',
                             style: TextStyle(
                               fontSize: 12,
                               color: colors.textSecondary,
@@ -270,7 +270,7 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Current: ${_kFiats.firstWhere((f) => f.code == _selected).name}',
+                          'Current: ${kFiatOptions.firstWhere((f) => f.code == _selected).name}',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -351,7 +351,7 @@ class _CurrencyTile extends StatefulWidget {
   });
 
   final AppColor colors;
-  final _Fiat fiat;
+  final FiatOption fiat;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -502,45 +502,45 @@ class _CurrencyTileState extends State<_CurrencyTile> {
 
 /// ---- Fiat options (common & PH-focused set) ----
 /// Add/remove freely; codes should be lowercase to match CurrencyProvider.
-class _Fiat {
+class FiatOption {
   final String code; // e.g., "usd"
   final String name; // e.g., "US Dollar"
   final String flag; // emoji flag
-  const _Fiat(this.code, this.name, this.flag);
+  const FiatOption(this.code, this.name, this.flag);
 }
 
-const List<_Fiat> _kFiats = [
-  _Fiat('php', 'Philippine Peso', '🇵🇭'),
-  _Fiat('usd', 'US Dollar', '🇺🇸'),
-  _Fiat('eur', 'Euro', '🇪🇺'),
-  _Fiat('jpy', 'Japanese Yen', '🇯🇵'),
-  _Fiat('cny', 'Chinese Yuan', '🇨🇳'),
-  _Fiat('hkd', 'Hong Kong Dollar', '🇭🇰'),
-  _Fiat('sgd', 'Singapore Dollar', '🇸🇬'),
-  _Fiat('aud', 'Australian Dollar', '🇦🇺'),
-  _Fiat('nzd', 'New Zealand Dollar', '🇳🇿'),
-  _Fiat('gbp', 'British Pound', '🇬🇧'),
-  _Fiat('cad', 'Canadian Dollar', '🇨🇦'),
-  _Fiat('inr', 'Indian Rupee', '🇮🇳'),
-  _Fiat('thb', 'Thai Baht', '🇹🇭'),
-  _Fiat('idr', 'Indonesian Rupiah', '🇮🇩'),
-  _Fiat('myr', 'Malaysian Ringgit', '🇲🇾'),
-  _Fiat('vnd', 'Vietnamese Dong', '🇻🇳'),
-  _Fiat('twd', 'New Taiwan Dollar', '🇹🇼'),
-  _Fiat('krw', 'South Korean Won', '🇰🇷'),
-  _Fiat('aed', 'UAE Dirham', '🇦🇪'),
-  _Fiat('sar', 'Saudi Riyal', '🇸🇦'),
-  _Fiat('brl', 'Brazilian Real', '🇧🇷'),
-  _Fiat('mxn', 'Mexican Peso', '🇲🇽'),
-  _Fiat('chf', 'Swiss Franc', '🇨🇭'),
-  _Fiat('sek', 'Swedish Krona', '🇸🇪'),
-  _Fiat('nok', 'Norwegian Krone', '🇳🇴'),
-  _Fiat('dkk', 'Danish Krone', '🇩🇰'),
-  _Fiat('pln', 'Polish Złoty', '🇵🇱'),
-  _Fiat('czk', 'Czech Koruna', '🇨🇿'),
-  _Fiat('huf', 'Hungarian Forint', '🇭🇺'),
-  _Fiat('try', 'Turkish Lira', '🇹🇷'),
-  _Fiat('ils', 'Israeli Shekel', '🇮🇱'),
-  _Fiat('ngn', 'Nigerian Naira', '🇳🇬'),
-  _Fiat('zar', 'South African Rand', '🇿🇦'),
+const List<FiatOption> kFiatOptions = [
+  FiatOption('php', 'Philippine Peso', '🇵🇭'),
+  FiatOption('usd', 'US Dollar', '🇺🇸'),
+  FiatOption('eur', 'Euro', '🇪🇺'),
+  FiatOption('jpy', 'Japanese Yen', '🇯🇵'),
+  FiatOption('cny', 'Chinese Yuan', '🇨🇳'),
+  FiatOption('hkd', 'Hong Kong Dollar', '🇭🇰'),
+  FiatOption('sgd', 'Singapore Dollar', '🇸🇬'),
+  FiatOption('aud', 'Australian Dollar', '🇦🇺'),
+  FiatOption('nzd', 'New Zealand Dollar', '🇳🇿'),
+  FiatOption('gbp', 'British Pound', '🇬🇧'),
+  FiatOption('cad', 'Canadian Dollar', '🇨🇦'),
+  FiatOption('inr', 'Indian Rupee', '🇮🇳'),
+  FiatOption('thb', 'Thai Baht', '🇹🇭'),
+  FiatOption('idr', 'Indonesian Rupiah', '🇮🇩'),
+  FiatOption('myr', 'Malaysian Ringgit', '🇲🇾'),
+  FiatOption('vnd', 'Vietnamese Dong', '🇻🇳'),
+  FiatOption('twd', 'New Taiwan Dollar', '🇹🇼'),
+  FiatOption('krw', 'South Korean Won', '🇰🇷'),
+  FiatOption('aed', 'UAE Dirham', '🇦🇪'),
+  FiatOption('sar', 'Saudi Riyal', '🇸🇦'),
+  FiatOption('brl', 'Brazilian Real', '🇧🇷'),
+  FiatOption('mxn', 'Mexican Peso', '🇲🇽'),
+  FiatOption('chf', 'Swiss Franc', '🇨🇭'),
+  FiatOption('sek', 'Swedish Krona', '🇸🇪'),
+  FiatOption('nok', 'Norwegian Krone', '🇳🇴'),
+  FiatOption('dkk', 'Danish Krone', '🇩🇰'),
+  FiatOption('pln', 'Polish Złoty', '🇵🇱'),
+  FiatOption('czk', 'Czech Koruna', '🇨🇿'),
+  FiatOption('huf', 'Hungarian Forint', '🇭🇺'),
+  FiatOption('try', 'Turkish Lira', '🇹🇷'),
+  FiatOption('ils', 'Israeli Shekel', '🇮🇱'),
+  FiatOption('ngn', 'Nigerian Naira', '🇳🇬'),
+  FiatOption('zar', 'South African Rand', '🇿🇦'),
 ];
