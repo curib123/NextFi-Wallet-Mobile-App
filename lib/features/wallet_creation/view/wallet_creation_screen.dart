@@ -2,6 +2,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:package_info_plus/package_info_plus.dart'; // ✅ NEW
 
@@ -9,6 +10,7 @@ import 'package:next_fi/features/import_wallet/view/import_wallet_screen.dart';
 import 'package:next_fi/features/seed_phrases/view/seed_phrase_screen.dart';
 import 'package:next_fi/common/components/button/CustomButton.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/services/app_cover/app_cover_service.dart';
 
 import 'widgets/shimmer_text.dart';
 import 'widgets/fintech_background.dart';
@@ -19,22 +21,20 @@ class WalletCreationScreen extends StatefulWidget {
   final bool isSplash;
 
   @override
-  State<WalletCreationScreen> createState() =>
-      _WalletCreationScreenState();
+  State<WalletCreationScreen> createState() => _WalletCreationScreenState();
 }
 
-class _WalletCreationScreenState
-    extends State<WalletCreationScreen>
+class _WalletCreationScreenState extends State<WalletCreationScreen>
     with SingleTickerProviderStateMixin {
-
   static const _logoAsset = 'assets/icon/icon.png';
 
   /// ✅ REAL APP INFO
   String _appName = '';
   String _version = '';
+  final AppCoverService _appCoverService = AppCoverService();
+  AppCoverConfig? _appCover;
 
-  late final AnimationController _bgCtrl =
-  AnimationController(
+  late final AnimationController _bgCtrl = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 22),
   )..repeat();
@@ -43,6 +43,7 @@ class _WalletCreationScreenState
   void initState() {
     super.initState();
     _loadAppInfo(); // ✅ load real metadata
+    _loadAppCover();
   }
 
   Future<void> _loadAppInfo() async {
@@ -56,6 +57,17 @@ class _WalletCreationScreenState
     });
   }
 
+  Future<void> _loadAppCover() async {
+    try {
+      final cover = await _appCoverService.getCurrent();
+      if (!mounted) return;
+      setState(() => _appCover = cover);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _appCover = null);
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -65,6 +77,7 @@ class _WalletCreationScreenState
   @override
   void dispose() {
     _bgCtrl.dispose();
+    _appCoverService.dispose();
     super.dispose();
   }
 
@@ -79,48 +92,91 @@ class _WalletCreationScreenState
 
       body: Stack(
         children: [
-
           /// 🌌 FULLSCREEN Animated Background
           Positioned.fill(
             child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _bgCtrl,
-                builder: (_, __) => FintechBackground(
-                  progress: _bgCtrl.value,
-                  colors: colors,
-                  devicePixelRatio: dpr,
-                  topBandFraction: .45,
-                ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AnimatedBuilder(
+                    animation: _bgCtrl,
+                    builder: (_, __) => FintechBackground(
+                      progress: _bgCtrl.value,
+                      colors: colors,
+                      devicePixelRatio: dpr,
+                      topBandFraction: .45,
+                    ),
+                  ),
+                  if (_appCover?.hasUsableImage == true)
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 320),
+                      opacity: 1,
+                      child: CachedNetworkImage(
+                        imageUrl: _appCover!.imageUrl!,
+                        fit: BoxFit.cover,
+                        fadeInDuration: const Duration(milliseconds: 260),
+                        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          colors.background.withValues(alpha: 0.28),
+                          colors.background.withValues(
+                            alpha: _appCover?.hasUsableImage == true
+                                ? 0.54
+                                : 0.24,
+                          ),
+                          colors.background.withValues(alpha: 0.84),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
+          if (_appCover?.hasUsableImage == true)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
+            ),
 
           /// 🧩 Foreground
           SafeArea(
             child: Padding(
-              padding:
-              const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
               child: Column(
                 children: [
-
                   /// 🪪 Center Card
                   Expanded(
                     child: Center(
                       child: AnimatedBuilder(
                         animation: _bgCtrl,
                         builder: (_, __) {
-                          final t =
-                              _bgCtrl.value * 2 * math.pi;
+                          final t = _bgCtrl.value * 2 * math.pi;
                           final dy = math.sin(t) * 6;
-                          final tilt =
-                              math.cos(t) * 0.02;
+                          final tilt = math.cos(t) * 0.02;
 
                           return Transform.translate(
                             offset: Offset(0, dy),
                             child: Transform.rotate(
                               angle: tilt,
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  22,
+                                  18,
+                                  18,
+                                ),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -140,11 +196,15 @@ class _WalletCreationScreenState
 
                                     /// ✅ REAL APP NAME
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
                                       child: FittedBox(
                                         fit: BoxFit.scaleDown,
                                         child: ShimmerText(
-                                          _appName.isEmpty ? "Loading..." : _appName,
+                                          _appName.isEmpty
+                                              ? "Loading..."
+                                              : _appName,
                                           baseColor: colors.textPrimary,
                                           highlightColor: colors.primary,
                                         ),
@@ -165,47 +225,35 @@ class _WalletCreationScreenState
                   /// 🔘 Buttons
                   if (!widget.isSplash) ...[
                     FadeInUp(
-                      duration: const Duration(
-                          milliseconds: 600),
-                      delay: const Duration(
-                          milliseconds: 120),
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 120),
                       child: CustomButton(
-                        text:
-                        "Create New Wallet",
-                        icon: LucideIcons
-                            .plusCircle,
-                        type: ButtonType
-                            .filled,
+                        text: "Create New Wallet",
+                        icon: LucideIcons.plusCircle,
+                        type: ButtonType.filled,
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                              const SeedPhraseScreen(),
+                              builder: (_) => const SeedPhraseScreen(),
                             ),
                           );
                         },
                       ),
                     ),
-                    const SizedBox(
-                        height: 12),
+                    const SizedBox(height: 12),
                     FadeInUp(
-                      duration: const Duration(
-                          milliseconds: 600),
-                      delay: const Duration(
-                          milliseconds: 220),
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 220),
                       child: CustomButton(
                         text: "Import Wallet",
-                        icon: LucideIcons
-                            .download,
-                        type: ButtonType
-                            .outlined,
+                        icon: LucideIcons.download,
+                        type: ButtonType.outlined,
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                              const ImportWalletScreen(),
+                              builder: (_) => const ImportWalletScreen(),
                             ),
                           );
                         },
@@ -238,6 +286,19 @@ class _WalletCreationScreenState
                         letterSpacing: .2,
                       ),
                     ),
+                    if (_version.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _version,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: colors.textSecondary.withValues(alpha: 0.82),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

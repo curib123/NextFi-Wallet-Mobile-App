@@ -24,9 +24,9 @@ class ClaimableVM extends ChangeNotifier {
     required StellarWalletServices service,
     required SeedKeypairVM seedVM,
     required WalletHomeVM walletHomeVM,
-  })  : _svc = service,
-        _seedVM = seedVM,
-        _walletHomeVM = walletHomeVM {
+  }) : _svc = service,
+       _seedVM = seedVM,
+       _walletHomeVM = walletHomeVM {
     // Listen to wallet home state changes for balance updates
     _walletHomeVM.addListener(_onWalletHomeStateChanged);
   }
@@ -63,6 +63,11 @@ class ClaimableVM extends ChangeNotifier {
   bool _disposed = false;
   DateTime? _lastRefresh;
   DateTime? get lastRefresh => _lastRefresh;
+  bool _refreshing = false;
+  bool _refreshQueued = false;
+  StreamSubscription<dynamic>? _accountStateSub;
+  Timer? _refreshDebounce;
+  Timer? _statusTimer;
 
   /// Current tab index (0 = received, 1 = sent)
   int _currentTab = 0;
@@ -115,14 +120,16 @@ class ClaimableVM extends ChangeNotifier {
     final newAccountId = _walletHomeVM.state.address;
     if (newAccountId != _accountId) {
       _accountId = newAccountId;
+      _bindRealtime();
 
       // Refresh claimable balances when account changes
       if (_accountId != null && _accountId!.isNotEmpty) {
-        refresh();
+        unawaited(refresh());
       } else {
         // Clear items if no account
         _receivedItems = [];
         _sentItems = [];
+        _cancelStatusTimer();
         _safeNotify();
       }
     }
@@ -204,8 +211,7 @@ class ClaimableVM extends ChangeNotifier {
           .where((i) => i.canClaimNow && !i.isExpired)
           .toList(),
       'locked': _receivedItems
-          .where(
-              (i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
+          .where((i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
           .toList(),
       'expired': _receivedItems.where((i) => i.isExpired).toList(),
     };
@@ -214,12 +220,9 @@ class ClaimableVM extends ChangeNotifier {
   /// Get sent items grouped by status
   Map<String, List<ClaimableItem>> get sentItemsByStatus {
     return {
-      'ready': _sentItems
-          .where((i) => i.canClaimNow && !i.isExpired)
-          .toList(),
+      'ready': _sentItems.where((i) => i.canClaimNow && !i.isExpired).toList(),
       'locked': _sentItems
-          .where(
-              (i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
+          .where((i) => i.unlockTime != null && !i.canClaimNow && !i.isExpired)
           .toList(),
       'reclaimable': _sentItems.where((i) => i.isExpired).toList(),
     };
@@ -266,6 +269,9 @@ class ClaimableVM extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _walletHomeVM.removeListener(_onWalletHomeStateChanged);
+    _accountStateSub?.cancel();
+    _refreshDebounce?.cancel();
+    _statusTimer?.cancel();
     super.dispose();
   }
 
@@ -293,6 +299,8 @@ class ClaimableVM extends ChangeNotifier {
 
       await _fetchAllBalances();
       _lastRefresh = DateTime.now();
+      _bindRealtime();
+      _scheduleStatusRefresh();
     } catch (e) {
       _error = 'Failed to initialize: $e';
       if (kDebugMode) {
@@ -310,7 +318,12 @@ class ClaimableVM extends ChangeNotifier {
       return init();
     }
 
-    if (_loading) return;
+    if (_refreshing) {
+      _refreshQueued = true;
+      return;
+    }
+
+    _refreshing = true;
 
     _error = null;
     _safeNotify();
@@ -318,12 +331,21 @@ class ClaimableVM extends ChangeNotifier {
     try {
       await _fetchAllBalances();
       _lastRefresh = DateTime.now();
+      _scheduleStatusRefresh();
     } catch (e) {
       _error = 'Refresh failed: $e';
       if (kDebugMode) {
         print('[ClaimableVM] Refresh error: $e');
       }
+    } finally {
+      _refreshing = false;
     }
+
+    if (_refreshQueued && !_disposed) {
+      _refreshQueued = false;
+      unawaited(refresh());
+    }
+
     _safeNotify();
   }
 
@@ -341,6 +363,127 @@ class ClaimableVM extends ChangeNotifier {
 
     _receivedItems = results[0];
     _sentItems = results[1];
+    _recomputeStatuses();
+  }
+
+  void _bindRealtime() {
+    _accountStateSub?.cancel();
+    _accountStateSub = null;
+
+    final aid = _accountId;
+    if (aid == null || aid.isEmpty) {
+      _cancelStatusTimer();
+      return;
+    }
+
+    _accountStateSub = _svc
+        .accountStateStream(aid)
+        .listen(
+          (_) => _scheduleRefresh(),
+          onError: (Object error) {
+            if (kDebugMode) {
+              print('[ClaimableVM] Realtime stream error: $error');
+            }
+          },
+          cancelOnError: false,
+        );
+  }
+
+  void _scheduleRefresh([Duration delay = const Duration(milliseconds: 450)]) {
+    if (_disposed) return;
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(delay, () {
+      if (_disposed) return;
+      unawaited(refresh());
+    });
+  }
+
+  void _cancelStatusTimer() {
+    _statusTimer?.cancel();
+    _statusTimer = null;
+  }
+
+  void _scheduleStatusRefresh() {
+    _cancelStatusTimer();
+
+    final now = DateTime.now();
+    DateTime? nextBoundary;
+
+    for (final item in allItems) {
+      final unlock = item.unlockTime;
+      if (unlock != null && unlock.isAfter(now)) {
+        if (nextBoundary == null || unlock.isBefore(nextBoundary)) {
+          nextBoundary = unlock;
+        }
+      }
+
+      final expiry = item.expiryTime;
+      if (expiry != null && expiry.isAfter(now)) {
+        if (nextBoundary == null || expiry.isBefore(nextBoundary)) {
+          nextBoundary = expiry;
+        }
+      }
+    }
+
+    if (nextBoundary == null) return;
+
+    final delay = nextBoundary.difference(now) + const Duration(seconds: 1);
+    _statusTimer = Timer(delay, () {
+      if (_disposed) return;
+      _recomputeStatuses();
+      _scheduleStatusRefresh();
+      _scheduleRefresh(const Duration(milliseconds: 250));
+      _safeNotify();
+    });
+  }
+
+  void _recomputeStatuses() {
+    final now = DateTime.now();
+
+    _receivedItems = _receivedItems
+        .map((item) => item.copyWith(canClaimNow: _canClaimNow(item, now)))
+        .toList();
+    _sortReceivedItems(_receivedItems);
+
+    _sentItems = _sentItems
+        .map((item) => item.copyWith(canClaimNow: _canClaimNow(item, now)))
+        .toList();
+    _sortSentItems(_sentItems);
+  }
+
+  bool _canClaimNow(ClaimableItem item, DateTime now) {
+    final expiry = item.expiryTime;
+    if (expiry != null && !now.isBefore(expiry)) {
+      return false;
+    }
+
+    final unlock = item.unlockTime;
+    if (unlock != null && now.isBefore(unlock)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  void _sortReceivedItems(List<ClaimableItem> items) {
+    items.sort((a, b) {
+      if (a.isExpired != b.isExpired) {
+        return a.isExpired ? 1 : -1;
+      }
+      if (a.canClaimNow != b.canClaimNow) {
+        return a.canClaimNow ? -1 : 1;
+      }
+      return b.amount.compareTo(a.amount);
+    });
+  }
+
+  void _sortSentItems(List<ClaimableItem> items) {
+    items.sort((a, b) {
+      if (a.isExpired != b.isExpired) {
+        return a.isExpired ? -1 : 1;
+      }
+      return b.amount.compareTo(a.amount);
+    });
   }
 
   /// Fetch balances that can be claimed by this account
@@ -355,18 +498,7 @@ class ClaimableVM extends ChangeNotifier {
         .where(_isXlmOrUsdc) // ← FILTER: Only XLM and USDC
         .toList();
 
-    // Sort: claimable-now first, then expired last, then by amount desc
-    items.sort((a, b) {
-      // Expired items go to the bottom
-      if (a.isExpired != b.isExpired) {
-        return a.isExpired ? 1 : -1;
-      }
-      // Then claimable-now first
-      if (a.canClaimNow != b.canClaimNow) {
-        return a.canClaimNow ? -1 : 1;
-      }
-      return b.amount.compareTo(a.amount);
-    });
+    _sortReceivedItems(items);
 
     return items;
   }
@@ -402,13 +534,7 @@ class ClaimableVM extends ChangeNotifier {
       }
     }
 
-    // Sort: reclaimable (expired) first, then by amount desc
-    items.sort((a, b) {
-      if (a.isExpired != b.isExpired) {
-        return a.isExpired ? -1 : 1;
-      }
-      return b.amount.compareTo(a.amount);
-    });
+    _sortSentItems(items);
 
     return items;
   }
@@ -419,10 +545,10 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Parse a ClaimableBalanceResponse into a ClaimableItem (received)
   ClaimableItem _parseResponse(
-      ClaimableBalanceResponse r,
-      String myAccountId,
-      DateTime now,
-      ) {
+    ClaimableBalanceResponse r,
+    String myAccountId,
+    DateTime now,
+  ) {
     // ── Asset ───────────────────────────────────────────────────────────
     String assetCode;
     String? assetIssuer;
@@ -482,12 +608,12 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Parse a ClaimableBalanceResponse into a ClaimableItem (sent)
   ClaimableItem _parseSentResponse(
-      ClaimableBalanceResponse r,
-      String recipientId,
-      String myAccountId,
-      DateTime now,
-      _PredicateResult predicateResult,
-      ) {
+    ClaimableBalanceResponse r,
+    String recipientId,
+    String myAccountId,
+    DateTime now,
+    _PredicateResult predicateResult,
+  ) {
     // ── Asset ───────────────────────────────────────────────────────────
     String assetCode;
     String? assetIssuer;
@@ -539,10 +665,7 @@ class ClaimableVM extends ChangeNotifier {
   /// - `NOT(beforeAbsoluteTime(T))` → claimable after T (unlock = T)
   /// - `AND(NOT(before(unlock)), before(expiry))` → window between unlock & expiry
   /// - `OR(...)` → at least one must be true
-  _PredicateResult _parsePredicate(
-      ClaimantPredicateResponse p,
-      DateTime now,
-      ) {
+  _PredicateResult _parsePredicate(ClaimantPredicateResponse p, DateTime now) {
     // 1) Unconditional — always claimable
     if (p.unconditional == true) {
       return const _PredicateResult(canClaimNow: true);

@@ -1088,13 +1088,10 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       confirmLabel: 'Confirm request',
     );
     if (!ok) return;
-    _runAction(
-      () async {
-        final updated = await _tradesCore.confirmRequest(_trade.id);
-        if (mounted) setState(() => _trade = updated);
-      },
-      successMsg: 'Trade request confirmed.',
-    );
+    _runAction(() async {
+      final updated = await _tradesCore.confirmRequest(_trade.id);
+      if (mounted) setState(() => _trade = updated);
+    }, successMsg: 'Trade request confirmed.');
   }
 
   Future<void> _ensureEscrowLockedBeforeConfirmFiat() async {
@@ -1398,6 +1395,27 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       }
     } catch (e) {
       if (!mounted) return;
+      try {
+        final refreshed = await _tradesCore.getOne(_trade.id);
+        if (!mounted) return;
+        setState(() {
+          _trade = refreshed;
+          _actionLoading = false;
+          if (_trade.status == TradeStatus.completed) {
+            _actionError = null;
+          }
+        });
+        if (refreshed.status == TradeStatus.completed) {
+          showFloatingSnackBar(
+            context,
+            message: successMsg,
+            type: SnackBarType.success,
+          );
+          return;
+        }
+      } catch (_) {
+        // Keep original error handling if refresh reconciliation fails.
+      }
       final msg = e.toString().replaceAll(
         RegExp(r'TradeApiException\(\d+\): '),
         '',
@@ -2711,10 +2729,7 @@ class _TradeAccountsCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               'Payment account is not available yet.',
-              style: AppFonts.sora(
-                fontSize: 11.5,
-                color: colors.textSecondary,
-              ),
+              style: AppFonts.sora(fontSize: 11.5, color: colors.textSecondary),
             ),
           ),
         if (receiver.isNotEmpty)
@@ -3093,7 +3108,13 @@ class _TimelineCard extends StatelessWidget {
 
     if (isSellOffer) {
       return [
-        (TradeStatus.starting, 'Request Sent', actingAsBuyer ? 'Waiting for merchant confirmation' : 'Review and confirm this request'),
+        (
+          TradeStatus.starting,
+          'Request Sent',
+          actingAsBuyer
+              ? 'Waiting for merchant confirmation'
+              : 'Review and confirm this request',
+        ),
         (TradeStatus.created, 'Trade Started', createdDesc),
         (TradeStatus.fiatSent, fiatSentTitle, fiatSentDesc),
         (TradeStatus.fiatConfirmed, '$asset Locked', fiatConfirmedDesc),
@@ -3102,7 +3123,13 @@ class _TimelineCard extends StatelessWidget {
     }
 
     return [
-      (TradeStatus.starting, 'Request Sent', actingAsBuyer ? 'Waiting for merchant confirmation' : 'Review and confirm this request'),
+      (
+        TradeStatus.starting,
+        'Request Sent',
+        actingAsBuyer
+            ? 'Waiting for merchant confirmation'
+            : 'Review and confirm this request',
+      ),
       (TradeStatus.created, 'Trade Started', createdDesc),
       (TradeStatus.cryptoLocked, '$asset Locked', lockedDesc),
       (TradeStatus.fiatSent, fiatSentTitle, fiatSentDesc),
@@ -3587,6 +3614,7 @@ class _CompletedCardState extends State<_CompletedCard> {
   bool _reviewSubmitted = false;
   bool _alreadyReviewed = false;
   bool _checkingReview = true;
+  bool _reviewAutoOpened = false;
 
   bool get _canSubmitReview {
     final me = (widget.currentUserId ?? '').trim();
@@ -3608,6 +3636,7 @@ class _CompletedCardState extends State<_CompletedCard> {
     if (oldWidget.trade.id != widget.trade.id ||
         oldWidget.currentUserId != widget.currentUserId ||
         oldWidget.merchantUserId != widget.merchantUserId) {
+      _reviewAutoOpened = false;
       _loadReviewState();
     }
   }
@@ -3633,6 +3662,7 @@ class _CompletedCardState extends State<_CompletedCard> {
       _reviewSubmitted = already;
       _checkingReview = false;
     });
+    _maybeAutoOpenReviewSheet();
   }
 
   Future<void> _openReviewSheet() async {
@@ -3647,6 +3677,26 @@ class _CompletedCardState extends State<_CompletedCard> {
       ),
     );
     if (result == null) return;
+    await _submitReview(result);
+  }
+
+  void _maybeAutoOpenReviewSheet() {
+    if (!_canSubmitReview ||
+        _alreadyReviewed ||
+        _reviewSubmitted ||
+        _checkingReview ||
+        _reviewAutoOpened ||
+        !mounted) {
+      return;
+    }
+    _reviewAutoOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _openReviewSheet();
+    });
+  }
+
+  Future<void> _submitReview(TradeReviewResult result) async {
     try {
       await ReviewsCoreService.I.create(
         CreateReviewRequest(
@@ -3986,9 +4036,14 @@ class _BottomActions extends StatelessWidget {
         (isSellOffer
             ? s == TradeStatus.created
             : s == TradeStatus.cryptoLocked);
-    final bool showCancel = isParticipant && isUserBuyer && s == TradeStatus.starting;
+    final bool showCancel =
+        isParticipant && isUserBuyer && s == TradeStatus.starting;
     final hasPrimary =
-        showConfirmRequest || showLock || showMarkFiat || showConfirm || showClaim;
+        showConfirmRequest ||
+        showLock ||
+        showMarkFiat ||
+        showConfirm ||
+        showClaim;
 
     if (!hasPrimary && !showCancel && !s.isActive) {
       return const SizedBox.shrink();
@@ -4013,7 +4068,8 @@ class _BottomActions extends StatelessWidget {
               loading: loading,
               onTap: onConfirmRequest,
             ),
-          if (showConfirmRequest && (showLock || showMarkFiat || showConfirm || showClaim))
+          if (showConfirmRequest &&
+              (showLock || showMarkFiat || showConfirm || showClaim))
             const SizedBox(height: 10),
           if (showLock)
             _ActionBtn(
@@ -4214,4 +4270,3 @@ class _ActionBtn extends StatelessWidget {
 }
 
 // ─── Bottom sheet base ────────────────────────────────────────────────────────
-
