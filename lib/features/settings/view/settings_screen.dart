@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/features/settings/model/settings_model.dart';
+import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:next_fi/features/settings/view/widgets/fiat_chip.dart';
 import 'package:next_fi/features/settings/view/widgets/section_header.dart';
 import 'package:next_fi/features/settings/view/widgets/settings_app_bar.dart';
@@ -42,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final sections = vm.sections.where((s) => s.items.isNotEmpty).toList();
 
     return Scaffold(
+      drawer: const AppDrawer(),
       backgroundColor: c.surface,
       appBar: SettingsAppBar(colors: c),
       body: SafeArea(

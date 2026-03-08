@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:provider/provider.dart';
 
 import 'package:next_fi/Helper/colors/AppColor.dart';
@@ -417,10 +418,22 @@ class _SwapScreenState extends State<SwapScreen>
 
     return Scaffold(
       backgroundColor: c.background,
+      drawer: const AppDrawer(),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
         backgroundColor: c.background,
+        leading: Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Menu',
+            icon: Icon(
+              LucideIcons.menu,
+              color: c.primary,
+              size: 26,
+            ),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: Text('Swap',
             style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
         actions: [

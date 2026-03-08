@@ -1,5 +1,6 @@
 // lib/features/settings/view/widgets/settings_app_bar.dart
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
 
 class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -15,6 +16,17 @@ class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       elevation: 0,
       backgroundColor: colors.surface,
+      leading: Builder(
+        builder: (context) => IconButton(
+          tooltip: 'Menu',
+          icon: Icon(
+            LucideIcons.menu,
+            color: colors.primary,
+            size: 26,
+          ),
+          onPressed: () => Scaffold.of(context).openDrawer(),
+        ),
+      ),
       centerTitle: true,
       title: Text(
         'Settings',
