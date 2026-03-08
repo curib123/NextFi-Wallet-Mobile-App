@@ -151,17 +151,6 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       ),
       child: Row(
         children: [
-          Builder(
-            builder: (context) => IconButton(
-              onPressed: () {
-                HapticFeedback.selectionClick();
-                Scaffold.of(context).openDrawer();
-              },
-              icon: Icon(LucideIcons.menu, color: c.primary),
-              iconSize: 26,
-              tooltip: 'Menu',
-            ),
-          ),
           Expanded(
             child: Text(
               'Claimable Balances',

@@ -16,18 +16,7 @@ class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       elevation: 0,
       backgroundColor: colors.surface,
-      leading: Builder(
-        builder: (context) => IconButton(
-          tooltip: 'Menu',
-          icon: Icon(
-            LucideIcons.menu,
-            color: colors.primary,
-            size: 26,
-          ),
-          onPressed: () => Scaffold.of(context).openDrawer(),
-        ),
-      ),
-      centerTitle: true,
+      centerTitle: false,
       title: Text(
         'Settings',
         style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
