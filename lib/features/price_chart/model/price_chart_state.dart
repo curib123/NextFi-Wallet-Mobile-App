@@ -2,6 +2,38 @@
 enum PriceChartRange { h24, w1, m1, y1, all }
 enum PriceToken { xlm, usdc }
 
+extension PriceChartRangeX on PriceChartRange {
+  String get shortLabel {
+    switch (this) {
+      case PriceChartRange.h24:
+        return '1D';
+      case PriceChartRange.w1:
+        return '1W';
+      case PriceChartRange.m1:
+        return '1M';
+      case PriceChartRange.y1:
+        return '1Y';
+      case PriceChartRange.all:
+        return 'ALL';
+    }
+  }
+
+  String get longLabel {
+    switch (this) {
+      case PriceChartRange.h24:
+        return '1 Day';
+      case PriceChartRange.w1:
+        return '1 Week';
+      case PriceChartRange.m1:
+        return '1 Month';
+      case PriceChartRange.y1:
+        return '1 Year';
+      case PriceChartRange.all:
+        return 'All Time';
+    }
+  }
+}
+
 extension PriceTokenX on PriceToken {
   String get code => this == PriceToken.usdc ? 'USDC' : 'XLM';
   static PriceToken parse(String v) =>

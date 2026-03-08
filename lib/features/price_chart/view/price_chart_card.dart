@@ -163,7 +163,7 @@ class _PriceChartView extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Live market view',
+                        '${vm.range.longLabel} market view',
                         style: TextStyle(
                           color: c.onSurface.withValues(alpha: 0.48),
                           fontWeight: FontWeight.w600,

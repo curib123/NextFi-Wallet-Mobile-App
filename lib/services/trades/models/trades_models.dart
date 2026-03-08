@@ -259,6 +259,7 @@ class TradeModel {
   final int? paymentWindowMinutes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? startingExpiresAt;
   final DateTime? expiresAt;
   final DateTime? paymentDueAt;
   final DateTime? fiatSentAt;
@@ -292,6 +293,7 @@ class TradeModel {
     this.paymentWindowMinutes,
     this.createdAt,
     this.updatedAt,
+    this.startingExpiresAt,
     this.expiresAt,
     this.paymentDueAt,
     this.fiatSentAt,
@@ -482,11 +484,13 @@ class TradeModel {
       ]),
       createdAt: readDate(const ['createdAt', 'created_at']),
       updatedAt: readDate(const ['updatedAt', 'updated_at']),
+      startingExpiresAt: readDate(const [
+        'startingExpiresAt',
+        'starting_expires_at',
+      ]),
       expiresAt: readDate(const [
         'expiresAt',
         'expires_at',
-        'startingExpiresAt',
-        'starting_expires_at',
         'paymentDeadline',
         'payment_deadline',
       ]),
@@ -520,6 +524,7 @@ class TradeModel {
     DateTime? paymentDueAt,
     DateTime? fiatSentAt,
     DateTime? fiatConfirmDueAt,
+    DateTime? startingExpiresAt,
     String? disputeId,
     String? autoDisputeTrigger,
   }) {
@@ -543,6 +548,7 @@ class TradeModel {
       paymentWindowMinutes: paymentWindowMinutes,
       createdAt: createdAt,
       updatedAt: updatedAt,
+      startingExpiresAt: startingExpiresAt ?? this.startingExpiresAt,
       expiresAt: expiresAt,
       paymentDueAt: paymentDueAt ?? this.paymentDueAt,
       fiatSentAt: fiatSentAt ?? this.fiatSentAt,

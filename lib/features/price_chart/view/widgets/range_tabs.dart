@@ -11,13 +11,7 @@ class RangeTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    const items = [
-      (PriceChartRange.h24, '24H'),
-      (PriceChartRange.w1,  '1W'),
-      (PriceChartRange.m1,  '1M'),
-      (PriceChartRange.y1,  '1Y'),
-      (PriceChartRange.all, 'ALL'),
-    ];
+    const items = PriceChartRange.values;
 
     return Container(
       decoration: BoxDecoration(
@@ -28,13 +22,13 @@ class RangeTabs extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: items.map((e) {
-          final selected = e.$1 == range;
+        children: items.map((item) {
+          final selected = item == range;
           return Expanded(
             child: SegmentButton(
-              label: e.$2,
+              label: item.shortLabel,
               selected: selected,
-              onTap: () => onChanged(e.$1),
+              onTap: () => onChanged(item),
             ),
           );
         }).toList(),

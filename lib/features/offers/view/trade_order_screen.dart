@@ -452,14 +452,37 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
       if (disputeStart == null) return null;
       return disputeStart.add(const Duration(hours: 24));
     }
-    final expires = _trade.expiresAt;
-    if (expires != null) return expires;
-    final created = _trade.createdAt;
-    final window = _trade.paymentWindowMinutes;
-    if (created != null && window != null) {
-      return created.add(Duration(minutes: window));
+    if (_trade.status == TradeStatus.starting) {
+      return _trade.startingExpiresAt ?? _trade.expiresAt;
+    }
+    if (_usesPaymentWindowTimer(_trade.status)) {
+      final paymentDue = _trade.paymentDueAt;
+      if (paymentDue != null) return paymentDue;
+
+      final created = _trade.createdAt;
+      final window = _trade.paymentWindowMinutes;
+      if (created != null && window != null) {
+        return created.add(Duration(minutes: window));
+      }
+    }
+    if (_trade.status == TradeStatus.fiatConfirmed) {
+      return _trade.expiresAt;
     }
     return null;
+  }
+
+  bool _usesPaymentWindowTimer(TradeStatus status) {
+    return status == TradeStatus.created ||
+        status == TradeStatus.cryptoLocked ||
+        status == TradeStatus.fiatSent;
+  }
+
+  String _countdownLabel() {
+    if (_trade.status == TradeStatus.disputed) return 'Dispute time';
+    if (_trade.status == TradeStatus.starting) return 'Request expiry';
+    if (_usesPaymentWindowTimer(_trade.status)) return 'Trade time';
+    if (_trade.status == TradeStatus.fiatConfirmed) return 'Claim window';
+    return 'Trade time';
   }
 
   DateTime _resolveEscrowExpiryTime() {
@@ -1606,9 +1629,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
 
   PreferredSizeWidget _buildAppBar(AppColor colors) {
     final showHeaderTimer = _trade.status.isActive && _timeLeft > Duration.zero;
-    final timerLabel = _trade.status == TradeStatus.disputed
-        ? 'Dispute time'
-        : 'Trade time';
+    final timerLabel = _countdownLabel();
     return AppBar(
       backgroundColor: colors.background,
       elevation: 0,

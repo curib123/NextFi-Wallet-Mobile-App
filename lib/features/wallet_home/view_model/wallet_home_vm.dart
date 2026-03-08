@@ -12,9 +12,6 @@ import 'package:next_fi/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/reusable_view_model/seed_keypair_vm.dart';
 
-// ✅ add this import
-import 'package:next_fi/services/fcm_notification/fcm_notification_core.dart';
-
 /// UI-neutral severity for toasts/snackbars
 enum UiSeverity { info, success, warning, error }
 
@@ -169,10 +166,6 @@ class WalletHomeVM extends ChangeNotifier {
   DateTime? _lastFetch;
   String? _lastBoundAddress;
 
-  // ✅ throttle self-push (avoid spamming)
-  DateTime? _lastSelfPushAt;
-  static const Duration _minSelfPushGap = Duration(minutes: 3);
-
   // ───────────────────── Auth check helper ─────────────────────
 
   /// Returns true if user has valid OAuth tokens
@@ -197,37 +190,6 @@ class WalletHomeVM extends ChangeNotifier {
     }
 
     return true;
-  }
-
-  // ✅ Send push to self ONLY if logged in + throttled
-  Future<void> _notifyMeIfAuthed({
-    required String title,
-    required String body,
-    Map<String, String>? data,
-  }) async {
-    if (_disposed) return;
-
-    // throttle
-    final now = DateTime.now();
-    if (_lastSelfPushAt != null &&
-        now.difference(_lastSelfPushAt!) < _minSelfPushGap) {
-      return;
-    }
-
-    final authed = await _isAuthenticated();
-    if (!authed) return;
-
-    try {
-      await FcmNotificationCore().sendPushToMe(
-        title: title,
-        body: body,
-        data: data ?? const {'route': '/wallet'},
-      );
-      _lastSelfPushAt = now;
-      debugPrint('[FCM] sendPushToMe ok');
-    } catch (e) {
-      debugPrint('[FCM] sendPushToMe failed: $e');
-    }
   }
 
   // ───────────────────── Buy / Sell ─────────────────────
@@ -498,13 +460,6 @@ class WalletHomeVM extends ChangeNotifier {
             _set(_state.copyWith(hints: next));
             _emit(IncomingHintAddedEvent(hint));
 
-            // ✅ OPTIONAL: send a push to yourself (only if logged in + throttled)
-            await _notifyMeIfAuthed(
-              title: 'Incoming $assetCode',
-              body: '+$amount $assetCode received',
-              data: const {'route': '/wallet'},
-            );
-
             _scheduleBalanceKick(_debounceDelay);
           },
           onError: (e) {
@@ -528,13 +483,6 @@ class WalletHomeVM extends ChangeNotifier {
 
         _emit(
           TransactionConfirmedEvent(hash: hash, asset: asset, amount: amount),
-        );
-
-        // ✅ OPTIONAL: self-push on confirmations too (logged-in + throttled)
-        await _notifyMeIfAuthed(
-          title: 'Transaction confirmed',
-          body: '$amount $asset confirmed',
-          data: const {'route': '/wallet'},
         );
       },
       onError: (e) {

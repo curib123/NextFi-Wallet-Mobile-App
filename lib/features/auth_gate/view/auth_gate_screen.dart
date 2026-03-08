@@ -263,13 +263,13 @@ class _AuthGateScreenState extends State<AuthGateScreen>
                       end: Alignment.bottomCenter,
                       colors: <Color>[
                         Colors.black.withValues(
-                          alpha: _coverImageUrl != null ? 0.40 : 0.18,
+                          alpha: _coverImageUrl != null ? 0.48 : 0.18,
                         ),
                         Colors.black.withValues(
-                          alpha: _coverImageUrl != null ? 0.24 : 0.08,
+                          alpha: _coverImageUrl != null ? 0.32 : 0.08,
                         ),
                         colors.background.withValues(
-                          alpha: _coverImageUrl != null ? 0.68 : 0.16,
+                          alpha: _coverImageUrl != null ? 0.76 : 0.16,
                         ),
                       ],
                     ),
