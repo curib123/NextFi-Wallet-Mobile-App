@@ -313,17 +313,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: colors.surface,
-        leading: Builder(
-          builder: (context) => IconButton(
-            tooltip: 'Menu',
-            icon: Icon(
-              LucideIcons.menu,
-              color: colors.primary,
-              size: 26,
-            ),
-            onPressed: () => Scaffold.of(context).openDrawer(),
-          ),
-        ),
         title: const Text(
           'Transactions',
           style: TextStyle(fontWeight: FontWeight.bold),
