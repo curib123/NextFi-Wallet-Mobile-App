@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/drawer/app_drawer_button.dart';
 import 'package:next_fi/common/components/modal/wallet_switch_result.dart';
 import 'package:next_fi/common/components/profile_avatar/user_avatar.dart';
 import 'package:next_fi/common/components/snackbar/SnackBar.dart';
@@ -109,7 +110,7 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
         children: [
           Builder(
             builder: (ctx) =>
-                _MenuButton(colors: colors, onTap: () => _openDrawer(ctx)),
+                AppDrawerButton(colors: colors, onTap: () => _openDrawer(ctx)),
           ),
           const Spacer(),
           _WalletSwitcher(
@@ -195,82 +196,6 @@ class _TopBarState extends State<TopBar> with WidgetsBindingObserver {
   }
 }
 
-class _MenuButton extends StatefulWidget {
-  final AppColor colors;
-  final VoidCallback onTap;
-
-  const _MenuButton({required this.colors, required this.onTap});
-
-  @override
-  State<_MenuButton> createState() => _MenuButtonState();
-}
-
-class _MenuButtonState extends State<_MenuButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scaleAnimation;
-  bool _isPressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-    );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.92,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTapDown: (_) {
-        setState(() => _isPressed = true);
-        _controller.forward();
-      },
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () {
-        setState(() => _isPressed = false);
-        _controller.reverse();
-      },
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 44,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _isPressed
-                ? widget.colors.border.withValues(alpha: isDark ? 0.15 : 0.12)
-                : widget.colors.border.withValues(alpha: isDark ? 0.08 : 0.05),
-          ),
-          child: Icon(
-            Icons.widgets_rounded,
-            size: 20,
-            color: widget.colors.textPrimary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _WalletSwitcher extends StatelessWidget {
   final String walletName;
   final AppColor colors;
@@ -308,7 +233,9 @@ class _WalletSwitcher extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.04),
+                  color: AppColor.of(
+                    context,
+                  ).textPrimary.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -408,20 +335,20 @@ class _ProfileActionButton extends StatelessWidget {
         ),
         child: isLoading
             ? SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colors.primary,
-          ),
-        )
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colors.primary,
+                ),
+              )
             : (isLoggedIn && user != null)
             ? UserAvatarMedium(user: user!, colors: colors)
             : Icon(
-          LucideIcons.userCircle2,
-          color: colors.textPrimary,
-          size: 22,
-        ),
+                LucideIcons.userCircle2,
+                color: colors.textPrimary,
+                size: 22,
+              ),
       ),
     );
   }

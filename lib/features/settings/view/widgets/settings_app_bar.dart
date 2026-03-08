@@ -1,7 +1,7 @@
 // lib/features/settings/view/widgets/settings_app_bar.dart
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/Helper/colors/AppColor.dart';
+import 'package:next_fi/common/components/drawer/app_drawer_button.dart';
 
 class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
   const SettingsAppBar({super.key, required this.colors});
@@ -16,10 +16,23 @@ class SettingsAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       elevation: 0,
       backgroundColor: colors.surface,
+      leadingWidth: 60,
+      leading: Builder(
+        builder: (context) => Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: AppDrawerButton(
+            colors: colors,
+            onTap: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
       centerTitle: false,
       title: Text(
         'Settings',
-        style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
+        style: TextStyle(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

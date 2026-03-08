@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Page;
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/drawer/app_drawer_button.dart';
 import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:provider/provider.dart';
 
@@ -166,8 +167,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
       for (final tx in list) {
         final direction = (tx['direction'] ?? 'other').toString();
         final isIncoming = direction == 'in';
-        final peerAddr =
-            (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? '')).toString().trim();
+        final peerAddr = (isIncoming ? (tx['from'] ?? '') : (tx['to'] ?? ''))
+            .toString()
+            .trim();
         if (peerAddr.isEmpty) continue;
         final rec = recipProv.byAddress(peerAddr);
         tx['recName'] = rec?.name;
@@ -177,7 +179,8 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     final visibleTxs = [...vm.state.visibleTxs];
     attachRecipientMetaTo(visibleTxs);
-    final showLoaderRow = vm.state.loadingMore && vm.state.filter == TxFilter.all;
+    final showLoaderRow =
+        vm.state.loadingMore && vm.state.filter == TxFilter.all;
 
     Widget content;
     if (vm.state.loading && vm.state.txs.isEmpty) {
@@ -313,6 +316,16 @@ class _TransactionScreenState extends State<TransactionScreen> {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: colors.surface,
+        leadingWidth: 60,
+        leading: Builder(
+          builder: (context) => Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: AppDrawerButton(
+              colors: colors,
+              onTap: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
+        ),
         title: const Text(
           'Transactions',
           style: TextStyle(fontWeight: FontWeight.bold),

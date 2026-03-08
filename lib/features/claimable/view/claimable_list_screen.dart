@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:next_fi/common/components/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/common/components/drawer/app_drawer_button.dart';
 import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:provider/provider.dart';
 
@@ -151,6 +152,15 @@ class _ClaimableListScreenState extends State<ClaimableListScreen>
       ),
       child: Row(
         children: [
+          Builder(
+            builder: (context) => Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: AppDrawerButton(
+                colors: c,
+                onTap: () => Scaffold.of(context).openDrawer(),
+              ),
+            ),
+          ),
           Expanded(
             child: Text(
               'Claimable Balances',

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/common/components/alert/AppAlert.dart';
+import 'package:next_fi/common/components/drawer/app_drawer_button.dart';
 import 'package:next_fi/common/components/drawer/appdrawer.dart';
 import 'package:provider/provider.dart';
 
@@ -29,19 +30,19 @@ class SwapScreen extends StatefulWidget {
 
 class _SwapScreenState extends State<SwapScreen>
     with SingleTickerProviderStateMixin {
-  final _fmt    = NumberFormat('#,##0.######');
+  final _fmt = NumberFormat('#,##0.######');
   final _fromCtl = TextEditingController();
-  final _toCtl   = TextEditingController();
+  final _toCtl = TextEditingController();
 
   final RegExp _partialRe = RegExp(r'^\d{0,12}([.]\d{0,7})?$');
 
-  bool _booted      = false;
+  bool _booted = false;
   bool _syncingFrom = false;
-  bool _syncingTo   = false;
+  bool _syncingTo = false;
   double? _lastPct;
 
   late final AnimationController _flipCtl;
-  late final Animation<double>    _flipAnim;
+  late final Animation<double> _flipAnim;
 
   @override
   void initState() {
@@ -98,7 +99,7 @@ class _SwapScreenState extends State<SwapScreen>
     // VM already clamped _amount to availableFrom (fees deducted).
     // If the raw text exceeds what the VM accepted, snap the field.
     final accepted = vm.amount;
-    final typed    = double.tryParse(raw.replaceAll(',', '').trim()) ?? 0.0;
+    final typed = double.tryParse(raw.replaceAll(',', '').trim()) ?? 0.0;
     if (typed > 0 && (accepted - typed).abs() > 1e-9) {
       _setField(_fromCtl, _tight(accepted), isFrom: true);
     }
@@ -136,7 +137,11 @@ class _SwapScreenState extends State<SwapScreen>
 
   // ── Sync helpers ──────────────────────────────────────────────────────────
 
-  void _setField(TextEditingController ctl, String text, {required bool isFrom}) {
+  void _setField(
+    TextEditingController ctl,
+    String text, {
+    required bool isFrom,
+  }) {
     if (isFrom) {
       _syncingFrom = true;
     } else {
@@ -161,7 +166,9 @@ class _SwapScreenState extends State<SwapScreen>
     try {
       final t = vm.amount <= 0 ? '' : _tight(vm.amount);
       _fromCtl.value = TextEditingValue(
-          text: t, selection: TextSelection.collapsed(offset: t.length));
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
     } finally {
       _syncingFrom = false;
     }
@@ -171,9 +178,11 @@ class _SwapScreenState extends State<SwapScreen>
     _syncingTo = true;
     try {
       final est = vm.state.estReceive;
-      final t   = (est == null || est <= 0) ? '' : _tight(est);
+      final t = (est == null || est <= 0) ? '' : _tight(est);
       _toCtl.value = TextEditingValue(
-          text: t, selection: TextSelection.collapsed(offset: t.length));
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
+      );
     } finally {
       _syncingTo = false;
     }
@@ -181,18 +190,22 @@ class _SwapScreenState extends State<SwapScreen>
 
   void _syncBoth(SwapVM vm) {
     _syncingFrom = true;
-    _syncingTo   = true;
+    _syncingTo = true;
     try {
       final fromT = vm.amount <= 0 ? '' : _tight(vm.amount);
-      final est   = vm.state.estReceive;
-      final toT   = (est == null || est <= 0) ? '' : _tight(est);
+      final est = vm.state.estReceive;
+      final toT = (est == null || est <= 0) ? '' : _tight(est);
       _fromCtl.value = TextEditingValue(
-          text: fromT, selection: TextSelection.collapsed(offset: fromT.length));
+        text: fromT,
+        selection: TextSelection.collapsed(offset: fromT.length),
+      );
       _toCtl.value = TextEditingValue(
-          text: toT, selection: TextSelection.collapsed(offset: toT.length));
+        text: toT,
+        selection: TextSelection.collapsed(offset: toT.length),
+      );
     } finally {
       _syncingFrom = false;
-      _syncingTo   = false;
+      _syncingTo = false;
     }
     if (mounted) setState(() {});
   }
@@ -230,7 +243,8 @@ class _SwapScreenState extends State<SwapScreen>
   Future<void> _confirmMarket(SwapVM vm) async {
     // Flush any pending input.
     await vm.onAmountChanged(
-        vm.mode == AmountMode.from ? _fromCtl.text : _toCtl.text);
+      vm.mode == AmountMode.from ? _fromCtl.text : _toCtl.text,
+    );
     if (!mounted) return;
 
     if (!vm.hasAmount) return;
@@ -241,7 +255,7 @@ class _SwapScreenState extends State<SwapScreen>
         type: AppAlertType.warning,
         title: 'Insufficient balance',
         subtitle:
-        'Your available ${vm.state.isXlmToUsdc ? 'XLM' : 'USDC'} '
+            'Your available ${vm.state.isXlmToUsdc ? 'XLM' : 'USDC'} '
             'is not enough for this swap.',
         primaryText: 'OK',
       );
@@ -318,7 +332,8 @@ class _SwapScreenState extends State<SwapScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                height: 4, width: 36,
+                height: 4,
+                width: 36,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: c.border.withValues(alpha: 0.5),
@@ -327,19 +342,38 @@ class _SwapScreenState extends State<SwapScreen>
               ),
               Row(
                 children: [
-                  Icon(LucideIcons.slidersHorizontal, size: 18, color: c.textPrimary),
+                  Icon(
+                    LucideIcons.slidersHorizontal,
+                    size: 18,
+                    color: c.textPrimary,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Slippage Tolerance',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                  Text(
+                    'Slippage Tolerance',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: c.textPrimary,
+                    ),
+                  ),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: c.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('${_fmtPct(tempPct)}%',
-                        style: TextStyle(color: c.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                    child: Text(
+                      '${_fmtPct(tempPct)}%',
+                      style: TextStyle(
+                        color: c.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -353,10 +387,15 @@ class _SwapScreenState extends State<SwapScreen>
                   trackHeight: 4,
                 ),
                 child: Slider(
-                  value: tempPct.clamp(SwapVM.slippageMinPct, SwapVM.slippageMaxPct),
+                  value: tempPct.clamp(
+                    SwapVM.slippageMinPct,
+                    SwapVM.slippageMaxPct,
+                  ),
                   min: SwapVM.slippageMinPct,
                   max: SwapVM.slippageMaxPct,
-                  divisions: ((SwapVM.slippageMaxPct - SwapVM.slippageMinPct) / 0.1).round(),
+                  divisions:
+                      ((SwapVM.slippageMaxPct - SwapVM.slippageMinPct) / 0.1)
+                          .round(),
                   label: '${_fmtPct(tempPct)}%',
                   onChanged: (v) => set(() => tempPct = v),
                 ),
@@ -397,11 +436,11 @@ class _SwapScreenState extends State<SwapScreen>
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<SwapVM>();
-    final s  = vm.state;
-    final c  = AppColor.of(context);
+    final s = vm.state;
+    final c = AppColor.of(context);
 
     final fromSymbol = s.isXlmToUsdc ? 'XLM' : 'USDC';
-    final toSymbol   = s.isXlmToUsdc ? 'USDC' : 'XLM';
+    final toSymbol = s.isXlmToUsdc ? 'USDC' : 'XLM';
 
     final priceLine = (vm.amount > 0 && (s.estReceive ?? 0) > 0)
         ? '1 $fromSymbol ≈ ${_tight(s.estReceive! / vm.amount)} $toSymbol'
@@ -423,19 +462,20 @@ class _SwapScreenState extends State<SwapScreen>
         elevation: 0,
         scrolledUnderElevation: 0,
         backgroundColor: c.background,
+        leadingWidth: 60,
         leading: Builder(
-          builder: (context) => IconButton(
-            tooltip: 'Menu',
-            icon: Icon(
-              LucideIcons.menu,
-              color: c.primary,
-              size: 26,
+          builder: (context) => Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: AppDrawerButton(
+              colors: c,
+              onTap: () => Scaffold.of(context).openDrawer(),
             ),
-            onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Text('Swap',
-            style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
+        title: Text(
+          'Swap',
+          style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary),
+        ),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -448,17 +488,30 @@ class _SwapScreenState extends State<SwapScreen>
           ),
         ],
       ),
-      body: _buildBody(vm, s, c, fromSymbol, toSymbol, priceLine,
-          minReceiveText, balanceStr),
+      body: _buildBody(
+        vm,
+        s,
+        c,
+        fromSymbol,
+        toSymbol,
+        priceLine,
+        minReceiveText,
+        balanceStr,
+      ),
       bottomNavigationBar: _buildBottomBar(vm, s, c),
     );
   }
 
   Widget _buildBody(
-      SwapVM vm, dynamic s, AppColor c,
-      String fromSymbol, String toSymbol,
-      String priceLine, String? minReceiveText, String balanceStr,
-      ) {
+    SwapVM vm,
+    dynamic s,
+    AppColor c,
+    String fromSymbol,
+    String toSymbol,
+    String priceLine,
+    String? minReceiveText,
+    String balanceStr,
+  ) {
     if (s.loading && s.accountId == null) return const PageLoader();
     if (s.error != null && s.error!.isNotEmpty) {
       return ErrorCard(
@@ -474,7 +527,14 @@ class _SwapScreenState extends State<SwapScreen>
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        _buildExchangeCard(vm, c, fromSymbol, toSymbol, balanceStr, minReceiveText),
+        _buildExchangeCard(
+          vm,
+          c,
+          fromSymbol,
+          toSymbol,
+          balanceStr,
+          minReceiveText,
+        ),
         const SizedBox(height: 14),
         _buildPriceRow(vm, c, priceLine),
         const SizedBox(height: 14),
@@ -484,10 +544,13 @@ class _SwapScreenState extends State<SwapScreen>
   }
 
   Widget _buildExchangeCard(
-      SwapVM vm, AppColor c,
-      String fromSymbol, String toSymbol,
-      String balanceStr, String? minReceiveText,
-      ) {
+    SwapVM vm,
+    AppColor c,
+    String fromSymbol,
+    String toSymbol,
+    String balanceStr,
+    String? minReceiveText,
+  ) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -516,10 +579,16 @@ class _SwapScreenState extends State<SwapScreen>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Icon(LucideIcons.shieldCheck, size: 14, color: c.textSecondary),
+                    Icon(
+                      LucideIcons.shieldCheck,
+                      size: 14,
+                      color: c.textSecondary,
+                    ),
                     const SizedBox(width: 6),
-                    Text(minReceiveText,
-                        style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                    Text(
+                      minReceiveText,
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
                   ],
                 ),
               ],
@@ -533,8 +602,10 @@ class _SwapScreenState extends State<SwapScreen>
             alignment: Alignment.center,
             child: AnimatedBuilder(
               animation: _flipAnim,
-              builder: (_, child) =>
-                  Transform.rotate(angle: _flipAnim.value * math.pi, child: child),
+              builder: (_, child) => Transform.rotate(
+                angle: _flipAnim.value * math.pi,
+                child: child,
+              ),
               child: GestureDetector(
                 onTap: () => _flip(vm),
                 child: Container(
@@ -552,7 +623,11 @@ class _SwapScreenState extends State<SwapScreen>
                       ),
                     ],
                   ),
-                  child: Icon(LucideIcons.arrowUpDown, size: 18, color: c.primary),
+                  child: Icon(
+                    LucideIcons.arrowUpDown,
+                    size: 18,
+                    color: c.primary,
+                  ),
                 ),
               ),
             ),
@@ -575,9 +650,11 @@ class _SwapScreenState extends State<SwapScreen>
           Icon(LucideIcons.trendingUp, size: 16, color: c.textSecondary),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(priceLine,
-                style: TextStyle(color: c.textSecondary, fontSize: 13),
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              priceLine,
+              style: TextStyle(color: c.textSecondary, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           InkWell(
             borderRadius: BorderRadius.circular(8),
@@ -591,11 +668,20 @@ class _SwapScreenState extends State<SwapScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.slidersHorizontal, size: 13, color: c.primary),
+                  Icon(
+                    LucideIcons.slidersHorizontal,
+                    size: 13,
+                    color: c.primary,
+                  ),
                   const SizedBox(width: 4),
-                  Text('${_fmtPct(vm.slippagePctPercent)}%',
-                      style: TextStyle(
-                          color: c.primary, fontWeight: FontWeight.w700, fontSize: 12)),
+                  Text(
+                    '${_fmtPct(vm.slippagePctPercent)}%',
+                    style: TextStyle(
+                      color: c.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -624,17 +710,17 @@ class _SwapScreenState extends State<SwapScreen>
               : vm.canSwap
               ? () => _confirmMarket(vm)
               : () {
-            HapticFeedback.selectionClick();
-            showAppAlert(
-              context,
-              type: AppAlertType.warning,
-              title: 'Insufficient balance',
-              subtitle:
-              'Your available ${s.isXlmToUsdc ? 'XLM' : 'USDC'} '
-                  'is not enough for this swap.',
-              primaryText: 'OK',
-            );
-          },
+                  HapticFeedback.selectionClick();
+                  showAppAlert(
+                    context,
+                    type: AppAlertType.warning,
+                    title: 'Insufficient balance',
+                    subtitle:
+                        'Your available ${s.isXlmToUsdc ? 'XLM' : 'USDC'} '
+                        'is not enough for this swap.',
+                    primaryText: 'OK',
+                  );
+                },
         ),
       ),
     );
@@ -673,29 +759,50 @@ class _AmountTile extends StatelessWidget {
         // Header
         Row(
           children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: c.textSecondary)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: c.textSecondary,
+              ),
+            ),
             const Spacer(),
             if (balanceText != null) ...[
-              Text('Balance: ', style: TextStyle(fontSize: 12, color: c.textSecondary)),
-              Text(balanceText!,
-                  style: TextStyle(
-                      fontSize: 12, color: c.textPrimary, fontWeight: FontWeight.w500)),
+              Text(
+                'Balance: ',
+                style: TextStyle(fontSize: 12, color: c.textSecondary),
+              ),
+              Text(
+                balanceText!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: c.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               if (onMax != null) ...[
                 const SizedBox(width: 6),
                 InkWell(
                   borderRadius: BorderRadius.circular(6),
                   onTap: onMax,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: c.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text('MAX',
-                        style: TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w800, color: c.primary)),
+                    child: Text(
+                      'MAX',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: c.primary,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -719,7 +826,10 @@ class _AmountTile extends StatelessWidget {
                 onTap: onAssetTap,
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: c.surface,
                     border: Border.all(color: c.border.withValues(alpha: 0.5)),
@@ -730,11 +840,19 @@ class _AmountTile extends StatelessWidget {
                     children: [
                       AssetLogo(keyOrSymbol: symbol, size: 20),
                       const SizedBox(width: 8),
-                      Text(symbol,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(
+                        symbol,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(width: 4),
-                      Icon(LucideIcons.chevronsUpDown, size: 14, color: c.textSecondary),
+                      Icon(
+                        LucideIcons.chevronsUpDown,
+                        size: 14,
+                        color: c.textSecondary,
+                      ),
                     ],
                   ),
                 ),
@@ -746,18 +864,25 @@ class _AmountTile extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   readOnly: readOnly,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                   ],
                   textAlign: TextAlign.end,
                   style: TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w700, color: c.textPrimary),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: c.textPrimary,
+                  ),
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
                     hintText: hint,
-                    hintStyle: TextStyle(color: c.textSecondary.withValues(alpha: 0.5)),
+                    hintStyle: TextStyle(
+                      color: c.textSecondary.withValues(alpha: 0.5),
+                    ),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),

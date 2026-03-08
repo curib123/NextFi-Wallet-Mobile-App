@@ -106,7 +106,7 @@ Future<void> main() async {
 }
 
 List<SingleChildWidget> _buildProviders() {
-  const bool kIsTestnet = false;
+  const bool kIsTestnet = bool.fromEnvironment('NEXTFI_TESTNET');
 
   const String defaultUsdcMainnet =
       'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
@@ -129,9 +129,20 @@ List<SingleChildWidget> _buildProviders() {
     ChangeNotifierProvider(create: (_) => SeedKeypairVM()..init()),
 
     // 3) Currency depends on Stellar service
-    ChangeNotifierProxyProvider<StellarWalletServices, CurrencyVM>(
+    ChangeNotifierProxyProvider2<
+      StellarWalletServices,
+      NetworkMonitor,
+      CurrencyVM
+    >(
       create: (ctx) => CurrencyVM(stellar: ctx.read<StellarWalletServices>()),
-      update: (ctx, stellar, prev) => prev ?? CurrencyVM(stellar: stellar),
+      update: (ctx, stellar, monitor, prev) {
+        final vm = prev ?? CurrencyVM(stellar: stellar);
+        vm.handleConnectivityChanged(
+          isOnline: monitor.isOnline,
+          justReconnected: monitor.justReconnected,
+        );
+        return vm;
+      },
     ),
 
     // 4) AssetVM depends on Currency
@@ -299,10 +310,8 @@ class _MyAppState extends State<MyApp> {
 
     debugPrint('[FCM] token=$token');
     debugPrint(
-      '[FCM] deviceId=${deviceMeta.deviceId} platform=${deviceMeta
-          .platform} appVersion=${deviceMeta.appVersion}',
+      '[FCM] deviceId=${deviceMeta.deviceId} platform=${deviceMeta.platform} appVersion=${deviceMeta.appVersion}',
     );
-
 
     // ✅ Register token with backend
     if (token != null) {
@@ -337,8 +346,7 @@ class _MyAppState extends State<MyApp> {
     await FcmBootstrap.bindListeners(
       onForeground: (RemoteMessage msg) async {
         debugPrint(
-          '[FCM][onMessage] ${msg.notification?.title} | ${msg.notification
-              ?.body}',
+          '[FCM][onMessage] ${msg.notification?.title} | ${msg.notification?.body}',
         );
         debugPrint('[FCM][data] ${msg.data}');
         // Show notification in foreground using LocalNotif
@@ -362,7 +370,6 @@ class _MyAppState extends State<MyApp> {
       // Navigator.of(context).pushNamed(route);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -396,7 +403,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-
   final ThemeData _lightTheme = ThemeData(
     useMaterial3: true,
     fontFamily: GoogleFonts.inter().fontFamily,
@@ -416,12 +422,8 @@ class _MyAppState extends State<MyApp> {
     fontFamily: GoogleFonts.inter().fontFamily,
     scaffoldBackgroundColor: AppColor.dark.background,
     canvasColor: AppColor.dark.surface,
-    textTheme: AppFonts.interTextTheme(ThemeData
-        .dark()
-        .textTheme),
-    primaryTextTheme: AppFonts.interTextTheme(ThemeData
-        .dark()
-        .textTheme),
+    textTheme: AppFonts.interTextTheme(ThemeData.dark().textTheme),
+    primaryTextTheme: AppFonts.interTextTheme(ThemeData.dark().textTheme),
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColor.dark.primary,
       surface: AppColor.dark.surface,

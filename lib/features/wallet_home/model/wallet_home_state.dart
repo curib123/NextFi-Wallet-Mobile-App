@@ -43,7 +43,7 @@ class WalletHomeState {
     this.lastBalancesAt,
     this.lastReservesAt,
     this.hints = const [],
-    this.selectedWindow = PriceWindow.y1,
+    this.selectedWindow = PriceWindow.h24,
   });
 
   bool get hasWallet => (address != null && address!.isNotEmpty);

@@ -219,7 +219,7 @@ class AssetWidget extends StatelessWidget {
 
     // Get price window from WalletHomeVM
     final homeVM = context.watch<WalletHomeVM?>();
-    final window = homeVM?.state.selectedWindow ?? PriceWindow.y1;
+    final window = homeVM?.state.selectedWindow ?? PriceWindow.h24;
 
     if (loading) {
       final isDark = Theme.of(context).brightness == Brightness.dark;
