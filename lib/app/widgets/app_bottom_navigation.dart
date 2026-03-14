@@ -2,13 +2,11 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
 
-import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/features/claimable/view_model/claimable_vm.dart';
-import 'package:next_fi/features/transactions/view_model/transactions_vm.dart';
-import 'package:next_fi/reusable_view_model/tab_vm.dart';
+import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/config/app_providers.dart';
 
 /// Ultra-premium fintech navigation with advanced morphing effects
 ///
@@ -22,15 +20,16 @@ import 'package:next_fi/reusable_view_model/tab_vm.dart';
 /// - Performance optimized
 ///
 /// Design inspired by modern banking apps like Revolut, N26, and Wise
-class AppBottomNavigationPremium extends StatefulWidget {
+class AppBottomNavigationPremium extends ConsumerStatefulWidget {
   const AppBottomNavigationPremium({super.key});
 
   @override
-  State<AppBottomNavigationPremium> createState() =>
+  ConsumerState<AppBottomNavigationPremium> createState() =>
       _AppBottomNavigationPremiumState();
 }
 
-class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
+class _AppBottomNavigationPremiumState
+    extends ConsumerState<AppBottomNavigationPremium>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
 
@@ -52,19 +51,18 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
   @override
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
-    final tabVM = context.watch<TabVM>();
+    final tab = ref.watch(tabControllerProvider);
+    final claimableVM = ref.watch(claimableVmProvider);
+    final transactionsVM = ref.watch(transactionsVmProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Consumer2<ClaimableVM, TransactionsVM>(
-      builder: (context, claimableVM, transactionsVM, _) {
-        // Calculate notification counts
-        final claimableReadyCount = claimableVM.receivedReadyCount;
-        final reclaimableCount = claimableVM.sentExpiredCount;
-        final totalClaimableCount = claimableReadyCount + reclaimableCount;
-        final unreadTxCount = transactionsVM.unreadCount;
-        final pendingTxCount = transactionsVM.pendingCount;
+    final claimableReadyCount = claimableVM.receivedReadyCount;
+    final reclaimableCount = claimableVM.sentExpiredCount;
+    final totalClaimableCount = claimableReadyCount + reclaimableCount;
+    final unreadTxCount = transactionsVM.unreadCount;
+    final pendingTxCount = transactionsVM.pendingCount;
 
-        return Container(
+    return Container(
           decoration: BoxDecoration(
             gradient: isDark
                 ? LinearGradient(
@@ -126,53 +124,57 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
                           icon: LucideIcons.wallet,
                           label: 'Wallet',
                           index: 0,
-                          isSelected: tabVM.currentIndex == 0,
+                          isSelected: tab.currentIndex == 0,
                           colors: colors,
-                          onTap: () => tabVM.setTab(0),
+                          onTap: () =>
+                              ref.read(tabControllerProvider.notifier).setTab(0),
                         ),
                         _buildNavItem(
                           context: context,
                           icon: LucideIcons.history,
                           label: 'History',
                           index: 1,
-                          isSelected: tabVM.currentIndex == 1,
+                          isSelected: tab.currentIndex == 1,
                           colors: colors,
                           badgeCount: unreadTxCount,
                           showDot: unreadTxCount == 0 && pendingTxCount > 0,
                           onTap: () {
                             if (unreadTxCount > 0) {
-                              transactionsVM.markAllAsRead();
+                              ref.read(transactionsVmProvider).markAllAsRead();
                             }
-                            tabVM.setTab(1);
+                            ref.read(tabControllerProvider.notifier).setTab(1);
                           },
                         ),
                         _build3DSwapButton(
                           context: context,
-                          isSelected: tabVM.currentIndex == 2,
+                          isSelected: tab.currentIndex == 2,
                           colors: colors,
-                          onTap: () => tabVM.setTab(2),
+                          onTap: () =>
+                              ref.read(tabControllerProvider.notifier).setTab(2),
                         ),
                         _buildNavItem(
                           context: context,
                           icon: LucideIcons.gift,
                           label: 'Claimable',
                           index: 3,
-                          isSelected: tabVM.currentIndex == 3,
+                          isSelected: tab.currentIndex == 3,
                           colors: colors,
                           badgeCount: totalClaimableCount,
                           badgeColor: claimableReadyCount > 0
                               ? colors.error
                               : colors.warning,
-                          onTap: () => tabVM.setTab(3),
+                          onTap: () =>
+                              ref.read(tabControllerProvider.notifier).setTab(3),
                         ),
                         _buildNavItem(
                           context: context,
                           icon: LucideIcons.settings,
                           label: 'Settings',
                           index: 4,
-                          isSelected: tabVM.currentIndex == 4,
+                          isSelected: tab.currentIndex == 4,
                           colors: colors,
-                          onTap: () => tabVM.setTab(4),
+                          onTap: () =>
+                              ref.read(tabControllerProvider.notifier).setTab(4),
                         ),
                       ],
                     ),
@@ -181,8 +183,6 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
               ),
             ),
           ),
-        );
-      },
     );
   }
 
@@ -422,3 +422,4 @@ class _AppBottomNavigationPremiumState extends State<AppBottomNavigationPremium>
     );
   }
 }
+

@@ -1,0 +1,1 @@
+enum SendToken { xlm, usdc }

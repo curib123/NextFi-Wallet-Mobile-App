@@ -1,0 +1,702 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+
+import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/button/custom_button.dart';
+
+/// Returns the confirmed [minOut] (double) or null if cancelled.
+Future<double?> showConfirmMarketSheet(
+    BuildContext context, {
+      required NumberFormat fmt,
+    }) async {
+  final vm = ProviderScope.containerOf(context, listen: false).read(swapVmProvider);
+  if (!vm.hasFeeEstimates) await vm.refreshBalances();
+  if (!context.mounted) return null;
+
+  return showModalBottomSheet<double?>(
+    context: context,
+    useSafeArea: true,
+    backgroundColor: AppColor.of(context).surface,
+    isScrollControlled: true,
+    builder: (_) => _ConfirmMarketSheet(fmt: fmt),
+  );
+}
+
+/// Returns true if the limit order was confirmed, null/false if cancelled.
+Future<bool?> showConfirmLimitSheet(
+    BuildContext context, {
+      required NumberFormat fmt,
+      required double price,
+    }) =>
+    showModalBottomSheet<bool?>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: AppColor.of(context).surface,
+      isScrollControlled: true,
+      builder: (_) => _ConfirmLimitSheet(fmt: fmt, price: price),
+    );
+
+/// Returns true if the schedule was confirmed, null/false if cancelled.
+Future<bool?> showConfirmScheduleSheet(
+    BuildContext context, {
+      required NumberFormat fmt,
+      required DateTime? start,
+      required DateTime? end,
+    }) =>
+    showModalBottomSheet<bool?>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: AppColor.of(context).surface,
+      isScrollControlled: true,
+      builder: (_) => _ConfirmScheduleSheet(fmt: fmt, start: start, end: end),
+    );
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Shared slide-up animation mixin
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+mixin _SheetAnimMixin<T extends StatefulWidget>
+on State<T>, SingleTickerProviderStateMixin<T> {
+  late final AnimationController _animCtrl;
+  late final Animation<double>   _fade;
+  late final Animation<Offset>   _slide;
+
+  void initSheetAnim() {
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _fade  = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
+    _animCtrl.forward();
+  }
+
+  Future<void> closeSheet<R>(R result) async {
+    await _animCtrl.reverse();
+    if (!mounted) return;
+    Navigator.pop(context, result);
+  }
+
+  Widget wrapAnim({required Widget child}) => FadeTransition(
+    opacity: _fade,
+    child: SlideTransition(position: _slide, child: child),
+  );
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Market swap sheet
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+class _ConfirmMarketSheet extends ConsumerStatefulWidget {
+  const _ConfirmMarketSheet({required this.fmt});
+  final NumberFormat fmt;
+
+  @override
+  ConsumerState<_ConfirmMarketSheet> createState() => _ConfirmMarketSheetState();
+}
+
+class _ConfirmMarketSheetState extends ConsumerState<_ConfirmMarketSheet>
+    with SingleTickerProviderStateMixin, _SheetAnimMixin {
+  @override
+  void initState() {
+    super.initState();
+    initSheetAnim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm   = ref.watch(swapVmProvider);
+    final s    = vm.state;
+
+    final fromSymbol = s.isXlmToUsdc ? 'XLM' : 'USDC';
+    final toSymbol   = s.isXlmToUsdc ? 'USDC' : 'XLM';
+
+    final estOut = s.estReceive;
+    // currentMinOut = estOut Ãƒâ€” (1 Ã¢Ë†â€™ slippage), already computed in VM.
+    final minOut = vm.currentMinOut ?? 0.0;
+
+    return wrapAnim(
+      child: _SheetShell(
+        children: [
+          _Header(
+            icon: LucideIcons.arrowLeftRight,
+            title: 'Confirm Swap',
+            subtitle: 'Review your transaction',
+          ),
+          const SizedBox(height: 20),
+          _SwapVisualization(
+            from: '${widget.fmt.format(vm.amount)} $fromSymbol',
+            to: estOut != null
+                ? '${widget.fmt.format(estOut)} $toSymbol'
+                : 'CalculatingÃ¢â‚¬Â¦',
+          ),
+          const SizedBox(height: 20),
+          _DetailsCard(rows: [
+            _DetailRow(
+              label: 'Slippage Tolerance',
+              value: _fmtPct(vm.slippagePct),
+              icon: LucideIcons.zap,
+            ),
+            _DetailRow(
+              label: 'Minimum Received',
+              value: '${widget.fmt.format(minOut)} $toSymbol',
+              icon: LucideIcons.shield,
+              highlight: true,
+            ),
+            _DetailRow(
+              label: 'Network Fee',
+              value: vm.hasFeeEstimates
+                  ? 'Ã¢â€°Ë† ${widget.fmt.format(vm.estCombinedFeeXlm)} XLM'
+                  : 'CalculatingÃ¢â‚¬Â¦',
+              icon: LucideIcons.coins,
+              subtitle: s.needsTrustline ? 'Includes trustline setup' : null,
+            ),
+          ]),
+          const SizedBox(height: 24),
+          _ActionRow(
+            onCancel: () => closeSheet<double?>(null),
+            confirmLabel: 'Confirm Swap',
+            onConfirm: () => closeSheet<double?>(minOut),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Limit order sheet
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+class _ConfirmLimitSheet extends ConsumerStatefulWidget {
+  const _ConfirmLimitSheet({required this.fmt, required this.price});
+  final NumberFormat fmt;
+  final double price;
+
+  @override
+  ConsumerState<_ConfirmLimitSheet> createState() => _ConfirmLimitSheetState();
+}
+
+class _ConfirmLimitSheetState extends ConsumerState<_ConfirmLimitSheet>
+    with SingleTickerProviderStateMixin, _SheetAnimMixin {
+  @override
+  void initState() {
+    super.initState();
+    initSheetAnim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c          = AppColor.of(context);
+    final vm         = ref.watch(swapVmProvider);
+    final isXlmToUsdc = vm.state.isXlmToUsdc;
+    final fromSymbol  = isXlmToUsdc ? 'XLM' : 'USDC';
+    final badgeColor  = isXlmToUsdc ? c.error : c.success;
+
+    return wrapAnim(
+      child: _SheetShell(
+        children: [
+          _Header(
+            icon: LucideIcons.target,
+            title: 'Place Limit Order',
+            subtitle: 'Set your target price',
+          ),
+          const SizedBox(height: 20),
+          _OrderTypeBadge(
+            label: isXlmToUsdc ? 'SELL ORDER' : 'BUY ORDER',
+            color: badgeColor,
+          ),
+          const SizedBox(height: 20),
+          _DetailsCard(rows: [
+            _DetailRow(
+              label: 'Amount',
+              value: '${widget.fmt.format(vm.amount)} $fromSymbol',
+              icon: LucideIcons.coins,
+            ),
+            _DetailRow(
+              label: 'Limit Price',
+              value: '${widget.fmt.format(widget.price)} USDC per XLM',
+              icon: LucideIcons.trendingUp,
+              highlight: true,
+            ),
+            _DetailRow(
+              label: 'Order Type',
+              value: 'Good-Till-Cancel',
+              icon: LucideIcons.clock,
+              subtitle: 'Stays active until filled or cancelled',
+            ),
+          ]),
+          const SizedBox(height: 24),
+          _ActionRow(
+            onCancel: () => closeSheet<bool?>(false),
+            confirmLabel: 'Place Order',
+            onConfirm: () => closeSheet<bool?>(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Schedule sheet
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+class _ConfirmScheduleSheet extends ConsumerStatefulWidget {
+  const _ConfirmScheduleSheet({
+    required this.fmt,
+    required this.start,
+    required this.end,
+  });
+  final NumberFormat fmt;
+  final DateTime?    start;
+  final DateTime?    end;
+
+  @override
+  ConsumerState<_ConfirmScheduleSheet> createState() => _ConfirmScheduleSheetState();
+}
+
+class _ConfirmScheduleSheetState extends ConsumerState<_ConfirmScheduleSheet>
+    with SingleTickerProviderStateMixin, _SheetAnimMixin {
+  @override
+  void initState() {
+    super.initState();
+    initSheetAnim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm         = ref.watch(swapVmProvider);
+    final isXlmToUsdc = vm.state.isXlmToUsdc;
+    final fromSymbol  = isXlmToUsdc ? 'XLM' : 'USDC';
+
+    return wrapAnim(
+      child: _SheetShell(
+        children: [
+          _Header(
+            icon: LucideIcons.calendar,
+            title: 'Schedule Swap',
+            subtitle: 'Execute during time window',
+          ),
+          const SizedBox(height: 20),
+          _TimeWindow(start: widget.start, end: widget.end),
+          const SizedBox(height: 20),
+          _DetailsCard(rows: [
+            _DetailRow(
+              label: 'Amount',
+              value: '${widget.fmt.format(vm.amount)} $fromSymbol',
+              icon: LucideIcons.coins,
+            ),
+            _DetailRow(
+              label: 'Execution',
+              value: 'Market Price',
+              icon: LucideIcons.zap,
+              subtitle: 'Best available price during window',
+            ),
+          ]),
+          const SizedBox(height: 24),
+          _ActionRow(
+            onCancel: () => closeSheet<bool?>(false),
+            confirmLabel: 'Schedule',
+            onConfirm: () => closeSheet<bool?>(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Shared UI widgets
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+class _SheetShell extends StatelessWidget {
+  const _SheetShell({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: c.border.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+              ...children,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+  final IconData icon;
+  final String   title;
+  final String   subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 48, height: 48,
+          decoration: BoxDecoration(
+            gradient: c.primaryGradient,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: c.primary.withValues(alpha: 0.3),
+                blurRadius: 12, offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: AppColor.of(context).onPrimary, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: TextStyle(
+                    fontSize: 19, fontWeight: FontWeight.w700,
+                    color: c.textPrimary, letterSpacing: -0.3,
+                  )),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  style: TextStyle(fontSize: 13, color: c.textSecondary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SwapVisualization extends StatelessWidget {
+  const _SwapVisualization({required this.from, required this.to});
+  final String from;
+  final String to;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: c.primaryGradient,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: c.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          _AmountBox(text: from, accentColor: c.primary),
+          const SizedBox(height: 12),
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: c.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: c.primary.withValues(alpha: 0.3), width: 2),
+            ),
+            child: Icon(LucideIcons.arrowDown, size: 16, color: c.primary),
+          ),
+          const SizedBox(height: 12),
+          _AmountBox(text: to, accentColor: c.success),
+        ],
+      ),
+    );
+  }
+}
+
+class _AmountBox extends StatelessWidget {
+  const _AmountBox({required this.text, required this.accentColor});
+  final String text;
+  final Color  accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w700,
+          color: c.textPrimary, letterSpacing: -0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailsCard extends StatelessWidget {
+  const _DetailsCard({required this.rows});
+  final List<_DetailRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final divided = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      divided.add(rows[i]);
+      if (i < rows.length - 1) {
+        divided.add(Divider(color: c.border.withValues(alpha: 0.2), height: 1));
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(children: divided),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.subtitle,
+    this.highlight = false,
+  });
+  final String   label;
+  final String   value;
+  final IconData icon;
+  final String?  subtitle;
+  final bool     highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: highlight
+                  ? c.primary.withValues(alpha: 0.1)
+                  : c.border.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16,
+                color: highlight ? c.primary : c.textSecondary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(fontSize: 13, color: c.textSecondary)),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle!,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: c.textSecondary.withValues(alpha: 0.7))),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(value,
+              style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700,
+                color: highlight ? c.primary : c.textPrimary,
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderTypeBadge extends StatelessWidget {
+  const _OrderTypeBadge({required this.label, required this.color});
+  final String label;
+  final Color  color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.trendingUp, size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700,
+                  color: color, letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeWindow extends StatelessWidget {
+  const _TimeWindow({required this.start, required this.end});
+  final DateTime? start;
+  final DateTime? end;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: c.primaryGradient,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _TimeBox(label: 'Start', time: start)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Icon(LucideIcons.arrowRight, size: 20, color: c.primary),
+          ),
+          Expanded(child: _TimeBox(label: 'End', time: end)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeBox extends StatelessWidget {
+  const _TimeBox({required this.label, required this.time});
+  final String    label;
+  final DateTime? time;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Column(
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600,
+                color: c.textSecondary)),
+        const SizedBox(height: 6),
+        Text(_fmtCompact(time),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700,
+                color: c.textPrimary)),
+      ],
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.onCancel,
+    required this.confirmLabel,
+    required this.onConfirm,
+  });
+  final VoidCallback onCancel;
+  final String       confirmLabel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: CustomButton(
+            type: ButtonType.outlined,
+            icon: LucideIcons.x,
+            text: 'Cancel',
+            onPressed: onCancel,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: CustomButton(
+            icon: LucideIcons.checkCircle2,
+            text: confirmLabel,
+            onPressed: onConfirm,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// Helpers
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+String _fmtPct(double frac) {
+  final p = frac * 100;
+  return p % 1 == 0 ? '${p.toStringAsFixed(0)}%' : '${p.toStringAsFixed(1)}%';
+}
+
+String _fmtCompact(DateTime? dt) {
+  if (dt == null) return 'Ã¢â‚¬â€';
+  final t = dt.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(t.month)}/${two(t.day)}\n${two(t.hour)}:${two(t.minute)}';
+}
+

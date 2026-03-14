@@ -1,41 +1,38 @@
-// lib/app/home.dart
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:next_fi/Helper/colors/AppColor.dart';
-import 'package:next_fi/common/components/loader/page_loader.dart';
-import 'package:next_fi/features/onboarding/view/onboarding_screen.dart';
-import 'package:next_fi/reusable_view_model/tab_vm.dart';
-import 'package:next_fi/features/auth_gate/view/auth_gate_screen.dart';
-import 'package:next_fi/features/wallet_creation/view/wallet_creation_screen.dart';
-import 'package:next_fi/services/secure_storage/seed_storage.dart';
-import 'package:provider/provider.dart';
-import 'package:next_fi/common/components/snackbar/SnackBar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/loader/page_loader.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
+import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
+import 'package:next_fi/features/claimable/presentation/screens/claimable_list_screen.dart';
+import 'package:next_fi/features/onboarding/presentation/screens/onboarding_screen.dart';
+import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
+import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
+import 'package:next_fi/features/transactions/presentation/screens/transaction_screen.dart';
+import 'package:next_fi/features/wallet_creation/presentation/screens/wallet_creation_screen.dart';
+import 'package:next_fi/features/wallet_home/presentation/screens/wallet_home_screen.dart';
 
 import 'widgets/app_bottom_navigation.dart';
 
-const String _kOnboardingSeenKey = 'pref.onboarding_seen.v1';
-const FlutterSecureStorage _launchSecure = FlutterSecureStorage(
-  aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
-);
+const List<Widget> _shellScreens = [
+  WalletHomeScreen(),
+  TransactionScreen(),
+  SwapScreen(),
+  ClaimableListScreen(),
+  SettingsScreen(),
+];
 
-class Home extends StatefulWidget {
+class Home extends ConsumerStatefulWidget {
   const Home({super.key});
 
   @override
-  State<Home> createState() => _HomeState();
-} 
+  ConsumerState<Home> createState() => _HomeState();
+}
 
-class _HomeState extends State<Home> with WidgetsBindingObserver {
-  Timer? _splashTimer;
-
-  bool _showSplash = true;
-  bool _isLoading = true;
-  bool _hasMnemonic = false;
-  bool _isAuthenticated = false;
-  bool _showOnboarding = false;
+class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
+  bool _shownMissingWalletSnack = false;
 
   @override
   void initState() {
@@ -43,17 +40,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _applySystemThemeToRoot();
 
-    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged =
-        () {
-          _applySystemThemeToRoot();
-        };
-
-    _boot();
+    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
+      _applySystemThemeToRoot();
+    };
   }
 
   @override
   void dispose() {
-    _splashTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -67,96 +60,63 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void _applySystemThemeToRoot() {
     final brightness =
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
-    final mode = (brightness == Brightness.dark)
+    final mode = brightness == Brightness.dark
         ? ThemeMode.dark
         : ThemeMode.light;
     ThemeBridge.apply?.call(mode);
   }
 
-  Future<void> _boot() async {
-    final splashCompleter = Completer<void>();
-    _splashTimer?.cancel();
-    _splashTimer = Timer(const Duration(seconds: 2), splashCompleter.complete);
-
-    final check = _checkMnemonic();
-    await Future.wait([splashCompleter.future, check]);
-    if (!mounted) return;
-    setState(() => _showSplash = false);
-  }
-
-  Future<void> _checkMnemonic() async {
-    final storedMnemonic = await SeedStorage.getSeed();
-    final onboardingSeen =
-        await _launchSecure.read(key: _kOnboardingSeenKey) == '1';
-
-    if (!mounted) return;
-    if (storedMnemonic != null && storedMnemonic.isNotEmpty) {
-      setState(() {
-        _hasMnemonic = true;
-        _showOnboarding = false;
-        _isLoading = false;
-      });
-    } else {
-      setState(() {
-        _hasMnemonic = false;
-        _showOnboarding = !onboardingSeen;
-        _isLoading = false;
-      });
-      if (onboardingSeen) {
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<AppShellState>(appShellProvider, (prev, next) {
+      final shouldShowMissingWallet = !next.showSplash &&
+          !next.loading &&
+          !next.hasMnemonic &&
+          !next.showOnboarding;
+      if (!_shownMissingWalletSnack && shouldShowMissingWallet && mounted) {
+        _shownMissingWalletSnack = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
           showFloatingSnackBar(
             context,
-            message: "No wallet found. Please create one.",
+            message: 'No wallet found. Please create one.',
             type: SnackBarType.error,
           );
         });
       }
-    }
-  }
+    });
 
-  Future<void> _completeOnboarding() async {
-    await _launchSecure.write(key: _kOnboardingSeenKey, value: '1');
-    if (!mounted) return;
-    setState(() => _showOnboarding = false);
-  }
+    final shell = ref.watch(appShellProvider);
+    final tab = ref.watch(tabControllerProvider);
 
-  void _onAuthSuccess() {
-    if (!mounted) return;
-    setState(() => _isAuthenticated = true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_showSplash) {
+    if (shell.showSplash) {
       return const WalletCreationScreen(isSplash: true);
     }
 
-    if (_isLoading) {
+    if (shell.loading) {
       return const Scaffold(body: PageLoader(label: 'Loading wallet...'));
     }
 
-    if (_showOnboarding) {
-      return OnboardingScreen(onFinish: _completeOnboarding);
+    if (shell.showOnboarding) {
+      return OnboardingScreen(
+        onFinish: () => ref.read(appShellProvider.notifier).completeOnboarding(),
+      );
     }
 
-    if (!_hasMnemonic) {
+    if (!shell.hasMnemonic) {
       return const WalletCreationScreen();
     }
 
-    if (!_isAuthenticated) {
-      return AuthGateScreen(goNext: _onAuthSuccess);
+    if (!shell.isAuthenticated) {
+      return AuthGateScreen(
+        goNext: () => ref.read(appShellProvider.notifier).setAuthenticated(true),
+      );
     }
 
-    return ChangeNotifierProvider(
-      create: (_) => TabVM(),
-      child: Consumer<TabVM>(
-        builder: (context, tabVM, _) {
-          return Scaffold(
-            body: tabVM.screens[tabVM.currentIndex],
-            bottomNavigationBar: const AppBottomNavigationPremium(),
-          );
-        },
-      ),
+    return Scaffold(
+      body: _shellScreens[tab.currentIndex],
+      bottomNavigationBar: const AppBottomNavigationPremium(),
     );
   }
 }
+
