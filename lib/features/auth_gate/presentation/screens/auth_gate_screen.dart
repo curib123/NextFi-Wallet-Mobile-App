@@ -211,15 +211,20 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AnimatedBuilder(
-                      animation: _bgCtrl,
-                      builder: (_, __) => FintechBackground(
-                        progress: _bgCtrl.value,
-                        colors: colors,
-                        devicePixelRatio: dpr,
-                        topBandFraction: .55,
+                    if (!hasCover)
+                      AnimatedBuilder(
+                        animation: _bgCtrl,
+                        builder: (_, __) => FintechBackground(
+                          progress: _bgCtrl.value,
+                          colors: colors,
+                          devicePixelRatio: dpr,
+                          topBandFraction: .55,
+                        ),
+                      )
+                    else
+                      DecoratedBox(
+                        decoration: BoxDecoration(color: colors.background),
                       ),
-                    ),
                     if (hasCover)
                       AnimatedOpacity(
                         duration: const Duration(milliseconds: 320),
