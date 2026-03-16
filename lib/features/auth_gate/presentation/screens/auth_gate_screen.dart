@@ -109,7 +109,8 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   void _onNumberPressed(String number) {
     final controller = ref.read(authGateControllerProvider.notifier);
     final completed = controller.onNumberPressed(number);
-    if (completed || ref.read(authGateControllerProvider).currentPinLength > 0) {
+    if (completed ||
+        ref.read(authGateControllerProvider).currentPinLength > 0) {
       HapticFeedback.lightImpact();
     }
     if (completed) {
@@ -240,13 +241,13 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                           end: Alignment.bottomCenter,
                           colors: <Color>[
                             colors.background.withValues(
-                              alpha: hasCover ? 0.16 : 0.18,
+                              alpha: hasCover ? 0.08 : 0.18,
                             ),
                             colors.background.withValues(
-                              alpha: hasCover ? 0.38 : 0.08,
+                              alpha: hasCover ? 0.24 : 0.08,
                             ),
                             colors.background.withValues(
-                              alpha: hasCover ? 0.78 : 0.16,
+                              alpha: hasCover ? 0.58 : 0.16,
                             ),
                           ],
                         ),
@@ -261,7 +262,7 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                 child: IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: colors.background.withValues(alpha: 0.08),
+                      color: colors.background.withValues(alpha: 0.03),
                     ),
                   ),
                 ),
@@ -738,5 +739,3 @@ class _BiometricKeyButtonState extends State<_BiometricKeyButton>
     );
   }
 }
-
-

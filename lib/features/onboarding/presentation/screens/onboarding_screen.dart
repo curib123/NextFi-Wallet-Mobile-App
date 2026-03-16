@@ -116,9 +116,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: <Color>[
-                    colors.background,
-                    colors.surface.withValues(alpha: isDark ? 0.44 : 0.38),
-                    colors.background,
+                    colors.background.withValues(alpha: hasCover ? 0.84 : 1),
+                    colors.surface.withValues(
+                      alpha: hasCover
+                          ? (isDark ? 0.24 : 0.18)
+                          : (isDark ? 0.44 : 0.38),
+                    ),
+                    colors.background.withValues(alpha: hasCover ? 0.8 : 1),
                   ],
                 ),
               ),
@@ -127,7 +131,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           if (hasCover)
             Positioned.fill(
               child: Opacity(
-                opacity: isDark ? 0.09 : 0.06,
+                opacity: isDark ? 0.2 : 0.16,
                 child: CachedNetworkImage(
                   imageUrl: onboarding.appCover!.imageUrl!,
                   fit: BoxFit.cover,

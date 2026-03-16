@@ -90,11 +90,15 @@ class _WalletCreationScreenState extends ConsumerState<WalletCreationScreen>
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: <Color>[
-                          colors.background.withValues(alpha: 0.28),
                           colors.background.withValues(
-                            alpha: hasCover ? 0.54 : 0.24,
+                            alpha: hasCover ? 0.16 : 0.28,
                           ),
-                          colors.background.withValues(alpha: 0.84),
+                          colors.background.withValues(
+                            alpha: hasCover ? 0.34 : 0.24,
+                          ),
+                          colors.background.withValues(
+                            alpha: hasCover ? 0.64 : 0.84,
+                          ),
                         ],
                       ),
                     ),
@@ -108,7 +112,7 @@ class _WalletCreationScreenState extends ConsumerState<WalletCreationScreen>
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: colors.background.withValues(alpha: 0.12),
+                    color: colors.background.withValues(alpha: 0.05),
                   ),
                 ),
               ),

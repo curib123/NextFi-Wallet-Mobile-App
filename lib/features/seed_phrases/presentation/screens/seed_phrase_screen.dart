@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -134,7 +133,10 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(
-          bottom: BorderSide(color: colors.border.withValues(alpha: 0.1), width: 1),
+          bottom: BorderSide(
+            color: colors.border.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
       ),
       child: Row(
@@ -317,7 +319,10 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: colors.border.withValues(alpha: 0.15), width: 1),
+          border: Border.all(
+            color: colors.border.withValues(alpha: 0.15),
+            width: 1,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -344,7 +349,10 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.warning.withValues(alpha: 0.15), width: 1),
+        border: Border.all(
+          color: colors.warning.withValues(alpha: 0.15),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
@@ -387,7 +395,9 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
               backgroundColor: colors.primary,
               foregroundColor: colors.onPrimary,
               disabledBackgroundColor: colors.border.withValues(alpha: 0.2),
-              disabledForegroundColor: colors.textSecondary.withValues(alpha: 0.5),
+              disabledForegroundColor: colors.textSecondary.withValues(
+                alpha: 0.5,
+              ),
               elevation: 0,
               shadowColor: colors.surface,
               shape: RoundedRectangleBorder(
@@ -400,7 +410,9 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(colors.onPrimary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        colors.onPrimary,
+                      ),
                     ),
                   )
                 : const Text(
@@ -474,12 +486,13 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
 
               if (!context.mounted) return;
               ref.read(tabControllerProvider.notifier).setTab(0);
+              ref.read(appShellProvider.notifier).completeWalletSetup();
 
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-
-              Phoenix.rebirth(context);
+              if (!context.mounted) return;
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).popUntil((route) => route.isFirst);
             } catch (e) {
               if (context.mounted) {
                 showFloatingSnackBar(
@@ -619,7 +632,9 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
                     child: AppOutlinedButton(
                       onPressed: () => Navigator.pop(context, false),
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: colors.border.withValues(alpha: 0.2)),
+                        side: BorderSide(
+                          color: colors.border.withValues(alpha: 0.2),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -673,7 +688,10 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.border.withValues(alpha: 0.1), width: 1),
+        border: Border.all(
+          color: colors.border.withValues(alpha: 0.1),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
@@ -914,7 +932,9 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
                   child: AppOutlinedButton(
                     onPressed: () => Navigator.pop(context, false),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colors.border.withValues(alpha: 0.2)),
+                      side: BorderSide(
+                        color: colors.border.withValues(alpha: 0.2),
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -987,4 +1007,3 @@ class _SeedPhraseScreenState extends ConsumerState<SeedPhraseScreen>
     }
   }
 }
-

@@ -106,21 +106,25 @@ class AppShellController extends Notifier<AppShellState> {
   void setAuthenticated(bool value) {
     state = state.copyWith(isAuthenticated: value);
   }
+
+  void completeWalletSetup({bool authenticated = true}) {
+    state = state.copyWith(
+      showSplash: false,
+      loading: false,
+      hasMnemonic: true,
+      isAuthenticated: authenticated,
+      showOnboarding: false,
+    );
+  }
 }
 
 class AppTabState {
-  const AppTabState({
-    this.currentIndex = 0,
-    this.isFirstTime = false,
-  });
+  const AppTabState({this.currentIndex = 0, this.isFirstTime = false});
 
   final int currentIndex;
   final bool isFirstTime;
 
-  AppTabState copyWith({
-    int? currentIndex,
-    bool? isFirstTime,
-  }) {
+  AppTabState copyWith({int? currentIndex, bool? isFirstTime}) {
     return AppTabState(
       currentIndex: currentIndex ?? this.currentIndex,
       isFirstTime: isFirstTime ?? this.isFirstTime,
@@ -242,10 +246,11 @@ final importWalletVmProvider = ChangeNotifierProvider<ImportWalletVM>((ref) {
   return ImportWalletVM();
 });
 
-final walletSettingsVmProvider =
-    ChangeNotifierProvider<WalletSettingsVM>((ref) {
-      return WalletSettingsVM();
-    });
+final walletSettingsVmProvider = ChangeNotifierProvider<WalletSettingsVM>((
+  ref,
+) {
+  return WalletSettingsVM();
+});
 
 final settingsVmProvider = ChangeNotifierProvider<SettingsVM>((ref) {
   final vm = SettingsVM();
@@ -276,19 +281,13 @@ final claimableVmProvider = ChangeNotifierProvider<ClaimableVM>((ref) {
   final stellar = ref.read(stellarWalletServiceProvider);
   final seed = ref.read(seedKeypairProvider);
   final walletHome = ref.read(walletHomeVmProvider);
-  return ClaimableVM(
-    service: stellar,
-    seedVM: seed,
-    walletHomeVM: walletHome,
-  );
+  return ClaimableVM(service: stellar, seedVM: seed, walletHomeVM: walletHome);
 });
 
-final appShellProvider =
-    NotifierProvider<AppShellController, AppShellState>(
-      AppShellController.new,
-    );
+final appShellProvider = NotifierProvider<AppShellController, AppShellState>(
+  AppShellController.new,
+);
 
 final tabControllerProvider = NotifierProvider<AppTabController, AppTabState>(
   AppTabController.new,
 );
-

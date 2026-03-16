@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
-import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
@@ -190,12 +189,13 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen>
 
               if (!context.mounted) return;
               ref.read(tabControllerProvider.notifier).setTab(0);
+              ref.read(appShellProvider.notifier).completeWalletSetup();
 
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-
-              Phoenix.rebirth(context);
+              if (!context.mounted) return;
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).popUntil((route) => route.isFirst);
             } catch (e) {
               if (context.mounted) {
                 showFloatingSnackBar(
@@ -386,7 +386,10 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen>
           colors: [colors.surface, colors.surface.withValues(alpha: 0.95)],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border.withValues(alpha: 0.15), width: 1.5),
+        border: Border.all(
+          color: colors.border.withValues(alpha: 0.15),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: colors.textPrimary.withValues(alpha: 0.03),
@@ -584,7 +587,10 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen>
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.error.withValues(alpha: 0.3), width: 1.5),
+        border: Border.all(
+          color: colors.error.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -625,7 +631,10 @@ class _ImportWalletScreenState extends ConsumerState<ImportWalletScreen>
           colors: [colors.surface.withValues(alpha: 0.95), colors.surface],
         ),
         border: Border(
-          top: BorderSide(color: colors.border.withValues(alpha: 0.1), width: 1),
+          top: BorderSide(
+            color: colors.border.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
         boxShadow: [
           BoxShadow(
@@ -819,7 +828,11 @@ class _ModernImportButtonState extends State<_ModernImportButton> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(LucideIcons.download, size: 18, color: widget.colors.onPrimary),
+            Icon(
+              LucideIcons.download,
+              size: 18,
+              color: widget.colors.onPrimary,
+            ),
             const SizedBox(width: 10),
             Text(
               widget.text,
@@ -1025,7 +1038,10 @@ class _SheetButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           side: isPrimary
               ? BorderSide.none
-              : BorderSide(color: colors.border.withValues(alpha: 0.25), width: 1.5),
+              : BorderSide(
+                  color: colors.border.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
         ),
       ),
       onPressed: enabled ? onPressed : null,
@@ -1041,4 +1057,3 @@ class _SheetButton extends StatelessWidget {
     );
   }
 }
-
