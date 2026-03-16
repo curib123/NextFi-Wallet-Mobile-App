@@ -285,48 +285,51 @@ class _HeaderSectionState extends State<HeaderSection> {
             ),
           ),
         ),
-        const SizedBox(height: 5),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _ActionTile(
-                colors: widget.colors,
-                icon: LucideIcons.send,
-                label: 'Send',
-                onTap: widget.onSend,
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _ActionTile(
+                  colors: widget.colors,
+                  icon: LucideIcons.send,
+                  label: 'Send',
+                  onTap: widget.onSend,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ActionTile(
-                colors: widget.colors,
-                icon: LucideIcons.download,
-                label: 'Receive',
-                onTap: widget.onReceive,
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ActionTile(
+                  colors: widget.colors,
+                  icon: LucideIcons.download,
+                  label: 'Receive',
+                  onTap: widget.onReceive,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ActionTile(
-                colors: widget.colors,
-                icon: LucideIcons.scanLine,
-                label: 'Scan',
-                onTap: widget.onSwap,
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ActionTile(
+                  colors: widget.colors,
+                  icon: LucideIcons.scanLine,
+                  label: 'Scan',
+                  onTap: widget.onSwap,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ActionTile(
-                colors: widget.colors,
-                icon: LucideIcons.store,
-                label: 'P2P',
-                onTap: widget.onP2P ?? () => debugPrint('P2P'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ActionTile(
+                  colors: widget.colors,
+                  icon: LucideIcons.store,
+                  label: 'P2P',
+                  onTap: widget.onP2P ?? () => debugPrint('P2P'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
         widget.incomingStrip,
       ],
     );
@@ -636,6 +639,7 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         DecoratedBox(
           decoration: BoxDecoration(
@@ -679,7 +683,7 @@ class _ActionTile extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Text(
           label,
           textAlign: TextAlign.center,
