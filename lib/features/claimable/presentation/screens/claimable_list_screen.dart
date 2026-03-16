@@ -23,7 +23,8 @@ class ClaimableListScreen extends ConsumerStatefulWidget {
   const ClaimableListScreen({super.key});
 
   @override
-  ConsumerState<ClaimableListScreen> createState() => _ClaimableListScreenState();
+  ConsumerState<ClaimableListScreen> createState() =>
+      _ClaimableListScreenState();
 }
 
 class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
@@ -128,7 +129,7 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
 
     return Scaffold(
       drawer: const AppDrawer(),
-      backgroundColor: c.background,
+      backgroundColor: c.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -146,7 +147,7 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: c.background,
+        color: c.surface,
         border: Border(
           bottom: BorderSide(color: c.border.withValues(alpha: 0.1), width: 1),
         ),
@@ -461,5 +462,3 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
     );
   }
 }
-
-

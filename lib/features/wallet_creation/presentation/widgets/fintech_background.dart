@@ -39,10 +39,7 @@ class FintechBackground extends StatelessWidget {
         // Crypto visual elements overlay
         Positioned.fill(
           child: CustomPaint(
-            painter: _CryptoElementsPainter(
-              progress: progress,
-              colors: colors,
-            ),
+            painter: _CryptoElementsPainter(progress: progress, colors: colors),
           ),
         ),
       ],
@@ -78,7 +75,10 @@ class _FintechBackgroundPainter extends CustomPainter {
       ],
       stops: const [0.0, 1.0],
     );
-    canvas.drawRect(radialRect, Paint()..shader = radialGradient.createShader(radialRect));
+    canvas.drawRect(
+      radialRect,
+      Paint()..shader = radialGradient.createShader(radialRect),
+    );
 
     // 2) Animated subtle grid texture - full screen
     final hiDpi = devicePixelRatio >= 2.75;
@@ -187,26 +187,31 @@ class _FintechBackgroundPainter extends CustomPainter {
     }
 
     // 6) Bottom gradient - adaptive for light and dark modes
-    final bottomRect = Rect.fromLTWH(0, size.height * .3, size.width, size.height * .7);
+    final bottomRect = Rect.fromLTWH(
+      0,
+      size.height * .3,
+      size.width,
+      size.height * .7,
+    );
     final bottomGlow = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: isDark
             ? [
-          // Dark mode: subtle blue depth, avoid bright/white veil.
-          colors.background.withValues(alpha: .0),
-          colors.primary.withValues(alpha: .03),
-          colors.primary.withValues(alpha: .06),
-          colors.background.withValues(alpha: .22),
-        ]
+                // Dark mode: subtle blue depth, avoid bright/white veil.
+                colors.surface.withValues(alpha: .0),
+                colors.primary.withValues(alpha: .03),
+                colors.primary.withValues(alpha: .06),
+                colors.surface.withValues(alpha: .22),
+              ]
             : [
-          // Light mode: soft tint without fogging the content.
-          colors.background.withValues(alpha: .0),
-          colors.primary.withValues(alpha: .03),
-          colors.primary.withValues(alpha: .05),
-          colors.primary.withValues(alpha: .09),
-        ],
+                // Light mode: soft tint without fogging the content.
+                colors.surface.withValues(alpha: .0),
+                colors.primary.withValues(alpha: .03),
+                colors.primary.withValues(alpha: .05),
+                colors.primary.withValues(alpha: .09),
+              ],
         stops: const [0.0, 0.3, 0.6, 1.0],
       ).createShader(bottomRect);
     canvas.drawRect(bottomRect, bottomGlow);
@@ -224,13 +229,16 @@ class _FintechBackgroundPainter extends CustomPainter {
     final path = Path()..moveTo(0, base);
     for (double x = 0; x <= size.width; x += 2) {
       final t = (x / wavelength) * 2 * math.pi;
-      final y = base + amp1 * math.sin(t + phase) + amp2 * math.sin(2 * t + phase * 1.7);
+      final y =
+          base +
+          amp1 * math.sin(t + phase) +
+          amp2 * math.sin(2 * t + phase * 1.7);
       final yy = y.clamp(0, topH).toDouble();
       path.lineTo(x, yy);
     }
     return path;
-  } 
- 
+  }
+
   List<Offset> _getWavePoints({
     required Size size,
     required double topH,
@@ -243,27 +251,27 @@ class _FintechBackgroundPainter extends CustomPainter {
     final points = <Offset>[];
     for (double x = 0; x <= size.width; x += 2) {
       final t = (x / wavelength) * 2 * math.pi;
-      final y = base + amp1 * math.sin(t + phase) + amp2 * math.sin(2 * t + phase * 1.7);
+      final y =
+          base +
+          amp1 * math.sin(t + phase) +
+          amp2 * math.sin(2 * t + phase * 1.7);
       final yy = y.clamp(0, topH).toDouble();
       points.add(Offset(x, yy));
     }
     return points;
-  } 
+  }
 
   @override
   bool shouldRepaint(covariant _FintechBackgroundPainter old) =>
       old.progress != progress ||
-          old.colors != colors ||
-          old.topBandFraction != topBandFraction ||
-          old.devicePixelRatio != devicePixelRatio ||
-          old.isDark != isDark;
+      old.colors != colors ||
+      old.topBandFraction != topBandFraction ||
+      old.devicePixelRatio != devicePixelRatio ||
+      old.isDark != isDark;
 }
 
 class _CryptoElementsPainter extends CustomPainter {
-  _CryptoElementsPainter({
-    required this.progress,
-    required this.colors,
-  });
+  _CryptoElementsPainter({required this.progress, required this.colors});
 
   final double progress;
   final AppColor colors;
@@ -273,28 +281,36 @@ class _CryptoElementsPainter extends CustomPainter {
     final ph = progress * 2 * math.pi;
 
     // Floating hexagons - spread across full screen
-    _drawFloatingHexagon(canvas, size,
+    _drawFloatingHexagon(
+      canvas,
+      size,
       x: size.width * 0.15,
       y: size.height * 0.20 + math.sin(ph * 0.7) * 15,
       hexSize: 40,
       rotation: progress * math.pi * 0.5,
     );
 
-    _drawFloatingHexagon(canvas, size,
+    _drawFloatingHexagon(
+      canvas,
+      size,
       x: size.width * 0.85,
       y: size.height * 0.30 + math.cos(ph * 0.5) * 20,
       hexSize: 30,
       rotation: -progress * math.pi * 0.3,
     );
 
-    _drawFloatingHexagon(canvas, size,
+    _drawFloatingHexagon(
+      canvas,
+      size,
       x: size.width * 0.1,
       y: size.height * 0.50 + math.sin(ph * 0.6) * 10,
       hexSize: 25,
       rotation: progress * math.pi * 0.4,
     );
 
-    _drawFloatingHexagon(canvas, size,
+    _drawFloatingHexagon(
+      canvas,
+      size,
       x: size.width * 0.9,
       y: size.height * 0.65 + math.cos(ph * 0.8) * 12,
       hexSize: 35,
@@ -308,7 +324,9 @@ class _CryptoElementsPainter extends CustomPainter {
     _drawBlockchainNodes(canvas, size, ph);
   }
 
-  void _drawFloatingHexagon(Canvas canvas, Size size, {
+  void _drawFloatingHexagon(
+    Canvas canvas,
+    Size size, {
     required double x,
     required double y,
     required double hexSize,
@@ -383,8 +401,14 @@ class _CryptoElementsPainter extends CustomPainter {
     );
   }
 
-  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint,
-      {double dashWidth = 5, double dashSpace = 3}) {
+  void _drawDashedLine(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Paint paint, {
+    double dashWidth = 5,
+    double dashSpace = 3,
+  }) {
     final path = Path();
     final totalDistance = (end - start).distance;
     final dashCount = (totalDistance / (dashWidth + dashSpace)).floor();
@@ -416,9 +440,15 @@ class _CryptoElementsPainter extends CustomPainter {
     // Nodes distributed throughout the screen
     final nodes = [
       Offset(size.width * 0.25, size.height * 0.45 + math.sin(phase * 0.8) * 8),
-      Offset(size.width * 0.75, size.height * 0.55 + math.cos(phase * 0.9) * 12),
+      Offset(
+        size.width * 0.75,
+        size.height * 0.55 + math.cos(phase * 0.9) * 12,
+      ),
       Offset(size.width * 0.5, size.height * 0.70 + math.sin(phase * 0.6) * 6),
-      Offset(size.width * 0.35, size.height * 0.85 + math.cos(phase * 0.7) * 10),
+      Offset(
+        size.width * 0.35,
+        size.height * 0.85 + math.cos(phase * 0.7) * 10,
+      ),
       Offset(size.width * 0.65, size.height * 0.90 + math.sin(phase * 0.5) * 8),
     ];
 
@@ -440,4 +470,3 @@ class _CryptoElementsPainter extends CustomPainter {
   bool shouldRepaint(covariant _CryptoElementsPainter old) =>
       old.progress != progress || old.colors != colors;
 }
-

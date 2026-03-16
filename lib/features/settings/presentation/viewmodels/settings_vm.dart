@@ -1,71 +1,68 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
+import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/services/secure_storage/security_storage.dart';
+import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
+import 'package:next_fi/core/widgets/modal/show_pin_change_bottom_sheet.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/settings/data/models/settings_model.dart';
 import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_settings_screen.dart';
-import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
-import 'package:next_fi/core/widgets/modal/show_pin_change_bottom_sheet.dart';
-import 'package:next_fi/core/services/secure_storage/security_storage.dart';
-import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
-/// Optional bridge the app can hook to actually apply ThemeMode at root.
-/// In your app bootstrap (near MaterialApp), set once:
-///   ThemeBridge.apply = (mode) { myThemeController.setMode(mode); };
 typedef ThemeApplier = FutureOr<void> Function(ThemeMode mode);
-class ThemeBridge { static ThemeApplier? apply; }
+
+class ThemeBridge {
+  static ThemeApplier? apply;
+}
+
+typedef ThemeStyleApplier = FutureOr<void> Function(int styleIndex);
+
+class ThemeStyleBridge {
+  static ThemeStyleApplier? apply;
+}
 
 class SettingsVM extends ChangeNotifier {
   SettingsVM();
 
   final LocalAuthentication _localAuth = LocalAuthentication();
 
-  // -------------------------
-  // Secure storage (for theme)
-  // -------------------------
-  static const String _kThemePrefKey = 'pref.theme_mode.v1'; // 'light' | 'dark' | 'system'
+  static const String _kThemePrefKey = 'pref.theme_mode.v1';
+  static const String _kThemeStylePrefKey = 'pref.theme_style_index.v1';
   static const FlutterSecureStorage _secure = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
 
-  // -------------------------
-  // Biometrics UI state
-  // -------------------------
   bool _bioSupported = false;
   bool _bioEnabled = false;
   bool get biometricsSupported => _bioSupported;
   bool get biometricsEnabled => _bioEnabled;
 
-  // -------------------------
-  // Theme state
-  // -------------------------
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
 
-  // -------------------------
-  // Sections data
-  // -------------------------
+  int _themeStyleIndex = 2;
+  int get themeStyleIndex => _themeStyleIndex;
+
   List<SettingSection> _sections = const [];
   List<SettingSection> get sections => _sections;
 
-  /// Call once (we also call this from reusable_view_model registration in main).
   Future<void> initDefaults() async {
-    // Ensure platform keystores are ready (your SecurityStorage helper already does a probe)
     await SecurityStorage.ensureReady();
 
     await Future.wait([
       _loadBiometricState(),
       _loadThemeMode(),
+      _loadThemeStyle(),
     ]);
 
     _sections = [
-      // 1) Account
       SettingSection(
         header: 'Account',
         items: const [
@@ -77,8 +74,6 @@ class SettingsVM extends ChangeNotifier {
           ),
         ],
       ),
-
-      // 2) Security
       SettingSection(
         header: 'Security',
         items: [
@@ -90,64 +85,54 @@ class SettingsVM extends ChangeNotifier {
           ),
           SettingItem(
             title: 'Biometric unlock',
-            subtitle: _subtitleForBiometricStatic, // temporary; recalculated post-load
+            subtitle: _subtitleForBiometric(),
             icon: LucideIcons.fingerprint,
             action: SettingAction.biometrics,
-            enabled: true, // row visible; switch enable is gated in the UI
+            enabled: _bioSupported,
           ),
         ],
       ),
-
-      // 3) Preferences
       SettingSection(
         header: 'Preferences',
         items: [
           const SettingItem(
-            title: 'Fiat Currency',
+            title: 'Fiat currency',
             subtitle: 'Change display currency (PHP, USD, etc.)',
             icon: LucideIcons.banknote,
             action: SettingAction.fiatCurrency,
           ),
-          // Appearance (Theme) uses secure storage now
           SettingItem(
-            title: 'Appearance (Theme)',
-            subtitle: _themeSubtitle(),
-            icon: LucideIcons.moon,
+            title: 'Appearance',
+            subtitle: _appearanceSubtitle(),
+            icon: LucideIcons.palette,
             action: SettingAction.themeMode,
           ),
         ],
       ),
     ];
 
-    // Patch dynamic subtitles now that state is known
-    _sections = _sections.map((sec) {
-      final items = sec.items.map((it) {
-        if (it.action == SettingAction.biometrics) {
-          return it.copyWith(
-            subtitle: _subtitleForBiometric(),
-            enabled: biometricsSupported,
-          );
-        }
-        if (it.action == SettingAction.themeMode) {
-          return it.copyWith(subtitle: _themeSubtitle());
-        }
-        return it;
-      }).toList();
-      return sec.copyWith(items: items);
-    }).toList();
-
     notifyListeners();
   }
 
-  // ===========================================================================
-  // THEME MODE (Flutter Secure Storage)
-  // ===========================================================================
   String _themeSubtitle() {
     switch (_themeMode) {
-      case ThemeMode.light: return 'Light';
-      case ThemeMode.dark: return 'Dark';
-      case ThemeMode.system: return 'System';
+      case ThemeMode.light:
+        return 'Light';
+      case ThemeMode.dark:
+        return 'Dark';
+      case ThemeMode.system:
+        return 'System';
     }
+  }
+
+  String _appearanceSubtitle() {
+    return '${_themeSubtitle()} · ${AppColor.themeStyleLabel(_themeStyleIndex)}';
+  }
+
+  String _subtitleForBiometric() {
+    return _bioSupported
+        ? 'Use fingerprint/face to unlock'
+        : 'Not available on this device';
   }
 
   Future<void> _loadThemeMode() async {
@@ -163,6 +148,16 @@ class SettingsVM extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadThemeStyle() async {
+    try {
+      final raw = await _secure.read(key: _kThemeStylePrefKey);
+      final parsed = int.tryParse(raw ?? '');
+      _themeStyleIndex = AppColor.normalizeThemeStyleIndex(parsed ?? 2);
+    } catch (_) {
+      _themeStyleIndex = 2;
+    }
+  }
+
   Future<void> _persistThemeMode(ThemeMode mode) async {
     try {
       final raw = switch (mode) {
@@ -171,46 +166,57 @@ class SettingsVM extends ChangeNotifier {
         ThemeMode.system => 'system',
       };
       await _secure.write(key: _kThemePrefKey, value: raw);
-    } catch (_) {/* ignore */}
+    } catch (_) {}
   }
 
-  /// Switch.adaptive handler: true = Dark, false = Light
-  Future<void> onToggleDarkMode(BuildContext context, bool dark) async {
-    HapticFeedback.selectionClick();
-    final newMode = dark ? ThemeMode.dark : ThemeMode.light;
-    await setThemeMode(context, newMode);
+  Future<void> _persistThemeStyle(int styleIndex) async {
+    try {
+      await _secure.write(
+        key: _kThemeStylePrefKey,
+        value: styleIndex.toString(),
+      );
+    } catch (_) {}
   }
 
-  /// Public setter (useful if you later add a bottom sheet with 3 choices).
+  void _syncAppearanceSubtitle() {
+    _sections = _sections.map((section) {
+      final items = section.items.map((item) {
+        if (item.action == SettingAction.biometrics) {
+          return item.copyWith(
+            subtitle: _subtitleForBiometric(),
+            enabled: _bioSupported,
+          );
+        }
+        if (item.action == SettingAction.themeMode) {
+          return item.copyWith(subtitle: _appearanceSubtitle());
+        }
+        return item;
+      }).toList();
+      return section.copyWith(items: items);
+    }).toList();
+  }
+
   Future<void> setThemeMode(BuildContext context, ThemeMode mode) async {
     _themeMode = mode;
     await _persistThemeMode(mode);
-
-    // Update subtitle in sections immediately
-    _sections = _sections.map((sec) {
-      final items = sec.items.map((it) {
-        if (it.action == SettingAction.themeMode) {
-          return it.copyWith(subtitle: _themeSubtitle());
-        }
-        return it;
-      }).toList();
-      return sec.copyWith(items: items);
-    }).toList();
-
+    _syncAppearanceSubtitle();
     notifyListeners();
 
-    // Ask host app to apply real theme at MaterialApp level.
-    try { await ThemeBridge.apply?.call(mode); } catch (_) {/* ignore */}
+    try {
+      await ThemeBridge.apply?.call(mode);
+    } catch (_) {}
   }
 
-  // ===========================================================================
-  // BIOMETRICS
-  // ===========================================================================
-  static String get _subtitleForBiometricStatic =>
-      'Use fingerprint/face to unlock';
+  Future<void> setThemeStyle(BuildContext context, int styleIndex) async {
+    _themeStyleIndex = AppColor.normalizeThemeStyleIndex(styleIndex);
+    await _persistThemeStyle(_themeStyleIndex);
+    _syncAppearanceSubtitle();
+    notifyListeners();
 
-  String _subtitleForBiometric() =>
-      biometricsSupported ? 'Use fingerprint/face to unlock' : 'Not available on this device';
+    try {
+      await ThemeStyleBridge.apply?.call(_themeStyleIndex);
+    } catch (_) {}
+  }
 
   Future<void> _loadBiometricState() async {
     bool supported = false;
@@ -235,14 +241,12 @@ class SettingsVM extends ChangeNotifier {
     _bioEnabled = enabled;
   }
 
-  /// Enabling ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ navigate to AuthGateScreen to confirm (PIN/Biometric) then enable.
-  /// Disabling ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ flip off immediately.
   Future<void> onToggleBiometrics(BuildContext context, bool value) async {
     HapticFeedback.selectionClick();
     await _loadBiometricState();
     if (!context.mounted) return;
 
-    if (!biometricsSupported) {
+    if (!_bioSupported) {
       _showSnack(context, 'Biometric unlock is not available on this device.');
       notifyListeners();
       return;
@@ -264,6 +268,7 @@ class SettingsVM extends ChangeNotifier {
               await SecurityStorage.setBiometricsEnabled(true);
               if (!context.mounted) return;
               _bioEnabled = true;
+              _syncAppearanceSubtitle();
               notifyListeners();
               _showSnack(context, 'Biometric unlock enabled.');
               Navigator.of(context).pop(true);
@@ -273,23 +278,22 @@ class SettingsVM extends ChangeNotifier {
       );
 
       if (success != true) {
-        // user cancelled / failed ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ keep previous state
         notifyListeners();
       }
     } else {
       await SecurityStorage.setBiometricsEnabled(false);
       if (!context.mounted) return;
       _bioEnabled = false;
+      _syncAppearanceSubtitle();
       notifyListeners();
       _showSnack(context, 'Biometric unlock disabled.');
     }
   }
 
-  // ===========================================================================
-  // Sections + actions
-  // ===========================================================================
   void setSections(List<SettingSection> sections) {
-    _sections = sections.where((s) => s.items.isNotEmpty).toList(growable: false);
+    _sections = sections
+        .where((s) => s.items.isNotEmpty)
+        .toList(growable: false);
     notifyListeners();
   }
 
@@ -302,36 +306,284 @@ class SettingsVM extends ChangeNotifier {
     HapticFeedback.selectionClick();
     switch (action) {
       case SettingAction.wallet:
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const WalletScreenSettings()),
-        );
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const WalletScreenSettings()));
         break;
-
       case SettingAction.changePin:
         await showPinChangeBottomSheet(context);
         break;
-
       case SettingAction.fiatCurrency:
         await showFiatPickerBottomSheet(context);
         break;
-
       case SettingAction.biometrics:
-      // No-op; the trailing switch drives toggling.
         break;
-
       case SettingAction.themeMode:
-      // Optional: later, show a bottom-sheet to pick Light/Dark/System.
-      // For now, the switch directly toggles Light <-> Dark.
+        await showAppearanceSheet(context);
         break;
     }
   }
 
-  void _showSnack(BuildContext context, String msg) {
-    showFloatingSnackBar(
-      context,
-      message: msg,
-      type: SnackBarType.info,
+  Future<void> showAppearanceSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final colors = AppColor.of(sheetContext);
+        final textTheme = Theme.of(sheetContext).textTheme;
+        final selectedMode = _themeMode;
+        final selectedStyle = _themeStyleIndex;
+
+        Widget modeCard(
+          ThemeMode mode,
+          IconData icon,
+          String title,
+          String subtitle,
+        ) {
+          final selected = selectedMode == mode;
+          return InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () async {
+              Navigator.of(sheetContext).pop();
+              await setThemeMode(context, mode);
+            },
+            child: Ink(
+              decoration: BoxDecoration(
+                color: selected ? colors.surfaceRaised : colors.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: selected ? colors.primary : colors.border,
+                  width: selected ? 1.4 : 1,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? colors.primary.withValues(alpha: 0.14)
+                            : colors.surfaceOverlay,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        icon,
+                        size: 18,
+                        color: selected ? colors.primary : colors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: textTheme.titleMedium?.copyWith(
+                              color: colors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (selected)
+                      Icon(
+                        Icons.check_rounded,
+                        color: colors.primary,
+                        size: 20,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        final mediaQuery = MediaQuery.of(sheetContext);
+        final maxHeight = mediaQuery.size.height * 0.88;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: colors.border),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: colors.border,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Appearance',
+                      style: textTheme.titleLarge?.copyWith(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Theme controls live here only, with semantic surfaces and restrained accent usage for clear contrast.',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Theme mode',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    modeCard(
+                      ThemeMode.system,
+                      LucideIcons.smartphone,
+                      'System',
+                      'Follow the device appearance.',
+                    ),
+                    const SizedBox(height: 10),
+                    modeCard(
+                      ThemeMode.light,
+                      LucideIcons.sun,
+                      'Light',
+                      'Bright surfaces with strong text contrast.',
+                    ),
+                    const SizedBox(height: 10),
+                    modeCard(
+                      ThemeMode.dark,
+                      LucideIcons.moon,
+                      'Dark',
+                      'Low-glare surfaces with readable text.',
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      'Accent style',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: AppColor.themeStyleCount,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 2.15,
+                          ),
+                      itemBuilder: (gridContext, index) {
+                        final normalized = AppColor.normalizeThemeStyleIndex(
+                          index,
+                        );
+                        final selected =
+                            normalized ==
+                            AppColor.normalizeThemeStyleIndex(selectedStyle);
+                        final preview = AppColor.themeStylePreview(
+                          index,
+                          Theme.of(sheetContext).brightness,
+                        );
+
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () async {
+                            Navigator.of(sheetContext).pop();
+                            await setThemeStyle(context, index);
+                          },
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? colors.surfaceRaised
+                                  : colors.surface,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: selected ? preview : colors.border,
+                                width: selected ? 1.4 : 1,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: preview,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      AppColor.themeStyleLabel(normalized),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: textTheme.titleSmall?.copyWith(
+                                        color: colors.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  if (selected)
+                                    Icon(
+                                      Icons.check_rounded,
+                                      size: 18,
+                                      color: preview,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
-}
 
+  void _showSnack(BuildContext context, String text) {
+    showFloatingSnackBar(context, message: text, type: SnackBarType.info);
+  }
+}

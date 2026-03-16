@@ -140,7 +140,7 @@ class AppTheme {
       brightness: brightness,
       fontFamily: GoogleFonts.inter().fontFamily,
       colorScheme: scheme,
-      scaffoldBackgroundColor: colors.background,
+      scaffoldBackgroundColor: colors.surface,
       canvasColor: colors.surface,
       cardColor: colors.surface,
       dividerColor: colors.border,
@@ -152,7 +152,7 @@ class AppTheme {
       textTheme: textTheme,
       primaryTextTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? colors.surfaceOverlay : colors.background,
+        backgroundColor: colors.surface,
         foregroundColor: colors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,

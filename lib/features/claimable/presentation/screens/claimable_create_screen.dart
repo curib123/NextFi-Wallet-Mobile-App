@@ -27,7 +27,8 @@ class ClaimableCreateScreen extends ConsumerStatefulWidget {
   const ClaimableCreateScreen({super.key, this.initialAsset = 'XLM'});
 
   @override
-  ConsumerState<ClaimableCreateScreen> createState() => _ClaimableCreateScreenState();
+  ConsumerState<ClaimableCreateScreen> createState() =>
+      _ClaimableCreateScreenState();
 }
 
 class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
@@ -465,7 +466,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     final currentBal = vm.getBalanceForSymbol(_selectedAsset);
 
     return Scaffold(
-      backgroundColor: c.background,
+      backgroundColor: c.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -511,7 +512,7 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 24, 14),
       decoration: BoxDecoration(
-        color: c.background,
+        color: c.surface,
         border: Border(bottom: BorderSide(color: c.border, width: 1)),
       ),
       child: Row(
@@ -1613,5 +1614,3 @@ class _ClaimableCreateScreenState extends ConsumerState<ClaimableCreateScreen> {
     );
   }
 }
-
-

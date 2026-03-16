@@ -62,7 +62,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (hasHeader) SectionHeader(text: section.header!, colors: c),
+                  if (hasHeader)
+                    SectionHeader(text: section.header!, colors: c),
                   SettingsCard(
                     items: section.items,
                     onTapItem: (it) => vm.handleAction(context, it.action),
@@ -73,20 +74,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                       if (it.action == SettingAction.biometrics) {
                         // Switch enabled only when device supports biometrics.
-                        final isSwitchEnabled = it.enabled && vm.biometricsSupported;
+                        final isSwitchEnabled =
+                            it.enabled && vm.biometricsSupported;
                         return Switch.adaptive(
                           value: vm.biometricsEnabled,
                           onChanged: isSwitchEnabled
                               ? (val) => vm.onToggleBiometrics(context, val)
                               : null,
-                        );
-                      }
-
-                      // NEW: Appearance (Theme) toggle (Light <-> Dark)
-                      if (it.action == SettingAction.themeMode) {
-                        return Switch.adaptive(
-                          value: vm.isDarkMode, // true = Dark, false = Light
-                          onChanged: (val) => vm.onToggleDarkMode(context, val),
                         );
                       }
 
@@ -103,5 +97,3 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 }
-
-

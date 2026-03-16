@@ -449,7 +449,7 @@ class _AppDrawerState extends State<AppDrawer>
     final showShimmer = user == null && !_DrawerCache.hasProfile;
 
     return Drawer(
-      backgroundColor: c.background,
+      backgroundColor: c.surface,
       elevation: 0,
       child: FadeTransition(
         opacity: _fadeAnim,

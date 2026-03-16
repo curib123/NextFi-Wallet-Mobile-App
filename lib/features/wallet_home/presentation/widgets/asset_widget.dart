@@ -196,10 +196,10 @@ class AssetWidget extends ConsumerWidget {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final shimmerBase = isDark
           ? colors.surface.withValues(alpha: 0.92)
-          : colors.surfaceRaised.withValues(alpha: 0.98);
+          : colors.border.withValues(alpha: 0.42);
       final shimmerHighlight = isDark
           ? colors.border.withValues(alpha: 0.96)
-          : Colors.white;
+          : colors.surface;
 
       return Shimmer.fromColors(
         baseColor: shimmerBase,
@@ -274,7 +274,7 @@ class AssetWidget extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final blockColor = isDark
         ? palette.border.withValues(alpha: 0.9)
-        : palette.textMuted.withValues(alpha: 0.18);
+        : palette.textSecondary.withValues(alpha: 0.22);
 
     Widget block(double w, double h, {double r = 6}) => Container(
       width: w,
@@ -292,12 +292,12 @@ class AssetWidget extends ConsumerWidget {
         decoration: BoxDecoration(
           color: isDark
               ? palette.surface.withValues(alpha: 0.55)
-              : palette.surfaceRaised.withValues(alpha: 0.92),
+              : palette.surface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isDark
                 ? palette.border.withValues(alpha: 0.7)
-                : palette.border.withValues(alpha: 0.95),
+                : palette.border.withValues(alpha: 0.9),
           ),
         ),
         child: Row(

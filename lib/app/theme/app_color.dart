@@ -78,14 +78,14 @@ class AppColor {
   }
 
   // Brand / accent
-  static const Color accentBase = Color(0xFF111111);
-  static const Color accentDarkBase = Color(0xFFFFFFFF);
+  static const Color accentBase = Color(0xFF3A5BFF);
+  static const Color accentDarkBase = Color(0xFF3A5BFF);
 
   // Semantic colors
-  static const Color successBase = Color(0xFF111111);
-  static const Color errorBase = Color(0xFF111111);
-  static const Color warningBase = Color(0xFF2A2A2A);
-  static const Color infoBase = Color(0xFF1C1C1C);
+  static const Color successBase = Color(0xFF10B981);
+  static const Color errorBase = Color(0xFFEF4444);
+  static const Color warningBase = Color(0xFFF59E0B);
+  static const Color infoBase = Color(0xFF38BDF8);
 
   static const Color brandPrimary = accentBase;
   static const Color brandPrimaryDark = accentDarkBase;
@@ -96,64 +96,64 @@ class AppColor {
     error: errorBase,
     warning: warningBase,
     info: infoBase,
-    accent: accentBase,
-    primaryDark: accentDarkBase,
-    background: Color(0xFFF5F5F5),
+    accent: Color(0xFFA5B4FC),
+    primaryDark: Color(0xFF2C46CC),
+    background: Color(0xFFF1F5F9),
     surface: Color(0xFFFFFFFF),
-    surfaceRaised: Color(0xFFF0F0F0),
-    surfaceOverlay: Color(0xFFFAFAFA),
-    border: Color(0xFFD4D4D4),
-    textPrimary: Color(0xFF111111),
-    textSecondary: Color(0xFF555555),
-    textMuted: Color(0xFF8A8A8A),
+    surfaceRaised: Color(0xFFFFFFFF),
+    surfaceOverlay: Color(0xFFF1F5F9),
+    border: Color(0xFFCBD5E1),
+    textPrimary: Color(0xFF0F172A),
+    textSecondary: Color(0xFF64748B),
+    textMuted: Color(0xFF94A3B8),
     onPrimary: Color(0xFFFFFFFF),
-    onSurface: Color(0xFF111111),
-    chartGreen: Color(0xFF111111),
-    chartRed: Color(0xFF555555),
+    onSurface: Color(0xFF0F172A),
+    chartGreen: Color(0xFF34D399),
+    chartRed: Color(0xFFFB7185),
     primaryGradient: LinearGradient(
-      colors: [Color(0xFF1A1A1A), Color(0xFF000000)],
+      colors: [Color(0xFF4F46E5), Color(0xFF818CF8)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     surfaceGradient: LinearGradient(
-      colors: [Color(0xFFFFFFFF), Color(0xFFEDEDED)],
+      colors: [Color(0xFFFFFFFF), Color(0xFFF1F5F9)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     darkGlassGradient: LinearGradient(
-      colors: [Color(0xD9FFFFFF), Color(0xBFF0F0F0)],
+      colors: [Color(0x1AFFFFFF), Color(0x0DFFFFFF)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
   );
 
   static const AppColor dark = AppColor._(
-    primary: Color(0xFFFFFFFF),
+    primary: accentBase,
     success: successBase,
     error: errorBase,
     warning: warningBase,
     info: infoBase,
-    accent: Color(0xFFFFFFFF),
-    primaryDark: accentDarkBase,
-    background: Color(0xFF000000),
-    surface: Color(0xFF0B0B0B),
-    surfaceRaised: Color(0xFF161616),
-    surfaceOverlay: Color(0xFF111111),
-    border: Color(0xFF2B2B2B),
-    textPrimary: Color(0xFFFFFFFF),
-    textSecondary: Color(0xFFCFCFCF),
-    textMuted: Color(0xFF8F8F8F),
-    onPrimary: Color(0xFF000000),
-    onSurface: Color(0xFFFFFFFF),
-    chartGreen: Color(0xFFFFFFFF),
-    chartRed: Color(0xFF8F8F8F),
+    accent: Color(0xFFA5B4FC),
+    primaryDark: Color(0xFF2C46CC),
+    background: Color(0xFF0B0F14),
+    surface: Color(0xFF0B0F14),
+    surfaceRaised: Color(0xFF111C33),
+    surfaceOverlay: Color(0xFF0B1220),
+    border: Color(0xFF1E293B),
+    textPrimary: Color(0xFFF8FAFC),
+    textSecondary: Color(0xFF94A3B8),
+    textMuted: Color(0xFF64748B),
+    onPrimary: Color(0xFFFFFFFF),
+    onSurface: Color(0xFFF8FAFC),
+    chartGreen: Color(0xFF34D399),
+    chartRed: Color(0xFFFB7185),
     primaryGradient: LinearGradient(
-      colors: [Color(0xFFFFFFFF), Color(0xFFD9D9D9)],
+      colors: [Color(0xFF4F46E5), Color(0xFF818CF8)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     surfaceGradient: LinearGradient(
-      colors: [Color(0xFF181818), Color(0xFF050505)],
+      colors: [Color(0xFFFFFFFF), Color(0xFFF1F5F9)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -478,47 +478,13 @@ class AppColor {
   ];
 
   static AppColor lightStyle(int index) {
-    final spec = themePalettes[normalizeThemeStyleIndex(index)].light;
+    final palette = themePalettes[normalizeThemeStyleIndex(index)];
     return light.copyWith(
-      primary: spec.primary,
-      background: spec.background,
-      surface: spec.surface,
-      surfaceRaised: spec.surfaceRaised,
-      surfaceOverlay: spec.surfaceOverlay,
-      textPrimary: spec.textPrimary,
-      textSecondary: spec.textSecondary,
-      textMuted: spec.textMuted,
-      border: spec.border,
-      accent: spec.accent,
-      primaryDark: spec.primaryDark,
-      success: spec.primary,
-      error: spec.primaryDark,
-      warning: spec.accent,
-      info: spec.primaryDark,
-      onPrimary: spec.onPrimary,
-      chartGreen: spec.primary,
-      chartRed: spec.primaryDark.withValues(alpha: 0.72),
+      primary: palette.dark.primary,
+      primaryDark: palette.dark.primaryDark,
+      accent: palette.light.accent,
       primaryGradient: LinearGradient(
-        colors: <Color>[
-          spec.primary,
-          spec.primaryDark,
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      surfaceGradient: LinearGradient(
-        colors: <Color>[
-          spec.surface,
-          spec.surfaceRaised,
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      darkGlassGradient: LinearGradient(
-        colors: <Color>[
-          spec.accent.withValues(alpha: 0.12),
-          spec.surface.withValues(alpha: 0.92),
-        ],
+        colors: <Color>[palette.dark.primary, palette.dark.primaryDark],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -526,47 +492,13 @@ class AppColor {
   }
 
   static AppColor darkStyle(int index) {
-    final spec = themePalettes[normalizeThemeStyleIndex(index)].dark;
+    final palette = themePalettes[normalizeThemeStyleIndex(index)];
     return dark.copyWith(
-      primary: spec.primary,
-      background: spec.background,
-      surface: spec.surface,
-      surfaceRaised: spec.surfaceRaised,
-      surfaceOverlay: spec.surfaceOverlay,
-      textPrimary: spec.textPrimary,
-      textSecondary: spec.textSecondary,
-      textMuted: spec.textMuted,
-      border: spec.border,
-      accent: spec.accent,
-      primaryDark: spec.primaryDark,
-      success: spec.primary,
-      error: spec.primaryDark,
-      warning: spec.accent,
-      info: spec.primaryDark,
-      onPrimary: spec.onPrimary,
-      chartGreen: spec.primary,
-      chartRed: spec.primaryDark.withValues(alpha: 0.72),
+      primary: palette.dark.primary,
+      primaryDark: palette.dark.primaryDark,
+      accent: palette.dark.accent,
       primaryGradient: LinearGradient(
-        colors: <Color>[
-          spec.primary,
-          spec.primaryDark,
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      surfaceGradient: LinearGradient(
-        colors: <Color>[
-          spec.surfaceRaised,
-          spec.surface,
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      darkGlassGradient: LinearGradient(
-        colors: <Color>[
-          spec.accent.withValues(alpha: 0.2),
-          spec.surface.withValues(alpha: 0.1),
-        ],
+        colors: <Color>[palette.dark.primary, palette.dark.primaryDark],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),

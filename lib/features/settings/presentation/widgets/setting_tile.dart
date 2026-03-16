@@ -20,27 +20,34 @@ class SettingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
 
-    final leadingBg = (item.accentColor ?? c.primary).withValues(alpha: 0.07);
+    final accent = item.accentColor ?? c.primary;
+    final leadingBg = c.surfaceRaised;
 
     final Widget leading = Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
         color: leadingBg,
+        border: Border.all(color: c.border.withValues(alpha: 0.9)),
         borderRadius: BorderRadius.circular(50),
       ),
       alignment: Alignment.center,
-      child: Icon(item.icon, color: item.accentColor ?? c.primary, size: 18),
+      child: Icon(item.icon, color: accent, size: 18),
     );
 
-    final Widget effectiveTrailing = trailing ??
+    final Widget effectiveTrailing =
+        trailing ??
         Icon(
           LucideIcons.chevronRight,
           size: 18,
-          color: item.enabled ? c.textSecondary.withValues(alpha: 0.9) : c.textSecondary.withValues(alpha: 0.4),
+          color: item.enabled
+              ? c.textSecondary.withValues(alpha: 0.9)
+              : c.textSecondary.withValues(alpha: 0.4),
         );
 
-    final textPrimary = item.enabled ? c.textPrimary : c.textSecondary.withValues(alpha: 0.6);
+    final textPrimary = item.enabled
+        ? c.textPrimary
+        : c.textSecondary.withValues(alpha: 0.6);
 
     return MergeSemantics(
       child: Semantics(
@@ -57,6 +64,8 @@ class SettingTile extends StatelessWidget {
               child: InkWell(
                 onTap: item.enabled ? onTap : null,
                 borderRadius: BorderRadius.circular(12),
+                splashColor: accent.withValues(alpha: 0.08),
+                highlightColor: accent.withValues(alpha: 0.04),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                   child: Row(
@@ -67,8 +76,13 @@ class SettingTile extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item.title,
-                                style: TextStyle(color: textPrimary, fontWeight: FontWeight.w800)),
+                            Text(
+                              item.title,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                             if ((item.subtitle ?? '').isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
@@ -76,7 +90,11 @@ class SettingTile extends StatelessWidget {
                                   item.subtitle!,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                                  style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12.5,
+                                    height: 1.3,
+                                  ),
                                 ),
                               ),
                           ],
@@ -95,4 +113,3 @@ class SettingTile extends StatelessWidget {
     );
   }
 }
-

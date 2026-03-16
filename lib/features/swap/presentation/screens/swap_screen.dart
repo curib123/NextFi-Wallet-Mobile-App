@@ -457,12 +457,12 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
         : '${_fmt.format(s.usdcBal)} USDC';
 
     return Scaffold(
-      backgroundColor: c.background,
+      backgroundColor: c.surface,
       drawer: const AppDrawer(),
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: c.background,
+        backgroundColor: c.surface,
         leadingWidth: 60,
         leading: Builder(
           builder: (context) => Padding(
@@ -814,7 +814,7 @@ class _AmountTile extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: c.background,
+            color: c.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: c.border.withValues(alpha: 0.4)),
           ),

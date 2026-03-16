@@ -21,7 +21,6 @@ import 'package:next_fi/core/services/internet_loss_guard.dart';
 import 'package:next_fi/core/services/inactivity_guard.dart';
 import 'package:next_fi/core/widgets/network_status_overlay.dart';
 import 'package:next_fi/core/widgets/modal/global_announcement_host.dart';
-import 'package:next_fi/core/widgets/theme/theme_selector_overlay.dart';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Services Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -39,7 +38,7 @@ const FlutterSecureStorage _secure = FlutterSecureStorage(
 );
 
 final ValueNotifier<ThemeMode> _themeModeVN = ValueNotifier(ThemeMode.system);
-final ValueNotifier<int> _themeStyleVN = ValueNotifier(0);
+final ValueNotifier<int> _themeStyleVN = ValueNotifier(2);
 
 Future<void> _loadInitialThemeMode() async {
   final raw = await _secure.read(key: _kThemePrefKey) ?? 'system';
@@ -54,7 +53,7 @@ Future<void> _loadInitialThemeMode() async {
 Future<void> _loadInitialThemeStyle() async {
   final raw = await _secure.read(key: _kThemeStylePrefKey);
   final parsed = int.tryParse(raw ?? '');
-  _themeStyleVN.value = AppColor.normalizeThemeStyleIndex(parsed ?? 0);
+  _themeStyleVN.value = AppColor.normalizeThemeStyleIndex(parsed ?? 2);
 }
 
 Future<void> _setThemeStyle(int styleIndex) async {
@@ -90,6 +89,7 @@ Future<void> main() async {
     };
     await _secure.write(key: _kThemePrefKey, value: raw);
   };
+  ThemeStyleBridge.apply = _setThemeStyle;
 
   // Ã¢Å“â€¦ Use FcmBootstrap for clean initialization
   await FcmBootstrap.init();
@@ -219,22 +219,14 @@ class _MyAppState extends State<MyApp> {
                 final mq = MediaQuery.of(context);
                 return MediaQuery(
                   data: mq.copyWith(textScaler: _kClampedTextScaler),
-                  child: Stack(
-                    children: <Widget>[
-                      NetworkStatusOverlay(
-                        child: GlobalAnnouncementHost(
-                          child: InactivityGuard(
-                            child: InternetLossGuard(
-                              child: child ?? const SizedBox.shrink(),
-                            ),
-                          ),
+                  child: NetworkStatusOverlay(
+                    child: GlobalAnnouncementHost(
+                      child: InactivityGuard(
+                        child: InternetLossGuard(
+                          child: child ?? const SizedBox.shrink(),
                         ),
                       ),
-                      ThemeSelectorOverlay(
-                        styleIndex: styleIndex,
-                        onStyleSelected: _setThemeStyle,
-                      ),
-                    ],
+                    ),
                   ),
                 );
               },
