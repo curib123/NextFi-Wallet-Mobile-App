@@ -908,13 +908,13 @@ class _CtaButton extends StatelessWidget {
       case TrustStatus.reviewing:
         return 'Under Review';
       case TrustStatus.ready:
-        return 'Account Verified Ã¢Å“â€œ';
+        return 'Account Verified';
       case TrustStatus.suspended:
         return 'Verification Suspended';
       case TrustStatus.basic:
       case TrustStatus.unknown:
         return snapshot.isCompleted
-            ? 'All Steps Completed Ã¢Å“â€œ'
+            ? 'All Steps Completed'
             : 'Continue Step ${snapshot.nextStepIndex}';
     }
   }

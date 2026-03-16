@@ -64,15 +64,20 @@ class _WalletCreationScreenState extends ConsumerState<WalletCreationScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  AnimatedBuilder(
-                    animation: _bgCtrl,
-                    builder: (_, __) => FintechBackground(
-                      progress: _bgCtrl.value,
-                      colors: colors,
-                      devicePixelRatio: dpr,
-                      topBandFraction: .45,
+                  if (!hasCover)
+                    AnimatedBuilder(
+                      animation: _bgCtrl,
+                      builder: (_, __) => FintechBackground(
+                        progress: _bgCtrl.value,
+                        colors: colors,
+                        devicePixelRatio: dpr,
+                        topBandFraction: .45,
+                      ),
+                    )
+                  else
+                    DecoratedBox(
+                      decoration: BoxDecoration(color: colors.background),
                     ),
-                  ),
                   if (hasCover)
                     AnimatedOpacity(
                       duration: const Duration(milliseconds: 320),
@@ -91,13 +96,13 @@ class _WalletCreationScreenState extends ConsumerState<WalletCreationScreen>
                         end: Alignment.bottomCenter,
                         colors: <Color>[
                           colors.background.withValues(
-                            alpha: hasCover ? 0.16 : 0.28,
+                            alpha: hasCover ? 0.14 : 0.28,
                           ),
                           colors.background.withValues(
-                            alpha: hasCover ? 0.34 : 0.24,
+                            alpha: hasCover ? 0.28 : 0.24,
                           ),
                           colors.background.withValues(
-                            alpha: hasCover ? 0.64 : 0.84,
+                            alpha: hasCover ? 0.56 : 0.84,
                           ),
                         ],
                       ),

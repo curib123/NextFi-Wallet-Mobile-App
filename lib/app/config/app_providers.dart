@@ -18,6 +18,7 @@ import 'package:next_fi/features/wallet_settings/presentation/viewmodels/wallet_
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
+import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
@@ -160,6 +161,12 @@ class AppTabController extends Notifier<AppTabState> {
 }
 
 final appConfigProvider = Provider<AppConfig>((ref) => AppConfig.instance);
+
+final appCoverServiceProvider = Provider<AppCoverService>((ref) {
+  final service = AppCoverService();
+  ref.onDispose(service.dispose);
+  return service;
+});
 
 final stellarWalletServiceProvider = Provider<StellarWalletServices>((ref) {
   final config = ref.watch(appConfigProvider);

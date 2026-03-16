@@ -1129,7 +1129,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
         final subtitle = [
           baseSubtitle,
           presence,
-        ].where((s) => s.trim().isNotEmpty).join(' Ã‚Â· ');
+        ].where((s) => s.trim().isNotEmpty).join(' | ');
         final unread = f.newUnreadMessageCount;
 
         return Padding(

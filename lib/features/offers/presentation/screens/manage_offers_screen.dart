@@ -299,7 +299,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       return;
     }
     if (maxAmt < minAmt) {
-      _snack('Max must be ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥ min amount.', error: true);
+      _snack('Max must be >= min amount.', error: true);
       return;
     }
     if (margin < -99.99 || margin > 999.99) {

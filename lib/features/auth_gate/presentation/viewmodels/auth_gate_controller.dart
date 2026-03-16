@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/auth_gate/presentation/viewmodels/auth_gate_view_state.dart';
 import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
@@ -36,14 +38,6 @@ class BioResult {
 final authGateLocalAuthProvider = Provider<LocalAuthentication>(
   (Ref ref) => LocalAuthentication(),
 );
-
-final authGateAppCoverServiceProvider = Provider.autoDispose<AppCoverService>((
-  Ref ref,
-) {
-  final service = AppCoverService();
-  ref.onDispose(service.dispose);
-  return service;
-});
 
 final authGateControllerProvider =
     NotifierProvider.autoDispose<AuthGateController, AuthGateViewState>(
@@ -81,6 +75,10 @@ class AuthGateController extends Notifier<AuthGateViewState> {
     final rem = await SecurityStorage.lockoutRemaining();
     state = state.copyWith(flow: state.flow.copyWith(lockoutRemaining: rem));
     _startOrStopLockoutTimer(rem);
+  }
+
+  Future<void> refreshAppCover() async {
+    await _loadAppCover();
   }
 
   Future<void> setBiometricsEnabled(bool enable) async {
@@ -283,14 +281,33 @@ class AuthGateController extends Notifier<AuthGateViewState> {
 
   Future<void> _loadAppCover() async {
     try {
-      final config = await ref
-          .read(authGateAppCoverServiceProvider)
-          .getCurrent();
+      if (kDebugMode) {
+        debugPrint('[AuthGateCover] Fetching app cover config...');
+      }
+      final config = await ref.read(appCoverServiceProvider).getCurrent();
+      if (kDebugMode) {
+        debugPrint(
+          '[AuthGateCover] Fetch result: '
+          'visible=${config?.isVisible} '
+          'usable=${config?.hasUsableImage} '
+          'url=${config?.imageUrl ?? 'null'}',
+        );
+      }
       if (!ref.mounted) return;
-      state = state.copyWith(
-        coverImageUrl: config?.hasUsableImage == true ? config!.imageUrl : null,
-      );
-    } catch (_) {
+      final resolvedUrl = config?.hasUsableImage == true
+          ? config!.imageUrl
+          : null;
+      if (kDebugMode) {
+        debugPrint(
+          '[AuthGateCover] Applying coverImageUrl=${resolvedUrl ?? 'null'}',
+        );
+      }
+      state = state.copyWith(coverImageUrl: resolvedUrl);
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[AuthGateCover] Fetch failed: $e');
+        debugPrint('$stackTrace');
+      }
       if (!ref.mounted) return;
       state = state.copyWith(coverImageUrl: null);
     }

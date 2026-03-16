@@ -126,7 +126,7 @@ class _SelfieVerificationStepScreenState
         account.accountName.trim(),
         if (method != null && method.trim().isNotEmpty) method.trim(),
         if (accountNo != null && accountNo.isNotEmpty) accountNo,
-      ].join(' â€¢ ');
+      ].join(' | ');
 
       setState(() {
         _activePaymentAccountId = account.id;
@@ -784,7 +784,7 @@ class _SelfieVerificationStepScreenState
           const SizedBox(height: 10),
           _UploadCard(
             c: c,
-            title: 'Government ID â€” Front',
+            title: 'Government ID - Front',
             subtitle: 'Capture the front side of your ID',
             icon: Icons.credit_card_outlined,
             file: _idFront,
@@ -795,7 +795,7 @@ class _SelfieVerificationStepScreenState
           const SizedBox(height: 10),
           _UploadCard(
             c: c,
-            title: 'Government ID â€” Back',
+            title: 'Government ID - Back',
             subtitle: 'Capture the back side of your ID',
             icon: Icons.flip_outlined,
             file: _idBack,
@@ -1556,7 +1556,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 autofocus: true,
                 style: TextStyle(color: c.textPrimary, fontSize: 14.5),
                 decoration: InputDecoration(
-                  hintText: 'Search countryâ€¦',
+                  hintText: 'Search country...',
                   hintStyle: TextStyle(
                     color: c.textSecondary.withValues(alpha: 0.5),
                     fontSize: 14,
@@ -1986,7 +1986,7 @@ class _ReviewHistoryItem extends StatelessWidget {
     final year = local.year.toString();
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
-    return '$month $day, $year â€¢ $hour:$minute';
+    return '$month $day, $year | $hour:$minute';
   }
 
   String _monthName(int month) {

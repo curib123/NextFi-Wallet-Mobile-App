@@ -27,7 +27,7 @@ class SentClaimableCard extends StatefulWidget {
 }
 
 class _SentClaimableCardState extends State<SentClaimableCard> {
-  static final _dateFmt = DateFormat('MMM d, yyyy Ã‚Â· h:mm a');
+  static final _dateFmt = DateFormat('MMM d, yyyy - h:mm a');
   static final _amtFmt = NumberFormat('#,##0.######');
 
   RecipientAddressModel? _recipient;

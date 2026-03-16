@@ -320,7 +320,7 @@ class MerchantInfoSection extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      paymentMethodIds.join(' Â· '),
+                      paymentMethodIds.join(' | '),
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 11.5,

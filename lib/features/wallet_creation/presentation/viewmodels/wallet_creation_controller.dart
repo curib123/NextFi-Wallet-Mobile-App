@@ -1,15 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/features/wallet_creation/presentation/viewmodels/wallet_creation_state.dart';
-
-final walletCreationAppCoverServiceProvider =
-    Provider.autoDispose<AppCoverService>((Ref ref) {
-      final service = AppCoverService();
-      ref.onDispose(service.dispose);
-      return service;
-    });
 
 final walletCreationPackageInfoProvider = Provider<Future<PackageInfo>>((
   Ref ref,
@@ -44,7 +38,7 @@ class WalletCreationController extends Notifier<WalletCreationState> {
 
   Future<void> loadAppCover() async {
     try {
-      final cover = await ref.read(walletCreationAppCoverServiceProvider).getCurrent();
+      final cover = await ref.read(appCoverServiceProvider).getCurrent();
       if (!ref.mounted) return;
       state = state.copyWith(appCover: cover);
     } catch (_) {

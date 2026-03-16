@@ -1907,7 +1907,7 @@ class _ReviewSheetState extends ConsumerState<_ReviewSheet> {
                           t: t,
                           c: c,
                           label: widget.recipientName != null
-                              ? 'To Ãƒâ€šÃ‚Â· ${widget.recipientName}'
+                              ? 'To | ${widget.recipientName}'
                               : 'To',
                           value: _short(vm.destinationAddress),
                           icon: LucideIcons.target,

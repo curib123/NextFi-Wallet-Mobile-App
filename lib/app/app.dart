@@ -6,6 +6,7 @@ import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/app/config/app_config.dart';
+import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
 import 'package:next_fi/firebase_options.dart';
 import 'package:next_fi/app/theme/app_theme.dart';
@@ -20,6 +21,7 @@ import 'package:next_fi/core/services/internet_loss_guard.dart';
 import 'package:next_fi/core/services/inactivity_guard.dart';
 import 'package:next_fi/core/widgets/network_status_overlay.dart';
 import 'package:next_fi/core/widgets/modal/global_announcement_host.dart';
+import 'package:next_fi/core/widgets/theme/theme_selector_overlay.dart';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Services Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -30,12 +32,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Theme persistence Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const String _kThemePrefKey = 'pref.theme_mode.v1';
+const String _kThemeStylePrefKey = 'pref.theme_style_index.v1';
 const FlutterSecureStorage _secure = FlutterSecureStorage(
   aOptions: AndroidOptions(encryptedSharedPreferences: true),
   iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
 );
 
 final ValueNotifier<ThemeMode> _themeModeVN = ValueNotifier(ThemeMode.system);
+final ValueNotifier<int> _themeStyleVN = ValueNotifier(0);
 
 Future<void> _loadInitialThemeMode() async {
   final raw = await _secure.read(key: _kThemePrefKey) ?? 'system';
@@ -45,6 +49,18 @@ Future<void> _loadInitialThemeMode() async {
     _ => ThemeMode.system,
   };
   _themeModeVN.value = mode;
+}
+
+Future<void> _loadInitialThemeStyle() async {
+  final raw = await _secure.read(key: _kThemeStylePrefKey);
+  final parsed = int.tryParse(raw ?? '');
+  _themeStyleVN.value = AppColor.normalizeThemeStyleIndex(parsed ?? 0);
+}
+
+Future<void> _setThemeStyle(int styleIndex) async {
+  final normalized = AppColor.normalizeThemeStyleIndex(styleIndex);
+  _themeStyleVN.value = normalized;
+  await _secure.write(key: _kThemeStylePrefKey, value: normalized.toString());
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Currency glyph fallback Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -63,6 +79,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.bootstrap();
   await _loadInitialThemeMode();
+  await _loadInitialThemeStyle();
 
   ThemeBridge.apply = (mode) async {
     _themeModeVN.value = mode;
@@ -188,26 +205,39 @@ class _MyAppState extends State<MyApp> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: _themeModeVN,
       builder: (_, mode, __) {
-        return MaterialApp(
-          title: 'NextFi Wallet',
-          debugShowCheckedModeBanner: false,
-          themeMode: mode,
-          theme: AppTheme.light(),
-          darkTheme: AppTheme.dark(),
-          home: const Home(),
-          builder: (context, child) {
-            final mq = MediaQuery.of(context);
-            return MediaQuery(
-              data: mq.copyWith(textScaler: _kClampedTextScaler),
-              child: NetworkStatusOverlay(
-                child: GlobalAnnouncementHost(
-                  child: InactivityGuard(
-                    child: InternetLossGuard(
-                      child: child ?? const SizedBox.shrink(),
-                    ),
+        return ValueListenableBuilder<int>(
+          valueListenable: _themeStyleVN,
+          builder: (_, styleIndex, __) {
+            return MaterialApp(
+              title: 'NextFi Wallet',
+              debugShowCheckedModeBanner: false,
+              themeMode: mode,
+              theme: AppTheme.light(styleIndex),
+              darkTheme: AppTheme.dark(styleIndex),
+              home: const Home(),
+              builder: (context, child) {
+                final mq = MediaQuery.of(context);
+                return MediaQuery(
+                  data: mq.copyWith(textScaler: _kClampedTextScaler),
+                  child: Stack(
+                    children: <Widget>[
+                      NetworkStatusOverlay(
+                        child: GlobalAnnouncementHost(
+                          child: InactivityGuard(
+                            child: InternetLossGuard(
+                              child: child ?? const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      ThemeSelectorOverlay(
+                        styleIndex: styleIndex,
+                        onStyleSelected: _setThemeStyle,
+                      ),
+                    ],
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         );
@@ -215,4 +245,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-

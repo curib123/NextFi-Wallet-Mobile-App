@@ -741,7 +741,7 @@ String _fmtPct(double frac) {
 }
 
 String _fmtCompact(DateTime? dt) {
-  if (dt == null) return 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â';
+  if (dt == null) return '-';
   final t = dt.toLocal();
   String two(int n) => n.toString().padLeft(2, '0');
   return '${two(t.month)}/${two(t.day)}\n${two(t.hour)}:${two(t.minute)}';

@@ -500,7 +500,7 @@ class _AccountItem {
       if (assetReceiverAddress != null && assetReceiverAddress!.isNotEmpty)
         assetReceiverAddress!,
     ];
-    return parts.join(' Ã‚Â· ');
+    return parts.join(' | ');
   }
 }
 
@@ -558,8 +558,8 @@ class _StepHero extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   isMerchant
-                      ? 'Step 2 of 2 Ã‚Â· Add your settlement account'
-                      : 'Step 2 of 3 Ã‚Â· Link your preferred account',
+                      ? 'Step 2 of 2 | Add your settlement account'
+                      : 'Step 2 of 3 | Link your preferred account',
                   style: TextStyle(color: c.textSecondary, fontSize: 12.5),
                 ),
               ],
@@ -990,7 +990,7 @@ class _MethodDropdown extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '${m.name}  Ã‚Â·  ${m.code}',
+                        '${m.name} | ${m.code}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

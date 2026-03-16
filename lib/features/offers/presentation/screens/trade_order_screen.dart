@@ -3815,7 +3815,7 @@ class _CompletedCardState extends State<_CompletedCard> {
                     Icon(Icons.star_rounded, color: green, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      'Review submitted ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â thank you!',
+                      'Review submitted - thank you!',
                       style: AppFonts.sora(
                         fontSize: 13,
                         color: green,

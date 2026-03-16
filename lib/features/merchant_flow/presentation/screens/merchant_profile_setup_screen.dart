@@ -585,7 +585,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 autofocus: true,
                 style: TextStyle(color: c.textPrimary, fontSize: 14.5),
                 decoration: InputDecoration(
-                  hintText: 'Search countryâ€¦',
+                  hintText: 'Search country...',
                   hintStyle: TextStyle(
                     color: c.textSecondary.withValues(alpha: 0.5),
                     fontSize: 14,

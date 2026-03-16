@@ -25,7 +25,7 @@ class AvatarWithAssetLogo extends StatelessWidget {
       final bg = Color(recColor!);
       final initial = recName!.trim().isNotEmpty
           ? recName!.trim().characters.first.toUpperCase()
-          : 'â€¢';
+          : '*';
       baseAvatar = CircleAvatar(
         backgroundColor: bg,
         foregroundColor: AppColor.of(context).onPrimary,

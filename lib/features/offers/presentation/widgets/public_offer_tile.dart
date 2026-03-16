@@ -449,7 +449,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
                     _SmallChip(
                       c: c,
                       label:
-                          'Min: ${offer.minAmount ?? "â€”"} Â· Max: ${offer.maxAmount ?? "â€”"}',
+                          'Min: ${offer.minAmount ?? "-"} | Max: ${offer.maxAmount ?? "-"}',
                     ),
                 ],
               ),
@@ -462,7 +462,7 @@ class _PublicOfferTileState extends State<PublicOfferTile>
         else if (widget.marketPrice != null)
           _PricePill(c: c, price: widget.marketPrice!, color: typeColor)
         else
-          Text('â€”', style: _T.price.copyWith(color: c.textSecondary)),
+          Text('-', style: _T.price.copyWith(color: c.textSecondary)),
       ],
     );
   }
@@ -1150,7 +1150,7 @@ class _Dot extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 4),
-    child: Text('Â·', style: _T.caption.copyWith(color: c.textSecondary)),
+    child: Text('|', style: _T.caption.copyWith(color: c.textSecondary)),
   );
 }
 

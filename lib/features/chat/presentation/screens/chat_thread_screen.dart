@@ -428,9 +428,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _statusText() {
     if (_socketStatus.ready) return 'End-to-end encrypted';
-    if (_socketStatus.connecting) return 'Connectingâ€¦';
-    if (_socketStatus.connected) return 'Joining roomâ€¦';
-    return 'Reconnectingâ€¦';
+    if (_socketStatus.connecting) return 'Connecting...';
+    if (_socketStatus.connected) return 'Joining room...';
+    return 'Reconnecting...';
   }
 
   bool _showDateHeader(int index) {
@@ -527,7 +527,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     Flexible(
                       child: Text(
                         _friendSubtitle.isNotEmpty && _socketStatus.ready
-                            ? '$_friendSubtitle Â· ${_statusText()}'
+                            ? '$_friendSubtitle | ${_statusText()}'
                             : _socketStatus.ready && _friendSubtitle.isEmpty
                             ? _statusText()
                             : _friendSubtitle.isNotEmpty
@@ -932,7 +932,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         onSubmitted: (_) => _sendMessage(),
                         style: TextStyle(color: c.textPrimary, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'Messageâ€¦',
+                          hintText: 'Message...',
                           hintStyle: TextStyle(
                             color: c.textSecondary.withValues(alpha: 0.6),
                             fontSize: 14,

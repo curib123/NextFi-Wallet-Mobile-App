@@ -5,9 +5,11 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
 
 class AppTheme {
-  static ThemeData light() => _build(AppColor.light, Brightness.light);
+  static ThemeData light([int styleIndex = 0]) =>
+      _build(AppColor.lightStyle(styleIndex), Brightness.light);
 
-  static ThemeData dark() => _build(AppColor.dark, Brightness.dark);
+  static ThemeData dark([int styleIndex = 0]) =>
+      _build(AppColor.darkStyle(styleIndex), Brightness.dark);
 
   static ThemeData _build(AppColor colors, Brightness brightness) {
     final isDark = brightness == Brightness.dark;
@@ -307,8 +309,8 @@ class AppTheme {
           minimumSize: const Size(0, 52),
           backgroundColor: colors.primary,
           foregroundColor: colors.onPrimary,
-        disabledBackgroundColor: colors.surfaceRaised,
-        disabledForegroundColor: colors.textMuted,
+          disabledBackgroundColor: colors.surfaceRaised,
+          disabledForegroundColor: colors.textMuted,
           textStyle: AppFonts.label(
             color: colors.onPrimary,
             fontSize: 14,

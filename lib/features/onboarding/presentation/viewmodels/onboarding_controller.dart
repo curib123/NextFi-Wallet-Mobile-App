@@ -1,15 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/features/onboarding/presentation/viewmodels/onboarding_state.dart';
-
-final onboardingAppCoverServiceProvider = Provider.autoDispose<AppCoverService>(
-  (Ref ref) {
-    final service = AppCoverService();
-    ref.onDispose(service.dispose);
-    return service;
-  },
-);
 
 final onboardingControllerProvider =
     NotifierProvider.autoDispose<OnboardingController, OnboardingState>(
@@ -26,7 +19,7 @@ class OnboardingController extends Notifier<OnboardingState> {
   Future<void> _loadAppCover() async {
     try {
       final AppCoverConfig? cover = await ref
-          .read(onboardingAppCoverServiceProvider)
+          .read(appCoverServiceProvider)
           .getCurrent();
       if (!ref.mounted) return;
       state = state.copyWith(appCover: cover);

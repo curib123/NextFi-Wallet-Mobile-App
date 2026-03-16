@@ -133,7 +133,7 @@ class SendState {
     final destination = destinationAddress.trim();
     if (destination.isEmpty ||
         !(destination.startsWith('G') && destination.length == 56)) {
-      return 'Enter a valid Stellar address (Gâ€¦)';
+      return 'Enter a valid Stellar address (G...)';
     }
     if (typedAmount <= 0) return 'Enter amount';
     if (isXlm) {

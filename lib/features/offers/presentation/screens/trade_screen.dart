@@ -1093,7 +1093,7 @@ class _AmountCard extends StatelessWidget {
               c: c,
               typeColor: typeColor,
               label: isBuy ? 'You receive' : 'You send',
-              value: 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°Ãƒâ€¹Ã¢â‚¬Â  ${computedCrypto.toStringAsFixed(7)} ${offer.asset}',
+              value: '~ ${computedCrypto.toStringAsFixed(7)} ${offer.asset}',
             ),
           ],
           if (!enterFiatMode && computedFiat > 0) ...[
@@ -1103,7 +1103,7 @@ class _AmountCard extends StatelessWidget {
               typeColor: typeColor,
               label: isBuy ? 'You pay' : 'You receive',
               value:
-                  'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°Ãƒâ€¹Ã¢â‚¬Â  ${offer.fiatCurrency} ${computedFiat.toStringAsFixed(2)}',
+                  '~ ${offer.fiatCurrency} ${computedFiat.toStringAsFixed(2)}',
             ),
           ],
           if (enterFiatMode && !canCalculate) ...[
@@ -1637,7 +1637,7 @@ class _YourAccountCard extends StatelessWidget {
                     : 'Saved account';
                 final display = label.isNotEmpty
                     ? label
-                    : '$fallback${accountNo.isNotEmpty ? ' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· $accountNo' : ''}';
+                    : '$fallback${accountNo.isNotEmpty ? ' | $accountNo' : ''}';
                 return DropdownMenuItem(
                   value: a,
                   child: Text(

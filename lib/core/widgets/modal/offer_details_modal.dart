@@ -124,7 +124,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
       : widget.offer.paymentMethodIds;
 
   String _getPaymentMethodNames(List<String> ids) =>
-      ids.map((id) => _paymentMethodsMap[id]?.name ?? id).join(' Ã‚Â· ');
+      ids.map((id) => _paymentMethodsMap[id]?.name ?? id).join(' | ');
 
   Future<void> _loadMerchantProfile() async {
     final ids = _resolveSellerIds();
@@ -648,7 +648,7 @@ class _TradeLimitsCard extends StatelessWidget {
                 child: _LimitBox(
                   c: c,
                   label: 'Min',
-                  value: offer.minAmount?.toString() ?? 'Ã¢â‚¬â€',
+                  value: offer.minAmount?.toString() ?? '-',
                   icon: Icons.south_rounded,
                   color: c.success,
                 ),
@@ -658,7 +658,7 @@ class _TradeLimitsCard extends StatelessWidget {
                 child: _LimitBox(
                   c: c,
                   label: 'Max',
-                  value: offer.maxAmount?.toString() ?? 'Ã¢â‚¬â€',
+                  value: offer.maxAmount?.toString() ?? '-',
                   icon: Icons.north_rounded,
                   color: c.error,
                 ),
@@ -672,7 +672,7 @@ class _TradeLimitsCard extends StatelessWidget {
                 child: _LimitBox(
                   c: c,
                   label: 'Total Qty',
-                  value: offer.totalQty?.toString() ?? 'Ã¢â‚¬â€',
+                  value: offer.totalQty?.toString() ?? '-',
                   icon: Icons.layers_outlined,
                   color: c.info,
                 ),
@@ -682,7 +682,7 @@ class _TradeLimitsCard extends StatelessWidget {
                 child: _LimitBox(
                   c: c,
                   label: 'Available',
-                  value: offer.availableQty?.toString() ?? 'Ã¢â‚¬â€',
+                  value: offer.availableQty?.toString() ?? '-',
                   icon: Icons.check_circle_outline_rounded,
                   color: c.success,
                 ),
@@ -732,7 +732,7 @@ class _DetailsCard extends StatelessWidget {
           _DetailRow(
             c: c,
             label: 'Payment window',
-            value: '${offer.paymentWindowMinutes ?? 'Ã¢â‚¬â€'} min',
+            value: '${offer.paymentWindowMinutes ?? '-'} min',
           ),
           _DetailRow(
             c: c,
@@ -744,7 +744,7 @@ class _DetailsCard extends StatelessWidget {
             label: 'Success rate',
             value: offer.successRate != null
                 ? '${offer.successRate!.toStringAsFixed(1)}%'
-                : 'Ã¢â‚¬â€',
+                : '-',
           ),
           if (loadingPaymentMethods)
             _LoadingDetailMethodsRow(c: c, shimmerAnim: shimmerAnim)
@@ -752,7 +752,7 @@ class _DetailsCard extends StatelessWidget {
             _DetailRow(
               c: c,
               label: 'Payment methods',
-              value: 'Ã¢â‚¬â€',
+              value: '-',
               isLast: true,
             )
           else

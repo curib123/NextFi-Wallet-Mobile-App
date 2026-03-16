@@ -6,6 +6,7 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:next_fi/features/onboarding/presentation/viewmodels/onboarding_controller.dart';
+import 'package:next_fi/features/wallet_creation/presentation/widgets/fintech_background.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key, required this.onFinish});
@@ -16,8 +17,13 @@ class OnboardingScreen extends ConsumerStatefulWidget {
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
+    with SingleTickerProviderStateMixin {
   late final PageController _pageController = PageController();
+  late final AnimationController _bgCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 22),
+  )..repeat();
 
   static const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
     _OnboardingSlide(
@@ -68,6 +74,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _bgCtrl.dispose();
     super.dispose();
   }
 
@@ -110,35 +117,57 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       body: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[
-                    colors.background.withValues(alpha: hasCover ? 0.84 : 1),
-                    colors.surface.withValues(
-                      alpha: hasCover
-                          ? (isDark ? 0.24 : 0.18)
-                          : (isDark ? 0.44 : 0.38),
+            child: IgnorePointer(
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (!hasCover)
+                    AnimatedBuilder(
+                      animation: _bgCtrl,
+                      builder: (_, __) => FintechBackground(
+                        progress: _bgCtrl.value,
+                        colors: colors,
+                        devicePixelRatio: MediaQuery.of(
+                          context,
+                        ).devicePixelRatio,
+                        topBandFraction: .5,
+                      ),
+                    )
+                  else
+                    DecoratedBox(
+                      decoration: BoxDecoration(color: colors.background),
                     ),
-                    colors.background.withValues(alpha: hasCover ? 0.8 : 1),
-                  ],
-                ),
+                  if (hasCover)
+                    CachedNetworkImage(
+                      imageUrl: onboarding.appCover!.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          colors.background.withValues(
+                            alpha: hasCover ? 0.12 : 0.2,
+                          ),
+                          colors.surface.withValues(
+                            alpha: hasCover
+                                ? (isDark ? 0.18 : 0.14)
+                                : (isDark ? 0.44 : 0.38),
+                          ),
+                          colors.background.withValues(
+                            alpha: hasCover ? 0.58 : 0.92,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          if (hasCover)
-            Positioned.fill(
-              child: Opacity(
-                opacity: isDark ? 0.2 : 0.16,
-                child: CachedNetworkImage(
-                  imageUrl: onboarding.appCover!.imageUrl!,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              ),
-            ),
           Positioned(
             top: -120,
             left: -60,

@@ -83,9 +83,9 @@ class CurrencyVM extends ChangeNotifier {
   static const Map<String, String> _symbolOverrides = <String, String>{
     'USD': r'$',
     'EUR': 'â‚¬',
-    'GBP': 'Â£',
-    'JPY': 'Â¥',
-    'CNY': 'Â¥',
+    'GBP': 'GBP',
+    'JPY': 'JPY',
+    'CNY': 'CNY',
     'KRW': 'â‚©',
     'PHP': 'â‚±',
     'THB': 'à¸¿',
@@ -110,7 +110,7 @@ class CurrencyVM extends ChangeNotifier {
     'BRL': 'R\$',
     'MXN': r'$',
     'NGN': 'â‚¦',
-    'EGP': 'EÂ£',
+    'EGP': 'EGP',
     'TRY': 'â‚º',
   };
 
@@ -186,7 +186,7 @@ class CurrencyVM extends ChangeNotifier {
     if (override != null && override.trim().isNotEmpty) return override;
     try {
       final sym = NumberFormat.simpleCurrency(name: code).currencySymbol.trim();
-      if (sym.isEmpty || sym == 'Â¤') return code;
+      if (sym.isEmpty || sym == 'CUR') return code;
       return sym;
     } catch (_) {
       return code;
@@ -406,7 +406,7 @@ class CurrencyVM extends ChangeNotifier {
         _consecutiveErrors++;
         if (_consecutiveErrors >= _maxConsecutiveErrors) {
           debugPrint(
-            'CurrencyVM: ${'$_consecutiveErrors'} consecutive stream errors â€” zeroing rates',
+            'CurrencyVM: ${'$_consecutiveErrors'} consecutive stream errors - zeroing rates',
           );
           // FIX: _zeroRates does NOT call notifyListeners internally;
           // caller is responsible. Stream listener calls notifyListeners
@@ -516,7 +516,7 @@ class CurrencyVM extends ChangeNotifier {
     _lastUsdcPerXlm = 0;
     _ratesUnavailable = true;
     _usingFallbackRates = false;
-    debugPrint('CurrencyVM: Rates zeroed ($reason) â€” UI should show N/A');
+    debugPrint('CurrencyVM: Rates zeroed ($reason) - UI should show N/A');
   }
 
   Future<void> _refreshUsdToFiat() async {
@@ -539,7 +539,7 @@ class CurrencyVM extends ChangeNotifier {
         await _saveLatestPricesToCache();
 
         debugPrint(
-          'CurrencyVM: Rates refreshed â€” '
+          'CurrencyVM: Rates refreshed - '
           'USDC: $_usdcRate $_fiat, '
           'XLM: ${_xlmRate.toStringAsFixed(4)} $_fiat '
           '(USDC/XLM: $_lastUsdcPerXlm)',

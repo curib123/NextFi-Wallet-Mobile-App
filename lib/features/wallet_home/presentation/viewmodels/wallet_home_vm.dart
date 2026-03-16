@@ -203,7 +203,7 @@ class WalletHomeVM extends ChangeNotifier {
     final authed = await _isAuthenticated();
 
     if (!authed) {
-      debugPrint('User not authenticated Ã¢â€ â€™ NavigateToLogin emitted');
+      debugPrint('User not authenticated -> NavigateToLogin emitted');
       _emit(const NavigateToLogin());
       return false;
     }

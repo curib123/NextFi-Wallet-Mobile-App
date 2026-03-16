@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,8 @@ class AuthGateScreen extends ConsumerStatefulWidget {
 class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   Timer? _smallVisualDelay;
+  String? _lastLoggedCoverUrl;
+  bool? _lastLoggedHasCover;
 
   // Animation controllers
   late final AnimationController _bgCtrl = AnimationController(
@@ -83,6 +86,7 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       final controller = ref.read(authGateControllerProvider.notifier);
+      controller.refreshAppCover();
       controller.refreshLockout();
       controller.maybeAutoBiometric().then((auto) {
         if (!mounted) return;
@@ -184,6 +188,17 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
     final s = viewState.flow;
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final hasCover = (viewState.coverImageUrl ?? '').trim().isNotEmpty;
+    if (kDebugMode &&
+        (_lastLoggedHasCover != hasCover ||
+            _lastLoggedCoverUrl != viewState.coverImageUrl)) {
+      _lastLoggedHasCover = hasCover;
+      _lastLoggedCoverUrl = viewState.coverImageUrl;
+      debugPrint(
+        '[AuthGateCover] Render mode='
+        '${hasCover ? 'app-cover' : 'fintech-background'} '
+        'url=${viewState.coverImageUrl ?? 'null'}',
+      );
+    }
     final foregroundPrimary = hasCover ? colors.onPrimary : colors.textPrimary;
     final foregroundSecondary = hasCover
         ? colors.onPrimary.withValues(alpha: 0.82)
@@ -235,7 +250,32 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                           alignment: Alignment.center,
                           fadeInDuration: const Duration(milliseconds: 240),
                           fadeOutDuration: const Duration(milliseconds: 120),
-                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                          imageBuilder: (context, imageProvider) {
+                            if (kDebugMode) {
+                              debugPrint(
+                                '[AuthGateCover] Image resolved successfully: '
+                                '${viewState.coverImageUrl}',
+                              );
+                            }
+                            return DecoratedBox(
+                              decoration: BoxDecoration(
+                                image: DecorationImage(
+                                  image: imageProvider,
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.center,
+                                ),
+                              ),
+                            );
+                          },
+                          errorWidget: (_, __, error) {
+                            if (kDebugMode) {
+                              debugPrint(
+                                '[AuthGateCover] Image load failed: '
+                                '${viewState.coverImageUrl} error=$error',
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
                           placeholder: (_, __) => const SizedBox.shrink(),
                         ),
                       ),

@@ -110,7 +110,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'xlm_transactions_long',
       icon: LucideIcons.send,
       text:
-          'XLM is great for transactionsâ€”fast to arrive with very low fees.\nKeep a little XLM on hand so transfers and swaps always go through.',
+          'XLM is great for transactions-fast to arrive with very low fees.\nKeep a little XLM on hand so transfers and swaps always go through.',
       tags: {'xlm', 'fees', 'tip', 'beginner'},
     ),
   ),
@@ -119,7 +119,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'xlm_risk_profile',
       icon: LucideIcons.trendingUp,
       text:
-          'XLM price can move up and down more than USDC.\nGood for investing if youâ€™re comfortable with risk and short-term swings.',
+          'XLM price can move up and down more than USDC.\nGood for investing if you are comfortable with risk and short-term swings.',
       tags: {'xlm', 'risk', 'info', 'beginner'},
     ),
   ),
@@ -148,7 +148,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'usdc_simple',
       icon: LucideIcons.badgeDollarSign,
       text:
-          'USDC is designed to track the US dollar (â‰ˆ1:1 USD).\nEasy to understandâ€”use it for savings, salaries, and daily budgeting.',
+          'USDC is designed to track the US dollar (~1:1 USD).\nEasy to understand-use it for savings, salaries, and daily budgeting.',
       tags: {'usdc', 'info', 'beginner'},
     ),
   ),
@@ -216,7 +216,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'swap_slippage',
       icon: LucideIcons.activity,
       text:
-          'Large swaps can â€œslipâ€ if the market moves or thereâ€™s low liquidity.\nDoing it in smaller steps may get you a better overall rate.',
+          'Large swaps can "slip" if the market moves or there is low liquidity.\nDoing it in smaller steps may get you a better overall rate.',
       tags: {'swap', 'price', 'tip'},
     ),
   ),
@@ -225,7 +225,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'payment_memo',
       icon: LucideIcons.stickyNote,
       text:
-          'Sending to an exchange or business?\nSome require a Memo/Tag to credit your accountâ€”check before sending.',
+          'Sending to an exchange or business?\nSome require a Memo/Tag to credit your account-check before sending.',
       tags: {'transfer', 'memo', 'warning'},
     ),
   ),
@@ -243,7 +243,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'qr_over_typing',
       icon: LucideIcons.scanLine,
       text:
-          'Use QR scan or copy-paste instead of typing long addresses.\nItâ€™s fasterâ€”and helps avoid costly typos.',
+          'Use QR scan or copy-paste instead of typing long addresses.\nIt is faster-and helps avoid costly typos.',
       tags: {'transfer', 'ux', 'tip', 'beginner'},
     ),
   ),
@@ -263,7 +263,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'sec_secret',
       icon: LucideIcons.lock,
       text:
-          'Never share your secret phrase with anyoneâ€”support will never ask for it.\nWrite it down and keep it offline in a safe place.',
+          'Never share your secret phrase with anyone-support will never ask for it.\nWrite it down and keep it offline in a safe place.',
       tags: {'security', 'warning', 'beginner'},
     ),
   ),
@@ -281,7 +281,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'sec_scams',
       icon: LucideIcons.alertOctagon,
       text:
-          'Be cautious of â€œairdropâ€ messages or offers that feel too good to be true.\nIf it sounds magical, itâ€™s almost always a scam.',
+          'Be cautious of "airdrop" messages or offers that feel too good to be true.\nIf it sounds magical, it is almost always a scam.',
       tags: {'security', 'warning'},
     ),
   ),
@@ -299,7 +299,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'backup_phrase',
       icon: LucideIcons.server,
       text:
-          'Back up your secret phrase on paper or a metal backup.\nAvoid screenshotsâ€”they can be discovered by malware or cloud sync.',
+          'Back up your secret phrase on paper or a metal backup.\nAvoid screenshots-they can be discovered by malware or cloud sync.',
       tags: {'security', 'tip'},
     ),
   ),
@@ -308,7 +308,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'share_address_safely',
       icon: LucideIcons.share,
       text:
-          'Itâ€™s okay to share your public address when someone needs to pay you.\nJust never share your secret phrase or private keys.',
+          'It is okay to share your public address when someone needs to pay you.\nJust never share your secret phrase or private keys.',
       tags: {'security', 'info', 'beginner'},
     ),
   ),
@@ -319,7 +319,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'low_xlm',
       icon: LucideIcons.alertTriangle,
       text:
-          'Your XLM looks lowâ€”top up a little so transactions keep working.\nWithout XLM, certain actions like swaps and trustlines may fail.',
+          'Your XLM looks low-top up a little so transactions keep working.\nWithout XLM, certain actions like swaps and trustlines may fail.',
       tags: {'xlm', 'fees', 'warning'},
     ),
     when: (ctx) => (ctx.xlmBalance ?? double.infinity) < ctx.lowXlmThreshold,
@@ -353,7 +353,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'testnet_note',
       icon: LucideIcons.testTube,
       text:
-          'Youâ€™re on Testnetâ€”a practice network for learning and testing.\nTokens here have no real-world value.',
+          'You are on Testnet-a practice network for learning and testing.\nTokens here have no real-world value.',
       tags: {'env', 'info', 'beginner'},
     ),
     when: (ctx) => ctx.isTestnet == true,
@@ -365,7 +365,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
       id: 'onramp_compare',
       icon: LucideIcons.creditCard,
       text:
-          'Buying with cash/card? Compare on-ramp fees and limits.\nSmall differences add upâ€”choose what fits your budget and speed.',
+          'Buying with cash/card? Compare on-ramp fees and limits.\nSmall differences add up-choose what fits your budget and speed.',
       tags: {'ramp', 'fees', 'tip'},
     ),
   ),
