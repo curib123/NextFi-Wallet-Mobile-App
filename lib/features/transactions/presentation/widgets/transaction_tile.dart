@@ -56,7 +56,7 @@ class TransactionTile extends StatelessWidget {
     }
 
     final titleText = recName != null
-        ? '$recName Ã¢â‚¬Â¢ ${amount.toStringAsFixed(2)} $asset'
+        ? '$recName - ${amount.toStringAsFixed(2)} $asset'
         : '${amount.toStringAsFixed(2)} $asset';
 
     final subtitleWho = isIncoming ? 'From' : 'To';
@@ -103,7 +103,7 @@ class TransactionTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        '$subtitleWho: $subtitlePeer Ã¢â‚¬Â¢ ${dt != null ? listFormat.format(dt) : ''}',
+        '$subtitleWho: $subtitlePeer - ${dt != null ? listFormat.format(dt) : ''}',
         style: TextStyle(color: colors.textSecondary),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
 class KeyValueRow extends StatelessWidget {
   const KeyValueRow({
@@ -49,8 +50,11 @@ class KeyValueRow extends StatelessWidget {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: value));
               if (!context.mounted) return;
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('Copied')));
+              showFloatingSnackBar(
+                context,
+                message: 'Copied',
+                type: SnackBarType.success,
+              );
             },
           ),
       ],

@@ -32,7 +32,7 @@ class AppTheme {
           surfaceContainerHigh: colors.surfaceRaised,
           surfaceContainerHighest: colors.surfaceRaised,
           outline: colors.border,
-          outlineVariant: colors.border,
+          outlineVariant: colors.border.withValues(alpha: isDark ? 0.7 : 1),
           shadow: isDark ? Colors.black : const Color(0xFF111111),
           scrim: Colors.black,
           surfaceTint: Colors.transparent,
@@ -150,7 +150,7 @@ class AppTheme {
       textTheme: textTheme,
       primaryTextTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: colors.background,
+        backgroundColor: isDark ? colors.surfaceOverlay : colors.background,
         foregroundColor: colors.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -163,7 +163,7 @@ class AppTheme {
         color: colors.surface,
         surfaceTintColor: Colors.transparent,
         shadowColor: (isDark ? Colors.black : colors.textPrimary).withValues(
-          alpha: isDark ? 0.22 : 0.08,
+          alpha: isDark ? 0.34 : 0.08,
         ),
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -172,7 +172,7 @@ class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: colors.surface,
+        backgroundColor: isDark ? colors.surfaceRaised : colors.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
@@ -180,9 +180,9 @@ class AppTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: colors.surface,
+        backgroundColor: isDark ? colors.surfaceRaised : colors.surface,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: colors.surface,
+        modalBackgroundColor: isDark ? colors.surfaceRaised : colors.surface,
         modalBarrierColor: Colors.black.withValues(alpha: isDark ? 0.64 : 0.4),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -212,10 +212,10 @@ class AppTheme {
         tileColor: Colors.transparent,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: colors.surface,
+        backgroundColor: isDark ? colors.surfaceOverlay : colors.surface,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
-        indicatorColor: colors.primary.withValues(alpha: isDark ? 0.14 : 0.12),
+        indicatorColor: colors.primary.withValues(alpha: isDark ? 0.22 : 0.12),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
@@ -234,11 +234,11 @@ class AppTheme {
         }),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: colors.surfaceRaised,
+        backgroundColor: isDark ? colors.surface : colors.surfaceRaised,
         disabledColor: colors.surfaceOverlay,
-        selectedColor: colors.primary.withValues(alpha: isDark ? 0.14 : 0.12),
+        selectedColor: colors.primary.withValues(alpha: isDark ? 0.2 : 0.12),
         secondarySelectedColor: colors.primary.withValues(
-          alpha: isDark ? 0.14 : 0.12,
+          alpha: isDark ? 0.2 : 0.12,
         ),
         side: BorderSide(color: colors.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -257,7 +257,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colors.surfaceRaised,
+        fillColor: isDark ? colors.surfaceOverlay : colors.surfaceRaised,
         hintStyle: AppFonts.inter(
           fontSize: 14,
           color: colors.textSecondary.withValues(alpha: isDark ? 0.8 : 0.9),
@@ -307,8 +307,8 @@ class AppTheme {
           minimumSize: const Size(0, 52),
           backgroundColor: colors.primary,
           foregroundColor: colors.onPrimary,
-          disabledBackgroundColor: colors.surfaceRaised,
-          disabledForegroundColor: colors.textMuted,
+        disabledBackgroundColor: colors.surfaceRaised,
+        disabledForegroundColor: colors.textMuted,
           textStyle: AppFonts.label(
             color: colors.onPrimary,
             fontSize: 14,
@@ -343,7 +343,7 @@ class AppTheme {
           minimumSize: const Size(0, 52),
           foregroundColor: colors.textPrimary,
           side: BorderSide(color: colors.border),
-          backgroundColor: colors.surface,
+          backgroundColor: isDark ? colors.surfaceRaised : colors.surface,
           disabledForegroundColor: colors.textMuted,
           textStyle: AppFonts.label(
             color: colors.textPrimary,

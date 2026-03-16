@@ -43,6 +43,8 @@ class EmptyState extends StatelessWidget {
     VoidCallback? onPrimaryAction,
     String? secondaryActionLabel,
     VoidCallback? onSecondaryAction,
+    bool compact = false,
+    bool fill = false,
   }) =>
       EmptyState(
         icon: LucideIcons.alertTriangle,
@@ -53,6 +55,8 @@ class EmptyState extends StatelessWidget {
         onPrimaryAction: onPrimaryAction,
         secondaryActionLabel: secondaryActionLabel,
         onSecondaryAction: onSecondaryAction,
+        compact: compact,
+        fill: fill,
       );
 
   factory EmptyState.noData({
@@ -63,6 +67,8 @@ class EmptyState extends StatelessWidget {
     VoidCallback? onPrimaryAction,
     String? secondaryActionLabel,
     VoidCallback? onSecondaryAction,
+    bool compact = false,
+    bool fill = false,
   }) =>
       EmptyState(
         icon: LucideIcons.inbox,
@@ -73,6 +79,8 @@ class EmptyState extends StatelessWidget {
         onPrimaryAction: onPrimaryAction,
         secondaryActionLabel: secondaryActionLabel,
         onSecondaryAction: onSecondaryAction,
+        compact: compact,
+        fill: fill,
       );
 
   @override

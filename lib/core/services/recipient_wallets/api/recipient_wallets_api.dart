@@ -14,6 +14,9 @@ class RecipientWalletsApi {
       final map = Map<String, dynamic>.from(response);
       final items = map['items'];
       final data = map['data'];
+      final recipients = map['recipients'];
+      final recipientWallets = map['recipientWallets'];
+      final list = map['list'];
 
       if (items is List) {
         rawList = items;
@@ -21,6 +24,16 @@ class RecipientWalletsApi {
         rawList = data;
       } else if (data is Map && data['items'] is List) {
         rawList = data['items'] as List;
+      } else if (data is Map && data['recipients'] is List) {
+        rawList = data['recipients'] as List;
+      } else if (data is Map && data['recipientWallets'] is List) {
+        rawList = data['recipientWallets'] as List;
+      } else if (recipients is List) {
+        rawList = recipients;
+      } else if (recipientWallets is List) {
+        rawList = recipientWallets;
+      } else if (list is List) {
+        rawList = list;
       }
     }
 

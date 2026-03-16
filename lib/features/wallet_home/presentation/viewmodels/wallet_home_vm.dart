@@ -1,6 +1,7 @@
 // lib/features/wallet_home/view_model/wallet_home_vm.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:next_fi/features/wallet_home/data/services/wallet_home_flow_service.dart';
 import 'package:next_fi/features/wallet_home/data/models/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
@@ -136,10 +137,23 @@ class WalletHomeVM extends ChangeNotifier {
 
   WalletHomeState _state = const WalletHomeState();
   WalletHomeState get state => _state;
+  bool _notifyScheduled = false;
 
   void _set(WalletHomeState s) {
     _state = s;
-    if (!_disposed) notifyListeners();
+    _scheduleNotify();
+  }
+
+  void _scheduleNotify() {
+    if (_disposed || _notifyScheduled) return;
+    _notifyScheduled = true;
+
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _notifyScheduled = false;
+      if (_disposed) return;
+      notifyListeners();
+    });
+    SchedulerBinding.instance.scheduleFrame();
   }
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ UI events stream (for the View) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -623,6 +637,7 @@ class WalletHomeVM extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _notifyScheduled = false;
     stopRealtime();
 
     if (!_ui.isClosed) {

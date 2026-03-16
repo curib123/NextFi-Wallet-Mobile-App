@@ -686,7 +686,7 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       backgroundColor: c.background,
       body: SafeArea(
         child: _loading
-            ? const PageLoader(label: 'Loading offersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦')
+            ? const PageLoader(label: 'Loading offers...')
             : _error != null
             ? _ErrorState(c: c, error: _error!, onRetry: _load)
             : FadeTransition(
@@ -2283,7 +2283,7 @@ class _SubmitBtn extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       const Text(
-                        'Creating offerÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
+                        'Creating offer...',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 14.5,

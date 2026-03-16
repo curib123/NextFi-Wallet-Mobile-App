@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/modal/profile_setup_modal.dart';
 import 'package:next_fi/core/widgets/profile_avatar/user_avatar.dart';
@@ -176,7 +177,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   final _profileSvc = ProfileCoreService.I;
   final _verificationSvc = VerificationCoreService.I;
   final _merchantSvc = MerchantProfileCoreService.I;
-  final _dateFmt = DateFormat('MMM d, yyyy Ã‚Â· HH:mm');
+  final _dateFmt = DateFormat('MMM d, yyyy · HH:mm');
 
   late final AnimationController _fadeCtrl;
   late final AnimationController _slideCtrl;
@@ -184,6 +185,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   late final Animation<Offset> _slide;
 
   StreamSubscription<void>? _profileSub;
+  StreamSubscription<void>? _merchantSub;
+  int _loadVersion = 0;
 
   bool _loading = true;
   String? _error;
@@ -210,7 +213,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOutCubic));
     _profileSub = ProfileCoreService.changes.listen((_) {
-      if (mounted) _load();
+      if (mounted) _load(showLoader: false);
+    });
+    _merchantSub = MerchantProfileCoreService.changes.listen((_) {
+      if (mounted) _load(showLoader: false);
     });
     _load();
   }
@@ -218,6 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void dispose() {
     _profileSub?.cancel();
+    _merchantSub?.cancel();
     _fadeCtrl.dispose();
     _slideCtrl.dispose();
     super.dispose();
@@ -231,14 +238,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showLoader = true}) async {
+    final requestVersion = ++_loadVersion;
     if (!mounted) return;
     setState(() {
-      _loading = true;
+      _loading = showLoader;
       _error = null;
     });
     try {
       final auth = await _auth.isAuthenticated;
+      if (!mounted || requestVersion != _loadVersion) return;
       if (!auth) {
         if (!mounted) return;
         setState(() {
@@ -265,7 +274,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               () => _merchantSvc.getTierProgress(),
             )
           : null;
-      if (!mounted) return;
+      if (!mounted || requestVersion != _loadVersion) return;
       setState(() {
         _user = results[0] as User?;
         _profileData = results[1] as ProfileModel?;
@@ -277,7 +286,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       _fadeCtrl.forward(from: 0);
       _slideCtrl.forward(from: 0);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestVersion != _loadVersion) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -289,12 +298,14 @@ class _ProfileScreenState extends State<ProfileScreen>
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const VerificationFlowScreen()));
-    if (mounted) await _load();
+    if (mounted) await _load(showLoader: false);
   }
 
   Future<void> _editProfile() async {
     final changed = await showProfileSetupModal(context, initial: _profileData);
-    if (changed == true && mounted) _fadeCtrl.forward(from: 0);
+    if (changed == true && mounted) {
+      await _load(showLoader: false);
+    }
   }
 
   String _displayName() {
@@ -310,11 +321,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   String _val(String? v) {
     final t = v?.trim() ?? '';
-    return t.isEmpty ? 'Ã¢â‚¬â€' : t;
+    return t.isEmpty ? '-' : t;
   }
 
   String _valDate(DateTime? d) =>
-      d == null ? 'Ã¢â‚¬â€' : _dateFmt.format(d.toLocal());
+      d == null ? '-' : _dateFmt.format(d.toLocal());
 
   bool get _isMerchant => _merchantData?.isApproved == true;
 
@@ -392,33 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           user: _user!,
                           profile: _profileData,
                           displayName: _displayName(),
-                          tierProgress: _tierProgress,
-                          trustUi: _trustUi(c),
-                          onEdit: _editProfile,
-                        ),
-                      ),
-
-                      // Stats (merchant)
-                      if (_isMerchant && _tierProgress != null) ...[
-                        const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                        SliverToBoxAdapter(
-                          child: _StatStrip(data: _tierProgress!),
-                        ),
-                      ],
-
-                      // Account
-                      const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                      SliverToBoxAdapter(
-                        child: _SectionLabel(
-                          label: 'ACCOUNT',
-                          icon: LucideIcons.user,
-                          c: c,
-                        ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
-                      SliverToBoxAdapter(
-                        child: _InfoCard(
-                          rows: [
+                          accountRows: [
                             _Row(LucideIcons.mail, 'Email', _val(_user!.email)),
                             _Row(
                               LucideIcons.atSign,
@@ -447,8 +432,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                               isLast: true,
                             ),
                           ],
+                          tierProgress: _tierProgress,
+                          trustUi: _trustUi(c),
+                          onEdit: _editProfile,
                         ),
                       ),
+
+                      // Stats (merchant)
+                      if (_isMerchant && _tierProgress != null) ...[
+                        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                        SliverToBoxAdapter(
+                          child: _StatStrip(data: _tierProgress!),
+                        ),
+                      ],
 
                       // Verification
                       const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -508,23 +504,16 @@ class _PAppBar extends StatelessWidget implements PreferredSizeWidget {
           'Profile',
           style: TextStyle(
             color: c.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.6,
-          ),
-        ),
-        Text(
-          'Identity, verification, and merchant standing',
-          style: TextStyle(
-            color: c.textSecondary,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
           ),
         ),
       ],
     ),
     actions: [
-      GestureDetector(
+      InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: onRefresh,
         child: Container(
           margin: const EdgeInsets.only(right: 16),
@@ -551,6 +540,7 @@ class _HeroCard extends StatefulWidget {
     required this.user,
     required this.profile,
     required this.displayName,
+    required this.accountRows,
     required this.tierProgress,
     required this.trustUi,
     required this.onEdit,
@@ -559,6 +549,7 @@ class _HeroCard extends StatefulWidget {
   final User user;
   final ProfileModel? profile;
   final String displayName;
+  final List<_Row> accountRows;
   final MerchantTierProgressModel? tierProgress;
   final ({String label, Color color, IconData icon}) trustUi;
   final VoidCallback onEdit;
@@ -624,43 +615,38 @@ class _HeroCardState extends State<_HeroCard>
           Container(
             decoration: BoxDecoration(
               color: c.surface,
-              borderRadius: BorderRadius.circular(26),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: accent.withValues(alpha: 0.20),
-                width: 1.5,
+                color: c.border.withValues(alpha: 0.8),
+                width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: accent.withValues(alpha: 0.08),
-                  blurRadius: 28,
-                  offset: const Offset(0, 10),
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(24),
               child: Stack(
                 children: [
-                  // Gradient wash
                   Positioned(
                     top: 0,
                     left: 0,
                     right: 0,
                     child: Container(
-                      height: 110,
+                      height: 88,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            grad[0].withValues(alpha: 0.16),
-                            grad[1].withValues(alpha: 0.06),
-                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [accent.withValues(alpha: 0.08), c.surface],
                         ),
                       ),
                     ),
                   ),
-                  // Top color strip
                   Positioned(
                     top: 0,
                     left: 0,
@@ -672,27 +658,8 @@ class _HeroCardState extends State<_HeroCard>
                       ),
                     ),
                   ),
-                  // Decorative radial bloom
-                  Positioned(
-                    top: -70,
-                    right: -70,
-                    child: Container(
-                      width: 220,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            accent.withValues(alpha: 0.10),
-                            accent.withValues(alpha: 0),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Content
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -704,13 +671,13 @@ class _HeroCardState extends State<_HeroCard>
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.10),
+                                color: accent.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
                                 tier != null
-                                    ? '${_TierMeta.label(tier)} profile'
-                                    : 'Wallet identity',
+                                    ? '${_TierMeta.label(tier)} merchant'
+                                    : 'Wallet profile',
                                 style: TextStyle(
                                   color: accent,
                                   fontSize: 11,
@@ -720,11 +687,10 @@ class _HeroCardState extends State<_HeroCard>
                             ),
                           ],
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Avatar + animated ring
                             AnimatedBuilder(
                               animation: _ringAnim,
                               builder: (_, __) => _Avatar(
@@ -777,7 +743,7 @@ class _HeroCardState extends State<_HeroCard>
                         const SizedBox(height: 16),
                         Container(
                           height: 1,
-                          color: accent.withValues(alpha: 0.10),
+                          color: c.border.withValues(alpha: 0.7),
                         ),
                         const SizedBox(height: 13),
                         Wrap(
@@ -790,11 +756,37 @@ class _HeroCardState extends State<_HeroCard>
                               _CountryPill(country: country, c: c),
                           ],
                         ),
+                        if (widget.accountRows.isNotEmpty) ...[
+                          const SizedBox(height: 18),
+                          Container(
+                            height: 1,
+                            color: c.border.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(
+                                LucideIcons.user,
+                                size: 14,
+                                color: c.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Account',
+                                style: _T.sectionLabel.copyWith(
+                                  color: c.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _EmbeddedInfoCard(rows: widget.accountRows),
+                        ],
                         if (data != null) ...[
                           const SizedBox(height: 18),
                           Container(
                             height: 1,
-                            color: accent.withValues(alpha: 0.10),
+                            color: c.border.withValues(alpha: 0.7),
                           ),
                           const SizedBox(height: 16),
                           Row(
@@ -840,10 +832,10 @@ class _HeroCardState extends State<_HeroCard>
                           Container(
                             padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                             decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.05),
+                              color: c.background,
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: accent.withValues(alpha: 0.14),
+                                color: c.border.withValues(alpha: 0.8),
                               ),
                             ),
                             child: Column(
@@ -883,8 +875,8 @@ class _HeroCardState extends State<_HeroCard>
                                           Text(
                                             _TierMeta.label(tier),
                                             style: _T.tierDisplay.copyWith(
-                                              color: accent,
-                                              fontSize: 24,
+                                              color: c.textPrimary,
+                                              fontSize: 22,
                                             ),
                                           ),
                                           const SizedBox(height: 3),
@@ -908,7 +900,7 @@ class _HeroCardState extends State<_HeroCard>
                                         decoration: BoxDecoration(
                                           color: _TierMeta.color(
                                             next.tier,
-                                          ).withValues(alpha: 0.12),
+                                          ).withValues(alpha: 0.10),
                                           borderRadius: BorderRadius.circular(
                                             999,
                                           ),
@@ -966,7 +958,7 @@ class _HeroCardState extends State<_HeroCard>
                                       ),
                                       Text(
                                         'Need +${next.progress.remainingSuccessRate.toStringAsFixed(1)}% success'
-                                        ' Ã‚Â· +${next.progress.remainingAvgRating.toStringAsFixed(2)} rating',
+                                        ' - +${next.progress.remainingAvgRating.toStringAsFixed(2)} rating',
                                         style: _T.rowKey.copyWith(
                                           color: c.textSecondary,
                                         ),
@@ -1069,7 +1061,7 @@ class _HeroCardState extends State<_HeroCard>
                         const SizedBox(height: 16),
                         Container(
                           height: 1,
-                          color: accent.withValues(alpha: 0.10),
+                          color: c.border.withValues(alpha: 0.7),
                         ),
                         const SizedBox(height: 14),
                         _TapTarget(
@@ -1260,15 +1252,16 @@ class _TrustPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
-      color: ui.color,
+      color: ui.color.withValues(alpha: 0.10),
+      border: Border.all(color: ui.color.withValues(alpha: 0.18)),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(ui.icon, size: 10, color: c.onPrimary),
+        Icon(ui.icon, size: 10, color: ui.color),
         const SizedBox(width: 4),
-        Text(ui.label, style: _T.pill.copyWith(color: c.onPrimary)),
+        Text(ui.label, style: _T.pill.copyWith(color: ui.color)),
       ],
     ),
   );
@@ -1282,17 +1275,18 @@ class _TierPill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
     decoration: BoxDecoration(
-      gradient: LinearGradient(colors: _TierMeta.gradient(tier)),
+      color: _TierMeta.color(tier).withValues(alpha: 0.10),
+      border: Border.all(color: _TierMeta.color(tier).withValues(alpha: 0.18)),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(_TierMeta.icon(tier), size: 10, color: Colors.white),
+        Icon(_TierMeta.icon(tier), size: 10, color: _TierMeta.color(tier)),
         const SizedBox(width: 4),
         Text(
           _TierMeta.label(tier),
-          style: _T.pill.copyWith(color: Colors.white),
+          style: _T.pill.copyWith(color: _TierMeta.color(tier)),
         ),
       ],
     ),
@@ -1523,6 +1517,25 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
+class _EmbeddedInfoCard extends StatelessWidget {
+  const _EmbeddedInfoCard({required this.rows});
+
+  final List<_Row> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: c.background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: c.border.withValues(alpha: 0.78)),
+      ),
+      child: Column(children: rows.map((r) => _InfoRow(row: r)).toList()),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.row});
   final _Row row;
@@ -1530,7 +1543,7 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
-    final isEmpty = row.value == 'Ã¢â‚¬â€';
+    final isEmpty = row.value == '-';
     return Column(
       children: [
         Padding(
@@ -1695,7 +1708,7 @@ class _VerificationCard extends StatelessWidget {
                 verification?.submittedAt == null
                     ? 'Not submitted'
                     : DateFormat(
-                        'MMM d, yyyy Ã‚Â· HH:mm',
+                        'MMM d, yyyy - HH:mm',
                       ).format(verification!.submittedAt!.toLocal()),
                 isLast: true,
               ),
@@ -2022,7 +2035,7 @@ class _TierCardState extends State<_TierCard>
                             Expanded(
                               child: Text(
                                 'Need +${next.progress.remainingSuccessRate.toStringAsFixed(1)}% success'
-                                ' Ã‚Â· +${next.progress.remainingAvgRating.toStringAsFixed(2)} rating',
+                                ' - +${next.progress.remainingAvgRating.toStringAsFixed(2)} rating',
                                 style: _T.rowKey.copyWith(
                                   color: c.textSecondary,
                                   height: 1.4,
@@ -2051,7 +2064,7 @@ class _TierCardState extends State<_TierCard>
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                "Maximum tier achieved Ã¢â‚¬â€ you're at the top.",
+                                "Maximum tier achieved. You're at the top.",
                                 style: TextStyle(
                                   color: tc,
                                   fontSize: 13,
@@ -2060,7 +2073,11 @@ class _TierCardState extends State<_TierCard>
                                 ),
                               ),
                             ),
-                            const Text('Ã°Å¸Ââ€ ', style: TextStyle(fontSize: 18)),
+                            Icon(
+                              Icons.workspace_premium_rounded,
+                              size: 18,
+                              color: tc,
+                            ),
                           ],
                         ),
                       ),
@@ -2346,11 +2363,11 @@ class _PrimaryBtn extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState._({
-    required this.stateIcon,
+    required this.icon,
+    required this.isError,
     required this.title,
     required this.body,
     required this.btnLabel,
-    required this.filled,
     required this.onAction,
   });
 
@@ -2358,127 +2375,42 @@ class _EmptyState extends StatelessWidget {
     required String message,
     required VoidCallback onAction,
   }) => _EmptyState._(
-    stateIcon: const _StateIcon(icon: Icons.cloud_off_rounded, isError: true),
+    icon: Icons.cloud_off_rounded,
+    isError: true,
     title: 'Failed to load',
     body: message,
     btnLabel: 'Try Again',
-    filled: true,
     onAction: onAction,
   );
 
   factory _EmptyState.loggedOut({required VoidCallback onAction}) =>
       _EmptyState._(
-        stateIcon: const _StateIcon(
-          icon: Icons.lock_outline_rounded,
-          isError: false,
-        ),
+        icon: Icons.lock_outline_rounded,
+        isError: false,
         title: 'Sign in required',
         body: 'Please sign in to view your profile.',
         btnLabel: 'Refresh Session',
-        filled: false,
         onAction: onAction,
       );
 
-  final Widget stateIcon;
+  final IconData icon;
+  final bool isError;
   final String title;
   final String body;
   final String btnLabel;
-  final bool filled;
   final VoidCallback onAction;
 
   @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final accent = filled ? c.primary : c.primary;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            stateIcon,
-            const SizedBox(height: 18),
-            Text(
-              title,
-              style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 7),
-            Text(
-              body,
-              style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 13,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            GestureDetector(
-              onTap: onAction,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: filled ? accent : c.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: filled ? null : Border.all(color: accent),
-                  boxShadow: filled
-                      ? [
-                          BoxShadow(
-                            color: accent.withValues(alpha: 0.22),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Text(
-                  btnLabel,
-                  style: TextStyle(
-                    color: filled ? c.onPrimary : accent,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => EmptyState(
+    icon: icon,
+    accentColor: isError
+        ? AppColor.of(context).error
+        : AppColor.of(context).info,
+    title: title,
+    message: body,
+    primaryActionLabel: btnLabel,
+    onPrimaryAction: onAction,
+    compact: true,
+    fill: true,
+  );
 }
-
-class _StateIcon extends StatelessWidget {
-  const _StateIcon({required this.icon, required this.isError});
-  final IconData icon;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    final color = isError ? c.error : c.primary;
-    return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: 0.09),
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Icon(icon, size: 26, color: color),
-    );
-  }
-}
-
-

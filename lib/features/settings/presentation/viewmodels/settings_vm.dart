@@ -11,6 +11,7 @@ import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_set
 import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
 import 'package:next_fi/core/widgets/modal/show_pin_change_bottom_sheet.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
 /// Optional bridge the app can hook to actually apply ThemeMode at root.
 /// In your app bootstrap (near MaterialApp), set once:
@@ -326,10 +327,11 @@ class SettingsVM extends ChangeNotifier {
   }
 
   void _showSnack(BuildContext context, String msg) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    messenger.clearSnackBars();
-    messenger.showSnackBar(SnackBar(content: Text(msg)));
+    showFloatingSnackBar(
+      context,
+      message: msg,
+      type: SnackBarType.info,
+    );
   }
 }
 

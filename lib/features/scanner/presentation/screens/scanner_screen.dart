@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/scanner/presentation/viewmodels/scanner_state.dart';
 import 'package:next_fi/features/scanner/presentation/viewmodels/scanner_controller.dart';
 
@@ -67,9 +68,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               onPickFromGallery: () async {
                 final message = await controller.pickQrFromGallery();
                 if (!context.mounted || message == null || message.isEmpty) return;
-                ScaffoldMessenger.of(
+                showFloatingSnackBar(
                   context,
-                ).showSnackBar(SnackBar(content: Text(message)));
+                  message: message,
+                  type: SnackBarType.info,
+                );
               },
               onClose: () {
                 if (Navigator.of(context).canPop()) {

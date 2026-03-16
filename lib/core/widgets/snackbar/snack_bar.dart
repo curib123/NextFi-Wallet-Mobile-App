@@ -1,15 +1,18 @@
+import 'dart:async';
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/material.dart';
-import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
+import 'package:next_fi/core/widgets/button/app_buttons.dart';
 
 enum SnackBarType { info, success, warning, error }
 
 enum SnackBarPosition { bottom, top }
 
-/// Keep a single top toast at a time.
 OverlayEntry? _currentTopSnack;
 
 void showFloatingSnackBar(
@@ -24,22 +27,20 @@ void showFloatingSnackBar(
   bool haptics = true,
   String? semanticsLabel,
 }) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
-
-  messenger.clearSnackBars();
+  final trimmedMessage = message.trim();
+  if (trimmedMessage.isEmpty) return;
+  if (!context.mounted) return;
 
   final colors = AppColor.of(context);
   final theme = Theme.of(context);
   final mq = MediaQuery.of(context);
-  final bottomSafe = (mq.viewInsets.bottom > 0
+  final bottomSafe = mq.viewInsets.bottom > 0
       ? mq.viewInsets.bottom
-      : mq.viewPadding.bottom);
+      : mq.viewPadding.bottom;
   final topSafe = mq.viewPadding.top;
 
-  final (bg, fg, icon) = _getTypeStyles(colors, type);
+  final palette = _getTypeStyles(colors, type);
 
-  /// Haptics
   if (haptics) {
     switch (type) {
       case SnackBarType.success:
@@ -57,234 +58,343 @@ void showFloatingSnackBar(
     }
   }
 
-  /// TOP TOAST
   if (position == SnackBarPosition.top) {
-    _showTopOverlayToast(
+    _removeCurrentTopSnack();
+    final didShowOverlay = _showTopOverlayToast(
       context,
-      top: topSafe + 16,
+      top: topSafe + 12,
       left: 16,
       right: 16,
       colors: colors,
-      bg: bg,
-      fg: fg,
-      icon: icon,
-      message: message,
+      palette: palette,
+      message: trimmedMessage,
       textStyle: theme.textTheme.bodyMedium,
       duration: duration,
-      type: type,
       onTap: onTap,
       actionLabel: actionLabel,
       onAction: onAction,
       semanticsLabel: semanticsLabel,
     );
-    return;
+    if (didShowOverlay) return;
   }
 
-  /// BOTTOM SNACK
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+
+  _removeCurrentTopSnack();
+  messenger.clearSnackBars();
+
   messenger.showSnackBar(
     SnackBar(
       behavior: SnackBarBehavior.floating,
       margin: EdgeInsets.fromLTRB(16, 0, 16, 20 + bottomSafe),
       elevation: 0,
-      padding: const EdgeInsets.all(0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      backgroundColor: colors.surface,
+      padding: EdgeInsets.zero,
+      backgroundColor: Colors.transparent,
       duration: duration,
       dismissDirection: DismissDirection.horizontal,
-      content: _SnackContent(
+      content: _SnackSurface(
         colors: colors,
-        bg: bg,
-        fg: fg,
-        icon: icon,
-        message: message,
+        palette: palette,
+        message: trimmedMessage,
         textStyle: theme.textTheme.bodyMedium,
         actionLabel: actionLabel,
         onAction: onAction,
         semanticsLabel: semanticsLabel,
-        type: type,
+        compact: false,
       ),
     ),
   );
 }
 
-(Color, Color, IconData) _getTypeStyles(AppColor colors, SnackBarType type) {
+_SnackPalette _getTypeStyles(AppColor colors, SnackBarType type) {
   return switch (type) {
-    SnackBarType.success => (
-      colors.success,
-      colors.onPrimary,
-      LucideIcons.checkCircle2,
+    SnackBarType.success => _SnackPalette(
+      accent: colors.success,
+      foreground: colors.onPrimary,
+      icon: LucideIcons.checkCircle2,
+      accentSoft: colors.success.withValues(alpha: 0.2),
     ),
-    SnackBarType.warning => (
-      colors.warning,
-      colors.onPrimary,
-      LucideIcons.alertTriangle,
+    SnackBarType.warning => _SnackPalette(
+      accent: colors.warning,
+      foreground: colors.onPrimary,
+      icon: LucideIcons.alertTriangle,
+      accentSoft: colors.warning.withValues(alpha: 0.24),
     ),
-    SnackBarType.error => (colors.error, colors.onPrimary, LucideIcons.xCircle),
-    SnackBarType.info => (colors.primary, colors.onPrimary, LucideIcons.info),
+    SnackBarType.error => _SnackPalette(
+      accent: colors.error,
+      foreground: colors.onPrimary,
+      icon: LucideIcons.xCircle,
+      accentSoft: colors.error.withValues(alpha: 0.22),
+    ),
+    SnackBarType.info => _SnackPalette(
+      accent: colors.primary,
+      foreground: colors.onPrimary,
+      icon: LucideIcons.info,
+      accentSoft: colors.primary.withValues(alpha: 0.2),
+    ),
   };
 }
 
-/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-/// CONTENT (BOTTOM + TOP SHARED UI)
-/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-class _SnackContent extends StatelessWidget {
-  const _SnackContent({
-    required this.colors,
-    required this.bg,
-    required this.fg,
+class _SnackPalette {
+  const _SnackPalette({
+    required this.accent,
+    required this.foreground,
     required this.icon,
+    required this.accentSoft,
+  });
+
+  final Color accent;
+  final Color foreground;
+  final IconData icon;
+  final Color accentSoft;
+}
+
+class _SnackSurface extends StatelessWidget {
+  const _SnackSurface({
+    required this.colors,
+    required this.palette,
     required this.message,
     required this.textStyle,
-    required this.type,
+    required this.semanticsLabel,
     this.actionLabel,
     this.onAction,
-    this.semanticsLabel,
+    this.compact = false,
+    this.contentOpacity = 1,
+    this.iconOpacity = 1,
   });
 
   final AppColor colors;
-  final Color bg, fg;
-  final IconData icon;
+  final _SnackPalette palette;
   final String message;
   final TextStyle? textStyle;
-  final SnackBarType type;
   final String? actionLabel;
   final VoidCallback? onAction;
   final String? semanticsLabel;
+  final bool compact;
+  final double contentOpacity;
+  final double iconOpacity;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: bg,
-
-        borderRadius: BorderRadius.circular(14),
-
-        /// Soft fintech shadow (NOT glow)
-        boxShadow: [
-          BoxShadow(
-            color: colors.textPrimary.withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-
-        /// Subtle border
-        border: Border.all(
-          color: colors.onPrimary.withValues(alpha: 0.06),
-          width: 1,
+    final radius = compact ? 20.0 : 22.0;
+    final horizontal = compact ? 14.0 : 16.0;
+    final vertical = compact ? 12.0 : 14.0;
+    final actionAvailable = actionLabel != null && onAction != null;
+    final messageWidget = Opacity(
+      opacity: contentOpacity,
+      child: Semantics(
+        label: semanticsLabel,
+        child: Text(
+          message,
+          maxLines: actionAvailable ? 3 : 4,
+          overflow: TextOverflow.ellipsis,
+          style: AppFonts.body(
+            color: colors.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ).merge(textStyle).copyWith(color: colors.textPrimary, height: 1.2),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          /// Icon chip
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: colors.textPrimary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 18, color: fg),
-          ),
-
-          const SizedBox(width: 12),
-
-          /// Message
-          Expanded(
-            child: Semantics(
-              label: semanticsLabel,
-              child: Text(
-                message,
-                style: AppFonts.body(
-                  color: fg,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ).merge(textStyle).copyWith(color: fg),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-
-          /// Action
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(width: 8),
-            AppTextButton(
+    );
+    final actionWidget = actionAvailable
+        ? Opacity(
+            opacity: contentOpacity,
+            child: AppTextButton(
               onPressed: onAction,
               style: TextButton.styleFrom(
-                foregroundColor: fg,
-                backgroundColor: colors.textPrimary.withValues(alpha: 0.12),
+                foregroundColor: palette.accent,
+                backgroundColor: palette.accentSoft,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 6,
+                  vertical: 8,
                 ),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
               child: Text(
                 actionLabel!,
                 style: AppFonts.label(
-                  color: fg,
-                  fontWeight: FontWeight.w700,
+                  color: palette.accent,
+                  fontWeight: FontWeight.w800,
                   fontSize: 12,
                 ),
               ),
             ),
-          ],
+          )
+        : null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: colors.textPrimary.withValues(alpha: 0.07),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.textPrimary.withValues(alpha: 0.12),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                colors.surface,
+                Color.alphaBlend(
+                  palette.accent.withValues(alpha: 0.08),
+                  colors.surface,
+                ),
+              ],
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontal,
+              vertical: vertical,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stackActionBelow =
+                    actionWidget != null && constraints.maxWidth < 360;
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Opacity(
+                      opacity: iconOpacity,
+                      child: _SnackIconChip(
+                        colors: colors,
+                        palette: palette,
+                        size: compact ? 38 : 40,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: stackActionBelow
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                messageWidget,
+                                const SizedBox(height: 10),
+                                actionWidget!,
+                              ],
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(child: messageWidget),
+                                if (actionWidget != null) ...[
+                                  const SizedBox(width: 10),
+                                  Flexible(
+                                    fit: FlexFit.loose,
+                                    child: actionWidget,
+                                  ),
+                                ],
+                              ],
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-/// TOP OVERLAY
-/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-void _showTopOverlayToast(
+class _SnackIconChip extends StatelessWidget {
+  const _SnackIconChip({
+    required this.colors,
+    required this.palette,
+    required this.size,
+  });
+
+  final AppColor colors;
+  final _SnackPalette palette;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(
+              colors.onPrimary.withValues(alpha: 0.14),
+              palette.accent,
+            ),
+            palette.accent,
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: palette.accent.withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Icon(palette.icon, size: size * 0.46, color: palette.foreground),
+    );
+  }
+}
+
+bool _showTopOverlayToast(
   BuildContext context, {
   required double top,
   required double left,
   required double right,
   required AppColor colors,
-  required Color bg,
-  required Color fg,
-  required IconData icon,
+  required _SnackPalette palette,
   required String message,
   required TextStyle? textStyle,
   required Duration duration,
-  required SnackBarType type,
   VoidCallback? onTap,
   String? actionLabel,
   VoidCallback? onAction,
   String? semanticsLabel,
 }) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
-  if (overlay == null) return;
+  if (overlay == null) return false;
 
-  _currentTopSnack?.remove();
-  _currentTopSnack = null;
+  _removeCurrentTopSnack();
 
-  final entry = OverlayEntry(
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
     builder: (ctx) => _TopSnackAnimated(
       top: top,
       left: left,
       right: right,
       colors: colors,
-      bg: bg,
-      fg: fg,
-      icon: icon,
+      palette: palette,
       message: message,
       textStyle: textStyle,
       duration: duration,
-      type: type,
       onClose: () {
-        _currentTopSnack?.remove();
-        _currentTopSnack = null;
+        if (identical(_currentTopSnack, entry)) {
+          _removeCurrentTopSnack();
+        }
       },
       onTap: onTap,
       actionLabel: actionLabel,
@@ -295,24 +405,19 @@ void _showTopOverlayToast(
 
   overlay.insert(entry);
   _currentTopSnack = entry;
+  return true;
 }
 
-/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-/// TOP ANIMATED WIDGET
-/// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _TopSnackAnimated extends StatefulWidget {
   const _TopSnackAnimated({
     required this.top,
     required this.left,
     required this.right,
     required this.colors,
-    required this.bg,
-    required this.fg,
-    required this.icon,
+    required this.palette,
     required this.message,
     required this.textStyle,
     required this.duration,
-    required this.type,
     required this.onClose,
     this.onTap,
     this.actionLabel,
@@ -320,14 +425,14 @@ class _TopSnackAnimated extends StatefulWidget {
     this.semanticsLabel,
   });
 
-  final double top, left, right;
+  final double top;
+  final double left;
+  final double right;
   final AppColor colors;
-  final Color bg, fg;
-  final IconData icon;
+  final _SnackPalette palette;
   final String message;
   final TextStyle? textStyle;
   final Duration duration;
-  final SnackBarType type;
   final VoidCallback onClose;
   final VoidCallback? onTap;
   final String? actionLabel;
@@ -340,114 +445,185 @@ class _TopSnackAnimated extends StatefulWidget {
 
 class _TopSnackAnimatedState extends State<_TopSnackAnimated>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ac = AnimationController(
+  late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 400),
+    duration: const Duration(milliseconds: 980),
+    reverseDuration: const Duration(milliseconds: 520),
   );
 
-  late final Animation<double> _fade = CurvedAnimation(
-    parent: _ac,
-    curve: Curves.easeOutCubic,
-  );
-
-  late final Animation<Offset> _slide = Tween(
-    begin: const Offset(0, -1),
-    end: Offset.zero,
-  ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOutCubic));
+  Timer? _dismissTimer;
+  bool _isClosing = false;
 
   @override
   void initState() {
     super.initState();
-    _ac.forward();
-    Future.delayed(widget.duration, _dismiss);
-  }
-
-  void _dismiss() async {
-    if (!mounted) return;
-    await _ac.reverse();
-    if (mounted) widget.onClose();
+    _controller.forward();
+    _dismissTimer = Timer(widget.duration, _dismiss);
   }
 
   @override
   void dispose() {
-    _ac.dispose();
+    _dismissTimer?.cancel();
+    _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _dismiss() async {
+    if (_isClosing) return;
+    _isClosing = true;
+    _dismissTimer?.cancel();
+    if (!mounted) return;
+    await _controller.reverse();
+    if (mounted) widget.onClose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const double maxCardWidth = 640;
+    const maxCardWidth = 680.0;
 
     return Positioned(
       top: widget.top,
       left: widget.left,
       right: widget.right,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: FadeTransition(
-          opacity: _fade,
-          child: SlideTransition(
-            position: _slide,
-            child: Dismissible(
-              key: const ValueKey('top_snack'),
-              direction: DismissDirection.horizontal,
-              onDismissed: (_) => widget.onClose(),
-              child: Material(
-                color: widget.colors.surface,
-                child: InkWell(
-                  onTap: widget.onTap ?? _dismiss,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: maxCardWidth),
-                    decoration: BoxDecoration(
-                      color: widget.bg,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.colors.textPrimary.withValues(
-                            alpha: 0.15,
-                          ),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: widget.colors.onPrimary.withValues(alpha: 0.06),
-                        width: 1,
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    child: Row(
+      child: Material(
+        type: MaterialType.transparency,
+        child: IgnorePointer(
+          ignoring: false,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: maxCardWidth),
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  final progress = _controller.value.clamp(0.0, 1.0);
+                  final isReversing =
+                      _controller.status == AnimationStatus.reverse ||
+                      _isClosing;
+
+                  final drop = Curves.easeInCubic.transform(
+                    _interval(progress, 0.0, 0.3),
+                  );
+                  final impact = Curves.easeOutBack.transform(
+                    _interval(progress, 0.3, 0.52),
+                  );
+                  final bloom = Curves.easeOutCubic.transform(
+                    _interval(progress, 0.44, 0.86),
+                  );
+                  final content = Curves.easeOut.transform(
+                    _interval(progress, 0.58, 1.0),
+                  );
+                  final exit = Curves.easeInOutCubic.transform(1.0 - progress);
+
+                  final chipTravel = isReversing
+                      ? 0.0
+                      : (lerpDouble(-42, 0, drop) ?? 0);
+                  final chipScale = isReversing
+                      ? 1.0
+                      : (lerpDouble(0.82, 1.0, drop) ?? 1);
+                  final chipStretchX = isReversing
+                      ? 1.0
+                      : (lerpDouble(0.72, 1.08, impact) ?? 1);
+                  final chipStretchY = isReversing
+                      ? 1.0
+                      : (lerpDouble(1.24, 0.92, impact) ?? 1);
+                  final cardScaleX = isReversing
+                      ? (lerpDouble(1.0, 0.985, exit) ?? 1)
+                      : (lerpDouble(0.9, 1.0, bloom) ?? 1);
+                  final cardScaleY = isReversing
+                      ? (lerpDouble(1.0, 0.95, exit) ?? 1)
+                      : (lerpDouble(0.72, 1.0, bloom) ?? 1);
+                  final cardOpacity = isReversing
+                      ? (lerpDouble(1.0, 0.0, exit) ?? 1)
+                      : (lerpDouble(0.0, 1.0, bloom) ?? 1);
+                  final cardTravel = isReversing
+                      ? (lerpDouble(0.0, -16.0, exit) ?? 0)
+                      : (lerpDouble(22.0, 0.0, bloom) ?? 0);
+
+                  final snackCard = _SnackSurface(
+                    colors: widget.colors,
+                    palette: widget.palette,
+                    message: widget.message,
+                    textStyle: widget.textStyle,
+                    actionLabel: widget.actionLabel,
+                    onAction: widget.onAction == null
+                        ? null
+                        : () {
+                            widget.onAction?.call();
+                            _dismiss();
+                          },
+                    semanticsLabel: widget.semanticsLabel,
+                    compact: true,
+                    contentOpacity: isReversing
+                        ? (lerpDouble(1.0, 0.0, exit) ?? 1)
+                        : content,
+                    iconOpacity: isReversing
+                        ? (lerpDouble(1.0, 0.0, exit) ?? 1)
+                        : content,
+                  );
+
+                  return Dismissible(
+                    key: const ValueKey('animated_top_snack'),
+                    direction: DismissDirection.horizontal,
+                    resizeDuration: null,
+                    onDismissed: (_) => widget.onClose(),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
                       children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: widget.colors.textPrimary.withValues(
-                              alpha: 0.12,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 18),
+                          child: Transform.translate(
+                            offset: Offset(0, cardTravel),
+                            child: Opacity(
+                              opacity: cardOpacity,
+                              child: Transform.scale(
+                                scaleX: cardScaleX,
+                                scaleY: cardScaleY,
+                                alignment: Alignment.topCenter,
+                                child: widget.onTap == null
+                                    ? snackCard
+                                    : Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            widget.onTap?.call();
+                                            _dismiss();
+                                          },
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          child: snackCard,
+                                        ),
+                                      ),
+                              ),
                             ),
-                            shape: BoxShape.circle,
                           ),
-                          child: Icon(widget.icon, size: 18, color: widget.fg),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            widget.message,
-                            style: AppFonts.body(
-                              color: widget.fg,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                        if (!isReversing)
+                          Transform.translate(
+                            offset: Offset(0, chipTravel),
+                            child: Transform(
+                              alignment: Alignment.center,
+                              transform: Matrix4.diagonal3Values(
+                                chipScale * chipStretchX,
+                                chipScale * chipStretchY,
+                                1,
+                              ),
+                              child: IgnorePointer(
+                                ignoring: true,
+                                child: _OrbDropChip(
+                                  colors: widget.colors,
+                                  palette: widget.palette,
+                                  collapse: bloom,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -455,4 +631,69 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
       ),
     );
   }
+}
+
+double _interval(double t, double begin, double end) {
+  if (t <= begin) return 0.0;
+  if (t >= end) return 1.0;
+  return ((t - begin) / (end - begin)).clamp(0.0, 1.0);
+}
+
+class _OrbDropChip extends StatelessWidget {
+  const _OrbDropChip({
+    required this.colors,
+    required this.palette,
+    required this.collapse,
+  });
+
+  final AppColor colors;
+  final _SnackPalette palette;
+  final double collapse;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = lerpDouble(52, 22, collapse) ?? 22;
+    final height = lerpDouble(52, 22, collapse) ?? 22;
+    final opacity = lerpDouble(1.0, 0.0, collapse) ?? 0.0;
+
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              Color.alphaBlend(
+                colors.onPrimary.withValues(alpha: 0.16),
+                palette.accent,
+              ),
+              palette.accent,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: palette.accent.withValues(alpha: 0.34),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Icon(
+          palette.icon,
+          color: palette.foreground,
+          size: lerpDouble(22, 10, collapse),
+        ),
+      ),
+    );
+  }
+}
+
+void _removeCurrentTopSnack() {
+  final entry = _currentTopSnack;
+  if (entry != null && entry.mounted) {
+    entry.remove();
+  }
+  _currentTopSnack = null;
 }

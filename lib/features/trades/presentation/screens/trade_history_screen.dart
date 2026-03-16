@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/features/offers/presentation/screens/trade_order_screen.dart';
 import 'package:next_fi/core/services/offers/models/offers_models.dart';
@@ -152,7 +153,7 @@ class _TradeHistoryScreenState extends ConsumerState<TradeHistoryScreen>
             // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Body ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
             Expanded(
               child: state.loading
-                  ? const PageLoader(label: 'Loading tradesÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦')
+                  ? const PageLoader(label: 'Loading trades...')
                   : state.error != null
                   ? _ErrorState(
                       c: c,
@@ -756,6 +757,25 @@ class _TradeCardState extends State<_TradeCard>
       ? '${(v / 1000).toStringAsFixed(1)}K'
       : v.toStringAsFixed(2);
 
+  String _cleanTokenLabel(String raw, {String fallback = 'Asset'}) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return fallback;
+
+    final parts = trimmed
+        .split(RegExp(r'[\/|]+'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    final base = (parts.isNotEmpty ? parts.last : trimmed)
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final cleaned = base.replaceAll(RegExp(r'[^A-Za-z0-9 .]'), '').trim();
+    if (cleaned.isEmpty) return fallback;
+    return cleaned.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
@@ -765,6 +785,8 @@ class _TradeCardState extends State<_TradeCard>
     final statusColor = _statusColor(trade.status);
     final statusLabel = _statusLabel(trade.status);
     final isActive = trade.status.isActive;
+    final assetLabel = _cleanTokenLabel(trade.asset);
+    final fiatLabel = _cleanTokenLabel(trade.fiatCurrency, fallback: 'FIAT');
 
     // Time label
     final timeLabel = trade.createdAt != null
@@ -832,7 +854,7 @@ class _TradeCardState extends State<_TradeCard>
                               const SizedBox(width: 5),
                               Expanded(
                                 child: Text(
-                                  trade.asset,
+                                  assetLabel,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -872,7 +894,7 @@ class _TradeCardState extends State<_TradeCard>
                             children: [
                               Flexible(
                                 child: Text(
-                                  '${_fmtCrypto(trade.cryptoAmount)} ${trade.asset}',
+                                  '${_fmtCrypto(trade.cryptoAmount)} $assetLabel',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -890,7 +912,7 @@ class _TradeCardState extends State<_TradeCard>
                                   horizontal: 6,
                                 ),
                                 child: Text(
-                                  'Ãƒâ€šÃ‚Â·',
+                                  '·',
                                   style: TextStyle(
                                     color: c.border,
                                     fontSize: 14,
@@ -899,7 +921,7 @@ class _TradeCardState extends State<_TradeCard>
                               ),
                               Flexible(
                                 child: Text(
-                                  '${trade.fiatCurrency} ${_fmtFiat(trade.fiatAmount)}',
+                                  '$fiatLabel ${_fmtFiat(trade.fiatAmount)}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -998,53 +1020,15 @@ class _EmptyState extends StatelessWidget {
   final bool isFiltered;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 44),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: c.border),
-            ),
-            child: Icon(
-              isFiltered
-                  ? Icons.filter_list_off_rounded
-                  : Icons.swap_horiz_rounded,
-              color: c.textSecondary,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            isFiltered ? 'No results' : 'No trades yet',
-            style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isFiltered
-                ? 'No trades match this filter. Try switching to All.'
-                : 'Your buy and sell history will\nappear here after your first trade.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: c.textSecondary,
-              fontSize: 13.5,
-              height: 1.6,
-            ),
-          ),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => EmptyState(
+    icon: isFiltered ? Icons.filter_list_off_rounded : Icons.swap_horiz_rounded,
+    accentColor: c.info,
+    title: isFiltered ? 'No results' : 'No trades yet',
+    message: isFiltered
+        ? 'No trades match this filter. Try switching to All.'
+        : 'Your buy and sell history will appear here after your first trade.',
+    compact: true,
+    fill: true,
   );
 }
 

@@ -92,7 +92,7 @@ class AppModalBase extends StatelessWidget {
             child: Padding(
               padding: padding,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisSize: MainAxisSize.max,
                 children: [
                   if (showHandle)
                     Container(
@@ -104,7 +104,10 @@ class AppModalBase extends StatelessWidget {
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
-                  child,
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: child,
+                  ),
                 ],
               ),
             ),

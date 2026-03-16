@@ -35,15 +35,15 @@ Future<void> showTokenSelector(
   }
 
   String subtitleFor(AssetModel a) {
-    if (a.isNative) return '${a.name} â€¢ ${a.chain}';
+    if (a.isNative) return '${a.name} - ${a.chain}';
     final chainNet = '${a.chain}/${a.network}';
     if ((a.assetCode ?? '').isNotEmpty && (a.issuer ?? '').isNotEmpty) {
-      return '${a.assetCode} â€¢ $chainNet';
+      return '${a.assetCode} - $chainNet';
     }
     if ((a.contract ?? '').isNotEmpty) {
-      return '${a.symbol} (contract) â€¢ $chainNet';
+      return '${a.symbol} (contract) - $chainNet';
     }
-    return '${a.name} â€¢ $chainNet';
+    return '${a.name} - $chainNet';
   }
 
   String? logoFor(AssetModel a) {

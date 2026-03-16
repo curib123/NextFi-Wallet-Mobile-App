@@ -13,6 +13,7 @@ import 'package:next_fi/core/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/core/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/core/services/chat/models/chat_models.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
 class ChatHubScreen extends StatefulWidget {
   const ChatHubScreen({super.key});
@@ -279,12 +280,14 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       );
       await _load(showLoader: false);
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      showFloatingSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Friend request sent.')));
+        message: 'Friend request sent.',
+        type: SnackBarType.success,
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showFloatingSnackBar(context, message: '$e', type: SnackBarType.error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -309,7 +312,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showFloatingSnackBar(context, message: '$e', type: SnackBarType.error);
     }
   }
 
@@ -323,7 +326,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       await _load(showLoader: false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showFloatingSnackBar(context, message: '$e', type: SnackBarType.error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -437,7 +440,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
       await _load(showLoader: false);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showFloatingSnackBar(context, message: '$e', type: SnackBarType.error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -680,7 +683,7 @@ class _ChatHubScreenState extends State<ChatHubScreen>
                 onSubmitted: (_) => _load(showLoader: false),
                 style: TextStyle(color: c.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Search messages, friendsÃ¢â‚¬Â¦',
+                  hintText: 'Search messages, friends...',
                   hintStyle: TextStyle(
                     color: c.textSecondary.withValues(alpha: 0.55),
                     fontSize: 14,

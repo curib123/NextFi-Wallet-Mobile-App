@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
 import 'package:next_fi/features/contact/data/services/contact_service.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_state.dart';
@@ -19,22 +20,51 @@ final contactListProvider =
     );
 
 class ContactListNotifier extends Notifier<ContactListState> {
+  static const Duration _loadTimeout = Duration(seconds: 15);
   Future<void>? _loadFuture;
 
   ContactService get _service => ref.read(contactServiceProvider);
 
   @override
   ContactListState build() {
-    _loadFuture ??= _load();
-    return const ContactListState();
+    final isAuthenticated = ref.watch(
+      appShellProvider.select((state) => state.isAuthenticated),
+    );
+
+    ref.listen<bool>(
+      appShellProvider.select((state) => state.isAuthenticated),
+      (previous, next) {
+        if (previous == next) return;
+        _syncAuthentication(next);
+      },
+    );
+
+    if (isAuthenticated) {
+      Future<void>.microtask(ensureLoaded);
+    }
+
+    return ContactListState(
+      loading: isAuthenticated,
+      isAuthenticated: isAuthenticated,
+    );
   }
 
-  Future<void> ensureLoaded() => _loadFuture ??= _load();
+  Future<void> ensureLoaded() {
+    final pending = _loadFuture;
+    if (pending != null) return pending;
+    if (state.initialized && !state.loading) {
+      return Future<void>.value();
+    }
+    _loadFuture = _load();
+    return _loadFuture!;
+  }
 
   Future<void> _load() async {
     state = state.copyWith(loading: true);
     try {
-      final items = await _service.fetchAll(activeOnly: false);
+      final items = await _service
+          .fetchAll(activeOnly: false)
+          .timeout(_loadTimeout);
       state = state.copyWith(
         items: items,
         loading: false,
@@ -54,6 +84,8 @@ class ContactListNotifier extends Notifier<ContactListState> {
         isAuthenticated: !authError,
         lastError: e,
       );
+    } finally {
+      _loadFuture = null;
     }
   }
 
@@ -136,17 +168,32 @@ class ContactListNotifier extends Notifier<ContactListState> {
   }
 
   void setAuthenticated(bool isAuthenticated) {
-    state = state.copyWith(
-      isAuthenticated: isAuthenticated,
-      items: isAuthenticated ? state.items : const [],
-    );
-    if (isAuthenticated) {
-      unawaited(refresh());
-    }
+    _syncAuthentication(isAuthenticated);
   }
 
   bool _isAuthError(Object error) {
     final raw = error.toString();
     return raw.contains('Not authenticated') || raw.contains('401');
+  }
+
+  void _syncAuthentication(bool isAuthenticated) {
+    if (!isAuthenticated) {
+      _loadFuture = null;
+      state = state.copyWith(
+        items: const [],
+        loading: false,
+        isAuthenticated: false,
+        initialized: false,
+        lastError: null,
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      isAuthenticated: true,
+      loading: !state.initialized || state.items.isEmpty,
+      lastError: null,
+    );
+    unawaited(refresh());
   }
 }

@@ -38,11 +38,11 @@ class AppCoverService {
     final map = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     final root = _unwrapMap(map);
 
-    final imageUrl = _readOptionalText(root, const <String>[
+    final imageUrl = _normalizeImageUrl(_readOptionalText(root, const <String>[
       'imageUrl',
       'coverImageUrl',
       'image',
-    ]);
+    ]));
     final isVisible = root['isVisible'] != false;
 
     return AppCoverConfig(imageUrl: imageUrl, isVisible: isVisible);
@@ -60,6 +60,35 @@ class AppCoverService {
       if (value != null && value.isNotEmpty) return value;
     }
     return null;
+  }
+
+  String? _normalizeImageUrl(String? rawUrl) {
+    if (rawUrl == null) return null;
+
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return null;
+
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed != null && parsed.hasScheme && parsed.host.isNotEmpty) {
+      return parsed.toString();
+    }
+
+    final base = Uri.parse(centralizedBaseUrl);
+
+    if (trimmed.startsWith('//')) {
+      return base.replace(
+        path: '',
+        query: null,
+        fragment: null,
+      ).resolve('${base.scheme}:$trimmed').toString();
+    }
+
+    final root = base.replace(path: '', query: null, fragment: null);
+    if (trimmed.startsWith('/')) {
+      return root.resolve(trimmed).toString();
+    }
+
+    return base.resolve(trimmed).toString();
   }
 
   void dispose() => _client.close();

@@ -139,6 +139,13 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                   url: widget.logoUrl,
                   colors: widget.colors,
                   assetId: widget.asset.id,
+                  badgeLabel: _volatilityLabel,
+                  badgeColor: widget.isNative
+                      ? widget.colors.primary
+                      : widget.colors.success,
+                  badgeIcon: widget.isNative
+                      ? LucideIcons.activity
+                      : LucideIcons.shieldCheck,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -264,13 +271,6 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 6),
-                      _TypeBadge(
-                        label: _volatilityLabel,
-                        color: widget.isNative
-                            ? widget.colors.primary
-                            : widget.colors.success,
-                      ),
                     ],
                   ),
                 ),
@@ -288,11 +288,17 @@ class _AssetLogo extends StatelessWidget {
     required this.url,
     required this.colors,
     required this.assetId,
+    required this.badgeLabel,
+    required this.badgeColor,
+    required this.badgeIcon,
   });
 
   final String? url;
   final AppColor colors;
   final String assetId;
+  final String badgeLabel;
+  final Color badgeColor;
+  final IconData badgeIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -306,40 +312,65 @@ class _AssetLogo extends StatelessWidget {
     );
 
     return SizedBox(
-      width: 40,
-      height: 40,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: (url == null || url!.isEmpty)
-            ? fallback
-            : Hero(
-                tag: 'asset_logo_$assetId',
-                child: Image.network(
-                  url!,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (_, __, ___) => fallback,
-                  loadingBuilder: (ctx, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: colors.background,
-                        border: Border.all(color: colors.border, width: 1),
-                      ),
-                      child: Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.primary,
-                          ),
+      width: 52,
+      height: 52,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: (url == null || url!.isEmpty)
+                    ? fallback
+                    : Hero(
+                        tag: 'asset_logo_$assetId',
+                        child: Image.network(
+                          url!,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          errorBuilder: (_, __, ___) => fallback,
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: colors.background,
+                                border: Border.all(
+                                  color: colors.border,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: colors.primary,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    );
-                  },
-                ),
               ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 2,
+            child: _TypeBadge(
+              label: badgeLabel,
+              color: badgeColor,
+              icon: badgeIcon,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -462,32 +493,53 @@ class _MiniSparklinePainter extends CustomPainter {
 }
 
 class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({required this.label, required this.color});
+  const _TypeBadge({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
 
   final String label;
   final Color color;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.11),
+        color: colorsFor(context).surface,
+        border: Border.all(color: color.withValues(alpha: 0.18)),
         borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 9.2,
-          fontWeight: FontWeight.w700,
-          color: color,
-          letterSpacing: 0.15,
-          height: 1.0,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 9, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 8.8,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.1,
+              height: 1.0,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
-}
 
+  AppColor colorsFor(BuildContext context) => AppColor.of(context);
+}

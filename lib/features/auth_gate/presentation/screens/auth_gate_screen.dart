@@ -182,6 +182,11 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
     final controller = ref.read(authGateControllerProvider.notifier);
     final s = viewState.flow;
     final dpr = MediaQuery.of(context).devicePixelRatio;
+    final hasCover = (viewState.coverImageUrl ?? '').trim().isNotEmpty;
+    final foregroundPrimary = hasCover ? colors.onPrimary : colors.textPrimary;
+    final foregroundSecondary = hasCover
+        ? colors.onPrimary.withValues(alpha: 0.82)
+        : colors.textSecondary;
 
     final isLockedOut = viewState.isLockedOut;
     final headline = s.isNewUser
@@ -202,54 +207,65 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
             // Animated fallback background
             Positioned.fill(
               child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _bgCtrl,
-                  builder: (_, __) => FintechBackground(
-                    progress: _bgCtrl.value,
-                    colors: colors,
-                    devicePixelRatio: dpr,
-                    topBandFraction: .55,
-                  ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _bgCtrl,
+                      builder: (_, __) => FintechBackground(
+                        progress: _bgCtrl.value,
+                        colors: colors,
+                        devicePixelRatio: dpr,
+                        topBandFraction: .55,
+                      ),
+                    ),
+                    if (hasCover)
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 320),
+                        opacity: 1,
+                        child: CachedNetworkImage(
+                          imageUrl: viewState.coverImageUrl!,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          fadeInDuration: const Duration(milliseconds: 240),
+                          fadeOutDuration: const Duration(milliseconds: 120),
+                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                          placeholder: (_, __) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: <Color>[
+                            colors.background.withValues(
+                              alpha: hasCover ? 0.16 : 0.18,
+                            ),
+                            colors.background.withValues(
+                              alpha: hasCover ? 0.38 : 0.08,
+                            ),
+                            colors.background.withValues(
+                              alpha: hasCover ? 0.78 : 0.16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            if (viewState.coverImageUrl != null)
+            if (hasCover)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: CachedNetworkImage(
-                    imageUrl: viewState.coverImageUrl!,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    fadeInDuration: const Duration(milliseconds: 220),
-                    fadeOutDuration: const Duration(milliseconds: 120),
-                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                    placeholder: (_, __) => const SizedBox.shrink(),
-                  ),
-                ),
-              ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                        colors: <Color>[
-                          Colors.black.withValues(
-                          alpha: viewState.coverImageUrl != null ? 0.48 : 0.18,
-                        ),
-                        Colors.black.withValues(
-                          alpha: viewState.coverImageUrl != null ? 0.32 : 0.08,
-                        ),
-                        colors.background.withValues(
-                          alpha: viewState.coverImageUrl != null ? 0.76 : 0.16,
-                        ),
-                      ],
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.background.withValues(alpha: 0.08),
                     ),
                   ),
                 ),
               ),
-            ),
 
             // Main content
             SafeArea(
@@ -275,7 +291,7 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                             style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w700,
-                              color: colors.textPrimary,
+                              color: foregroundPrimary,
                               letterSpacing: -0.5,
                             ),
                           ),
@@ -290,7 +306,7 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen>
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 15,
-                                color: colors.textSecondary,
+                                color: foregroundSecondary,
                                 height: 1.4,
                               ),
                             ),

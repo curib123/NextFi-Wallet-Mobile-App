@@ -12,9 +12,10 @@ import 'package:next_fi/core/widgets/button/custom_button.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
 import 'package:next_fi/features/transactions/data/models/tx.dart';
 import 'package:next_fi/core/widgets/modal/recipient_upsert_sheet.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'key_value_row.dart';
 
-final DateFormat _detailFmt = DateFormat('MMM d, yyyy ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ h:mm a');
+final DateFormat _detailFmt = DateFormat('MMM d, yyyy - h:mm a');
 
 Future<void> showTxDetailsBottomSheet({
   required BuildContext context,
@@ -262,8 +263,10 @@ Future<void> showTxDetailsBottomSheet({
                           if (hash.isEmpty) return;
                           await Clipboard.setData(ClipboardData(text: hash));
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Hash copied')),
+                          showFloatingSnackBar(
+                            context,
+                            message: 'Hash copied',
+                            type: SnackBarType.success,
                           );
                         },
                       ),

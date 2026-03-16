@@ -283,7 +283,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     final ctl = showAppAlert(
       context,
       type: AppAlertType.loading,
-      title: 'Submitting swapÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',
+      title: 'Submitting swap...',
       subtitle: 'This usually takes a few seconds.',
       primaryText: 'Hide',
       barrierDismissible: false,
@@ -309,7 +309,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
       ctl.update(
         AppAlertType.error,
         title: 'Swap failed',
-        subtitle: msg.length > 400 ? '${msg.substring(0, 400)}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦' : msg,
+        subtitle: msg.length > 400 ? '${msg.substring(0, 400)}...' : msg,
         primaryText: 'Dismiss',
         onPrimary: ctl.close,
       );
@@ -444,8 +444,8 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     final toSymbol = s.isXlmToUsdc ? 'USDC' : 'XLM';
 
     final priceLine = (vm.amount > 0 && (s.estReceive ?? 0) > 0)
-        ? '1 $fromSymbol ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°Ãƒâ€¹Ã¢â‚¬Â  ${_tight(s.estReceive! / vm.amount)} $toSymbol'
-        : 'ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â';
+        ? '1 $fromSymbol = ${_tight(s.estReceive! / vm.amount)} $toSymbol'
+        : '-';
 
     final minOut = vm.currentMinOut;
     final minReceiveText = (minOut != null && minOut > 0)
@@ -703,7 +703,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         child: CustomButton(
-          text: s.isXlmToUsdc ? 'Swap XLM ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ USDC' : 'Swap USDC ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ XLM',
+          text: s.isXlmToUsdc ? 'Swap XLM to USDC' : 'Swap USDC to XLM',
           icon: LucideIcons.arrowRightLeft,
           type: vm.hasAmount ? ButtonType.filled : ButtonType.disabled,
           onPressed: !vm.hasAmount
@@ -812,7 +812,7 @@ class _AmountTile extends StatelessWidget {
 
         // Input row
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: c.background,
             borderRadius: BorderRadius.circular(14),
@@ -826,8 +826,8 @@ class _AmountTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                   decoration: BoxDecoration(
                     color: c.surface,
@@ -842,7 +842,7 @@ class _AmountTile extends StatelessWidget {
                       Text(
                         symbol,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -871,7 +871,7 @@ class _AmountTile extends StatelessWidget {
                   ],
                   textAlign: TextAlign.end,
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.w700,
                     color: c.textPrimary,
                   ),
@@ -893,5 +893,3 @@ class _AmountTile extends StatelessWidget {
     );
   }
 }
-
-

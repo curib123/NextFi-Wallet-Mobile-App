@@ -1681,7 +1681,7 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
           ),
           Text(
             _trade.id.length > 16
-                ? '${_trade.id.substring(0, 12)}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦${_trade.id.substring(_trade.id.length - 4)}'
+                ? '${_trade.id.substring(0, 12)}...${_trade.id.substring(_trade.id.length - 4)}'
                 : _trade.id,
             style: AppFonts.sora(fontSize: 10, color: colors.textSecondary),
           ),
@@ -1944,7 +1944,7 @@ class _HeroCard extends StatelessWidget {
                             ),
                             Text(
                               trade.id.length > 14
-                                  ? '${trade.id.substring(0, 10)}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦'
+                                  ? '${trade.id.substring(0, 10)}...'
                                   : trade.id,
                               style: AppFonts.sora(
                                 fontSize: 9.5,

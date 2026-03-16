@@ -288,7 +288,7 @@ class _SentClaimableCardState extends State<SentClaimableCard> {
       if (items.isNotEmpty) {
         items.add(const SizedBox(width: 8));
         items.add(
-          Text('Ã¢â‚¬Â¢', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+          Text('-', style: TextStyle(color: c.textSecondary, fontSize: 11)),
         );
         items.add(const SizedBox(width: 8));
       }

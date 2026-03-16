@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/core/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/core/services/base_url/base_url.dart';
@@ -279,7 +280,7 @@ class _TradeMessagesScreenState extends State<TradeMessagesScreen> {
           ),
           Text(
             widget.trade.id.length > 16
-                ? '${widget.trade.id.substring(0, 12)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦'
+                ? '${widget.trade.id.substring(0, 12)}...'
                 : widget.trade.id,
             style: AppFonts.sora(fontSize: 9.5, color: colors.textSecondary),
           ),
@@ -861,34 +862,12 @@ class _EmptyState extends StatelessWidget {
   final AppColor colors;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.chat_bubble_outline_rounded,
-          size: 42,
-          color: colors.textSecondary.withValues(alpha: 0.36),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'No messages yet',
-          style: AppFonts.sora(
-            fontSize: 14.5,
-            fontWeight: FontWeight.w600,
-            color: colors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Updates and messages will show up here',
-          style: AppFonts.sora(
-            fontSize: 11.5,
-            color: colors.textSecondary.withValues(alpha: 0.7),
-          ),
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => EmptyState.noData(
+    context: context,
+    title: 'No messages yet',
+    message: 'Updates and messages will show up here.',
+    compact: true,
+    fill: true,
   );
 }
 
@@ -943,7 +922,7 @@ class _InputBar extends StatelessWidget {
               enabled: enabled,
               style: AppFonts.sora(fontSize: 13, color: colors.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Write a messageÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
+                hintText: 'Write a message...',
                 hintStyle: AppFonts.sora(
                   fontSize: 12.5,
                   color: colors.textSecondary,

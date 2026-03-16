@@ -11,6 +11,8 @@ class IncomingHintsStrip extends StatelessWidget {
     required this.stellarAddress,
     required this.incomingHints,
     required this.onAcknowledge,
+    this.onActiveTradeTap,
+    this.activeTradeCount = 0,
     this.walletState,
   });
 
@@ -18,17 +20,27 @@ class IncomingHintsStrip extends StatelessWidget {
   final String stellarAddress;
   final List<Map<String, dynamic>> incomingHints;
   final void Function(Map<String, dynamic> tx) onAcknowledge;
+  final VoidCallback? onActiveTradeTap;
+  final int activeTradeCount;
   final WalletHomeState? walletState;
 
   @override
   Widget build(BuildContext context) {
-    if (incomingHints.isEmpty) return const SizedBox.shrink();
+    if (incomingHints.isEmpty && activeTradeCount <= 0) {
+      return const SizedBox.shrink();
+    }
 
     return AnimatedSize(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
       child: Column(
         children: [
+          if (activeTradeCount > 0)
+            activeTradeRoomHint(
+              context,
+              activeTradeCount: activeTradeCount,
+              onTap: onActiveTradeTap,
+            ),
           for (final tx in incomingHints.take(2))
             incomingPaymentHint(
               tx,

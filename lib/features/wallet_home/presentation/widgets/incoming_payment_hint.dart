@@ -50,7 +50,7 @@ Widget incomingPaymentHint(
           );
         },
         child: Material(
-          color: AppColor.of(context).surface,
+          color: Colors.transparent,
           child: InkWell(
             onTap: () => _showTxDetailsSheet(
               context,
@@ -68,137 +68,98 @@ Widget incomingPaymentHint(
                 type: SnackBarType.success,
               );
             },
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: colors.success.withValues(alpha: .04),
-                borderRadius: BorderRadius.circular(12),
+                color: colors.success.withValues(alpha: .05),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: colors.success.withValues(alpha: .15),
+                  color: colors.success.withValues(alpha: .18),
                   width: 1,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: colors.success,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: colors.success.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      LucideIcons.arrowDownLeft,
+                      size: 14,
+                      color: colors.success,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    '+ ${_fmtAmount(amount)} $symbol',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: colors.success,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                      letterSpacing: -0.2,
-                                    ),
+                            Flexible(
+                              child: Text(
+                                '+ ${_fmtAmount(amount)} $symbol',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.success,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                            if (isNewAsset) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colors.warning.withValues(alpha: .12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '+0.5 XLM reserve',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: colors.warning,
+                                    letterSpacing: 0.1,
                                   ),
                                 ),
-                                if (isNewAsset) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colors.warning.withValues(alpha: .1),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'NEW',
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                        color: colors.warning,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'from ${_short(from)} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ${_relative(tsMs)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: colors.textSecondary.withValues(alpha: 0.7),
-                                letterSpacing: -0.1,
                               ),
-                            ),
+                            ],
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        LucideIcons.chevronRight,
-                        size: 16,
-                        color: colors.textSecondary.withValues(alpha: 0.5),
-                      ),
-                    ],
-                  ),
-
-                  // Reserve impact warning
-                  if (reserveImpact > 0) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.warning.withValues(alpha: .06),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: colors.warning.withValues(alpha: .2),
-                          width: 1,
+                        const SizedBox(height: 2),
+                        Text(
+                          'From ${_short(from)}  -  ${_relative(tsMs)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: colors.textSecondary.withValues(alpha: 0.78),
+                            letterSpacing: -0.1,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            LucideIcons.info,
-                            size: 13,
-                            color: colors.warning,
-                          ),
-                          const SizedBox(width: 7),
-                          Flexible(
-                            child: Text(
-                              'Adds ${reserveImpact.toStringAsFixed(1)} XLM reserve for new trustline',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: colors.warning,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 15,
+                    color: colors.textSecondary.withValues(alpha: 0.45),
+                  ),
                 ],
               ),
             ),
@@ -206,6 +167,87 @@ Widget incomingPaymentHint(
         ),
       );
     },
+  );
+}
+
+Widget activeTradeRoomHint(
+  BuildContext context, {
+  required int activeTradeCount,
+  VoidCallback? onTap,
+}) {
+  final colors = AppColor.of(context);
+  final label = activeTradeCount == 1
+      ? '1 active trade room'
+      : '$activeTradeCount active trade rooms';
+
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: colors.primary.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                LucideIcons.messagesSquare,
+                size: 14,
+                color: colors.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'You have an ongoing trade conversation in progress.',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.textSecondary.withValues(alpha: 0.78),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              LucideIcons.chevronRight,
+              size: 15,
+              color: colors.textSecondary.withValues(alpha: 0.45),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 }
 
@@ -234,9 +276,9 @@ void _showTxDetailsSheet(
   );
   final String when = tsMs > 0
       ? DateFormat(
-          'MMM d, y ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ HH:mm',
+          'MMM d, y - HH:mm',
         ).format(DateTime.fromMillisecondsSinceEpoch(tsMs))
-      : 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â';
+      : '-';
 
   showModalBottomSheet(
     context: context,
@@ -492,7 +534,7 @@ int _parseMillis(dynamic v) {
 }
 
 String _relative(int tsMs) {
-  if (tsMs <= 0) return 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â';
+  if (tsMs <= 0) return '-';
   final now = DateTime.now().millisecondsSinceEpoch;
   final diff = now - tsMs;
   final s = (diff / 1000).floor();
@@ -518,7 +560,7 @@ String _fmtAmount(double v) => NumberFormat("#,##0.#######").format(v);
 String _short(String s) {
   if (s.isEmpty || s == 'Unknown') return s;
   if (s.length <= 12) return s;
-  return '${s.substring(0, 6)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦${s.substring(s.length - 4)}';
+  return '${s.substring(0, 6)}...${s.substring(s.length - 4)}';
 }
 
 String _resolveSymbol(dynamic assetCode, String assetType) {

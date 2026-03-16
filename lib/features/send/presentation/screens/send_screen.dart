@@ -1,11 +1,11 @@
 // lib/features/send/view/send_screen.dart
-// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
-// SEND SCREEN ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Redesigned
-// ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Zero runtime opacity ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â all tints are pre-mixed solid hex values
-// ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ DM Sans / DM Mono typography pairing
-// ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ 8pt grid spacing rhythm
-// ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Confident card hierarchy with precise border treatment
-// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+// -----------------------------------------------------------------------------
+// SEND SCREEN - Redesigned
+// - Zero runtime opacity; all tints are pre-mixed solid hex values
+// - DM Sans / DM Mono typography pairing
+// - 8pt grid spacing rhythm
+// - Confident card hierarchy with precise border treatment
+// -----------------------------------------------------------------------------
 import 'dart:convert' show utf8;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -268,7 +268,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
 
   String _shortenAddress(String addr) {
     if (addr.length <= 16) return addr;
-    return '${addr.substring(0, 6)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦${addr.substring(addr.length - 6)}';
+    return '${addr.substring(0, 6)}...${addr.substring(addr.length - 6)}';
   }
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -548,7 +548,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
 
           // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Big input row ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
           Row(
@@ -566,7 +566,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                     ),
                   ],
                   style: TextStyle(
-                    fontSize: 44,
+                    fontSize: 48,
                     fontWeight: FontWeight.w800,
                     color: c.textPrimary,
                     letterSpacing: -2,
@@ -576,7 +576,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                     hintText: '0',
                     hintStyle: TextStyle(
                       color: t.metaColor,
-                      fontSize: 44,
+                      fontSize: 48,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -2,
                     ),
@@ -795,18 +795,18 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         minLines: 1,
         maxLines: null,
         style: TextStyle(
-          fontSize: 14.5,
+          fontSize: 15.5,
           fontWeight: FontWeight.w500,
           color: c.textPrimary,
           letterSpacing: -0.2,
           fontFeatures: const [ui.FontFeature.tabularFigures()],
         ),
         decoration: InputDecoration(
-          hintText: 'Paste GÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ address or alias*${vm.federationDomain}',
+          hintText: 'Paste G... address or alias*${vm.federationDomain}',
           hintMaxLines: 1,
           hintStyle: TextStyle(
             color: t.metaColor,
-            fontSize: 13.5,
+            fontSize: 14,
             letterSpacing: -0.2,
           ),
           prefixIcon: Padding(
@@ -832,7 +832,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 15,
-            vertical: 15,
+            vertical: 19,
           ),
         ),
         onTapOutside: (_) => FocusScope.of(context).unfocus(),
@@ -896,7 +896,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         t: t,
         c: c,
         icon: null,
-        title: 'Resolving federation addressÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
+        title: 'Resolving federation address...',
         color: c.primary,
         tint: t.primaryTint,
         border: t.primaryTintBorder,
@@ -920,7 +920,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         t: t,
         c: c,
         icon: LucideIcons.checkCircle2,
-        title: 'Resolved ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${_shortenAddress(resolved.accountId)}',
+        title: 'Resolved - ${_shortenAddress(resolved.accountId)}',
         subtitle: resolved.stellarAddress,
         color: t.successText,
         tint: t.successTint,
@@ -938,7 +938,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
         t: t,
         c: c,
         icon: null,
-        title: 'Verifying trustlineÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
+        title: 'Verifying trustline...',
         color: c.primary,
         tint: t.primaryTint,
         border: t.primaryTintBorder,
@@ -1022,8 +1022,10 @@ class _SendScreenState extends ConsumerState<SendScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _memoCtl,
+            minLines: 2,
+            maxLines: 3,
             style: TextStyle(
-              fontSize: 14.5,
+              fontSize: 15.5,
               fontWeight: FontWeight.w500,
               color: c.textPrimary,
               letterSpacing: -0.2,
@@ -1032,12 +1034,12 @@ class _SendScreenState extends ConsumerState<SendScreen> {
               hintText: 'Add a note (e.g. invoice ref, exchange tag)',
               hintStyle: TextStyle(
                 color: t.metaColor,
-                fontSize: 13.5,
+                fontSize: 14,
                 letterSpacing: -0.2,
               ),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 4),
+              isDense: false,
             ),
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
           ),
@@ -1048,7 +1050,7 @@ class _SendScreenState extends ConsumerState<SendScreen> {
                 Icon(LucideIcons.alertCircle, size: 13, color: c.error),
                 const SizedBox(width: 6),
                 Text(
-                  'Memo exceeds 28 bytes ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â shorten it',
+                  'Memo exceeds 28 bytes - shorten it',
                   style: TextStyle(
                     color: c.error,
                     fontSize: 12,
@@ -1320,7 +1322,7 @@ class _RecipientBadge extends StatelessWidget {
 
   String _short(String addr) => addr.length <= 16
       ? addr
-      : '${addr.substring(0, 6)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦${addr.substring(addr.length - 6)}';
+      : '${addr.substring(0, 6)}...${addr.substring(addr.length - 6)}';
 
   Color _mix(Color a, Color b, double t) => Color.lerp(a, b, t)!;
 
@@ -1433,7 +1435,7 @@ class _RecipientAddTemplate extends StatelessWidget {
 
   String _short(String addr) => addr.length <= 16
       ? addr
-      : '${addr.substring(0, 6)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦${addr.substring(addr.length - 6)}';
+      : '${addr.substring(0, 6)}...${addr.substring(addr.length - 6)}';
 
   @override
   Widget build(BuildContext context) {
@@ -1549,7 +1551,7 @@ class _RecipientLoadingLine extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            'Looking up addressÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
+            'Looking up address...',
             style: TextStyle(
               color: t.labelColor,
               fontSize: 13,
@@ -1706,10 +1708,9 @@ class _ReviewSheet extends ConsumerStatefulWidget {
 }
 
 class _ReviewSheetState extends ConsumerState<_ReviewSheet> {
-
   String _short(String addr) => addr.length <= 16
       ? addr
-      : '${addr.substring(0, 8)}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦${addr.substring(addr.length - 8)}';
+      : '${addr.substring(0, 8)}...${addr.substring(addr.length - 8)}';
 
   Future<void> _confirm(BuildContext ctx) async {
     if (ref.read(sendControllerProvider(widget.args)).submitting) return;
@@ -1826,7 +1827,7 @@ class _ReviewSheetState extends ConsumerState<_ReviewSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                   decoration: BoxDecoration(
                     color: t.primaryTint,
                     borderRadius: BorderRadius.circular(18),
@@ -2010,7 +2011,9 @@ class _ReviewSheetState extends ConsumerState<_ReviewSheet> {
                     Expanded(
                       flex: 2,
                       child: AppElevatedButton(
-                        onPressed: vm.submitting ? null : () => _confirm(context),
+                        onPressed: vm.submitting
+                            ? null
+                            : () => _confirm(context),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
@@ -2035,7 +2038,7 @@ class _ReviewSheetState extends ConsumerState<_ReviewSheet> {
                                   ),
                                   const SizedBox(width: 12),
                                   Text(
-                                    'SendingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦',
+                                    'Sending...',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 14.5,
@@ -2160,7 +2163,7 @@ class _LoadingState extends StatelessWidget {
   const _LoadingState();
   @override
   Widget build(BuildContext context) =>
-      const PageLoader(label: 'Loading walletÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦');
+      const PageLoader(label: 'Loading wallet...');
 }
 
 class _ErrorState extends StatelessWidget {
@@ -2239,5 +2242,3 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-
-

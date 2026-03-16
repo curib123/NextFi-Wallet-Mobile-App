@@ -201,6 +201,9 @@ class AssetVM with ChangeNotifier {
       );
     }
 
+    // Keep id/symbol/alias lookups in sync with the latest recomputed models.
+    _buildLookupCache();
+
     _enabledSorted = _assets
         .where((a) => a.enabled)
         .toList()

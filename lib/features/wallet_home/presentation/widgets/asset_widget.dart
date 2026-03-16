@@ -196,10 +196,10 @@ class AssetWidget extends ConsumerWidget {
       final isDark = Theme.of(context).brightness == Brightness.dark;
       final shimmerBase = isDark
           ? colors.surface.withValues(alpha: 0.92)
-          : colors.surface.withValues(alpha: 0.72);
+          : colors.surfaceRaised.withValues(alpha: 0.98);
       final shimmerHighlight = isDark
           ? colors.border.withValues(alpha: 0.96)
-          : colors.background.withValues(alpha: 0.98);
+          : Colors.white;
 
       return Shimmer.fromColors(
         baseColor: shimmerBase,
@@ -271,7 +271,10 @@ class AssetWidget extends ConsumerWidget {
 
   Widget _shimmerTile(BuildContext context) {
     final palette = AppColor.of(context);
-    final blockColor = palette.border.withValues(alpha: 0.9);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final blockColor = isDark
+        ? palette.border.withValues(alpha: 0.9)
+        : palette.textMuted.withValues(alpha: 0.18);
 
     Widget block(double w, double h, {double r = 6}) => Container(
       width: w,
@@ -287,9 +290,15 @@ class AssetWidget extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: palette.surface.withValues(alpha: 0.55),
+          color: isDark
+              ? palette.surface.withValues(alpha: 0.55)
+              : palette.surfaceRaised.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: palette.border.withValues(alpha: 0.7)),
+          border: Border.all(
+            color: isDark
+                ? palette.border.withValues(alpha: 0.7)
+                : palette.border.withValues(alpha: 0.95),
+          ),
         ),
         child: Row(
           children: [
@@ -372,6 +381,8 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerLabel = widget.windowLabel.trim();
+    final hasHeaderLabel = headerLabel.isNotEmpty;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -440,35 +451,35 @@ class _PriceWindowSelectorState extends State<_PriceWindowSelector>
                   ),
                 ),
               ),
-              // Content
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      LucideIcons.trendingUp,
-                      size: 16,
-                      color: widget.colors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Wallet Value Trend ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ${widget.windowLabel}',
-                        style: TextStyle(
-                          fontSize: 12.6,
-                          fontWeight: FontWeight.w700,
-                          color: widget.colors.textPrimary,
-                          letterSpacing: -0.1,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+              if (hasHeaderLabel)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        LucideIcons.trendingUp,
+                        size: 16,
+                        color: widget.colors.primary,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Wallet Value Trend - $headerLabel',
+                          style: TextStyle(
+                            fontSize: 12.6,
+                            fontWeight: FontWeight.w700,
+                            color: widget.colors.textPrimary,
+                            letterSpacing: -0.1,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -485,7 +496,8 @@ class _ReserveBalanceCard extends ConsumerStatefulWidget {
   const _ReserveBalanceCard({required this.colors, required this.money});
 
   @override
-  ConsumerState<_ReserveBalanceCard> createState() => _ReserveBalanceCardState();
+  ConsumerState<_ReserveBalanceCard> createState() =>
+      _ReserveBalanceCardState();
 }
 
 class _ReserveBalanceCardState extends ConsumerState<_ReserveBalanceCard>
@@ -620,5 +632,3 @@ class _ReserveBalanceCardState extends ConsumerState<_ReserveBalanceCard>
     );
   }
 }
-
-

@@ -317,7 +317,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ),
         const SizedBox(height: 12),
         Text(
-          'Manage your XLM & USDC pair Ã¢â‚¬â€ send, receive, claim balances, and trade seamlessly. Buy and sell trades require verified status.',
+          'Manage your XLM and USDC wallet, send and receive funds, claim balances, and trade with verified access.',
           style: AppFonts.body(
             color: colors.textSecondary,
             fontSize: 15,
@@ -331,7 +331,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   // Ã¢â€â‚¬Ã¢â€â‚¬ Buttons Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
   Widget _buildButtons(AppColor colors, LoginState loginState) {
-    final googleBg = colors.primary;
+    final googleBg = colors.surface;
     final googleText = colors.textPrimary;
 
     return Column(
@@ -344,7 +344,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           backgroundColor: googleBg,
           textColor: googleText,
           borderColor: colors.border,
-          loadingColor: colors.primary,
+          loadingColor: const Color(0xFF4285F4),
         ),
         const SizedBox(height: 12),
         // _AuthButton(
@@ -521,15 +521,13 @@ class _GoogleIcon extends StatelessWidget {
     return SizedBox(
       width: 20,
       height: 20,
-      child: CustomPaint(painter: _GoogleLogoPainter(AppColor.of(context))),
+      child: const CustomPaint(painter: _GoogleLogoPainter()),
     );
   }
 }
 
 class _GoogleLogoPainter extends CustomPainter {
-  final AppColor colors;
-
-  _GoogleLogoPainter(this.colors);
+  const _GoogleLogoPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -541,19 +539,19 @@ class _GoogleLogoPainter extends CustomPainter {
     final bounds = Rect.fromCircle(center: Offset(cx, cy), radius: r);
 
     final blue = Paint()
-      ..color = colors.primary
+      ..color = const Color(0xFF4285F4)
       ..style = PaintingStyle.fill;
     final red = Paint()
-      ..color = colors.error
+      ..color = const Color(0xFFEA4335)
       ..style = PaintingStyle.fill;
     final yellow = Paint()
-      ..color = colors.warning
+      ..color = const Color(0xFFFBBC05)
       ..style = PaintingStyle.fill;
     final green = Paint()
-      ..color = colors.success
+      ..color = const Color(0xFF34A853)
       ..style = PaintingStyle.fill;
     final white = Paint()
-      ..color = colors.onPrimary
+      ..color = Colors.white
       ..style = PaintingStyle.fill;
 
     canvas.drawArc(bounds, -math.pi / 2, math.pi, true, blue);
@@ -577,4 +575,3 @@ class _GoogleLogoPainter extends CustomPainter {
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // FACEBOOK ICON
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-

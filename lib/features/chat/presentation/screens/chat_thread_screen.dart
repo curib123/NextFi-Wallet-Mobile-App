@@ -13,6 +13,7 @@ import 'package:next_fi/core/services/chat/realtime/mini_chat_socket_service.dar
 import 'package:next_fi/core/services/auth/auth_service.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
 class ChatThreadScreen extends StatefulWidget {
   const ChatThreadScreen({
@@ -318,9 +319,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(
+    showFloatingSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      type: SnackBarType.info,
+    );
   }
 
   // â”€â”€ message grouping helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

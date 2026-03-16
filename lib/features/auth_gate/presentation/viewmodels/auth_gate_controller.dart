@@ -53,65 +53,28 @@ final authGateControllerProvider =
 class AuthGateController extends Notifier<AuthGateViewState> {
   Timer? _lockoutTimer;
   bool _biometricInProgress = false;
+  Future<void>? _initializeFuture;
 
   @override
   AuthGateViewState build() {
     ref.onDispose(() {
       _lockoutTimer?.cancel();
     });
+    Future<void>.microtask(initialize);
     return const AuthGateViewState();
   }
 
   Future<void> initialize() async {
     if (state.initialized) return;
-    await _loadAppCover();
+    final pending = _initializeFuture;
+    if (pending != null) return pending;
 
-    final ready = await SecurityStorage.ensureReady();
-    if (!ready) {
-      state = state.copyWith(
-        flow: state.flow.copyWith(
-          isNewUser: true,
-          deviceSupportsBiometrics: false,
-          biometricsEnabled: false,
-          initWarning:
-              'Secure storage unavailable; PIN cannot be saved on this environment.',
-        ),
-        initialized: true,
-      );
-      return;
-    }
-
-    await SecurityStorage.migrateLegacyPlaintextPin(legacyKey: 'user_pin');
-    await SecurityStorage.migrateLegacyPlaintextPin(legacyKey: 'app_pin_v1');
-
-    final hasPin = await SecurityStorage.hasPin();
-
-    var canCheck = false;
-    var isSupported = false;
-    List<BiometricType> available = const [];
+    _initializeFuture = _runInitialize();
     try {
-      final localAuth = ref.read(authGateLocalAuthProvider);
-      canCheck = await localAuth.canCheckBiometrics;
-      isSupported = await localAuth.isDeviceSupported();
-      available = await localAuth.getAvailableBiometrics();
-    } catch (_) {}
-
-    final bioEnabled = await SecurityStorage.isBiometricsEnabled();
-    final rem = await SecurityStorage.lockoutRemaining();
-
-    state = state.copyWith(
-      flow: state.flow.copyWith(
-        isNewUser: !hasPin,
-        deviceSupportsBiometrics:
-            (canCheck || isSupported) && available.isNotEmpty,
-        biometricsEnabled: bioEnabled,
-        lockoutRemaining: rem,
-        initWarning: null,
-      ),
-      initialized: true,
-    );
-
-    _startOrStopLockoutTimer(rem);
+      await _initializeFuture;
+    } finally {
+      _initializeFuture = null;
+    }
   }
 
   Future<void> refreshLockout() async {
@@ -331,6 +294,59 @@ class AuthGateController extends Notifier<AuthGateViewState> {
       if (!ref.mounted) return;
       state = state.copyWith(coverImageUrl: null);
     }
+  }
+
+  Future<void> _runInitialize() async {
+    await _loadAppCover();
+
+    final ready = await SecurityStorage.ensureReady();
+    if (!ref.mounted) return;
+    if (!ready) {
+      state = state.copyWith(
+        flow: state.flow.copyWith(
+          isNewUser: true,
+          deviceSupportsBiometrics: false,
+          biometricsEnabled: false,
+          initWarning:
+              'Secure storage unavailable; PIN cannot be saved on this environment.',
+        ),
+        initialized: true,
+      );
+      return;
+    }
+
+    await SecurityStorage.migrateLegacyPlaintextPin(legacyKey: 'user_pin');
+    await SecurityStorage.migrateLegacyPlaintextPin(legacyKey: 'app_pin_v1');
+
+    final hasPin = await SecurityStorage.hasPin();
+
+    var canCheck = false;
+    var isSupported = false;
+    List<BiometricType> available = const [];
+    try {
+      final localAuth = ref.read(authGateLocalAuthProvider);
+      canCheck = await localAuth.canCheckBiometrics;
+      isSupported = await localAuth.isDeviceSupported();
+      available = await localAuth.getAvailableBiometrics();
+    } catch (_) {}
+
+    final bioEnabled = await SecurityStorage.isBiometricsEnabled();
+    final rem = await SecurityStorage.lockoutRemaining();
+    if (!ref.mounted) return;
+
+    state = state.copyWith(
+      flow: state.flow.copyWith(
+        isNewUser: !hasPin,
+        deviceSupportsBiometrics:
+            (canCheck || isSupported) && available.isNotEmpty,
+        biometricsEnabled: bioEnabled,
+        lockoutRemaining: rem,
+        initWarning: null,
+      ),
+      initialized: true,
+    );
+
+    _startOrStopLockoutTimer(rem);
   }
 
   void _startOrStopLockoutTimer(Duration? remaining) {

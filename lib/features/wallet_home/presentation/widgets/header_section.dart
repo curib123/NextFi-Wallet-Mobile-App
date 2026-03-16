@@ -60,13 +60,14 @@ class _HeaderSectionState extends State<HeaderSection> {
   Widget build(BuildContext context) {
     final isUp = widget.chartDeltaFiat >= 0;
     final chartColor = isUp ? widget.colors.success : widget.colors.error;
-    final hasChartData = widget.chartSeries.where((v) => v.isFinite).length >= 2;
+    final hasChartData =
+        widget.chartSeries.where((v) => v.isFinite).length >= 2;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          margin: const EdgeInsets.symmetric(vertical: 12),
+          margin: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: widget.colors.surface,
             borderRadius: BorderRadius.circular(26),
@@ -102,8 +103,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                   Positioned(
                     left: -12,
                     right: -12,
-                    top: 78,
-                    bottom: 50,
+                    top: 56,
+                    bottom: 32,
                     child: IgnorePointer(
                       child: _BalanceTrendBackdrop(
                         series: widget.chartSeries,
@@ -115,8 +116,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 38,
-                    height: 74,
+                    bottom: 24,
+                    height: 48,
                     child: IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -155,7 +156,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                  padding: const EdgeInsets.fromLTRB(18, 11, 18, 9),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -178,8 +179,9 @@ class _HeaderSectionState extends State<HeaderSection> {
                                 const SizedBox(width: 8),
                                 InkWell(
                                   borderRadius: BorderRadius.circular(10),
-                                  onTap: () =>
-                                      setState(() => _hideBalance = !_hideBalance),
+                                  onTap: () => setState(
+                                    () => _hideBalance = !_hideBalance,
+                                  ),
                                   child: Padding(
                                     padding: const EdgeInsets.all(4),
                                     child: Icon(
@@ -210,7 +212,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       LiveCountingBalance(
                         animate: widget.animateTotal,
                         hidden: _hideBalance,
@@ -225,7 +227,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                         forceBaseColor: true,
                         fontSize: 25,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         widget.lastBalancesAt == null
                             ? 'Not synced yet'
@@ -237,7 +239,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                           letterSpacing: 0.1,
                         ),
                       ),
-                      SizedBox(height: hasChartData ? 74 : 18),
+                      SizedBox(height: hasChartData ? 48 : 10),
                       if (hasChartData)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
@@ -256,7 +258,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                             );
                           }).toList(),
                         ),
-                      if (hasChartData) const SizedBox(height: 10),
+                      if (hasChartData) const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: ConstrainedBox(
@@ -283,8 +285,9 @@ class _HeaderSectionState extends State<HeaderSection> {
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _ActionTile(
@@ -307,6 +310,15 @@ class _HeaderSectionState extends State<HeaderSection> {
             Expanded(
               child: _ActionTile(
                 colors: widget.colors,
+                icon: LucideIcons.scanLine,
+                label: 'Scan',
+                onTap: widget.onSwap,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ActionTile(
+                colors: widget.colors,
                 icon: LucideIcons.store,
                 label: 'P2P',
                 onTap: widget.onP2P ?? () => debugPrint('P2P'),
@@ -314,7 +326,7 @@ class _HeaderSectionState extends State<HeaderSection> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         widget.incomingStrip,
       ],
     );
@@ -335,10 +347,7 @@ class _HeaderSectionState extends State<HeaderSection> {
 }
 
 class _BalanceTrendBackdrop extends StatelessWidget {
-  const _BalanceTrendBackdrop({
-    required this.series,
-    required this.color,
-  });
+  const _BalanceTrendBackdrop({required this.series, required this.color});
 
   final List<double> series;
   final Color color;
@@ -347,20 +356,14 @@ class _BalanceTrendBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     if (series.length < 2) return const SizedBox.shrink();
     return CustomPaint(
-      painter: _BalanceTrendPainter(
-        series: series,
-        color: color,
-      ),
+      painter: _BalanceTrendPainter(series: series, color: color),
       size: Size.infinite,
     );
   }
 }
 
 class _BalanceTrendPainter extends CustomPainter {
-  const _BalanceTrendPainter({
-    required this.series,
-    required this.color,
-  });
+  const _BalanceTrendPainter({required this.series, required this.color});
 
   final List<double> series;
   final Color color;
@@ -449,11 +452,7 @@ class _BalanceTrendPainter extends CustomPainter {
       4.2,
       Paint()..color = color.withValues(alpha: 0.22),
     );
-    canvas.drawCircle(
-      endPoint,
-      2.8,
-      Paint()..color = color,
-    );
+    canvas.drawCircle(endPoint, 2.8, Paint()..color = color);
   }
 
   @override
@@ -484,11 +483,7 @@ class _HeaderIconButton extends StatelessWidget {
         child: SizedBox(
           width: 36,
           height: 36,
-          child: Icon(
-            icon,
-            size: 18,
-            color: colors.textPrimary,
-          ),
+          child: Icon(icon, size: 18, color: colors.textPrimary),
         ),
       ),
     );
@@ -592,11 +587,7 @@ class _MicroInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final child = Row(
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: colors.textSecondary,
-        ),
+        Icon(icon, size: 16, color: colors.textSecondary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -665,8 +656,8 @@ class _ActionTile extends StatelessWidget {
               customBorder: const CircleBorder(),
               onTap: onTap,
               child: Container(
-                width: 58,
-                height: 58,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
@@ -682,7 +673,7 @@ class _ActionTile extends StatelessWidget {
                 child: Icon(
                   icon,
                   color: AppColor.of(context).onPrimary,
-                  size: 23,
+                  size: 20,
                 ),
               ),
             ),
@@ -691,10 +682,11 @@ class _ActionTile extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: colors.textPrimary,
             fontWeight: FontWeight.w700,
-            fontSize: 12,
+            fontSize: 11.5,
             letterSpacing: 0.1,
           ),
         ),
@@ -702,4 +694,3 @@ class _ActionTile extends StatelessWidget {
     );
   }
 }
-

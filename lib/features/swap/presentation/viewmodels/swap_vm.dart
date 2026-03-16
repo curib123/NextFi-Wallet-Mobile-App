@@ -240,7 +240,7 @@ class SwapVM extends ChangeNotifier {
   }
 
   String buildQuoteLine(String Function(num) fmt) {
-    if (_state.estReceive == null) return 'Getting live quoteÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦';
+    if (_state.estReceive == null) return 'Getting live quote...';
     final recv = fmt(_state.estReceive!);
     final sl = slippagePctPercent;
     final slStr = sl % 1 == 0 ? sl.toStringAsFixed(0) : sl.toStringAsFixed(1);

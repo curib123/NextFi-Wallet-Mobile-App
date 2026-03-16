@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 import 'package:next_fi/core/widgets/modal/marketplace_filters_modal.dart';
 import 'package:next_fi/core/widgets/modal/offer_details_modal.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
@@ -76,20 +77,6 @@ abstract class _T {
     fontWeight: FontWeight.w600,
     letterSpacing: 0.1,
     height: 1.3,
-  );
-
-  static const emptyTitle = TextStyle(
-    fontSize: 15,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.3,
-    height: 1.3,
-  );
-
-  static const emptyBody = TextStyle(
-    fontSize: 12.5,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0,
-    height: 1.5,
   );
 
   static const errorTitle = TextStyle(
@@ -958,45 +945,11 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 44),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.border.withValues(alpha: 0.6)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: c.background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: c.border),
-            ),
-            child: Icon(
-              Icons.storefront_outlined,
-              color: c.textSecondary,
-              size: 22,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No ${type == OfferType.sell ? 'buy' : 'sell'} offers right now',
-            textAlign: TextAlign.center,
-            style: _T.emptyTitle.copyWith(color: c.textPrimary),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Pull down to refresh the marketplace.',
-            textAlign: TextAlign.center,
-            style: _T.emptyBody.copyWith(color: c.textSecondary),
-          ),
-        ],
-      ),
+    child: EmptyState.noData(
+      context: context,
+      title: 'No ${type == OfferType.sell ? 'buy' : 'sell'} offers right now',
+      message: 'Pull down to refresh the marketplace.',
+      compact: true,
     ),
   );
 }

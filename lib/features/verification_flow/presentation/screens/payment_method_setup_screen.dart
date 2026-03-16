@@ -1601,7 +1601,7 @@ class _AccountTile extends StatelessWidget {
                   border: Border.all(color: c.border.withValues(alpha: 0.2)),
                 ),
                 child: Text(
-                  settingActive ? 'Ã¢â‚¬Â¦' : 'Set Active',
+                  settingActive ? '...' : 'Set Active',
                   style: TextStyle(
                     color: settingActive
                         ? c.textSecondary.withValues(alpha: 0.3)
@@ -1828,7 +1828,7 @@ class _CreateButton extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     const Text(
-                      'CreatingÃ¢â‚¬Â¦',
+                      'Creating...',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
