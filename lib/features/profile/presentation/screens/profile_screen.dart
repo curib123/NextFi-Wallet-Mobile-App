@@ -13,8 +13,8 @@ import 'package:next_fi/features/verification_flow/presentation/screens/verifica
 import 'package:next_fi/core/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_tier_progress_models.dart';
-import 'package:next_fi/core/services/oath2.0/auth_service.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/auth_service.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/profile/models/profile_models.dart';
 import 'package:next_fi/core/services/profile/profile_core_service.dart';
 import 'package:next_fi/core/services/verification/models/verification_models.dart';
@@ -2480,4 +2480,5 @@ class _StateIcon extends StatelessWidget {
     );
   }
 }
+
 

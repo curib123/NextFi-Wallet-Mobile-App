@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/receive/presentation/viewmodels/receive_controller.dart';
 import 'package:next_fi/core/services/federation_address/federation_address_core_service.dart';
@@ -17,10 +18,8 @@ Future<void> showEditFederationModal(
   final c = AppColor.of(context);
   final aliasCtrl = TextEditingController(text: item.alias);
 
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColor.of(context).surface,
+  await showAppModalBottomSheet<void>(
+    context,
     builder: (sheetContext) {
       return Consumer(
         builder: (context, ref, _) {
@@ -56,7 +55,9 @@ Future<void> showEditFederationModal(
                     decoration: BoxDecoration(
                       color: c.surface,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: c.border.withValues(alpha: 0.45)),
+                      border: Border.all(
+                        color: c.border.withValues(alpha: 0.45),
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: AppColor.of(
@@ -201,7 +202,8 @@ Future<void> showEditFederationModal(
                               children: [
                                 Expanded(
                                   child: AppOutlinedButton(
-                                    onPressed: state.editingFederationId == item.id
+                                    onPressed:
+                                        state.editingFederationId == item.id
                                         ? null
                                         : () => Navigator.pop(context),
                                     style: OutlinedButton.styleFrom(
@@ -224,8 +226,8 @@ Future<void> showEditFederationModal(
                                   child: AppElevatedButton(
                                     onPressed: canSave
                                         ? () async {
-                                            final ok =
-                                                await controller.updateFederationAddress(
+                                            final ok = await controller
+                                                .updateFederationAddress(
                                                   id: item.id,
                                                   alias: normalizedAlias,
                                                 );
@@ -291,4 +293,3 @@ Future<void> showEditFederationModal(
     },
   );
 }
-

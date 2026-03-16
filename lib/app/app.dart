@@ -5,19 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:next_fi/app/config/app_config.dart';
 import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
 import 'package:next_fi/firebase_options.dart';
-import 'package:next_fi/app/theme/app_fonts.dart';
-import 'package:next_fi/core/services/device_meta/devices_meta.dart';
+import 'package:next_fi/app/theme/app_theme.dart';
+import 'package:next_fi/core/services/device_meta/device_meta_service.dart';
 import 'package:next_fi/core/services/fcm_notification/fcm_notification_core.dart';
 import 'package:next_fi/core/services/fcm_notification/fcm_bootstrap.dart';
-import 'package:next_fi/core/services/local_notif/local_nofification.dart';
+import 'package:next_fi/core/services/local_notif/local_notification_service.dart';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ App core Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-import 'package:next_fi/app/home.dart';
-import 'package:next_fi/app/theme/app_color.dart' hide ThemeBridge;
+import 'package:next_fi/app/app_shell.dart';
 import 'package:next_fi/core/services/internet_loss_guard.dart';
 import 'package:next_fi/core/services/inactivity_guard.dart';
 import 'package:next_fi/core/widgets/network_status_overlay.dart';
@@ -80,11 +78,7 @@ Future<void> main() async {
   await FcmBootstrap.init();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  runApp(
-    ProviderScope(
-      child: Phoenix(child: const MyApp()),
-    ),
-  );
+  runApp(ProviderScope(child: Phoenix(child: const MyApp())));
 }
 
 class MyApp extends StatefulWidget {
@@ -198,8 +192,8 @@ class _MyAppState extends State<MyApp> {
           title: 'NextFi Wallet',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
-          theme: _lightTheme,
-          darkTheme: _darkTheme,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
           home: const Home(),
           builder: (context, child) {
             final mq = MediaQuery.of(context);
@@ -220,33 +214,5 @@ class _MyAppState extends State<MyApp> {
       },
     );
   }
-
-  final ThemeData _lightTheme = ThemeData(
-    useMaterial3: true,
-    fontFamily: GoogleFonts.inter().fontFamily,
-    scaffoldBackgroundColor: AppColor.light.background,
-    canvasColor: AppColor.light.surface,
-    textTheme: AppFonts.interTextTheme(),
-    primaryTextTheme: AppFonts.interTextTheme(),
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColor.light.primary,
-      surface: AppColor.light.surface,
-      brightness: Brightness.light,
-    ),
-  );
-
-  final ThemeData _darkTheme = ThemeData(
-    useMaterial3: true,
-    fontFamily: GoogleFonts.inter().fontFamily,
-    scaffoldBackgroundColor: AppColor.dark.background,
-    canvasColor: AppColor.dark.surface,
-    textTheme: AppFonts.interTextTheme(ThemeData.dark().textTheme),
-    primaryTextTheme: AppFonts.interTextTheme(ThemeData.dark().textTheme),
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColor.dark.primary,
-      surface: AppColor.dark.surface,
-      brightness: Brightness.dark,
-    ),
-  );
 }
 

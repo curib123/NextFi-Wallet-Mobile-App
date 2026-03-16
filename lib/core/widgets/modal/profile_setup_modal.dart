@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/services/countries/country_service.dart';
 import 'package:next_fi/core/services/countries/models/country_model.dart';
 import 'package:next_fi/core/services/profile/models/profile_dtos.dart';
@@ -9,14 +10,12 @@ import 'package:next_fi/core/services/profile/models/profile_models.dart';
 import 'package:next_fi/core/services/profile/profile_core_service.dart';
 
 Future<bool?> showProfileSetupModal(
-    BuildContext context, {
-      ProfileModel? initial,
-    }) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
+  BuildContext context, {
+  ProfileModel? initial,
+}) {
+  return showAppModalBottomSheet<bool>(
+    context,
     useSafeArea: false,
-    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _ProfileSetupModal(initial: initial),
   );
 }
@@ -64,7 +63,8 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _selectedCountry = CountryModel(name: value, code: '', flag: ''),
+          () =>
+              _selectedCountry = CountryModel(name: value, code: '', flag: ''),
         );
       }
     }
@@ -236,11 +236,11 @@ class _ProfileSetupModalState extends State<_ProfileSetupModal> {
                           onTap: () async {
                             final picked =
                                 await showModalBottomSheet<CountryModel>(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: AppColor.of(context).surface,
-                              builder: (_) => const _CountryPickerSheet(),
-                            );
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: AppColor.of(context).surface,
+                                  builder: (_) => const _CountryPickerSheet(),
+                                );
                             if (picked != null) {
                               setState(() => _selectedCountry = picked);
                             }
@@ -352,16 +352,16 @@ class _FormFieldState extends State<_FormField> {
     final c = widget.c;
     final border = _focused
         ? OutlineInputBorder(
-      borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(color: c.primary, width: 1.5),
-    )
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(color: c.primary, width: 1.5),
+          )
         : OutlineInputBorder(
-      borderRadius: BorderRadius.circular(13),
-      borderSide: BorderSide(
-        color: c.border.withValues(alpha: 0.3),
-        width: 1.2,
-      ),
-    );
+            borderRadius: BorderRadius.circular(13),
+            borderSide: BorderSide(
+              color: c.border.withValues(alpha: 0.3),
+              width: 1.2,
+            ),
+          );
 
     return Focus(
       onFocusChange: (v) => setState(() => _focused = v),
@@ -399,7 +399,9 @@ class _FormFieldState extends State<_FormField> {
             child: Icon(
               widget.icon,
               size: 17,
-              color: _focused ? c.primary : c.textSecondary.withValues(alpha: 0.5),
+              color: _focused
+                  ? c.primary
+                  : c.textSecondary.withValues(alpha: 0.5),
             ),
           ),
           prefixIconConstraints: const BoxConstraints(
@@ -410,10 +412,7 @@ class _FormFieldState extends State<_FormField> {
           fillColor: _focused
               ? c.primary.withValues(alpha: 0.03)
               : c.border.withValues(alpha: 0.05),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 0,
-          ),
+          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 0),
           border: border,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -425,7 +424,10 @@ class _FormFieldState extends State<_FormField> {
           focusedBorder: border,
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
-            borderSide: BorderSide(color: c.error.withValues(alpha: 0.6), width: 1.2),
+            borderSide: BorderSide(
+              color: c.error.withValues(alpha: 0.6),
+              width: 1.2,
+            ),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(13),
@@ -528,15 +530,20 @@ class _CountryPickerField extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.border.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: c.border.withValues(alpha: 0.25), width: 1.2),
+          border: Border.all(
+            color: c.border.withValues(alpha: 0.25),
+            width: 1.2,
+          ),
         ),
         child: Row(
           children: [
-            Icon(Icons.public_rounded,
-                size: 17,
-                color: hasValue
-                    ? c.primary
-                    : c.textSecondary.withValues(alpha: 0.5)),
+            Icon(
+              Icons.public_rounded,
+              size: 17,
+              color: hasValue
+                  ? c.primary
+                  : c.textSecondary.withValues(alpha: 0.5),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -573,9 +580,13 @@ class _CountryPickerField extends StatelessWidget {
               ),
             ),
             Icon(
-              hasValue ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+              hasValue
+                  ? Icons.check_circle_rounded
+                  : Icons.chevron_right_rounded,
               size: 18,
-              color: hasValue ? c.primary : c.textSecondary.withValues(alpha: 0.4),
+              color: hasValue
+                  ? c.primary
+                  : c.textSecondary.withValues(alpha: 0.4),
             ),
           ],
         ),
@@ -643,10 +654,12 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
       _filtered = q.isEmpty
           ? _all
           : _all
-              .where((c) =>
-                  c.name.toLowerCase().contains(q) ||
-                  c.code.toLowerCase().contains(q))
-              .toList();
+                .where(
+                  (c) =>
+                      c.name.toLowerCase().contains(q) ||
+                      c.code.toLowerCase().contains(q),
+                )
+                .toList();
     });
   }
 
@@ -692,9 +705,14 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
               decoration: InputDecoration(
                 hintText: 'Search countriesâ€¦',
                 hintStyle: TextStyle(
-                    color: c.textSecondary.withValues(alpha: 0.5), fontSize: 14),
-                prefixIcon: Icon(Icons.search_rounded,
-                    size: 18, color: c.textSecondary.withValues(alpha: 0.5)),
+                  color: c.textSecondary.withValues(alpha: 0.5),
+                  fontSize: 14,
+                ),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: c.textSecondary.withValues(alpha: 0.5),
+                ),
                 filled: true,
                 fillColor: c.border.withValues(alpha: 0.07),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -709,48 +727,53 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? Center(
-                    child: CircularProgressIndicator(color: c.primary))
+                ? Center(child: CircularProgressIndicator(color: c.primary))
                 : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_error!,
-                                style: TextStyle(
-                                    color: c.error, fontSize: 13),
-                                textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            TextButton(
-                                onPressed: _load,
-                                child: const Text('Retry')),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _error!,
+                          style: TextStyle(color: c.error, fontSize: 13),
+                          textAlign: TextAlign.center,
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: _filtered.length,
-                        itemBuilder: (_, i) {
-                          final country = _filtered[i];
-                          return ListTile(
-                            leading: Text(country.flag,
-                                style: const TextStyle(fontSize: 22)),
-                            title: Text(
-                              country.name,
-                              style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500),
-                            ),
-                            trailing: Text(
-                              country.code,
-                              style: TextStyle(
-                                  color: c.textSecondary, fontSize: 12),
-                            ),
-                            onTap: () =>
-                                Navigator.of(context).pop(country),
-                          );
-                        },
-                      ),
+                        const SizedBox(height: 12),
+                        AppTextButton(
+                          onPressed: _load,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _filtered.length,
+                    itemBuilder: (_, i) {
+                      final country = _filtered[i];
+                      return ListTile(
+                        leading: Text(
+                          country.flag,
+                          style: const TextStyle(fontSize: 22),
+                        ),
+                        title: Text(
+                          country.name,
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        trailing: Text(
+                          country.code,
+                          style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () => Navigator.of(context).pop(country),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -783,12 +806,12 @@ class _SaveButton extends StatelessWidget {
         boxShadow: saving
             ? null
             : [
-          BoxShadow(
-            color: c.primary.withValues(alpha: 0.28),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+                BoxShadow(
+                  color: c.primary.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ],
       ),
       child: AppElevatedButton(
         onPressed: saving ? null : onPressed,
@@ -807,44 +830,46 @@ class _SaveButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           child: saving
               ? Row(
-            key: const ValueKey('saving'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(AppColor.of(context).onPrimary),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Savingâ€¦',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          )
+                  key: const ValueKey('saving'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(
+                          AppColor.of(context).onPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Savingâ€¦',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                )
               : Row(
-            key: const ValueKey('save'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.check_rounded, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'Save Profile',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                  key: const ValueKey('save'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.check_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Save Profile',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );

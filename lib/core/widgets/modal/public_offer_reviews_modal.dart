@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:next_fi/core/services/reviews/models/reviews_dtos.dart';
 import 'package:next_fi/core/services/reviews/models/reviews_models.dart';
 import 'package:next_fi/core/services/reviews/reviews_core_service.dart';
@@ -19,7 +20,8 @@ class PublicOfferReviewsModal extends StatefulWidget {
   final int totalCount;
 
   @override
-  State<PublicOfferReviewsModal> createState() => _PublicOfferReviewsModalState();
+  State<PublicOfferReviewsModal> createState() =>
+      _PublicOfferReviewsModalState();
 }
 
 class _PublicOfferReviewsModalState extends State<PublicOfferReviewsModal> {
@@ -190,9 +192,7 @@ class _PublicOfferReviewsModalState extends State<PublicOfferReviewsModal> {
               ],
             ),
             const SizedBox(height: 10),
-            Flexible(
-              child: _buildBody(c),
-            ),
+            Flexible(child: _buildBody(c)),
           ],
         ),
       ),
@@ -217,13 +217,15 @@ class _PublicOfferReviewsModalState extends State<PublicOfferReviewsModal> {
               ),
             ),
             const SizedBox(height: 8),
-            TextButton(onPressed: _loadInitial, child: const Text('Retry')),
+            AppTextButton(onPressed: _loadInitial, child: const Text('Retry')),
           ],
         ),
       );
     }
 
-    final commentItems = _items.where((r) => (r.comment ?? '').trim().isNotEmpty).toList();
+    final commentItems = _items
+        .where((r) => (r.comment ?? '').trim().isNotEmpty)
+        .toList();
     if (commentItems.isEmpty) {
       return Center(
         child: Text(
@@ -248,7 +250,9 @@ class _PublicOfferReviewsModalState extends State<PublicOfferReviewsModal> {
           );
         }
         return Padding(
-          padding: EdgeInsets.only(bottom: index == commentItems.length - 1 ? 0 : 8),
+          padding: EdgeInsets.only(
+            bottom: index == commentItems.length - 1 ? 0 : 8,
+          ),
           child: _PublicReviewItem(c: widget.c, review: commentItems[index]),
         );
       },
@@ -346,4 +350,3 @@ class _InlineRatingStars extends StatelessWidget {
     );
   }
 }
-

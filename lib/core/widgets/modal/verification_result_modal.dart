@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
+
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 Future<void> showVerificationResultModal(
   BuildContext context, {
@@ -9,11 +11,9 @@ Future<void> showVerificationResultModal(
   required String message,
   bool isError = false,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppColor.of(context).surface,
-    isScrollControlled: true,
-    builder: (ctx) => _VerificationResultModal(
+  return showAppModalBottomSheet<void>(
+    context,
+    builder: (_) => _VerificationResultModal(
       title: title,
       message: message,
       isError: isError,
@@ -55,8 +55,6 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _fadeAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-
-    // Haptic on appear
     HapticFeedback.lightImpact();
     _ctrl.forward();
   }
@@ -74,94 +72,50 @@ class _VerificationResultModalState extends State<_VerificationResultModal>
 
     return FadeTransition(
       opacity: _fadeAnim,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: c.border.withValues(alpha: 0.18)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // â”€â”€ Drag handle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 28),
-                  decoration: BoxDecoration(
-                    color: c.border.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-
-                // â”€â”€ Animated icon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                ScaleTransition(
-                  scale: _scaleAnim,
-                  child: _ResultIcon(
-                    isError: widget.isError,
-                    accent: accent,
-                    c: c,
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // â”€â”€ Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                Text(
-                  widget.title,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // â”€â”€ Message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                Text(
-                  widget.message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 14,
-                    height: 1.55,
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                // â”€â”€ OK button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                _OkButton(accent: accent, ctx: context),
-              ],
+      child: AppModalBase(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _scaleAnim,
+              child: _ResultIcon(isError: widget.isError, accent: accent),
             ),
-          ),
+            const SizedBox(height: 20),
+            Text(
+              widget.title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 14,
+                height: 1.55,
+              ),
+            ),
+            const SizedBox(height: 28),
+            _OkButton(accent: accent, ctx: context),
+          ],
         ),
       ),
     );
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// ICON
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 class _ResultIcon extends StatelessWidget {
-  const _ResultIcon({
-    required this.isError,
-    required this.accent,
-    required this.c,
-  });
+  const _ResultIcon({required this.isError, required this.accent});
 
   final bool isError;
   final Color accent;
-  final AppColor c;
 
   @override
   Widget build(BuildContext context) {
@@ -190,10 +144,6 @@ class _ResultIcon extends StatelessWidget {
     );
   }
 }
-
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// OK BUTTON
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _OkButton extends StatelessWidget {
   const _OkButton({required this.accent, required this.ctx});
@@ -242,4 +192,3 @@ class _OkButton extends StatelessWidget {
     );
   }
 }
-

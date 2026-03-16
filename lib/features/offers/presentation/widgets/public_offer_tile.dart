@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/app/state/asset_vm.dart';
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/core/services/merchant_profile/merchant_profile_core_service.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
@@ -1219,4 +1219,5 @@ class _ShimBox extends StatelessWidget {
     );
   }
 }
+
 

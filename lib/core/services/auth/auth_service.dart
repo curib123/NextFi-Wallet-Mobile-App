@@ -4,13 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
-import 'package:next_fi/core/services/device_meta/devices_meta.dart';
+import 'package:next_fi/core/services/device_meta/device_meta_service.dart';
 import 'package:next_fi/core/services/fcm_notification/fcm_notification_core.dart';
-import 'package:next_fi/core/services/oath2.0/api/auth_http_client.dart';
-import 'package:next_fi/core/services/oath2.0/api/endpoints.dart';
-import 'package:next_fi/core/services/oath2.0/models/auth_exception.dart';
-import 'package:next_fi/core/services/oath2.0/models/auth_response.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/api/auth_http_client.dart';
+import 'package:next_fi/core/services/auth/api/auth_endpoints.dart';
+import 'package:next_fi/core/services/auth/models/auth_exception.dart';
+import 'package:next_fi/core/services/auth/models/auth_response.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
@@ -375,3 +375,5 @@ class AuthService {
     _http.dispose();
   }
 }
+
+

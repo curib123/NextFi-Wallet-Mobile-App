@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/theme/app_fonts.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 
 /// Ultra-premium fintech navigation with advanced morphing effects
@@ -63,126 +64,126 @@ class _AppBottomNavigationPremiumState
     final pendingTxCount = transactionsVM.pendingCount;
 
     return Container(
-          decoration: BoxDecoration(
-            gradient: isDark
-                ? LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      colors.surface.withValues(alpha: 0.92),
-                      colors.surface.withValues(alpha: 0.98),
-                      colors.surface,
-                    ],
-                  )
-                : LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      colors.onPrimary.withValues(alpha: 0.95),
-                      colors.onPrimary,
-                    ],
-                  ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? colors.background.withValues(alpha: 0.50)
-                    : colors.textPrimary.withValues(alpha: 0.06),
-                blurRadius: 20,
-                spreadRadius: 0,
-                offset: const Offset(0, -4),
+      decoration: BoxDecoration(
+        gradient: isDark
+            ? LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  colors.surface.withValues(alpha: 0.92),
+                  colors.surface.withValues(alpha: 0.98),
+                  colors.surface,
+                ],
+              )
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  colors.onPrimary.withValues(alpha: 0.95),
+                  colors.onPrimary,
+                ],
               ),
-            ],
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? colors.background.withValues(alpha: 0.50)
+                : colors.textPrimary.withValues(alpha: 0.06),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, -4),
           ),
-          child: ClipRRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: isDark
-                          ? colors.onPrimary.withValues(alpha: 0.1)
-                          : colors.textPrimary.withValues(alpha: 0.08),
-                      width: 0.5,
-                    ),
-                  ),
+        ],
+      ),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: isDark
+                      ? colors.onPrimary.withValues(alpha: 0.1)
+                      : colors.textPrimary.withValues(alpha: 0.08),
+                  width: 0.5,
                 ),
-                child: SafeArea(
-                  top: false,
-                  child: Container(
-                    height: 82,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Container(
+                height: 82,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildNavItem(
+                      context: context,
+                      icon: LucideIcons.wallet,
+                      label: 'Wallet',
+                      index: 0,
+                      isSelected: tab.currentIndex == 0,
+                      colors: colors,
+                      onTap: () =>
+                          ref.read(tabControllerProvider.notifier).setTab(0),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _buildNavItem(
-                          context: context,
-                          icon: LucideIcons.wallet,
-                          label: 'Wallet',
-                          index: 0,
-                          isSelected: tab.currentIndex == 0,
-                          colors: colors,
-                          onTap: () =>
-                              ref.read(tabControllerProvider.notifier).setTab(0),
-                        ),
-                        _buildNavItem(
-                          context: context,
-                          icon: LucideIcons.history,
-                          label: 'History',
-                          index: 1,
-                          isSelected: tab.currentIndex == 1,
-                          colors: colors,
-                          badgeCount: unreadTxCount,
-                          showDot: unreadTxCount == 0 && pendingTxCount > 0,
-                          onTap: () {
-                            if (unreadTxCount > 0) {
-                              ref.read(transactionsVmProvider).markAllAsRead();
-                            }
-                            ref.read(tabControllerProvider.notifier).setTab(1);
-                          },
-                        ),
-                        _build3DSwapButton(
-                          context: context,
-                          isSelected: tab.currentIndex == 2,
-                          colors: colors,
-                          onTap: () =>
-                              ref.read(tabControllerProvider.notifier).setTab(2),
-                        ),
-                        _buildNavItem(
-                          context: context,
-                          icon: LucideIcons.gift,
-                          label: 'Claimable',
-                          index: 3,
-                          isSelected: tab.currentIndex == 3,
-                          colors: colors,
-                          badgeCount: totalClaimableCount,
-                          badgeColor: claimableReadyCount > 0
-                              ? colors.error
-                              : colors.warning,
-                          onTap: () =>
-                              ref.read(tabControllerProvider.notifier).setTab(3),
-                        ),
-                        _buildNavItem(
-                          context: context,
-                          icon: LucideIcons.settings,
-                          label: 'Settings',
-                          index: 4,
-                          isSelected: tab.currentIndex == 4,
-                          colors: colors,
-                          onTap: () =>
-                              ref.read(tabControllerProvider.notifier).setTab(4),
-                        ),
-                      ],
+                    _buildNavItem(
+                      context: context,
+                      icon: LucideIcons.history,
+                      label: 'History',
+                      index: 1,
+                      isSelected: tab.currentIndex == 1,
+                      colors: colors,
+                      badgeCount: unreadTxCount,
+                      showDot: unreadTxCount == 0 && pendingTxCount > 0,
+                      onTap: () {
+                        if (unreadTxCount > 0) {
+                          ref.read(transactionsVmProvider).markAllAsRead();
+                        }
+                        ref.read(tabControllerProvider.notifier).setTab(1);
+                      },
                     ),
-                  ),
+                    _build3DSwapButton(
+                      context: context,
+                      isSelected: tab.currentIndex == 2,
+                      colors: colors,
+                      onTap: () =>
+                          ref.read(tabControllerProvider.notifier).setTab(2),
+                    ),
+                    _buildNavItem(
+                      context: context,
+                      icon: LucideIcons.gift,
+                      label: 'Claimable',
+                      index: 3,
+                      isSelected: tab.currentIndex == 3,
+                      colors: colors,
+                      badgeCount: totalClaimableCount,
+                      badgeColor: claimableReadyCount > 0
+                          ? colors.error
+                          : colors.warning,
+                      onTap: () =>
+                          ref.read(tabControllerProvider.notifier).setTab(3),
+                    ),
+                    _buildNavItem(
+                      context: context,
+                      icon: LucideIcons.settings,
+                      label: 'Settings',
+                      index: 4,
+                      isSelected: tab.currentIndex == 4,
+                      colors: colors,
+                      onTap: () =>
+                          ref.read(tabControllerProvider.notifier).setTab(4),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
+        ),
+      ),
     );
   }
 
@@ -264,17 +265,21 @@ class _AppBottomNavigationPremiumState
                   opacity: isSelected ? 1.0 : 0.7,
                   child: Text(
                     label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                      color: isSelected
-                          ? colors.primary
-                          : colors.textSecondary.withValues(alpha: 0.6),
-                      letterSpacing: 0.3,
-                      height: 1.2,
-                    ),
+                    style:
+                        AppFonts.label(
+                          color: isSelected
+                              ? colors.primary
+                              : colors.textSecondary.withValues(alpha: 0.6),
+                          fontSize: 11,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          letterSpacing: 0.12,
+                        ).copyWith(
+                          color: isSelected
+                              ? colors.primary
+                              : colors.textSecondary.withValues(alpha: 0.6),
+                        ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -312,14 +317,19 @@ class _AppBottomNavigationPremiumState
                 height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [colors.primary, colors.primary.withValues(alpha: 0.8)],
+                    colors: [
+                      colors.primary,
+                      colors.primary.withValues(alpha: 0.8),
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: colors.primary.withValues(alpha: 0.2 + (0.1 * value)),
+                      color: colors.primary.withValues(
+                        alpha: 0.2 + (0.1 * value),
+                      ),
                       blurRadius: 12 + (4 * value),
                       spreadRadius: 0,
                       offset: Offset(0, 4 + (2 * value)),
@@ -375,12 +385,11 @@ class _AppBottomNavigationPremiumState
             constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
             child: Text(
               count > 99 ? '99+' : count.toString(),
-              style: TextStyle(
+              style: AppFonts.label(
                 color: colors.onPrimary,
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
-                height: 1.2,
-                letterSpacing: 0.5,
+                letterSpacing: 0.2,
               ),
               textAlign: TextAlign.center,
             ),
@@ -408,8 +417,8 @@ class _AppBottomNavigationPremiumState
               border: Border.all(color: colors.onPrimary, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: colors.warning.withValues(alpha:
-                    0.3 * _pulseController.value,
+                  color: colors.warning.withValues(
+                    alpha: 0.3 * _pulseController.value,
                   ),
                   blurRadius: 4 * _pulseController.value,
                   spreadRadius: 1 * _pulseController.value,
@@ -422,4 +431,3 @@ class _AppBottomNavigationPremiumState
     );
   }
 }
-

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/core/models/asset_model.dart';
-import 'package:next_fi/app/state/currency_vm.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
 
 /// Production-grade Asset Registry + Pricing Delta Engine
 class AssetVM with ChangeNotifier {
@@ -248,3 +248,4 @@ class AssetVM with ChangeNotifier {
     super.dispose();
   }
 }
+

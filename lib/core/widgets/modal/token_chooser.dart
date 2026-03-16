@@ -5,16 +5,17 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 Future<void> showTokenSelector(
-    BuildContext context,
-    String address,
-    double xlmBalance,
-    double usdcBalance, {
-      required Widget Function(String address, String token, double balance)
-      screenBuilder,
-      String title = 'Select Asset',
-    }) async {
+  BuildContext context,
+  String address,
+  double xlmBalance,
+  double usdcBalance, {
+  required Widget Function(String address, String token, double balance)
+  screenBuilder,
+  String title = 'Select Asset',
+}) async {
   final colors = AppColor.of(context);
   final assetVM = ProviderScope.containerOf(
     context,
@@ -59,11 +60,8 @@ Future<void> showTokenSelector(
     );
   }
 
-  await showModalBottomSheet(
-    context: context,
-    backgroundColor: AppColor.of(context).surface,
-    isScrollControlled: true,
-    useSafeArea: true,
+  await showAppModalBottomSheet(
+    context,
     builder: (ctx) => _TokenSelectorSheet(
       colors: colors,
       title: title,
@@ -116,13 +114,10 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
       parent: _animController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
     _animController.forward();
   }
 
@@ -308,12 +303,12 @@ class _TokenTileState extends State<_TokenTile> {
           ),
           boxShadow: _isPressed
               ? [
-            BoxShadow(
-              color: widget.colors.primary.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ]
+                  BoxShadow(
+                    color: widget.colors.primary.withValues(alpha: 0.1),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
               : null,
         ),
         child: Row(
@@ -465,12 +460,12 @@ class _TokenLogo extends StatelessWidget {
           borderRadius: BorderRadius.circular(size / 2),
           boxShadow: isNative
               ? [
-            BoxShadow(
-              color: colors.primary.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ]
+                  BoxShadow(
+                    color: colors.primary.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
               : null,
         ),
         child: Center(
@@ -479,7 +474,9 @@ class _TokenLogo extends StatelessWidget {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: isNative ? AppColor.of(context).onPrimary : colors.textSecondary,
+              color: isNative
+                  ? AppColor.of(context).onPrimary
+                  : colors.textSecondary,
             ),
           ),
         ),
@@ -526,4 +523,3 @@ class _TokenLogo extends StatelessWidget {
     );
   }
 }
-

@@ -55,7 +55,7 @@ class AppFonts {
       decorationColor: decorationColor,
       decorationStyle: decorationStyle,
       decorationThickness: decorationThickness,
-    );
+    ).copyWith(fontFamilyFallback: fallback);
   }
 
   static TextTheme interTextTheme([TextTheme? base]) {
@@ -83,7 +83,7 @@ class AppFonts {
     TextDecorationStyle? decorationStyle,
     double? decorationThickness,
   }) {
-    return inter(
+    return GoogleFonts.sora(
       textStyle: textStyle,
       color: color,
       backgroundColor: backgroundColor,
@@ -103,10 +103,81 @@ class AppFonts {
       decorationColor: decorationColor,
       decorationStyle: decorationStyle,
       decorationThickness: decorationThickness,
-    );
+    ).copyWith(fontFamilyFallback: fallback);
   }
 
   static TextTheme soraTextTheme([TextTheme? base]) {
-    return interTextTheme(base);
+    return GoogleFonts.soraTextTheme(base).apply(fontFamilyFallback: fallback);
+  }
+
+  static TextStyle display({
+    required Color color,
+    double fontSize = 32,
+    FontWeight fontWeight = FontWeight.w700,
+  }) {
+    return sora(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.08,
+      letterSpacing: -0.8,
+    );
+  }
+
+  static TextStyle headline({
+    required Color color,
+    double fontSize = 24,
+    FontWeight fontWeight = FontWeight.w700,
+  }) {
+    return sora(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.14,
+      letterSpacing: -0.45,
+    );
+  }
+
+  static TextStyle title({
+    required Color color,
+    double fontSize = 18,
+    FontWeight fontWeight = FontWeight.w700,
+  }) {
+    return sora(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.2,
+      letterSpacing: -0.2,
+    );
+  }
+
+  static TextStyle body({
+    required Color color,
+    double fontSize = 14,
+    FontWeight fontWeight = FontWeight.w500,
+  }) {
+    return inter(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.5,
+      letterSpacing: -0.1,
+    );
+  }
+
+  static TextStyle label({
+    required Color color,
+    double fontSize = 12,
+    FontWeight fontWeight = FontWeight.w600,
+    double letterSpacing = 0.1,
+  }) {
+    return inter(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.25,
+      letterSpacing: letterSpacing,
+    );
   }
 }

@@ -6,7 +6,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/features/claimable/data/models/claimable_item.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
-import 'package:next_fi/app/state/seed_keypair_vm.dart';
+import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
 /// View model for managing claimable balances.
@@ -1034,3 +1034,4 @@ class _PredicateResult {
     this.expiryTime,
   });
 }
+

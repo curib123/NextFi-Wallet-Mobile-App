@@ -3,6 +3,7 @@ import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/theme/app_fonts.dart';
 
 enum SnackBarType { info, success, warning, error }
 
@@ -196,11 +197,11 @@ class _SnackContent extends StatelessWidget {
               label: semanticsLabel,
               child: Text(
                 message,
-                style: (textStyle ?? const TextStyle()).copyWith(
+                style: AppFonts.body(
                   color: fg,
-                  fontWeight: FontWeight.w600,
                   fontSize: 14,
-                ),
+                  fontWeight: FontWeight.w600,
+                ).merge(textStyle).copyWith(color: fg),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -227,10 +228,10 @@ class _SnackContent extends StatelessWidget {
               ),
               child: Text(
                 actionLabel!,
-                style: TextStyle(
+                style: AppFonts.label(
+                  color: fg,
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
-                  color: fg,
                 ),
               ),
             ),
@@ -403,7 +404,9 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: widget.colors.textPrimary.withValues(alpha: 0.15),
+                          color: widget.colors.textPrimary.withValues(
+                            alpha: 0.15,
+                          ),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -423,7 +426,9 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: widget.colors.textPrimary.withValues(alpha: 0.12),
+                            color: widget.colors.textPrimary.withValues(
+                              alpha: 0.12,
+                            ),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(widget.icon, size: 18, color: widget.fg),
@@ -432,7 +437,7 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
                         Expanded(
                           child: Text(
                             widget.message,
-                            style: TextStyle(
+                            style: AppFonts.body(
                               color: widget.fg,
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
@@ -451,4 +456,3 @@ class _TopSnackAnimatedState extends State<_TopSnackAnimated>
     );
   }
 }
-

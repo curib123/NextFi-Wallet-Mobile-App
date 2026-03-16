@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 Future<void> showPaymentProofViewModal(
   BuildContext context, {
@@ -8,14 +10,8 @@ Future<void> showPaymentProofViewModal(
   required String imageUrl,
   String? title,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: colors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+  return showAppModalBottomSheet<void>(
+    context,
     builder: (_) => PaymentProofViewModal(
       imageUrl: imageUrl,
       title: title ?? 'Payment Proof',
@@ -39,21 +35,15 @@ class PaymentProofViewModal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    return Container(
-      constraints: BoxConstraints(maxHeight: media.size.height * 0.9),
+    return AppModalBase(
+      maxHeightFactor: 0.9,
       padding: EdgeInsets.fromLTRB(14, 10, 14, media.padding.bottom + 12),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: colors.border,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
           Row(
             children: [
               Expanded(
@@ -114,5 +104,3 @@ class PaymentProofViewModal extends StatelessWidget {
     );
   }
 }
-
-

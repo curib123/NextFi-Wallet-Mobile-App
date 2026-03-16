@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/button/app_buttons.dart';
 
 enum ButtonType { filled, outlined, disabled }
 
@@ -34,30 +35,26 @@ class CustomButton extends StatelessWidget {
       case ButtonType.filled:
         fgColor = colors.onPrimary;
         bgColor = colors.primary;
-        borderColor = colors.surface;
-        break;
-      case ButtonType.outlined:
-        fgColor = colors.primary;
-        bgColor = colors.surface;
         borderColor = colors.primary;
         break;
+      case ButtonType.outlined:
+        fgColor = colors.textPrimary;
+        bgColor = colors.surface;
+        borderColor = colors.border;
+        break;
       case ButtonType.disabled:
-        fgColor = colors.textSecondary.withValues(alpha: 0.75);
-        bgColor = colors.background; // subtle filled look
-        borderColor = colors.border.withValues(alpha: 0.6);
+        fgColor = colors.textMuted;
+        bgColor = colors.surfaceRaised;
+        borderColor = colors.border;
         break;
     }
 
     final iconWidget = icon == null
         ? const SizedBox.shrink()
         : Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Icon(
-        icon,
-        size: 18,
-        color: fgColor,
-      ),
-    );
+            padding: const EdgeInsets.only(right: 6),
+            child: Icon(icon, size: 18, color: fgColor),
+          );
 
     final child = Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -79,8 +76,10 @@ class CustomButton extends StatelessWidget {
     );
 
     final Size minSize = const Size(0, 40);
-    final EdgeInsets padding =
-    const EdgeInsets.symmetric(vertical: 13, horizontal: 14);
+    final EdgeInsets padding = const EdgeInsets.symmetric(
+      vertical: 13,
+      horizontal: 14,
+    );
     final BorderRadius radius = BorderRadius.circular(10);
 
     // Choose the underlying button widget based on type.
@@ -90,7 +89,7 @@ class CustomButton extends StatelessWidget {
       final style = ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
-            return colors.primary.withValues(alpha: 0.45);
+            return colors.surfaceRaised;
           }
           return bgColor!;
         }),
@@ -103,13 +102,12 @@ class CustomButton extends StatelessWidget {
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: radius),
         ),
-        elevation: WidgetStatePropertyAll(
-          Theme.of(context).brightness == Brightness.light ? 1 : 0,
-        ),
+        elevation: const WidgetStatePropertyAll(0),
         minimumSize: WidgetStatePropertyAll(minSize),
       );
 
-      button = ElevatedButton(
+      button = AppButton(
+        variant: AppButtonVariant.elevated,
         style: style,
         onPressed: isDisabled ? null : onPressed,
         child: child,
@@ -123,13 +121,13 @@ class CustomButton extends StatelessWidget {
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
-            return colors.textSecondary.withValues(alpha: 0.75);
+            return colors.textMuted;
           }
           return fgColor;
         }),
         overlayColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) return colors.surface;
-          return colors.primary.withValues(alpha: 0.06);
+          return colors.primary.withValues(alpha: 0.08);
         }),
         side: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.disabled)) {
@@ -147,18 +145,14 @@ class CustomButton extends StatelessWidget {
         minimumSize: WidgetStatePropertyAll(minSize),
       );
 
-      button = OutlinedButton(
+      button = AppButton(
+        variant: AppButtonVariant.outlined,
         style: style,
         onPressed: isDisabled ? null : onPressed,
         child: child,
       );
     }
 
-    return SizedBox(
-      width: fullWidth ? double.infinity : null,
-      child: button,
-    );
+    return SizedBox(width: fullWidth ? double.infinity : null, child: button);
   }
 }
-
-

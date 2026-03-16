@@ -1,28 +1,29 @@
-// lib/features/wallet_creation/model/wallet_creation_state.dart
-class WalletCreationState {
-  final bool isSplash;
-  final String title;
-  final String subtitle;
-  final String logoAsset;
+import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 
+class WalletCreationState {
   const WalletCreationState({
-    this.isSplash = false,
-    this.title = 'NextFI Wallet',
-    this.subtitle = 'Simple\u202F•\u202FUser Controlled\u202F•\u202FSecure',
-    this.logoAsset = 'assets/icon/ic_stat_notification.png',
+    this.appName = '',
+    this.version = '',
+    this.appCover,
   });
 
+  static const Object _unset = Object();
+
+  final String appName;
+  final String version;
+  final AppCoverConfig? appCover;
+
   WalletCreationState copyWith({
-    bool? isSplash,
-    String? title,
-    String? subtitle,
-    String? logoAsset,
+    String? appName,
+    String? version,
+    Object? appCover = _unset,
   }) {
     return WalletCreationState(
-      isSplash: isSplash ?? this.isSplash,
-      title: title ?? this.title,
-      subtitle: subtitle ?? this.subtitle,
-      logoAsset: logoAsset ?? this.logoAsset,
+      appName: appName ?? this.appName,
+      version: version ?? this.version,
+      appCover: identical(appCover, _unset)
+          ? this.appCover
+          : appCover as AppCoverConfig?,
     );
   }
 }

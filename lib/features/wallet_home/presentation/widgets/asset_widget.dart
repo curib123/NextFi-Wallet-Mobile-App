@@ -11,7 +11,7 @@ import 'package:next_fi/features/wallet_home/presentation/widgets/modern_asset_t
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'package:next_fi/app/state/currency_vm.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/asset_guide_footer.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
@@ -620,4 +620,5 @@ class _ReserveBalanceCardState extends ConsumerState<_ReserveBalanceCard>
     );
   }
 }
+
 

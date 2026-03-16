@@ -8,6 +8,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:next_fi/core/widgets/button/custom_button.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 
 /// Call this to open the sheet.
@@ -18,11 +19,9 @@ Future<bool?> showRecipientUpsertSheet(
   RecipientAddressModel? initial,
   String? address,
 }) {
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
+  return showAppModalBottomSheet<bool>(
+    context,
     useSafeArea: false,
-    backgroundColor: AppColor.of(context).surface,
     builder: (_) => _RecipientEditSheet(initial: initial, address: address),
   );
 }
@@ -217,19 +216,6 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
     await _animController.reverse();
     if (!mounted) return;
     Navigator.of(context).pop(false);
-  }
-
-  Widget _buildHandle() {
-    final c = AppColor.of(context);
-    return Container(
-      width: 40,
-      height: 4,
-      margin: const EdgeInsets.only(top: 12, bottom: 16),
-      decoration: BoxDecoration(
-        color: c.border.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(100),
-      ),
-    );
   }
 
   Widget _buildHeader(bool isEdit) {
@@ -591,147 +577,127 @@ class _RecipientEditSheetState extends ConsumerState<_RecipientEditSheet>
       opacity: _fadeAnimation,
       child: SlideTransition(
         position: _slideAnimation,
-        child: Container(
-          decoration: BoxDecoration(
-            color: c.background,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColor.of(context).textPrimary.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, -4),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: bottomInset),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHandle(),
-                  _buildHeader(isEdit),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Name field
-                            _buildInputField(
-                              controller: _name,
-                              focusNode: _nameFocus,
-                              label: 'Recipient Name',
-                              hint: 'e.g., Alice - USDC payouts',
-                              icon: LucideIcons.user,
-                              textCapitalization: TextCapitalization.words,
-                              textInputAction: TextInputAction.next,
-                              validator: (v) => (v == null || v.trim().isEmpty)
-                                  ? 'Please enter a name'
-                                  : null,
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Address field
-                            _buildInputField(
-                              controller: _addr,
-                              focusNode: _addrFocus,
-                              label: 'Stellar Address',
-                              hint: 'G... (56 characters)',
-                              icon: LucideIcons.wallet,
-                              suffix: addressSuffix,
-                              maxLines: 3,
-                              textInputAction: TextInputAction.done,
-                              inputFormatters: [
-                                TextInputFormatter.withFunction(
-                                  (oldValue, newValue) => newValue.copyWith(
-                                    text: newValue.text.toUpperCase(),
-                                  ),
-                                ),
-                                FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                              ],
-                              validator: (v) =>
-                                  (v == null || !_isValidStellarAddress(v))
-                                  ? 'Invalid Stellar address'
-                                  : null,
-                              onTap: () => setState(() => _addrTouched = true),
-                              onFieldSubmitted: (_) =>
-                                  canSubmit ? _save() : null,
-                            ),
-                            _addressStatus(),
-                            const SizedBox(height: 24),
-
-                            // Color picker
-                            _colorPicker(),
-                            const SizedBox(height: 32),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Action buttons
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      border: Border(
-                        top: BorderSide(
-                          color: c.border.withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: Row(
+        child: AppModalBase(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          backgroundColor: c.background,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(isEdit),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: CustomButton(
-                            text: 'Cancel',
-                            type: _saving
-                                ? ButtonType.disabled
-                                : ButtonType.outlined,
-                            onPressed: _saving ? () {} : _close,
-                            fullWidth: true,
-                            icon: LucideIcons.x,
-                          ),
+                        // Name field
+                        _buildInputField(
+                          controller: _name,
+                          focusNode: _nameFocus,
+                          label: 'Recipient Name',
+                          hint: 'e.g., Alice - USDC payouts',
+                          icon: LucideIcons.user,
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.next,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Please enter a name'
+                              : null,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: CustomButton(
-                            text: _saving
-                                ? 'Saving...'
-                                : prov.loading
-                                ? 'Checking session...'
-                                : !prov.isAuthenticated
-                                ? 'Login Required'
-                                : (isEdit ? 'Save Changes' : 'Add Recipient'),
-                            type: canSubmit
-                                ? ButtonType.filled
-                                : ButtonType.disabled,
-                            onPressed: canSubmit ? _save : () {},
-                            fullWidth: true,
-                            icon: _saving
-                                ? LucideIcons.loader2
-                                : !prov.isAuthenticated
-                                ? LucideIcons.lock
-                                : LucideIcons.check,
-                          ),
+                        const SizedBox(height: 20),
+
+                        // Address field
+                        _buildInputField(
+                          controller: _addr,
+                          focusNode: _addrFocus,
+                          label: 'Stellar Address',
+                          hint: 'G... (56 characters)',
+                          icon: LucideIcons.wallet,
+                          suffix: addressSuffix,
+                          maxLines: 3,
+                          textInputAction: TextInputAction.done,
+                          inputFormatters: [
+                            TextInputFormatter.withFunction(
+                              (oldValue, newValue) => newValue.copyWith(
+                                text: newValue.text.toUpperCase(),
+                              ),
+                            ),
+                            FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                          ],
+                          validator: (v) =>
+                              (v == null || !_isValidStellarAddress(v))
+                              ? 'Invalid Stellar address'
+                              : null,
+                          onTap: () => setState(() => _addrTouched = true),
+                          onFieldSubmitted: (_) => canSubmit ? _save() : null,
                         ),
+                        _addressStatus(),
+                        const SizedBox(height: 24),
+
+                        // Color picker
+                        _colorPicker(),
+                        const SizedBox(height: 32),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  border: Border(
+                    top: BorderSide(
+                      color: c.border.withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: CustomButton(
+                        text: 'Cancel',
+                        type: _saving
+                            ? ButtonType.disabled
+                            : ButtonType.outlined,
+                        onPressed: _saving ? () {} : _close,
+                        fullWidth: true,
+                        icon: LucideIcons.x,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: CustomButton(
+                        text: _saving
+                            ? 'Saving...'
+                            : prov.loading
+                            ? 'Checking session...'
+                            : !prov.isAuthenticated
+                            ? 'Login Required'
+                            : (isEdit ? 'Save Changes' : 'Add Recipient'),
+                        type: canSubmit
+                            ? ButtonType.filled
+                            : ButtonType.disabled,
+                        onPressed: canSubmit ? _save : () {},
+                        fullWidth: true,
+                        icon: _saving
+                            ? LucideIcons.loader2
+                            : !prov.isAuthenticated
+                            ? LucideIcons.lock
+                            : LucideIcons.check,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 }
-
-

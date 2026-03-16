@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer_button.dart';
-import 'package:next_fi/core/widgets/drawer/appdrawer.dart';
+import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
@@ -893,4 +893,5 @@ class _AmountTile extends StatelessWidget {
     );
   }
 }
+
 

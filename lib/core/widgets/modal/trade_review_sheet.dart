@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/core/widgets/modal/trade_sheet_base.dart';
+import 'package:next_fi/core/widgets/modal/base/trade_sheet_base.dart';
 import 'package:next_fi/app/theme/app_fonts.dart';
 
 class TradeReviewResult {
@@ -223,4 +223,3 @@ class _TradeReviewSheetState extends State<TradeReviewSheet> {
     );
   }
 }
-

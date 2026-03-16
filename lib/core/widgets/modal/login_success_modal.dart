@@ -5,7 +5,7 @@ import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/core/widgets/profile_avatar/user_avatar.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
 Future<void> showLoginSuccessModal(BuildContext context, {required User user}) {
@@ -390,4 +390,5 @@ class _LoginSuccessModalState extends State<_LoginSuccessModal>
     );
   }
 }
+
 

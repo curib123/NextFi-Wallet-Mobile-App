@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/receive/presentation/viewmodels/receive_state.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -15,10 +16,8 @@ Future<void> showReceiveQrModal(
   final address = state.address.trim();
   final token = state.token;
 
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColor.of(context).surface,
+  await showAppModalBottomSheet<void>(
+    context,
     builder: (sheetContext) {
       final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
 
@@ -33,7 +32,9 @@ Future<void> showReceiveQrModal(
               border: Border.all(color: c.border.withValues(alpha: 0.5)),
               boxShadow: [
                 BoxShadow(
-                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.12),
+                  color: AppColor.of(
+                    context,
+                  ).textPrimary.withValues(alpha: 0.12),
                   blurRadius: 24,
                   offset: const Offset(0, 10),
                 ),
@@ -81,7 +82,9 @@ Future<void> showReceiveQrModal(
                     decoration: BoxDecoration(
                       color: AppColor.of(context).onPrimary,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: c.border.withValues(alpha: 0.35)),
+                      border: Border.all(
+                        color: c.border.withValues(alpha: 0.35),
+                      ),
                     ),
                     child: Center(
                       child: QrImageView(
@@ -171,4 +174,3 @@ Future<void> showReceiveQrModal(
     },
   );
 }
-

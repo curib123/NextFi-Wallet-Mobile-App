@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/core/widgets/drawer/app_drawer_button.dart';
-import 'package:next_fi/core/widgets/drawer/appdrawer.dart';
+import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/widgets/alert/app_alert.dart';
-import 'package:next_fi/core/widgets/emptywidgets/empty_state.dart';
+import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 import 'package:next_fi/core/widgets/button/custom_button.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 
@@ -376,4 +376,5 @@ class _TransactionScreenState extends ConsumerState<TransactionScreen> {
     );
   }
 }
+
 

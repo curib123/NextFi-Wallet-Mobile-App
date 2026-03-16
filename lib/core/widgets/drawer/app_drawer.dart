@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/profile_avatar/user_avatar.dart';
-import 'package:next_fi/features/auth/presentation/screens/login.dart';
+import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
 import 'package:next_fi/features/merchant_flow/presentation/screens/merchant_onboarding_flow_screen.dart';
 import 'package:next_fi/features/merchant_trades/presentation/screens/merchant_trades_screen.dart';
 import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
@@ -16,12 +16,12 @@ import 'package:next_fi/features/offers/presentation/screens/manage_offers_scree
 import 'package:next_fi/features/verification_flow/presentation/screens/payment_method_setup_screen.dart';
 import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
-import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_screen_settings.dart';
+import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_settings_screen.dart';
 import 'package:next_fi/core/utils/link_opener.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:next_fi/core/services/base_url/base_url.dart';
-import 'package:next_fi/core/services/oath2.0/auth_service.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/auth_service.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_profile_models.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_tier_progress_models.dart';
 import 'package:next_fi/core/services/merchant_profile/merchant_profile_core_service.dart';
@@ -1796,3 +1796,4 @@ class _LogoutModal extends StatelessWidget {
     );
   }
 }
+

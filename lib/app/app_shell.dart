@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/claimable/presentation/screens/claimable_list_screen.dart';
 import 'package:next_fi/features/onboarding/presentation/screens/onboarding_screen.dart';
+import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
 import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
 import 'package:next_fi/features/transactions/presentation/screens/transaction_screen.dart';
@@ -40,9 +40,10 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _applySystemThemeToRoot();
 
-    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
-      _applySystemThemeToRoot();
-    };
+    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged =
+        () {
+          _applySystemThemeToRoot();
+        };
   }
 
   @override
@@ -69,7 +70,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     ref.listen<AppShellState>(appShellProvider, (prev, next) {
-      final shouldShowMissingWallet = !next.showSplash &&
+      final shouldShowMissingWallet =
+          !next.showSplash &&
           !next.loading &&
           !next.hasMnemonic &&
           !next.showOnboarding;
@@ -99,7 +101,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
 
     if (shell.showOnboarding) {
       return OnboardingScreen(
-        onFinish: () => ref.read(appShellProvider.notifier).completeOnboarding(),
+        onFinish: () =>
+            ref.read(appShellProvider.notifier).completeOnboarding(),
       );
     }
 
@@ -109,7 +112,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
 
     if (!shell.isAuthenticated) {
       return AuthGateScreen(
-        goNext: () => ref.read(appShellProvider.notifier).setAuthenticated(true),
+        goNext: () =>
+            ref.read(appShellProvider.notifier).setAuthenticated(true),
       );
     }
 
@@ -119,4 +123,3 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     );
   }
 }
-

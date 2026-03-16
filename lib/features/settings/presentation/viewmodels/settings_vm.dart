@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/settings/data/models/settings_model.dart';
-import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_screen_settings.dart';
+import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_settings_screen.dart';
 import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
 import 'package:next_fi/core/widgets/modal/show_pin_change_bottom_sheet.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
@@ -332,3 +332,4 @@ class SettingsVM extends ChangeNotifier {
     messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 }
+

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/theme/app_fonts.dart';
 
 /// App-level overlay that wraps the entire widget tree and shows an animated
 /// bottom banner while the device is offline, then briefly confirms reconnect.
@@ -34,10 +35,7 @@ class NetworkStatusOverlay extends ConsumerWidget {
 }
 
 class _NetworkBanner extends StatelessWidget {
-  const _NetworkBanner({
-    required this.isOnline,
-    required this.justReconnected,
-  });
+  const _NetworkBanner({required this.isOnline, required this.justReconnected});
 
   final bool isOnline;
   final bool justReconnected;
@@ -46,9 +44,7 @@ class _NetworkBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColor.of(context);
     final isConnected = isOnline && justReconnected;
-    final bgColor = isConnected
-        ? colors.success
-        : colors.textPrimary;
+    final bgColor = isConnected ? colors.success : colors.textPrimary;
     final textColor = colors.onPrimary;
     final iconColor = colors.onPrimary;
 
@@ -75,11 +71,7 @@ class _NetworkBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 if (isConnected) ...[
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: iconColor,
-                    size: 20,
-                  ),
+                  Icon(Icons.check_circle_rounded, color: iconColor, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -88,17 +80,19 @@ class _NetworkBanner extends StatelessWidget {
                       children: [
                         Text(
                           'Back online',
-                          style: TextStyle(
+                          style: AppFonts.label(
                             color: textColor,
                             fontWeight: FontWeight.w700,
-                            fontSize: 13.5,
+                            fontSize: 13,
+                            letterSpacing: 0.04,
                           ),
                         ),
                         Text(
                           'Connection restored.',
-                          style: TextStyle(
+                          style: AppFonts.body(
                             color: textColor.withValues(alpha: ((204) / 255.0)),
-                            fontSize: 11.5,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -114,17 +108,19 @@ class _NetworkBanner extends StatelessWidget {
                       children: [
                         Text(
                           'No internet connection',
-                          style: TextStyle(
+                          style: AppFonts.label(
                             color: textColor,
                             fontWeight: FontWeight.w700,
-                            fontSize: 13.5,
+                            fontSize: 13,
+                            letterSpacing: 0.04,
                           ),
                         ),
                         Text(
                           'You are offline. Some wallet data may be unavailable.',
-                          style: TextStyle(
+                          style: AppFonts.body(
                             color: textColor.withValues(alpha: ((178) / 255.0)),
-                            fontSize: 11.5,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -161,9 +157,10 @@ class _PulsingDotState extends State<_PulsingDot>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -179,12 +176,8 @@ class _PulsingDotState extends State<_PulsingDot>
       child: Container(
         width: 10,
         height: 10,
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }
 }
-

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:next_fi/core/services/wallet/wallet_core_service.dart';
@@ -27,11 +28,8 @@ Future<WalletSwitchResult?> showWalletSwitchSheet(
   String importLabel = 'Import Wallet',
 }) {
   final colors = AppColor.of(context);
-  return showModalBottomSheet<WalletSwitchResult>(
-    context: context,
-    useSafeArea: true,
-    isScrollControlled: true,
-    backgroundColor: AppColor.of(context).surface,
+  return showAppModalBottomSheet<WalletSwitchResult>(
+    context,
     builder: (_) => _WalletSwitchSheet(
       colors: colors,
       activeId: currentActiveId,
@@ -130,7 +128,9 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
     if (wallet.isActive || _togglingId != null) return;
     setState(() => _togglingId = wallet.localId);
     try {
-      final success = await WalletManager.I.switchWallet(localId: wallet.localId);
+      final success = await WalletManager.I.switchWallet(
+        localId: wallet.localId,
+      );
       if (!success) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -286,7 +286,9 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
             ),
             decoration: BoxDecoration(
               color: widget.colors.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
             ),
             child: Column(
               children: [
@@ -308,7 +310,9 @@ class _WalletSwitchSheetState extends State<_WalletSwitchSheet> {
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(
-                  color: AppColor.of(context).textPrimary.withValues(alpha: 0.16),
+                  color: AppColor.of(
+                    context,
+                  ).textPrimary.withValues(alpha: 0.16),
                   child: const Center(child: CircularProgressIndicator()),
                 ),
               ),
@@ -516,7 +520,11 @@ class _SheetHeader extends StatelessWidget {
               ),
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(LucideIcons.x, size: 18, color: colors.textSecondary),
+                icon: Icon(
+                  LucideIcons.x,
+                  size: 18,
+                  color: colors.textSecondary,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
@@ -585,7 +593,9 @@ class _WalletCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: colors.primary.withValues(alpha: isCurrent ? 0.1 : 0.06),
+              backgroundColor: colors.primary.withValues(
+                alpha: isCurrent ? 0.1 : 0.06,
+              ),
               child: Text(
                 wallet.name.isNotEmpty ? wallet.name[0].toUpperCase() : 'W',
                 style: TextStyle(
@@ -617,7 +627,10 @@ class _WalletCard extends StatelessWidget {
                       if (isCurrent) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: colors.success.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(4),
@@ -664,7 +677,11 @@ class _WalletCard extends StatelessWidget {
             if (canDelete && onDelete != null)
               IconButton(
                 onPressed: onDelete,
-                icon: Icon(LucideIcons.trash2, size: 14, color: colors.error.withValues(alpha: 0.5)),
+                icon: Icon(
+                  LucideIcons.trash2,
+                  size: 14,
+                  color: colors.error.withValues(alpha: 0.5),
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
               ),
@@ -782,7 +799,6 @@ class _CloudWalletCard extends StatelessWidget {
   }
 }
 
-
 class _SheetFooter extends StatelessWidget {
   const _SheetFooter({
     required this.colors,
@@ -819,8 +835,13 @@ class _SheetFooter extends StatelessWidget {
                       backgroundColor: colors.primary,
                       foregroundColor: AppColor.of(context).onPrimary,
                       elevation: 0,
-                      textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
@@ -840,8 +861,13 @@ class _SheetFooter extends StatelessWidget {
                     foregroundColor: colors.textPrimary,
                     side: BorderSide.none,
                     backgroundColor: colors.background.withValues(alpha: 0.45),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
@@ -852,4 +878,3 @@ class _SheetFooter extends StatelessWidget {
     );
   }
 }
-

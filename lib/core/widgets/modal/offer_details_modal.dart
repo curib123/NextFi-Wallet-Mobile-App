@@ -7,6 +7,7 @@ import 'package:next_fi/core/services/offers/models/offers_models.dart';
 import 'package:next_fi/core/services/offer_payment_method/offer_payment_method_core_service.dart';
 import 'package:next_fi/core/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
 import 'package:next_fi/core/services/reviews/reviews_core_service.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/modal/public_offer_reviews_modal.dart';
 import 'package:next_fi/features/offers/presentation/widgets/offer_details_widgets.dart';
 
@@ -79,10 +80,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   Future<void> _loadData() async {
     await _loadMerchantProfile();
-    await Future.wait([
-      _loadReviews(),
-      _loadPaymentMethods(),
-    ]);
+    await Future.wait([_loadReviews(), _loadPaymentMethods()]);
   }
 
   List<String> _resolveSellerIds({MerchantProfileModel? profile}) {
@@ -185,13 +183,8 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   Future<void> _openAllReviewsSheet() async {
     final c = AppColor.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: c.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+    await showAppModalBottomSheet<void>(
+      context,
       builder: (_) => PublicOfferReviewsModal(
         offerId: widget.offer.id,
         c: c,
@@ -218,57 +211,71 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
 
   // Ã¢â€â‚¬Ã¢â€â‚¬ Tier Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-  static String _tierLabel(MerchantTier t) => const {
-    MerchantTier.bronze: 'Bronze',
-    MerchantTier.silver: 'Silver',
-    MerchantTier.gold: 'Gold',
-    MerchantTier.platinum: 'Platinum',
-    MerchantTier.diamond: 'Diamond',
-  }[t] ?? 'Unknown';                                          // Ã¢â€ Â was [t]!
+  static String _tierLabel(MerchantTier t) =>
+      const {
+        MerchantTier.bronze: 'Bronze',
+        MerchantTier.silver: 'Silver',
+        MerchantTier.gold: 'Gold',
+        MerchantTier.platinum: 'Platinum',
+        MerchantTier.diamond: 'Diamond',
+      }[t] ??
+      'Unknown'; // Ã¢â€ Â was [t]!
 
-  static Color _tierColor(MerchantTier t, AppColor c) => {
-    MerchantTier.diamond: c.info,
-    MerchantTier.platinum: c.textSecondary,
-    MerchantTier.gold: c.warning,
-    MerchantTier.silver: c.accent,
-    MerchantTier.bronze: c.error,
-  }[t] ?? c.accent;                                          // Ã¢â€ Â was [t]!
+  static Color _tierColor(MerchantTier t, AppColor c) =>
+      {
+        MerchantTier.diamond: c.info,
+        MerchantTier.platinum: c.textSecondary,
+        MerchantTier.gold: c.warning,
+        MerchantTier.silver: c.accent,
+        MerchantTier.bronze: c.error,
+      }[t] ??
+      c.accent; // Ã¢â€ Â was [t]!
 
-  static IconData _tierIcon(MerchantTier t) => const {
-    MerchantTier.bronze: Icons.shield_outlined,
-    MerchantTier.silver: Icons.workspace_premium_outlined,
-    MerchantTier.gold: Icons.emoji_events_outlined,
-    MerchantTier.platinum: Icons.military_tech_outlined,
-    MerchantTier.diamond: Icons.diamond_outlined,
-  }[t] ?? Icons.shield_outlined;                             // Ã¢â€ Â was [t]!
+  static IconData _tierIcon(MerchantTier t) =>
+      const {
+        MerchantTier.bronze: Icons.shield_outlined,
+        MerchantTier.silver: Icons.workspace_premium_outlined,
+        MerchantTier.gold: Icons.emoji_events_outlined,
+        MerchantTier.platinum: Icons.military_tech_outlined,
+        MerchantTier.diamond: Icons.diamond_outlined,
+      }[t] ??
+      Icons.shield_outlined; // Ã¢â€ Â was [t]!
 
   // Ã¢â€â‚¬Ã¢â€â‚¬ Merchant Type Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-  static String _typeLabel(MerchantType t) => const {
-    MerchantType.individual: 'INDIVIDUAL',
-    MerchantType.business: 'BUSINESS',
-  }[t] ?? 'UNKNOWN';                                         // Ã¢â€ Â was [t]!
+  static String _typeLabel(MerchantType t) =>
+      const {
+        MerchantType.individual: 'INDIVIDUAL',
+        MerchantType.business: 'BUSINESS',
+      }[t] ??
+      'UNKNOWN'; // Ã¢â€ Â was [t]!
 
-  static IconData _typeIcon(MerchantType t) => const {
-    MerchantType.individual: Icons.person_outline_rounded,
-    MerchantType.business: Icons.store_outlined,
-  }[t] ?? Icons.person_outline_rounded;                      // Ã¢â€ Â was [t]!
+  static IconData _typeIcon(MerchantType t) =>
+      const {
+        MerchantType.individual: Icons.person_outline_rounded,
+        MerchantType.business: Icons.store_outlined,
+      }[t] ??
+      Icons.person_outline_rounded; // Ã¢â€ Â was [t]!
 
   // Ã¢â€â‚¬Ã¢â€â‚¬ Availability Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-  static String _availLabel(SellerAvailability a) => const {
-    SellerAvailability.available: 'Online',
-    SellerAvailability.unavailable: 'Offline',
-    SellerAvailability.onBreak: 'On Break',
-    SellerAvailability.unknown: 'Offline',
-  }[a] ?? 'Offline';                                         // Ã¢â€ Â was [a]! (safe but consistent)
+  static String _availLabel(SellerAvailability a) =>
+      const {
+        SellerAvailability.available: 'Online',
+        SellerAvailability.unavailable: 'Offline',
+        SellerAvailability.onBreak: 'On Break',
+        SellerAvailability.unknown: 'Offline',
+      }[a] ??
+      'Offline'; // Ã¢â€ Â was [a]! (safe but consistent)
 
-  static Color _availColor(SellerAvailability a, AppColor c) => {
-    SellerAvailability.available: c.success,
-    SellerAvailability.unavailable: c.accent,
-    SellerAvailability.onBreak: c.warning,
-    SellerAvailability.unknown: c.accent,
-  }[a] ?? c.accent;                                          // Ã¢â€ Â was [a]! (safe but consistent)
+  static Color _availColor(SellerAvailability a, AppColor c) =>
+      {
+        SellerAvailability.available: c.success,
+        SellerAvailability.unavailable: c.accent,
+        SellerAvailability.onBreak: c.warning,
+        SellerAvailability.unknown: c.accent,
+      }[a] ??
+      c.accent; // Ã¢â€ Â was [a]! (safe but consistent)
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Build Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -335,12 +342,13 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                                   getTypeLabel: _typeLabel,
                                   getTypeIcon: _typeIcon,
                                   getAvailabilityLabel: _availLabel,
-                                  getAvailabilityColor: (a) => _availColor(a, c),
+                                  getAvailabilityColor: (a) =>
+                                      _availColor(a, c),
                                   paymentMethodIds: _effectivePaymentMethodIds
                                       .map(
                                         (id) =>
-                                    _paymentMethodsMap[id]?.name ?? id,
-                                  )
+                                            _paymentMethodsMap[id]?.name ?? id,
+                                      )
                                       .toList(),
                                   averageRating: _averageRating,
                                   reviewCount: _reviewCount,
@@ -384,7 +392,7 @@ class _OfferDetailsModalState extends State<OfferDetailsModal>
                             shimmerAnim: _shimmerAnim,
                             loadingPaymentMethods: _loadingPaymentMethods,
                             effectivePaymentMethodIds:
-                            _effectivePaymentMethodIds,
+                                _effectivePaymentMethodIds,
                             paymentMethodsMap: _paymentMethodsMap,
                             getPaymentMethodNames: _getPaymentMethodNames,
                           ),
@@ -496,8 +504,7 @@ class _HeroHeader extends StatelessWidget {
               const SizedBox(width: 6),
               // Status pill Ã¢â‚¬â€ solid fill
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
                   color: statusColor,
                   borderRadius: BorderRadius.circular(10),
@@ -742,7 +749,12 @@ class _DetailsCard extends StatelessWidget {
           if (loadingPaymentMethods)
             _LoadingDetailMethodsRow(c: c, shimmerAnim: shimmerAnim)
           else if (effectivePaymentMethodIds.isEmpty)
-            _DetailRow(c: c, label: 'Payment methods', value: 'Ã¢â‚¬â€', isLast: true)
+            _DetailRow(
+              c: c,
+              label: 'Payment methods',
+              value: 'Ã¢â‚¬â€',
+              isLast: true,
+            )
           else
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

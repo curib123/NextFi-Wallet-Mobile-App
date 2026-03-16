@@ -2,7 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
-import 'package:next_fi/app/state/currency_vm.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
 
 class PriceChartVM extends ChangeNotifier {
@@ -200,3 +200,4 @@ class PriceChartVM extends ChangeNotifier {
     super.dispose();
   }
 }
+

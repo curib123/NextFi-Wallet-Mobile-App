@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:next_fi/app/theme/app_color.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class InactivityGuard extends StatefulWidget {
+import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
+
+class InactivityGuard extends ConsumerStatefulWidget {
   const InactivityGuard({
     super.key,
     required this.child,
@@ -15,20 +17,19 @@ class InactivityGuard extends StatefulWidget {
   final Duration idleTimeout;
 
   @override
-  State<InactivityGuard> createState() => _InactivityGuardState();
+  ConsumerState<InactivityGuard> createState() => _InactivityGuardState();
 }
 
-class _InactivityGuardState extends State<InactivityGuard>
+class _InactivityGuardState extends ConsumerState<InactivityGuard>
     with WidgetsBindingObserver {
   Timer? _idleTimer;
-  bool _isWarningVisible = false;
-  late DateTime _lastActivityAt;
+  DateTime _lastActivityAt = DateTime.now();
+  bool _hasLockedSession = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _lastActivityAt = DateTime.now();
     _scheduleIdleTimer(widget.idleTimeout);
   }
 
@@ -40,14 +41,21 @@ class _InactivityGuardState extends State<InactivityGuard>
   }
 
   @override
+  void didUpdateWidget(covariant InactivityGuard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.idleTimeout != widget.idleTimeout) {
+      _scheduleIdleTimer(widget.idleTimeout);
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      final idleFor = DateTime.now().difference(_lastActivityAt);
-      final remaining = widget.idleTimeout - idleFor;
-      if (remaining <= Duration.zero) {
-        _onIdleTimeout();
+      final Duration idleFor = DateTime.now().difference(_lastActivityAt);
+      if (_shouldProtectSession && idleFor >= widget.idleTimeout) {
+        _lockSession();
       } else {
-        _scheduleIdleTimer(remaining);
+        _scheduleIdleTimer(widget.idleTimeout - idleFor);
       }
       return;
     }
@@ -59,70 +67,62 @@ class _InactivityGuardState extends State<InactivityGuard>
     }
   }
 
+  AppShellState get _shell => ref.read(appShellProvider);
+
+  bool get _shouldProtectSession {
+    return _shell.hasMnemonic &&
+        !_shell.loading &&
+        !_shell.showSplash &&
+        !_shell.showOnboarding &&
+        _shell.isAuthenticated;
+  }
+
   void _markActivity() {
-    if (!mounted || _isWarningVisible) return;
+    if (!mounted || !_shouldProtectSession) return;
+    _hasLockedSession = false;
     _lastActivityAt = DateTime.now();
     _scheduleIdleTimer(widget.idleTimeout);
   }
 
   void _scheduleIdleTimer(Duration duration) {
     _idleTimer?.cancel();
-    if (_isWarningVisible) return;
-    _idleTimer = Timer(duration, _onIdleTimeout);
+    if (!_shouldProtectSession || _hasLockedSession) return;
+
+    final Duration safeDuration = duration <= Duration.zero
+        ? const Duration(milliseconds: 50)
+        : duration;
+    _idleTimer = Timer(safeDuration, _lockSession);
   }
 
-  void _onIdleTimeout() {
-    if (!mounted || _isWarningVisible) return;
-    _showExitWarningDialog();
-  }
+  void _lockSession() {
+    if (!mounted || !_shouldProtectSession || _hasLockedSession) return;
 
-  Future<void> _showExitWarningDialog() async {
-    _isWarningVisible = true;
+    _hasLockedSession = true;
+    _idleTimer?.cancel();
+    ref.read(appShellProvider.notifier).setAuthenticated(false);
 
-    final shouldExit = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        final colors = AppColor.of(dialogContext);
-        return AlertDialog(
-          backgroundColor: colors.surface,
-          title: const Text('Inactive Session'),
-          content: const Text(
-            'No activity detected. Exit the app?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Confirm'),
-            ),
-          ],
-        );
-      },
-    );
-
-    _isWarningVisible = false;
-    if (!mounted) return;
-
-    if (shouldExit == true) {
-      _exitApp();
-      return;
-    }
-
-    _lastActivityAt = DateTime.now();
-    _scheduleIdleTimer(widget.idleTimeout);
-  }
-
-  void _exitApp() {
-    _isWarningVisible = false;
-    SystemNavigator.pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showFloatingSnackBar(
+        context,
+        message: 'Session locked due to inactivity.',
+        type: SnackBarType.warning,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AppShellState>(appShellProvider, (prev, next) {
+      if (next.isAuthenticated) {
+        _lastActivityAt = DateTime.now();
+        _hasLockedSession = false;
+        _scheduleIdleTimer(widget.idleTimeout);
+      } else {
+        _idleTimer?.cancel();
+      }
+    });
+
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _markActivity(),
@@ -133,4 +133,3 @@ class _InactivityGuardState extends State<InactivityGuard>
     );
   }
 }
-

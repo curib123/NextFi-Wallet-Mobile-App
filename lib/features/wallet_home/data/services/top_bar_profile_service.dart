@@ -1,6 +1,6 @@
-import 'package:next_fi/core/services/oath2.0/api/auth_http_client.dart';
-import 'package:next_fi/core/services/oath2.0/api/endpoints.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/api/auth_http_client.dart';
+import 'package:next_fi/core/services/auth/api/auth_endpoints.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 
 class TopBarProfileService {
@@ -24,3 +24,5 @@ class TopBarProfileService {
     }
   }
 }
+
+

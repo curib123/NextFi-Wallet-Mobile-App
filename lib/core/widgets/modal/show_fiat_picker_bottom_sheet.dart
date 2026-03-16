@@ -4,14 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 /// Call this to open the modal. Returns the selected fiat code (e.g., "php") or null if cancelled.
 Future<String?> showFiatPickerBottomSheet(BuildContext context) {
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: AppColor.of(context).surface,
+  return showAppModalBottomSheet<String>(
+    context,
     builder: (_) => const _FiatPickerSheet(),
   );
 }
@@ -48,13 +46,10 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
       parent: _animController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+        );
     _animController.forward();
   }
 
@@ -210,12 +205,8 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                     ),
                   ),
                   child: TextField(
-                    onChanged: (value) =>
-                        setState(() => _searchQuery = value),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colors.textPrimary,
-                    ),
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                    style: TextStyle(fontSize: 14, color: colors.textPrimary),
                     decoration: InputDecoration(
                       hintText: 'Search currencies...',
                       hintStyle: TextStyle(
@@ -229,14 +220,14 @@ class _FiatPickerSheetState extends State<_FiatPickerSheet>
                       ),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
-                        icon: Icon(
-                          LucideIcons.x,
-                          size: 18,
-                          color: colors.textSecondary,
-                        ),
-                        onPressed: () =>
-                            setState(() => _searchQuery = ''),
-                      )
+                              icon: Icon(
+                                LucideIcons.x,
+                                size: 18,
+                                color: colors.textSecondary,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _searchQuery = ''),
+                            )
                           : null,
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -393,20 +384,20 @@ class _CurrencyTileState extends State<_CurrencyTile> {
           ),
           boxShadow: widget.isSelected
               ? [
-            BoxShadow(
-              color: widget.colors.primary.withValues(alpha: 0.15),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ]
+                  BoxShadow(
+                    color: widget.colors.primary.withValues(alpha: 0.15),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
               : _isPressed
               ? [
-            BoxShadow(
-              color: widget.colors.primary.withValues(alpha: 0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ]
+                  BoxShadow(
+                    color: widget.colors.primary.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
               : null,
         ),
         child: Row(
@@ -493,10 +484,10 @@ class _CurrencyTileState extends State<_CurrencyTile> {
               ),
               child: widget.isSelected
                   ? Icon(
-                LucideIcons.check,
-                size: 16,
-                color: AppColor.of(context).onPrimary,
-              )
+                      LucideIcons.check,
+                      size: 16,
+                      color: AppColor.of(context).onPrimary,
+                    )
                   : null,
             ),
           ],
@@ -550,4 +541,3 @@ const List<FiatOption> kFiatOptions = [
   FiatOption('ngn', 'Nigerian Naira', '🇳🇬'),
   FiatOption('zar', 'South African Rand', '🇿🇦'),
 ];
-

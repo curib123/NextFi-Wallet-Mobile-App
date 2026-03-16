@@ -6,13 +6,13 @@ import 'package:next_fi/core/widgets/modal/wallet_switch_result.dart';
 import 'package:next_fi/core/widgets/profile_avatar/user_avatar.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/app/config/app_providers.dart';
-import 'package:next_fi/features/auth/presentation/screens/login.dart';
+import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
 import 'package:next_fi/features/import_wallet/presentation/screens/import_wallet_screen.dart';
 import 'package:next_fi/features/profile/presentation/screens/profile_screen.dart';
 import 'package:next_fi/features/seed_phrases/presentation/screens/seed_phrase_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/top_bar_profile_controller.dart';
 import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 
 class TopBar extends ConsumerStatefulWidget {
@@ -317,4 +317,5 @@ class _ProfileActionButton extends StatelessWidget {
     );
   }
 }
+
 

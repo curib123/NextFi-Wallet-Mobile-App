@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
@@ -6,11 +7,12 @@ import 'package:next_fi/core/widgets/modal/profile_setup_modal.dart';
 import 'package:next_fi/core/widgets/modal/verification_consent_modal.dart';
 import 'package:next_fi/features/verification_flow/presentation/screens/payment_method_setup_screen.dart';
 import 'package:next_fi/features/verification_flow/presentation/screens/selfie_verification_step_screen.dart';
+import 'package:next_fi/features/verification_flow/presentation/viewmodels/verification_flow_controller.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
-import 'package:next_fi/core/services/verification/models/verification_models.dart';
 import 'package:next_fi/core/services/verification/verification_flow_service.dart';
+import 'package:next_fi/core/services/verification/models/verification_models.dart';
 
-class VerificationFlowScreen extends StatefulWidget {
+class VerificationFlowScreen extends ConsumerStatefulWidget {
   const VerificationFlowScreen({
     super.key,
     this.onOpenProfileStep,
@@ -23,18 +25,15 @@ class VerificationFlowScreen extends StatefulWidget {
   final Future<void> Function(BuildContext context)? onOpenPaymentStep;
 
   @override
-  State<VerificationFlowScreen> createState() => _VerificationFlowScreenState();
+  ConsumerState<VerificationFlowScreen> createState() =>
+      _VerificationFlowScreenState();
 }
 
-class _VerificationFlowScreenState extends State<VerificationFlowScreen>
+class _VerificationFlowScreenState extends ConsumerState<VerificationFlowScreen>
     with TickerProviderStateMixin {
   static const String _kVerificationConsentKey = 'verification.user_consent.v1';
   static const String _kVerificationConsentAtKey =
       'verification.user_consent_at.v1';
-
-  VerificationFlowSnapshot? _snapshot;
-  String? _error;
-  bool _loading = true;
 
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -50,7 +49,6 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
       parent: _fadeController,
       curve: Curves.easeOut,
     );
-    _load();
   }
 
   @override
@@ -60,29 +58,17 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final snapshot = await VerificationFlowService.I.getSnapshot();
-      if (!mounted) return;
-      setState(() {
-        _snapshot = snapshot;
-        _loading = false;
-      });
-      _fadeController.forward(from: 0);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
+    await ref.read(verificationFlowControllerProvider.notifier).load();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(verificationFlowControllerProvider, (previous, next) {
+      final snapshotChanged = previous?.snapshot != next.snapshot;
+      if (snapshotChanged && !next.loading && next.error == null) {
+        _fadeController.forward(from: 0);
+      }
+    });
     final c = AppColor.of(context);
     return Scaffold(
       backgroundColor: c.background,
@@ -122,12 +108,13 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
   }
 
   Widget _buildBody(AppColor c) {
-    if (_loading) {
+    final state = ref.watch(verificationFlowControllerProvider);
+    if (state.loading) {
       return const PageLoader(label: 'Checking verification status...');
     }
-    if (_error != null) return _buildErrorState(c);
+    if (state.error != null) return _buildErrorState(c, state.error!);
 
-    final snapshot = _snapshot;
+    final snapshot = state.snapshot;
     if (snapshot == null) return const SizedBox.shrink();
 
     final status = snapshot.verification.status;
@@ -242,7 +229,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
     );
   }
 
-  Widget _buildErrorState(AppColor c) {
+  Widget _buildErrorState(AppColor c, String error) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -270,7 +257,7 @@ class _VerificationFlowScreenState extends State<VerificationFlowScreen>
             ),
             const SizedBox(height: 6),
             Text(
-              _error!,
+              error,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: c.textSecondary,
@@ -980,4 +967,3 @@ class _AddPaymentButton extends StatelessWidget {
     );
   }
 }
-

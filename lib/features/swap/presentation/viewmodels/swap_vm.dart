@@ -7,7 +7,7 @@ import 'package:next_fi/features/swap/data/models/swap_dir.dart';
 import 'package:next_fi/features/swap/presentation/viewmodels/swap_state.dart';
 import 'package:next_fi/features/swap/data/models/swap_mode.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/app/state/seed_keypair_vm.dart';
+import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
 
 class SwapVM extends ChangeNotifier {
@@ -563,3 +563,4 @@ class SwapVM extends ChangeNotifier {
     return (v * m).roundToDouble() / m;
   }
 }
+

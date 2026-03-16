@@ -8,17 +8,13 @@ import 'package:next_fi/core/widgets/modal/marketplace_filters_modal.dart';
 import 'package:next_fi/core/widgets/modal/offer_details_modal.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/offers/presentation/screens/trade_screen.dart';
+import 'package:next_fi/features/offers/presentation/viewmodels/market_offers_controller.dart';
 import 'package:next_fi/features/offers/presentation/widgets/public_offer_tile.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_vm.dart';
-import 'package:next_fi/app/state/asset_vm.dart';
-import 'package:next_fi/app/state/seed_keypair_vm.dart';
-import 'package:next_fi/core/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
-import 'package:next_fi/core/services/payment_method_and_accounts/payment_method_and_accounts_core_service.dart';
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/core/services/offers/models/offers_models.dart';
-import 'package:next_fi/core/services/offers/offers_core_service.dart';
-import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 // TYPOGRAPHY TOKENS  (mirrors public_offer_tile.dart _T)
@@ -129,36 +125,21 @@ abstract class _T {
 // MARKET OFFERS SCREEN ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â P2P Marketplace
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
-class MarketOffersScreen extends StatefulWidget {
+class MarketOffersScreen extends ConsumerStatefulWidget {
   const MarketOffersScreen({super.key, required this.initialType});
   final OfferType initialType;
 
   @override
-  State<MarketOffersScreen> createState() => _MarketOffersScreenState();
+  ConsumerState<MarketOffersScreen> createState() => _MarketOffersScreenState();
 }
 
-class _MarketOffersScreenState extends State<MarketOffersScreen>
+class _MarketOffersScreenState extends ConsumerState<MarketOffersScreen>
     with TickerProviderStateMixin {
-  final _offersCore = OffersCoreService.I;
-  final _paymentCore = PaymentMethodAndAccountsCoreService.I;
-
   late final AssetVM _assetVm;
   late final PriceChartVM _xlmPriceVm;
   late final PriceChartVM _usdcPriceVm;
   late final VoidCallback _priceListener;
-
-  bool _loading = true;
-  String? _error;
-  OfferType _selectedType = OfferType.buy;
-  List<OfferModel> _offers = const [];
-  List<PaymentMethodModel> _paymentMethods = const [];
-  MarketOfferFilters _filters = const MarketOfferFilters();
-
-  SeedKeypairVM? _seedVm;
-  StellarWalletServices? _stellarSvc;
-  String? _lastBoundAddress;
-  String? _lastTrustlineCheckedAddress;
-  bool _lastHasUsdcTrustline = false;
+  ProviderSubscription? _seedSubscription;
 
   late final AnimationController _enterCtrl;
   late final Animation<double> _fadeAnim;
@@ -166,14 +147,11 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
   late final AnimationController _shimmerCtrl;
   late final Animation<double> _shimmerAnim;
 
-  ProviderContainer get _container =>
-      ProviderScope.containerOf(context, listen: false);
-
   @override
   void initState() {
     super.initState();
-    final currency = _container.read(currencyVmProvider);
-    final config = _container.read(appConfigProvider);
+    final currency = ref.read(currencyVmProvider);
+    final config = ref.read(appConfigProvider);
 
     _assetVm = AssetVM(
       currency,
@@ -189,34 +167,32 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     _usdcPriceVm.addListener(_priceListener);
     _assetVm.addListener(_priceListener);
 
-    _seedVm = _container.read(seedKeypairProvider);
-    _stellarSvc = _container.read(stellarWalletServiceProvider);
-    _lastBoundAddress = _seedVm?.accountId;
-    _seedVm?.addListener(_onActiveWalletChanged);
-    _selectedType = widget.initialType;
-
     _enterCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
     _fadeAnim = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.025), end: Offset.zero)
-        .animate(CurvedAnimation(
-        parent: _enterCtrl, curve: Curves.easeOutCubic));
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.025),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOutCubic));
 
     _shimmerCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     )..repeat();
-    _shimmerAnim =
-        CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear);
-
-    _load();
+    _shimmerAnim = CurvedAnimation(parent: _shimmerCtrl, curve: Curves.linear);
+    _seedSubscription = ref.listenManual(seedKeypairProvider, (previous, next) {
+      if (previous?.accountId == next.accountId) return;
+      ref
+          .read(marketOffersControllerProvider(widget.initialType).notifier)
+          .handleActiveWalletChanged(next.accountId);
+    });
   }
 
   @override
   void dispose() {
-    _seedVm?.removeListener(_onActiveWalletChanged);
+    _seedSubscription?.close();
     _xlmPriceVm.removeListener(_priceListener);
     _usdcPriceVm.removeListener(_priceListener);
     _assetVm.removeListener(_priceListener);
@@ -228,100 +204,32 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     super.dispose();
   }
 
-  void _onActiveWalletChanged() {
-    final currentAddress = _seedVm?.accountId;
-    if (currentAddress == _lastBoundAddress) return;
-    _lastBoundAddress = currentAddress;
-    _lastTrustlineCheckedAddress = null;
-    _load();
-  }
-
-  Future<bool> _activeAddressHasUsdcTrustline() async {
-    final SeedKeypairVM seedVm =
-        _seedVm ?? _container.read(seedKeypairProvider);
-    var accountId = seedVm.accountId?.trim();
-    if (accountId == null || accountId.isEmpty) {
-      await seedVm.refresh();
-      accountId = seedVm.accountId?.trim();
-    }
-    if (accountId == null || accountId.isEmpty) return false;
-    if (_lastTrustlineCheckedAddress == accountId) {
-      return _lastHasUsdcTrustline;
-    }
-    final stellar = _stellarSvc;
-    if (stellar == null) return false;
-    try {
-      final has = await stellar.accountService.hasUsdcTrustline(accountId);
-      _lastTrustlineCheckedAddress = accountId;
-      _lastHasUsdcTrustline = has;
-      return has;
-    } catch (_) {
-      _lastTrustlineCheckedAddress = accountId;
-      _lastHasUsdcTrustline = false;
-      return false;
-    }
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final hasUsdc = await _activeAddressHasUsdcTrustline();
-      final paymentMethods = await _paymentCore.listPaymentMethods(
-        activeOnly: true,
-      );
-      final offers = await _offersCore.listPublic(
-        query: _filters.toQuery(type: _selectedType),
-      );
-      final filtered = offers.where((o) {
-        final asset = o.asset.trim().toUpperCase();
-        return asset != 'USDC' || hasUsdc;
-      }).toList();
-      if (!mounted) return;
-      setState(() {
-        _paymentMethods = paymentMethods;
-        _offers = filtered;
-        _loading = false;
-      });
-      _enterCtrl.forward(from: 0);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-      showFloatingSnackBar(
-        context,
-        message: 'Failed to load marketplace offers.',
-        type: SnackBarType.error,
-        position: SnackBarPosition.top,
-      );
-    }
-  }
-
-  void _onTypeChanged(OfferType type) {
-    if (_selectedType == type) return;
+  void _onTypeChanged(OfferType currentType, OfferType nextType) {
+    if (currentType == nextType) return;
     HapticFeedback.selectionClick();
-    setState(() => _selectedType = type);
-    _load();
+    ref
+        .read(marketOffersControllerProvider(widget.initialType).notifier)
+        .setOfferType(nextType);
   }
 
-  Future<void> _openFilters() async {
+  Future<void> _openFilters(MarketOfferFilters filters) async {
+    final screenState = ref.read(
+      marketOffersControllerProvider(widget.initialType),
+    );
     final result = await showMarketplaceFiltersModal(
       context,
-      initialFilters: _filters,
-      paymentMethods: _paymentMethods,
+      initialFilters: filters,
+      paymentMethods: screenState.paymentMethods,
     );
 
-    if (result == null || result == _filters) return;
-    setState(() => _filters = result);
-    _load();
+    if (result == null || result == filters) return;
+    await ref
+        .read(marketOffersControllerProvider(widget.initialType).notifier)
+        .applyFilters(result);
   }
 
   bool _hasTrustedVmRates() {
-    final currency = _container.read(currencyVmProvider);
+    final currency = ref.read(currencyVmProvider);
     return !currency.loading &&
         !currency.ratesUnavailable &&
         !currency.usingFallbackRates;
@@ -344,8 +252,9 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
     if (!live.isFinite || live <= 0) return null;
     final margin = offer.marginPercent ?? 0.0;
     final isMerchantSell = offer.type == OfferType.sell;
-    final factor =
-    isMerchantSell ? (1.0 + margin / 100.0) : (1.0 - margin / 100.0);
+    final factor = isMerchantSell
+        ? (1.0 + margin / 100.0)
+        : (1.0 - margin / 100.0);
     return '${_formatFiat(fiatCode, live * factor)} $fiatCode';
   }
 
@@ -381,8 +290,9 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
   String _formatFiat(String fiatCode, double value, {int? decimalDigits}) =>
       NumberFormat.simpleCurrency(
-          name: fiatCode, decimalDigits: decimalDigits)
-          .format(value);
+        name: fiatCode,
+        decimalDigits: decimalDigits,
+      ).format(value);
 
   Future<void> _openOfferDetails(OfferModel offer) async {
     await showModalBottomSheet<void>(
@@ -409,6 +319,26 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenState = ref.watch(
+      marketOffersControllerProvider(widget.initialType),
+    );
+    ref.listen(marketOffersControllerProvider(widget.initialType), (
+      previous,
+      next,
+    ) {
+      if (previous?.error != next.error && next.error != null) {
+        showFloatingSnackBar(
+          context,
+          message: 'Failed to load marketplace offers.',
+          type: SnackBarType.error,
+          position: SnackBarPosition.top,
+        );
+      }
+      final offersChanged = previous?.offers != next.offers;
+      if (offersChanged && !next.loading && next.error == null) {
+        _enterCtrl.forward(from: 0);
+      }
+    });
     final c = AppColor.of(context);
 
     return Scaffold(
@@ -433,8 +363,9 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _TypeToggle(
                 c: c,
-                selected: _selectedType,
-                onChanged: _onTypeChanged,
+                selected: screenState.selectedType,
+                onChanged: (OfferType value) =>
+                    _onTypeChanged(screenState.selectedType, value),
               ),
             ),
             const SizedBox(height: 12),
@@ -442,63 +373,92 @@ class _MarketOffersScreenState extends State<MarketOffersScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _FilterBar(
                 c: c,
-                activeCount: _filters.activeCount,
-                summary: _filters.summary(_paymentMethods),
-                onTap: _openFilters,
+                activeCount: screenState.filters.activeCount,
+                summary: screenState.filters.summary(
+                  screenState.paymentMethods,
+                ),
+                onTap: () => _openFilters(screenState.filters),
               ),
             ),
-            if (!_loading && _error == null && _offers.isNotEmpty) ...[
+            if (!screenState.loading &&
+                screenState.error == null &&
+                screenState.offers.isNotEmpty) ...[
               const SizedBox(height: 14),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _OfferCountRow(c: c, count: _offers.length),
+                child: _OfferCountRow(c: c, count: screenState.offers.length),
               ),
             ],
             const SizedBox(height: 12),
             Expanded(
-              child: _loading
+              child: screenState.loading
                   ? _SkeletonList(c: c)
-                  : _error != null
-                  ? _ErrorState(c: c, error: _error!, onRetry: _load)
+                  : screenState.error != null
+                  ? _ErrorState(
+                      c: c,
+                      error: screenState.error!,
+                      onRetry: () => ref
+                          .read(
+                            marketOffersControllerProvider(
+                              widget.initialType,
+                            ).notifier,
+                          )
+                          .load(),
+                    )
                   : RefreshIndicator(
-                color: c.primary,
-                onRefresh: _load,
-                child: _offers.isEmpty
-                    ? ListView(children: [
-                  _EmptyState(c: c, type: _selectedType),
-                ])
-                    : FadeTransition(
-                  opacity: _fadeAnim,
-                  child: SlideTransition(
-                    position: _slideAnim,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(
-                          20, 0, 20, 32),
-                      itemCount: _offers.length,
-                      itemBuilder: (_, i) {
-                        final offer = _offers[i];
-                        return Padding(
-                          padding: const EdgeInsets.only(
-                              bottom: 12),
-                          child: PublicOfferTile(
-                            c: c,
-                            offer: offer,
-                            assetVm: _assetVm,
-                            marketPrice:
-                            _offerEffectivePrice(offer),
-                            priceLoading:
-                            _priceLoadingFor(offer),
-                            enabled: _offerEnabled(offer),
-                            shimmerAnim: _shimmerAnim,
-                            onTap: () =>
-                                _openOfferDetails(offer),
-                          ),
-                        );
-                      },
+                      color: c.primary,
+                      onRefresh: () => ref
+                          .read(
+                            marketOffersControllerProvider(
+                              widget.initialType,
+                            ).notifier,
+                          )
+                          .load(),
+                      child: screenState.offers.isEmpty
+                          ? ListView(
+                              children: [
+                                _EmptyState(
+                                  c: c,
+                                  type: screenState.selectedType,
+                                ),
+                              ],
+                            )
+                          : FadeTransition(
+                              opacity: _fadeAnim,
+                              child: SlideTransition(
+                                position: _slideAnim,
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    0,
+                                    20,
+                                    32,
+                                  ),
+                                  itemCount: screenState.offers.length,
+                                  itemBuilder: (_, i) {
+                                    final offer = screenState.offers[i];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: PublicOfferTile(
+                                        c: c,
+                                        offer: offer,
+                                        assetVm: _assetVm,
+                                        marketPrice: _offerEffectivePrice(
+                                          offer,
+                                        ),
+                                        priceLoading: _priceLoadingFor(offer),
+                                        enabled: _offerEnabled(offer),
+                                        shimmerAnim: _shimmerAnim,
+                                        onTap: () => _openOfferDetails(offer),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
                     ),
-                  ),
-                ),
-              ),
             ),
           ],
         ),
@@ -523,10 +483,7 @@ class _Header extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (canPop) ...[
-            _BackButton(c: c),
-            const SizedBox(width: 12),
-          ],
+          if (canPop) ...[_BackButton(c: c), const SizedBox(width: 12)],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,8 +543,7 @@ class _LiveBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding:
-    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
       color: c.success.withValues(alpha: 0.10),
       borderRadius: BorderRadius.circular(8),
@@ -599,14 +555,10 @@ class _LiveBadge extends StatelessWidget {
         Container(
           width: 6,
           height: 6,
-          decoration:
-          BoxDecoration(color: c.success, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: c.success, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(
-          'LIVE',
-          style: _T.label.copyWith(color: c.success),
-        ),
+        Text('LIVE', style: _T.label.copyWith(color: c.success)),
       ],
     ),
   );
@@ -674,14 +626,17 @@ class _MarketPulseStrip extends StatelessWidget {
                 fiat: xlmVm.fiatCode,
                 price: (xlm.isFinite && xlm > 0)
                     ? NumberFormat.simpleCurrency(
-                    name: xlmVm.fiatCode, decimalDigits: 4)
-                    .format(xlm)
+                        name: xlmVm.fiatCode,
+                        decimalDigits: 4,
+                      ).format(xlm)
                     : '--',
-                changePercent:
-                assetVm.findAsset('xlm')?.priceChangePercent24h,
+                changePercent: assetVm.findAsset('xlm')?.priceChangePercent24h,
               ),
               Container(
-                  width: 1, height: 52, color: c.border.withValues(alpha: 0.5)),
+                width: 1,
+                height: 52,
+                color: c.border.withValues(alpha: 0.5),
+              ),
               _PulseCell(
                 c: c,
                 logoUrl: assetVm.logoFor('usdc'),
@@ -689,11 +644,11 @@ class _MarketPulseStrip extends StatelessWidget {
                 fiat: usdcVm.fiatCode,
                 price: (usdc.isFinite && usdc > 0)
                     ? NumberFormat.simpleCurrency(
-                    name: usdcVm.fiatCode, decimalDigits: 4)
-                    .format(usdc)
+                        name: usdcVm.fiatCode,
+                        decimalDigits: 4,
+                      ).format(usdc)
                     : '--',
-                changePercent:
-                assetVm.findAsset('usdc')?.priceChangePercent24h,
+                changePercent: assetVm.findAsset('usdc')?.priceChangePercent24h,
               ),
             ],
           ),
@@ -705,8 +660,7 @@ class _MarketPulseStrip extends StatelessWidget {
           right: 0,
           child: Center(
             child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 color: c.surface,
                 borderRadius: BorderRadius.circular(6),
@@ -898,20 +852,14 @@ class _ToggleTab extends StatelessWidget {
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active
-              ? activeColor
-              : Colors.transparent,
+          color: active ? activeColor : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 13,
-              color: active ? c.onPrimary : c.textSecondary,
-            ),
+            Icon(icon, size: 13, color: active ? c.onPrimary : c.textSecondary),
             const SizedBox(width: 6),
             Text(
               label,
@@ -988,19 +936,13 @@ class _FilterBar extends StatelessWidget {
                     summary,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: c.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Icons.keyboard_arrow_right_rounded,
-              color: c.textSecondary,
-            ),
+            Icon(Icons.keyboard_arrow_right_rounded, color: c.textSecondary),
           ],
         ),
       ),
@@ -1018,8 +960,7 @@ class _EmptyState extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
     child: Container(
       width: double.infinity,
-      padding:
-      const EdgeInsets.symmetric(horizontal: 24, vertical: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 44),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(20),
@@ -1036,8 +977,11 @@ class _EmptyState extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: c.border),
             ),
-            child: Icon(Icons.storefront_outlined,
-                color: c.textSecondary, size: 22),
+            child: Icon(
+              Icons.storefront_outlined,
+              color: c.textSecondary,
+              size: 22,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -1084,11 +1028,9 @@ class _ErrorState extends StatelessWidget {
             decoration: BoxDecoration(
               color: c.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: c.error.withValues(alpha: 0.2)),
+              border: Border.all(color: c.error.withValues(alpha: 0.2)),
             ),
-            child: Icon(Icons.cloud_off_rounded,
-                color: c.error, size: 22),
+            child: Icon(Icons.cloud_off_rounded, color: c.error, size: 22),
           ),
           const SizedBox(height: 16),
           Text(
@@ -1108,8 +1050,7 @@ class _ErrorState extends StatelessWidget {
           GestureDetector(
             onTap: onRetry,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
                 color: c.primary,
                 borderRadius: BorderRadius.circular(12),
@@ -1144,8 +1085,10 @@ class _SkeletonListState extends State<_SkeletonList>
     vsync: this,
     duration: const Duration(milliseconds: 1100),
   )..repeat();
-  late final Animation<double> _anim =
-  CurvedAnimation(parent: _ctrl, curve: Curves.linear);
+  late final Animation<double> _anim = CurvedAnimation(
+    parent: _ctrl,
+    curve: Curves.linear,
+  );
 
   @override
   void dispose() {
@@ -1192,50 +1135,58 @@ class _SkeletonTile extends StatelessWidget {
         _box(72, 20, 5),
         const SizedBox(height: 10),
         // Merchant row
-        Row(children: [
-          _box(44, 44, 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+        Row(
+          children: [
+            _box(44, 44, 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _box(120, 12, 4),
                   const SizedBox(height: 6),
                   _box(80, 10, 3),
-                ]),
-          ),
-        ]),
+                ],
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         Container(height: 1, color: c.border.withValues(alpha: 0.5)),
         const SizedBox(height: 12),
         // Asset row
-        Row(children: [
-          _box(36, 36, 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
+        Row(
+          children: [
+            _box(36, 36, 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _box(100, 16, 4),
                   const SizedBox(height: 6),
                   _box(64, 11, 4),
-                ]),
-          ),
-          _box(76, 36, 10),
-        ]),
+                ],
+              ),
+            ),
+            _box(76, 36, 10),
+          ],
+        ),
         const SizedBox(height: 12),
         Container(height: 1, color: c.border.withValues(alpha: 0.5)),
         const SizedBox(height: 12),
         _box(140, 11, 3),
         const SizedBox(height: 10),
         // Action row
-        Row(children: [
-          Expanded(child: _box(double.infinity, 40, 10)),
-          const SizedBox(width: 8),
-          _box(100, 40, 10),
-        ]),
+        Row(
+          children: [
+            Expanded(child: _box(double.infinity, 40, 10)),
+            const SizedBox(width: 8),
+            _box(100, 40, 10),
+          ],
+        ),
       ],
     ),
   );
@@ -1281,25 +1232,27 @@ class _ShimBox extends StatelessWidget {
                 final band = w * 0.5;
                 final travel = w + band * 2;
                 final left = travel * anim.value - band;
-                return Stack(children: [
-                  Positioned(
-                    left: left,
-                    top: 0,
-                    bottom: 0,
-                    width: band,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            highlight.withValues(alpha: 0),
-                            highlight,
-                            highlight.withValues(alpha: 0),
-                          ],
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: left,
+                      top: 0,
+                      bottom: 0,
+                      width: band,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              highlight.withValues(alpha: 0),
+                              highlight,
+                              highlight.withValues(alpha: 0),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ]);
+                  ],
+                );
               },
             ),
           ],

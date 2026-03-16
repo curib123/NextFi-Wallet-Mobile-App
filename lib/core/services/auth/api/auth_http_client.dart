@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:next_fi/core/services/oath2.0/api/endpoints.dart';
-import 'package:next_fi/core/services/oath2.0/models/auth_exception.dart';
-import 'package:next_fi/core/services/oath2.0/models/auth_response.dart';
+import 'package:next_fi/core/services/auth/api/auth_endpoints.dart';
+import 'package:next_fi/core/services/auth/models/auth_exception.dart';
+import 'package:next_fi/core/services/auth/models/auth_response.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 
 import '../../base_url/base_url.dart';
@@ -145,3 +145,5 @@ class AuthHttpClient {
 
   void dispose() => _client.close();
 }
+
+

@@ -1,4 +1,4 @@
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 
 class TopBarProfileState {
   const TopBarProfileState({
@@ -30,3 +30,4 @@ class TopBarProfileState {
 }
 
 const Object _sentinel = Object();
+

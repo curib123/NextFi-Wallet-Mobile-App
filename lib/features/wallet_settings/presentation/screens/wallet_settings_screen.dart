@@ -25,7 +25,8 @@ class WalletScreenSettings extends ConsumerStatefulWidget {
   const WalletScreenSettings({super.key});
 
   @override
-  ConsumerState<WalletScreenSettings> createState() => _WalletScreenSettingsState();
+  ConsumerState<WalletScreenSettings> createState() =>
+      _WalletScreenSettingsState();
 }
 
 class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
@@ -48,7 +49,8 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
           statusBarColor: AppColor.of(context).surface,
-          statusBarIconBrightness: colors == AppColor.dark
+          statusBarIconBrightness:
+              Theme.of(context).brightness == Brightness.dark
               ? Brightness.light
               : Brightness.dark,
           systemNavigationBarColor: colors.background,
@@ -260,12 +262,7 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
                         ),
                       ),
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(
-                          _pad,
-                          12,
-                          _pad,
-                          12,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(_pad, 12, _pad, 12),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
                             FadeInDown(
@@ -281,9 +278,7 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
                             const SizedBox(height: 24),
                             FadeInUp(
                               duration: const Duration(milliseconds: 400),
-                              child: MetaHeaderSettings(
-                                wordCount: s.wordCount,
-                              ),
+                              child: MetaHeaderSettings(wordCount: s.wordCount),
                             ),
                             const SizedBox(height: 12),
                             FadeInUp(
@@ -291,8 +286,7 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
                               child: PhraseCardHoldReveal(
                                 words: s.words,
                                 obscured: s.obscured,
-                                onRevealHold: () =>
-                                    _toggleObscure(context, vm),
+                                onRevealHold: () => _toggleObscure(context, vm),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -400,7 +394,10 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.primary.withValues(alpha: 0.12), width: 1.5),
+        border: Border.all(
+          color: colors.primary.withValues(alpha: 0.12),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -429,7 +426,10 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
       decoration: BoxDecoration(
         color: colors.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.error.withValues(alpha: 0.3), width: 1.5),
+        border: Border.all(
+          color: colors.error.withValues(alpha: 0.3),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -635,7 +635,10 @@ class _RenameBottomSheet extends StatelessWidget {
           colors: [colors.surface, colors.surface.withValues(alpha: 0.98)],
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: colors.border.withValues(alpha: 0.15), width: 1.5),
+        border: Border.all(
+          color: colors.border.withValues(alpha: 0.15),
+          width: 1.5,
+        ),
       ),
       child: Padding(
         padding: EdgeInsets.only(
@@ -768,14 +771,19 @@ class _SheetButton extends StatelessWidget {
         backgroundColor: isPrimary
             ? colors.primary
             : colors.background.withValues(alpha: 0.6),
-        foregroundColor: isPrimary ? AppColor.of(context).onPrimary : colors.textPrimary,
+        foregroundColor: isPrimary
+            ? AppColor.of(context).onPrimary
+            : colors.textPrimary,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: isPrimary
               ? BorderSide.none
-              : BorderSide(color: colors.border.withValues(alpha: 0.25), width: 1.5),
+              : BorderSide(
+                  color: colors.border.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
         ),
       ),
       onPressed: onPressed,
@@ -791,4 +799,3 @@ class _SheetButton extends StatelessWidget {
     );
   }
 }
-

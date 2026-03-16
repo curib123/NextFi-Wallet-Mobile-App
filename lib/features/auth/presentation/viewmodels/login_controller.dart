@@ -3,7 +3,7 @@ import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/auth/data/services/login_service.dart';
 import 'package:next_fi/features/auth/presentation/viewmodels/login_state.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 
 final loginServiceProvider = Provider.autoDispose<LoginService>((ref) {
   final service = LoginService();
@@ -108,3 +108,4 @@ class LoginController extends Notifier<LoginState> {
     return user;
   }
 }
+

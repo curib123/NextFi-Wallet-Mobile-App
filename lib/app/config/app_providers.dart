@@ -13,12 +13,11 @@ import 'package:next_fi/features/seed_phrases/presentation/viewmodels/seed_phras
 import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
 import 'package:next_fi/features/swap/presentation/viewmodels/swap_vm.dart';
 import 'package:next_fi/features/transactions/presentation/viewmodels/transactions_vm.dart';
-import 'package:next_fi/features/wallet_creation/presentation/viewmodels/wallet_creation_vm.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
 import 'package:next_fi/features/wallet_settings/presentation/viewmodels/wallet_settings_vm.dart';
-import 'package:next_fi/app/state/asset_vm.dart';
-import 'package:next_fi/app/state/currency_vm.dart';
-import 'package:next_fi/app/state/seed_keypair_vm.dart';
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
+import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
@@ -248,11 +247,6 @@ final walletSettingsVmProvider =
       return WalletSettingsVM();
     });
 
-final walletCreationVmProvider =
-    ChangeNotifierProvider<WalletCreationVM>((ref) {
-      return WalletCreationVM();
-    });
-
 final settingsVmProvider = ChangeNotifierProvider<SettingsVM>((ref) {
   final vm = SettingsVM();
   unawaited(vm.initDefaults());
@@ -297,3 +291,4 @@ final appShellProvider =
 final tabControllerProvider = NotifierProvider<AppTabController, AppTabState>(
   AppTabController.new,
 );
+

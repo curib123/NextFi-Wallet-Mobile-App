@@ -5,16 +5,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
 import 'package:next_fi/features/send/presentation/viewmodels/send_state.dart';
-import 'package:next_fi/app/state/seed_keypair_vm.dart';
+import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/core/services/federation_address/federation_address_core_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
-final sendControllerProvider =
-    NotifierProvider.autoDispose.family<
-      SendController,
-      SendState,
-      SendControllerArgs
-    >(SendController.new);
+final sendFederationAddressServiceProvider =
+    Provider<FederationAddressCoreService>(
+      (Ref ref) => FederationAddressCoreService.I,
+    );
+
+final sendFederationDomainProvider = Provider<String>(
+  (Ref ref) => FederationAddressCoreService.defaultDomain,
+);
+
+final sendControllerProvider = NotifierProvider.autoDispose
+    .family<SendController, SendState, SendControllerArgs>(SendController.new);
 
 class SendController extends Notifier<SendState> {
   SendController(this.args);
@@ -32,7 +37,7 @@ class SendController extends Notifier<SendState> {
     });
     final initial = SendState.initial(
       args,
-      FederationAddressCoreService.defaultDomain,
+      ref.read(sendFederationDomainProvider),
     );
     Future.microtask(_start);
     return initial;
@@ -63,9 +68,7 @@ class SendController extends Notifier<SendState> {
   }
 
   void setTypedAmount(double value) {
-    state = state.copyWith(
-      typedAmount: value.clamp(0, double.infinity),
-    );
+    state = state.copyWith(typedAmount: value.clamp(0, double.infinity));
   }
 
   void setMemo(String value) {
@@ -84,7 +87,9 @@ class SendController extends Notifier<SendState> {
     state = state.copyWith(
       recipientInput: input,
       destinationAddress: _looksLikeStellarPk(input) ? input : '',
-      resolvedRecipient: _looksLikeStellarPk(input) ? state.resolvedRecipient : null,
+      resolvedRecipient: _looksLikeStellarPk(input)
+          ? state.resolvedRecipient
+          : null,
       resolvedFederation: null,
       federationError: null,
       federationSuggestions: suggestions,
@@ -123,7 +128,9 @@ class SendController extends Notifier<SendState> {
     state = state.copyWith(
       recipientInput: trimmed,
       destinationAddress: trimmed,
-      prefillName: displayName?.trim().isEmpty == true ? null : displayName?.trim(),
+      prefillName: displayName?.trim().isEmpty == true
+          ? null
+          : displayName?.trim(),
       resolvedFederation: null,
       federationError: null,
       federationSuggestions: _buildFederationSuggestions(trimmed),
@@ -159,8 +166,8 @@ class SendController extends Notifier<SendState> {
         final liveBreakdown = await _service
             .getXlmBalanceBreakdown(keyPair.accountId)
             .catchError((_) => <String, double>{});
-        final spendable = (liveBreakdown['spendable'] ?? state.senderBalanceToken)
-            .toDouble();
+        final spendable =
+            (liveBreakdown['spendable'] ?? state.senderBalanceToken).toDouble();
         final totalNeeded = state.totalDeductFromBalance;
         if (totalNeeded > spendable + 1e-9) {
           state = state.copyWith(senderBalanceToken: spendable);
@@ -223,10 +230,9 @@ class SendController extends Notifier<SendState> {
     );
 
     try {
-      final resolved = await FederationAddressCoreService.I.resolveByName(
-        federationAddress,
-        domain: state.federationDomain,
-      );
+      final resolved = await ref
+          .read(sendFederationAddressServiceProvider)
+          .resolveByName(federationAddress, domain: state.federationDomain);
       if (requestId != _federationResolveSeq) return;
       final accountId = resolved.accountId.trim();
       if (accountId.isEmpty || !_looksLikeStellarPk(accountId)) {
@@ -276,12 +282,11 @@ class SendController extends Notifier<SendState> {
 
   void _resubscribeFeeStream() {
     _feeSub?.cancel();
-    _feeSub = _service.feeEstimateStream(opCount: 1, percentile: 90).listen(
-      (fee) {
-        state = state.copyWith(estNetworkFeeXlm: fee.totalXlm);
-      },
-      onError: (_) {},
-    );
+    _feeSub = _service.feeEstimateStream(opCount: 1, percentile: 90).listen((
+      fee,
+    ) {
+      state = state.copyWith(estNetworkFeeXlm: fee.totalXlm);
+    }, onError: (_) {});
   }
 
   Future<double> _refreshLiveSenderBalance() async {
@@ -297,7 +302,10 @@ class SendController extends Notifier<SendState> {
 
   void _debounceCheckTrustline() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), _checkTrustlineIfNeeded);
+    _debounce = Timer(
+      const Duration(milliseconds: 300),
+      _checkTrustlineIfNeeded,
+    );
   }
 
   Future<void> _checkTrustlineIfNeeded() async {
@@ -326,3 +334,4 @@ class SendController extends Notifier<SendState> {
 
   double _floor7(double value) => (value * 1e7).floor() / 1e7;
 }
+

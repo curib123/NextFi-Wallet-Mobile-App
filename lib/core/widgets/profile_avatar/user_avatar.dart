@@ -2,7 +2,7 @@
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
 /// Centralized user avatar component
@@ -220,5 +220,6 @@ class ChatUserAvatar extends StatelessWidget {
     return _initials_(color);
   }
 }
+
 
 

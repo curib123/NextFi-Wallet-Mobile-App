@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:next_fi/core/services/oath2.0/auth_service.dart';
-import 'package:next_fi/core/services/oath2.0/models/user_model.dart';
+import 'package:next_fi/core/services/auth/auth_service.dart';
+import 'package:next_fi/core/services/auth/models/user_model.dart';
 import 'package:next_fi/core/services/wallet/wallet_manager.dart';
 
 class LoginLegalLinks {
@@ -71,3 +71,4 @@ class LoginService {
     _httpClient.close();
   }
 }
+

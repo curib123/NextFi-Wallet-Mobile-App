@@ -2,17 +2,17 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 
 void showPriceWindowModal(
-    BuildContext context, {
-      required AppColor colors,
-      required PriceWindow selectedWindow,
-      required void Function(PriceWindow)? onWindowChanged,
-    }) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: AppColor.of(context).surface,
+  BuildContext context, {
+  required AppColor colors,
+  required PriceWindow selectedWindow,
+  required void Function(PriceWindow)? onWindowChanged,
+}) {
+  showAppModalBottomSheet(
+    context,
     builder: (context) => Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
@@ -26,11 +26,7 @@ void showPriceWindowModal(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Icon(
-                  LucideIcons.trendingUp,
-                  size: 20,
-                  color: colors.primary,
-                ),
+                Icon(LucideIcons.trendingUp, size: 20, color: colors.primary),
                 const SizedBox(width: 10),
                 Text(
                   'Select Price Window',
@@ -129,7 +125,9 @@ class _ModalWindowOption extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: isSelected ? AppColor.of(context).onPrimary : colors.textSecondary,
+                  color: isSelected
+                      ? AppColor.of(context).onPrimary
+                      : colors.textSecondary,
                   letterSpacing: -0.2,
                 ),
               ),
@@ -147,11 +145,7 @@ class _ModalWindowOption extends StatelessWidget {
               ),
             ),
             if (isSelected)
-              Icon(
-                LucideIcons.check,
-                size: 20,
-                color: colors.primary,
-              ),
+              Icon(LucideIcons.check, size: 20, color: colors.primary),
           ],
         ),
       ),

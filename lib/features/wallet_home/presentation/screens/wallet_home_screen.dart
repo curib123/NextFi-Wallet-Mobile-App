@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:next_fi/core/widgets/drawer/appdrawer.dart';
-import 'package:next_fi/features/auth/presentation/screens/login.dart';
+import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
+import 'package:next_fi/features/auth/presentation/screens/login_screen.dart';
 import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/asset_widget.dart';
 
@@ -19,7 +19,7 @@ import 'package:next_fi/features/wallet_home/presentation/widgets/recipient_list
 import 'package:next_fi/features/wallet_home/presentation/widgets/top_bar.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
-import 'package:next_fi/app/state/currency_vm.dart';
+import 'package:next_fi/app/viewmodels/currency_vm.dart';
 
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/core/widgets/modal/token_chooser.dart';
@@ -598,4 +598,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     return '${addr.substring(0, 6)}ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦${addr.substring(addr.length - 4)}';
   }
 }
+
+
 

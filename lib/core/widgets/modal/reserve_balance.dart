@@ -5,12 +5,13 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 void showReserveBalanceModal(
-    BuildContext context, {
-      required AppColor colors,
-      required NumberFormat money,
-    }) {
+  BuildContext context, {
+  required AppColor colors,
+  required NumberFormat money,
+}) {
   final container = ProviderScope.containerOf(context, listen: false);
   final vm = container.read(walletHomeVmProvider);
 
@@ -18,10 +19,8 @@ void showReserveBalanceModal(
   final cur = container.read(currencyVmProvider);
   final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: AppColor.of(context).surface,
-    isScrollControlled: true,
+  showAppModalBottomSheet(
+    context,
     builder: (context) => Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
@@ -34,11 +33,7 @@ void showReserveBalanceModal(
         children: [
           Row(
             children: [
-              Icon(
-                LucideIcons.wallet,
-                size: 20,
-                color: colors.primary,
-              ),
+              Icon(LucideIcons.wallet, size: 20, color: colors.primary),
               const SizedBox(width: 10),
               Text(
                 'XLM Balance Breakdown',
@@ -128,7 +123,10 @@ void showReserveBalanceModal(
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: colors.textSecondary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -169,18 +167,11 @@ void showReserveBalanceModal(
                   ],
                 ),
                 const SizedBox(height: 12),
-                Divider(
-                  color: colors.border.withValues(alpha: 0.2),
-                  height: 1,
-                ),
+                Divider(color: colors.border.withValues(alpha: 0.2), height: 1),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Icon(
-                      LucideIcons.wallet,
-                      size: 14,
-                      color: colors.primary,
-                    ),
+                    Icon(LucideIcons.wallet, size: 14, color: colors.primary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -204,7 +195,9 @@ void showReserveBalanceModal(
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      money.format(cur.xlmToFiat(state.xlm + state.xlmTotalReserve)),
+                      money.format(
+                        cur.xlmToFiat(state.xlm + state.xlmTotalReserve),
+                      ),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -285,11 +278,7 @@ void showReserveBalanceModal(
               children: [
                 Row(
                   children: [
-                    Icon(
-                      LucideIcons.info,
-                      size: 16,
-                      color: colors.primary,
-                    ),
+                    Icon(LucideIcons.info, size: 16, color: colors.primary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -459,4 +448,3 @@ class _SlimReserveRow extends StatelessWidget {
     );
   }
 }
-

@@ -10,7 +10,7 @@ import 'package:next_fi/core/services/chat/crypto/chat_envelope_codec.dart';
 import 'package:next_fi/core/services/chat/models/chat_dtos.dart';
 import 'package:next_fi/core/services/chat/models/chat_models.dart';
 import 'package:next_fi/core/services/chat/realtime/mini_chat_socket_service.dart';
-import 'package:next_fi/core/services/oath2.0/auth_service.dart';
+import 'package:next_fi/core/services/auth/auth_service.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 
@@ -1002,4 +1002,5 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 }
+
 

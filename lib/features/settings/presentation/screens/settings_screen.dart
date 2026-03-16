@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/settings/data/models/settings_model.dart';
-import 'package:next_fi/core/widgets/drawer/appdrawer.dart';
+import 'package:next_fi/core/widgets/drawer/app_drawer.dart';
 import 'package:next_fi/features/settings/presentation/widgets/fiat_chip.dart';
 import 'package:next_fi/features/settings/presentation/widgets/section_header.dart';
 import 'package:next_fi/features/settings/presentation/widgets/settings_app_bar.dart';
@@ -103,4 +103,5 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 }
+
 

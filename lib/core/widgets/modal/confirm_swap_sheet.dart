@@ -6,72 +6,67 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/widgets/button/custom_button.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 /// Returns the confirmed [minOut] (double) or null if cancelled.
 Future<double?> showConfirmMarketSheet(
-    BuildContext context, {
-      required NumberFormat fmt,
-    }) async {
-  final vm = ProviderScope.containerOf(context, listen: false).read(swapVmProvider);
+  BuildContext context, {
+  required NumberFormat fmt,
+}) async {
+  final vm = ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(swapVmProvider);
   if (!vm.hasFeeEstimates) await vm.refreshBalances();
   if (!context.mounted) return null;
 
-  return showModalBottomSheet<double?>(
-    context: context,
-    useSafeArea: true,
-    backgroundColor: AppColor.of(context).surface,
-    isScrollControlled: true,
+  return showAppModalBottomSheet<double?>(
+    context,
     builder: (_) => _ConfirmMarketSheet(fmt: fmt),
   );
 }
 
 /// Returns true if the limit order was confirmed, null/false if cancelled.
 Future<bool?> showConfirmLimitSheet(
-    BuildContext context, {
-      required NumberFormat fmt,
-      required double price,
-    }) =>
-    showModalBottomSheet<bool?>(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: AppColor.of(context).surface,
-      isScrollControlled: true,
-      builder: (_) => _ConfirmLimitSheet(fmt: fmt, price: price),
-    );
+  BuildContext context, {
+  required NumberFormat fmt,
+  required double price,
+}) => showAppModalBottomSheet<bool?>(
+  context,
+  builder: (_) => _ConfirmLimitSheet(fmt: fmt, price: price),
+);
 
 /// Returns true if the schedule was confirmed, null/false if cancelled.
 Future<bool?> showConfirmScheduleSheet(
-    BuildContext context, {
-      required NumberFormat fmt,
-      required DateTime? start,
-      required DateTime? end,
-    }) =>
-    showModalBottomSheet<bool?>(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: AppColor.of(context).surface,
-      isScrollControlled: true,
-      builder: (_) => _ConfirmScheduleSheet(fmt: fmt, start: start, end: end),
-    );
+  BuildContext context, {
+  required NumberFormat fmt,
+  required DateTime? start,
+  required DateTime? end,
+}) => showAppModalBottomSheet<bool?>(
+  context,
+  builder: (_) => _ConfirmScheduleSheet(fmt: fmt, start: start, end: end),
+);
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Shared slide-up animation mixin
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 mixin _SheetAnimMixin<T extends StatefulWidget>
-on State<T>, SingleTickerProviderStateMixin<T> {
+    on State<T>, SingleTickerProviderStateMixin<T> {
   late final AnimationController _animCtrl;
-  late final Animation<double>   _fade;
-  late final Animation<Offset>   _slide;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
 
   void initSheetAnim() {
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
     );
-    _fade  = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-    _slide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
+    _fade = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
   }
 
@@ -102,7 +97,8 @@ class _ConfirmMarketSheet extends ConsumerStatefulWidget {
   final NumberFormat fmt;
 
   @override
-  ConsumerState<_ConfirmMarketSheet> createState() => _ConfirmMarketSheetState();
+  ConsumerState<_ConfirmMarketSheet> createState() =>
+      _ConfirmMarketSheetState();
 }
 
 class _ConfirmMarketSheetState extends ConsumerState<_ConfirmMarketSheet>
@@ -115,11 +111,11 @@ class _ConfirmMarketSheetState extends ConsumerState<_ConfirmMarketSheet>
 
   @override
   Widget build(BuildContext context) {
-    final vm   = ref.watch(swapVmProvider);
-    final s    = vm.state;
+    final vm = ref.watch(swapVmProvider);
+    final s = vm.state;
 
     final fromSymbol = s.isXlmToUsdc ? 'XLM' : 'USDC';
-    final toSymbol   = s.isXlmToUsdc ? 'USDC' : 'XLM';
+    final toSymbol = s.isXlmToUsdc ? 'USDC' : 'XLM';
 
     final estOut = s.estReceive;
     // currentMinOut = estOut Ãƒâ€” (1 Ã¢Ë†â€™ slippage), already computed in VM.
@@ -141,27 +137,29 @@ class _ConfirmMarketSheetState extends ConsumerState<_ConfirmMarketSheet>
                 : 'CalculatingÃ¢â‚¬Â¦',
           ),
           const SizedBox(height: 20),
-          _DetailsCard(rows: [
-            _DetailRow(
-              label: 'Slippage Tolerance',
-              value: _fmtPct(vm.slippagePct),
-              icon: LucideIcons.zap,
-            ),
-            _DetailRow(
-              label: 'Minimum Received',
-              value: '${widget.fmt.format(minOut)} $toSymbol',
-              icon: LucideIcons.shield,
-              highlight: true,
-            ),
-            _DetailRow(
-              label: 'Network Fee',
-              value: vm.hasFeeEstimates
-                  ? 'Ã¢â€°Ë† ${widget.fmt.format(vm.estCombinedFeeXlm)} XLM'
-                  : 'CalculatingÃ¢â‚¬Â¦',
-              icon: LucideIcons.coins,
-              subtitle: s.needsTrustline ? 'Includes trustline setup' : null,
-            ),
-          ]),
+          _DetailsCard(
+            rows: [
+              _DetailRow(
+                label: 'Slippage Tolerance',
+                value: _fmtPct(vm.slippagePct),
+                icon: LucideIcons.zap,
+              ),
+              _DetailRow(
+                label: 'Minimum Received',
+                value: '${widget.fmt.format(minOut)} $toSymbol',
+                icon: LucideIcons.shield,
+                highlight: true,
+              ),
+              _DetailRow(
+                label: 'Network Fee',
+                value: vm.hasFeeEstimates
+                    ? 'Ã¢â€°Ë† ${widget.fmt.format(vm.estCombinedFeeXlm)} XLM'
+                    : 'CalculatingÃ¢â‚¬Â¦',
+                icon: LucideIcons.coins,
+                subtitle: s.needsTrustline ? 'Includes trustline setup' : null,
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           _ActionRow(
             onCancel: () => closeSheet<double?>(null),
@@ -197,11 +195,11 @@ class _ConfirmLimitSheetState extends ConsumerState<_ConfirmLimitSheet>
 
   @override
   Widget build(BuildContext context) {
-    final c          = AppColor.of(context);
-    final vm         = ref.watch(swapVmProvider);
+    final c = AppColor.of(context);
+    final vm = ref.watch(swapVmProvider);
     final isXlmToUsdc = vm.state.isXlmToUsdc;
-    final fromSymbol  = isXlmToUsdc ? 'XLM' : 'USDC';
-    final badgeColor  = isXlmToUsdc ? c.error : c.success;
+    final fromSymbol = isXlmToUsdc ? 'XLM' : 'USDC';
+    final badgeColor = isXlmToUsdc ? c.error : c.success;
 
     return wrapAnim(
       child: _SheetShell(
@@ -217,25 +215,27 @@ class _ConfirmLimitSheetState extends ConsumerState<_ConfirmLimitSheet>
             color: badgeColor,
           ),
           const SizedBox(height: 20),
-          _DetailsCard(rows: [
-            _DetailRow(
-              label: 'Amount',
-              value: '${widget.fmt.format(vm.amount)} $fromSymbol',
-              icon: LucideIcons.coins,
-            ),
-            _DetailRow(
-              label: 'Limit Price',
-              value: '${widget.fmt.format(widget.price)} USDC per XLM',
-              icon: LucideIcons.trendingUp,
-              highlight: true,
-            ),
-            _DetailRow(
-              label: 'Order Type',
-              value: 'Good-Till-Cancel',
-              icon: LucideIcons.clock,
-              subtitle: 'Stays active until filled or cancelled',
-            ),
-          ]),
+          _DetailsCard(
+            rows: [
+              _DetailRow(
+                label: 'Amount',
+                value: '${widget.fmt.format(vm.amount)} $fromSymbol',
+                icon: LucideIcons.coins,
+              ),
+              _DetailRow(
+                label: 'Limit Price',
+                value: '${widget.fmt.format(widget.price)} USDC per XLM',
+                icon: LucideIcons.trendingUp,
+                highlight: true,
+              ),
+              _DetailRow(
+                label: 'Order Type',
+                value: 'Good-Till-Cancel',
+                icon: LucideIcons.clock,
+                subtitle: 'Stays active until filled or cancelled',
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           _ActionRow(
             onCancel: () => closeSheet<bool?>(false),
@@ -259,11 +259,12 @@ class _ConfirmScheduleSheet extends ConsumerStatefulWidget {
     required this.end,
   });
   final NumberFormat fmt;
-  final DateTime?    start;
-  final DateTime?    end;
+  final DateTime? start;
+  final DateTime? end;
 
   @override
-  ConsumerState<_ConfirmScheduleSheet> createState() => _ConfirmScheduleSheetState();
+  ConsumerState<_ConfirmScheduleSheet> createState() =>
+      _ConfirmScheduleSheetState();
 }
 
 class _ConfirmScheduleSheetState extends ConsumerState<_ConfirmScheduleSheet>
@@ -276,9 +277,9 @@ class _ConfirmScheduleSheetState extends ConsumerState<_ConfirmScheduleSheet>
 
   @override
   Widget build(BuildContext context) {
-    final vm         = ref.watch(swapVmProvider);
+    final vm = ref.watch(swapVmProvider);
     final isXlmToUsdc = vm.state.isXlmToUsdc;
-    final fromSymbol  = isXlmToUsdc ? 'XLM' : 'USDC';
+    final fromSymbol = isXlmToUsdc ? 'XLM' : 'USDC';
 
     return wrapAnim(
       child: _SheetShell(
@@ -291,19 +292,21 @@ class _ConfirmScheduleSheetState extends ConsumerState<_ConfirmScheduleSheet>
           const SizedBox(height: 20),
           _TimeWindow(start: widget.start, end: widget.end),
           const SizedBox(height: 20),
-          _DetailsCard(rows: [
-            _DetailRow(
-              label: 'Amount',
-              value: '${widget.fmt.format(vm.amount)} $fromSymbol',
-              icon: LucideIcons.coins,
-            ),
-            _DetailRow(
-              label: 'Execution',
-              value: 'Market Price',
-              icon: LucideIcons.zap,
-              subtitle: 'Best available price during window',
-            ),
-          ]),
+          _DetailsCard(
+            rows: [
+              _DetailRow(
+                label: 'Amount',
+                value: '${widget.fmt.format(vm.amount)} $fromSymbol',
+                icon: LucideIcons.coins,
+              ),
+              _DetailRow(
+                label: 'Execution',
+                value: 'Market Price',
+                icon: LucideIcons.zap,
+                subtitle: 'Best available price during window',
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           _ActionRow(
             onCancel: () => closeSheet<bool?>(false),
@@ -348,7 +351,8 @@ class _SheetShell extends StatelessWidget {
             children: [
               // Drag handle
               Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: c.border.withValues(alpha: 0.5),
@@ -371,8 +375,8 @@ class _Header extends StatelessWidget {
     required this.subtitle,
   });
   final IconData icon;
-  final String   title;
-  final String   subtitle;
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -380,14 +384,16 @@ class _Header extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 48, height: 48,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             gradient: c.primaryGradient,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: c.primary.withValues(alpha: 0.3),
-                blurRadius: 12, offset: const Offset(0, 4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -398,14 +404,20 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: TextStyle(
-                    fontSize: 19, fontWeight: FontWeight.w700,
-                    color: c.textPrimary, letterSpacing: -0.3,
-                  )),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: c.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(subtitle,
-                  style: TextStyle(fontSize: 13, color: c.textSecondary)),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 13, color: c.textSecondary),
+              ),
             ],
           ),
         ),
@@ -434,11 +446,15 @@ class _SwapVisualization extends StatelessWidget {
           _AmountBox(text: from, accentColor: c.primary),
           const SizedBox(height: 12),
           Container(
-            width: 32, height: 32,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: c.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: c.primary.withValues(alpha: 0.3), width: 2),
+              border: Border.all(
+                color: c.primary.withValues(alpha: 0.3),
+                width: 2,
+              ),
             ),
             child: Icon(LucideIcons.arrowDown, size: 16, color: c.primary),
           ),
@@ -453,7 +469,7 @@ class _SwapVisualization extends StatelessWidget {
 class _AmountBox extends StatelessWidget {
   const _AmountBox({required this.text, required this.accentColor});
   final String text;
-  final Color  accentColor;
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -470,8 +486,10 @@ class _AmountBox extends StatelessWidget {
         text,
         textAlign: TextAlign.center,
         style: TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w700,
-          color: c.textPrimary, letterSpacing: -0.2,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: c.textPrimary,
+          letterSpacing: -0.2,
         ),
       ),
     );
@@ -512,11 +530,11 @@ class _DetailRow extends StatelessWidget {
     this.subtitle,
     this.highlight = false,
   });
-  final String   label;
-  final String   value;
+  final String label;
+  final String value;
   final IconData icon;
-  final String?  subtitle;
-  final bool     highlight;
+  final String? subtitle;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -526,39 +544,51 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 32, height: 32,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: highlight
                   ? c.primary.withValues(alpha: 0.1)
                   : c.border.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 16,
-                color: highlight ? c.primary : c.textSecondary),
+            child: Icon(
+              icon,
+              size: 16,
+              color: highlight ? c.primary : c.textSecondary,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(fontSize: 13, color: c.textSecondary)),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 13, color: c.textSecondary),
+                ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(subtitle!,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: c.textSecondary.withValues(alpha: 0.7))),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: c.textSecondary.withValues(alpha: 0.7),
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Text(value,
-              style: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w700,
-                color: highlight ? c.primary : c.textPrimary,
-              )),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: highlight ? c.primary : c.textPrimary,
+            ),
+          ),
         ],
       ),
     );
@@ -568,7 +598,7 @@ class _DetailRow extends StatelessWidget {
 class _OrderTypeBadge extends StatelessWidget {
   const _OrderTypeBadge({required this.label, required this.color});
   final String label;
-  final Color  color;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -584,10 +614,15 @@ class _OrderTypeBadge extends StatelessWidget {
         children: [
           Icon(LucideIcons.trendingUp, size: 16, color: color),
           const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700,
-                  color: color, letterSpacing: 0.5)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.5,
+            ),
+          ),
         ],
       ),
     );
@@ -611,12 +646,16 @@ class _TimeWindow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _TimeBox(label: 'Start', time: start)),
+          Expanded(
+            child: _TimeBox(label: 'Start', time: start),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Icon(LucideIcons.arrowRight, size: 20, color: c.primary),
           ),
-          Expanded(child: _TimeBox(label: 'End', time: end)),
+          Expanded(
+            child: _TimeBox(label: 'End', time: end),
+          ),
         ],
       ),
     );
@@ -625,7 +664,7 @@ class _TimeWindow extends StatelessWidget {
 
 class _TimeBox extends StatelessWidget {
   const _TimeBox({required this.label, required this.time});
-  final String    label;
+  final String label;
   final DateTime? time;
 
   @override
@@ -633,16 +672,24 @@ class _TimeBox extends StatelessWidget {
     final c = AppColor.of(context);
     return Column(
       children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600,
-                color: c.textSecondary)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: c.textSecondary,
+          ),
+        ),
         const SizedBox(height: 6),
-        Text(_fmtCompact(time),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700,
-                color: c.textPrimary)),
+        Text(
+          _fmtCompact(time),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: c.textPrimary,
+          ),
+        ),
       ],
     );
   }
@@ -655,7 +702,7 @@ class _ActionRow extends StatelessWidget {
     required this.onConfirm,
   });
   final VoidCallback onCancel;
-  final String       confirmLabel;
+  final String confirmLabel;
   final VoidCallback onConfirm;
 
   @override
@@ -699,4 +746,3 @@ String _fmtCompact(DateTime? dt) {
   String two(int n) => n.toString().padLeft(2, '0');
   return '${two(t.month)}/${two(t.day)}\n${two(t.hour)}:${two(t.minute)}';
 }
-

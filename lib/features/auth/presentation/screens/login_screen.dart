@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/app/theme/app_fonts.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/modal/login_success_modal.dart';
 import 'package:next_fi/features/auth/presentation/viewmodels/login_controller.dart';
 import 'package:next_fi/features/auth/presentation/viewmodels/login_state.dart';
 import 'package:next_fi/core/utils/link_opener.dart';
-import 'package:next_fi/core/services/oath2.0/models/auth_exception.dart';
+import 'package:next_fi/core/services/auth/models/auth_exception.dart';
 import 'package:next_fi/features/wallet_creation/presentation/widgets/fintech_background.dart';
 
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -78,7 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     HapticFeedback.lightImpact();
 
     try {
-      final user = await ref.read(loginControllerProvider.notifier).signInGoogle();
+      final user = await ref
+          .read(loginControllerProvider.notifier)
+          .signInGoogle();
 
       if (!mounted) return;
 
@@ -102,10 +105,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
   void _snack(String msg) {
     if (!mounted) return;
+    final colors = AppColor.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w500)),
-        backgroundColor: AppColor.dark.error,
+        content: Text(
+          msg,
+          style: AppFonts.body(
+            color: colors.onPrimary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        backgroundColor: colors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -299,23 +309,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       children: [
         Text(
           'Welcome to\nNextFi',
-          style: TextStyle(
+          style: AppFonts.display(
+            color: colors.textPrimary,
             fontSize: 34,
             fontWeight: FontWeight.w700,
-            color: colors.textPrimary,
-            letterSpacing: -1.0,
-            height: 1.15,
           ),
         ),
         const SizedBox(height: 12),
         Text(
           'Manage your XLM & USDC pair Ã¢â‚¬â€ send, receive, claim balances, and trade seamlessly. Buy and sell trades require verified status.',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w400,
+          style: AppFonts.body(
             color: colors.textSecondary,
-            height: 1.55,
-            letterSpacing: 0.1,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -362,27 +368,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       child: RichText(
         textAlign: TextAlign.center,
         text: TextSpan(
-          style: TextStyle(
-            fontSize: 12,
+          style: AppFonts.body(
             color: colors.textSecondary.withValues(alpha: 0.6),
-            height: 1.6,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
           children: [
             const TextSpan(text: 'By continuing, you agree to our '),
             TextSpan(
               text: 'Terms of Service',
-              style: TextStyle(
+              style: AppFonts.label(
                 color: colors.primary.withValues(alpha: 0.85),
-                fontWeight: FontWeight.w500,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
               recognizer: _termsRecognizer,
             ),
             const TextSpan(text: ' and '),
             TextSpan(
               text: 'Privacy Policy',
-              style: TextStyle(
+              style: AppFonts.label(
                 color: colors.primary.withValues(alpha: 0.85),
-                fontWeight: FontWeight.w500,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
               recognizer: _privacyRecognizer,
             ),
@@ -485,11 +493,11 @@ class _AuthButtonState extends State<_AuthButton> {
                       const SizedBox(width: 12),
                       Text(
                         widget.label,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                        style: AppFonts.label(
                           color: widget.textColor,
-                          letterSpacing: -0.1,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.02,
                         ),
                       ),
                     ],
@@ -569,5 +577,4 @@ class _GoogleLogoPainter extends CustomPainter {
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // FACEBOOK ICON
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-
 

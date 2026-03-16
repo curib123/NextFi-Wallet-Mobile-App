@@ -5,6 +5,7 @@ import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
 
 /// Open the modal. Returns true if changed/created, false/null if cancelled.
@@ -19,11 +20,8 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
 
   bool preAuthed = false;
   if (hasPin) {
-    final verified = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: AppColor.of(context).surface,
+    final verified = await showAppModalBottomSheet<bool>(
+      context,
       builder: (_) => const _VerifyCurrentPinSheet(),
     );
 
@@ -34,11 +32,8 @@ Future<bool?> showPinChangeBottomSheet(BuildContext context) async {
     preAuthed = true;
   }
 
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: AppColor.of(context).surface,
+  return showAppModalBottomSheet<bool>(
+    context,
     builder: (_) => _PinChangeSheet(preAuthed: preAuthed),
   );
 }
@@ -684,7 +679,10 @@ Widget _buildSecurityTips(AppColor colors) {
     decoration: BoxDecoration(
       color: colors.primary.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: colors.primary.withValues(alpha: 0.2), width: 1),
+      border: Border.all(
+        color: colors.primary.withValues(alpha: 0.2),
+        width: 1,
+      ),
     ),
     child: Row(
       children: [
@@ -729,7 +727,10 @@ Widget _buildPinInput(
         decoration: BoxDecoration(
           color: colors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border.withValues(alpha: 0.3), width: 1),
+          border: Border.all(
+            color: colors.border.withValues(alpha: 0.3),
+            width: 1,
+          ),
         ),
         child: TextFormField(
           controller: controller,
@@ -828,4 +829,3 @@ Widget _buildButton(
     ),
   );
 }
-

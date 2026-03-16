@@ -33,15 +33,24 @@ class BioResult {
   final String? message;
 }
 
-final authGateControllerProvider = NotifierProvider.autoDispose<
-  AuthGateController,
-  AuthGateViewState
->(AuthGateController.new);
+final authGateLocalAuthProvider = Provider<LocalAuthentication>(
+  (Ref ref) => LocalAuthentication(),
+);
+
+final authGateAppCoverServiceProvider = Provider.autoDispose<AppCoverService>((
+  Ref ref,
+) {
+  final service = AppCoverService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final authGateControllerProvider =
+    NotifierProvider.autoDispose<AuthGateController, AuthGateViewState>(
+      AuthGateController.new,
+    );
 
 class AuthGateController extends Notifier<AuthGateViewState> {
-  final LocalAuthentication _localAuth = LocalAuthentication();
-  final AppCoverService _appCoverService = AppCoverService();
-
   Timer? _lockoutTimer;
   bool _biometricInProgress = false;
 
@@ -49,7 +58,6 @@ class AuthGateController extends Notifier<AuthGateViewState> {
   AuthGateViewState build() {
     ref.onDispose(() {
       _lockoutTimer?.cancel();
-      _appCoverService.dispose();
     });
     return const AuthGateViewState();
   }
@@ -82,9 +90,10 @@ class AuthGateController extends Notifier<AuthGateViewState> {
     var isSupported = false;
     List<BiometricType> available = const [];
     try {
-      canCheck = await _localAuth.canCheckBiometrics;
-      isSupported = await _localAuth.isDeviceSupported();
-      available = await _localAuth.getAvailableBiometrics();
+      final localAuth = ref.read(authGateLocalAuthProvider);
+      canCheck = await localAuth.canCheckBiometrics;
+      isSupported = await localAuth.isDeviceSupported();
+      available = await localAuth.getAvailableBiometrics();
     } catch (_) {}
 
     final bioEnabled = await SecurityStorage.isBiometricsEnabled();
@@ -107,9 +116,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
 
   Future<void> refreshLockout() async {
     final rem = await SecurityStorage.lockoutRemaining();
-    state = state.copyWith(
-      flow: state.flow.copyWith(lockoutRemaining: rem),
-    );
+    state = state.copyWith(flow: state.flow.copyWith(lockoutRemaining: rem));
     _startOrStopLockoutTimer(rem);
   }
 
@@ -124,9 +131,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
     }
 
     await SecurityStorage.setBiometricsEnabled(false);
-    state = state.copyWith(
-      flow: state.flow.copyWith(biometricsEnabled: false),
-    );
+    state = state.copyWith(flow: state.flow.copyWith(biometricsEnabled: false));
   }
 
   void toggleObscurePin() {
@@ -136,7 +141,9 @@ class AuthGateController extends Notifier<AuthGateViewState> {
   }
 
   bool onNumberPressed(String number) {
-    if (state.currentPin.length >= 6 || state.isLockedOut || state.flow.submitting) {
+    if (state.currentPin.length >= 6 ||
+        state.isLockedOut ||
+        state.flow.submitting) {
       return false;
     }
     state = state.copyWith(currentPin: '${state.currentPin}$number');
@@ -161,19 +168,19 @@ class AuthGateController extends Notifier<AuthGateViewState> {
     }
     _biometricInProgress = true;
     try {
-      final ok = await _localAuth.authenticate(
-        localizedReason: 'Authenticate to continue',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-          useErrorDialogs: true,
-        ),
-      );
+      final ok = await ref
+          .read(authGateLocalAuthProvider)
+          .authenticate(
+            localizedReason: 'Authenticate to continue',
+            options: const AuthenticationOptions(
+              biometricOnly: true,
+              stickyAuth: true,
+              useErrorDialogs: true,
+            ),
+          );
       if (ok) {
         await SecurityStorage.markSuccessfulAuth();
-        state = state.copyWith(
-          flow: state.flow.copyWith(unlockedVisual: true),
-        );
+        state = state.copyWith(flow: state.flow.copyWith(unlockedVisual: true));
         return const BioResult(
           success: true,
           message: 'Authentication successful',
@@ -226,10 +233,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
       if (state.flow.isNewUser) {
         if (state.flow.firstPinEntry == null) {
           state = state.copyWith(
-            flow: state.flow.copyWith(
-              firstPinEntry: pin,
-              submitting: false,
-            ),
+            flow: state.flow.copyWith(firstPinEntry: pin, submitting: false),
           );
           return const PinResult(
             PinStatus.needFirstConfirm,
@@ -239,10 +243,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
 
         if (pin != state.flow.firstPinEntry) {
           state = state.copyWith(
-            flow: state.flow.copyWith(
-              firstPinEntry: null,
-              submitting: false,
-            ),
+            flow: state.flow.copyWith(firstPinEntry: null, submitting: false),
           );
           return const PinResult(
             PinStatus.mismatch,
@@ -253,9 +254,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
         await SecurityStorage.setPin(pin);
         final saved = await SecurityStorage.hasPin();
         if (!saved) {
-          state = state.copyWith(
-            flow: state.flow.copyWith(submitting: false),
-          );
+          state = state.copyWith(flow: state.flow.copyWith(submitting: false));
           return const PinResult(
             PinStatus.storageError,
             message:
@@ -280,10 +279,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
       final ok = await SecurityStorage.verifyPin(pin);
       if (ok) {
         state = state.copyWith(
-          flow: state.flow.copyWith(
-            submitting: false,
-            unlockedVisual: true,
-          ),
+          flow: state.flow.copyWith(submitting: false, unlockedVisual: true),
         );
         return const PinResult(
           PinStatus.verified,
@@ -293,10 +289,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
 
       final rem = await SecurityStorage.lockoutRemaining();
       state = state.copyWith(
-        flow: state.flow.copyWith(
-          lockoutRemaining: rem,
-          submitting: false,
-        ),
+        flow: state.flow.copyWith(lockoutRemaining: rem, submitting: false),
       );
       if (rem != null && rem > Duration.zero) {
         _startOrStopLockoutTimer(rem);
@@ -306,18 +299,10 @@ class AuthGateController extends Notifier<AuthGateViewState> {
           message: 'Too many attempts. Try again in ${_fmt(rem)}.',
         );
       }
-      return const PinResult(
-        PinStatus.invalid,
-        message: 'Invalid PIN',
-      );
+      return const PinResult(PinStatus.invalid, message: 'Invalid PIN');
     } catch (e) {
-      state = state.copyWith(
-        flow: state.flow.copyWith(submitting: false),
-      );
-      return PinResult(
-        PinStatus.error,
-        message: 'Error: $e',
-      );
+      state = state.copyWith(flow: state.flow.copyWith(submitting: false));
+      return PinResult(PinStatus.error, message: 'Error: $e');
     }
   }
 
@@ -327,9 +312,7 @@ class AuthGateController extends Notifier<AuthGateViewState> {
         state.flow.deviceSupportsBiometrics &&
         state.flow.biometricsEnabled &&
         !state.isLockedOut) {
-      state = state.copyWith(
-        flow: state.flow.copyWith(autoBioTried: true),
-      );
+      state = state.copyWith(flow: state.flow.copyWith(autoBioTried: true));
       return authenticateWithBiometrics();
     }
     return null;
@@ -337,11 +320,12 @@ class AuthGateController extends Notifier<AuthGateViewState> {
 
   Future<void> _loadAppCover() async {
     try {
-      final config = await _appCoverService.getCurrent();
+      final config = await ref
+          .read(authGateAppCoverServiceProvider)
+          .getCurrent();
       if (!ref.mounted) return;
       state = state.copyWith(
-        coverImageUrl:
-            config?.hasUsableImage == true ? config!.imageUrl : null,
+        coverImageUrl: config?.hasUsableImage == true ? config!.imageUrl : null,
       );
     } catch (_) {
       if (!ref.mounted) return;

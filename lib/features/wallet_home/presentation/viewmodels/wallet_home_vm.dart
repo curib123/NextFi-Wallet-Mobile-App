@@ -11,7 +11,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
 
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
-import 'package:next_fi/app/state/seed_keypair_vm.dart';
+import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 
 /// UI-neutral severity for toasts/snackbars
 enum UiSeverity { info, success, warning, error }
@@ -673,3 +673,4 @@ class WalletHomeVM extends ChangeNotifier {
     });
   }
 }
+

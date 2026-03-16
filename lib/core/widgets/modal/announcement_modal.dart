@@ -25,10 +25,8 @@ Future<AnnouncementModalResult?> showAnnouncementModal(
     barrierLabel: 'Announcement',
     barrierColor: AppColor.of(context).textPrimary.withValues(alpha: 0.58),
     transitionDuration: const Duration(milliseconds: 320),
-    pageBuilder: (_, __, ___) => _AnnouncementModal(
-      item: item,
-      blocking: blocking,
-    ),
+    pageBuilder: (_, __, ___) =>
+        _AnnouncementModal(item: item, blocking: blocking),
     transitionBuilder: (_, anim, __, child) {
       final fade = CurvedAnimation(
         parent: anim,
@@ -101,7 +99,9 @@ class _AnnouncementModal extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: c.surface.withValues(alpha: 0.96),
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: c.border.withValues(alpha: 0.22)),
+                      border: Border.all(
+                        color: c.border.withValues(alpha: 0.22),
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: c.textPrimary.withValues(alpha: 0.2),
@@ -121,10 +121,10 @@ class _AnnouncementModal extends StatelessWidget {
                         GestureDetector(
                           onTap: hasActionUrl
                               ? () => LinkOpener.open(
-                                    context,
-                                    actionUrl,
-                                    fallbackLabel: primaryText,
-                                  )
+                                  context,
+                                  actionUrl,
+                                  fallbackLabel: primaryText,
+                                )
                               : null,
                           child: _HeroArt(
                             item: item,
@@ -169,18 +169,21 @@ class _AnnouncementModal extends StatelessWidget {
                                               _MetaPill(
                                                 label: tag,
                                                 accent: accent,
-                                                background:
-                                                    accent.withValues(alpha: 0.1),
+                                                background: accent.withValues(
+                                                  alpha: 0.1,
+                                                ),
                                               ),
                                               if (item.isCompulsory)
                                                 _MetaPill(
                                                   label: 'Required',
                                                   accent: c.error,
-                                                  background:
-                                                      c.error.withValues(alpha: 0.1),
+                                                  background: c.error
+                                                      .withValues(alpha: 0.1),
                                                 ),
                                               if (item.minAppVersion != null &&
-                                                  item.minAppVersion!.isNotEmpty)
+                                                  item
+                                                      .minAppVersion!
+                                                      .isNotEmpty)
                                                 _MetaPill(
                                                   label:
                                                       'Min ${item.minAppVersion}',
@@ -236,8 +239,9 @@ class _AnnouncementModal extends StatelessWidget {
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: c.textPrimary,
                                               side: BorderSide(
-                                                color:
-                                                    c.border.withValues(alpha: 0.35),
+                                                color: c.border.withValues(
+                                                  alpha: 0.35,
+                                                ),
                                               ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
@@ -263,8 +267,9 @@ class _AnnouncementModal extends StatelessWidget {
                                             if (blocking && !hasActionUrl) {
                                               HapticFeedback.heavyImpact();
                                               if (context.mounted) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
                                                   const SnackBar(
                                                     content: Text(
                                                       'Action link unavailable. Please contact support.',
@@ -385,24 +390,24 @@ class _HeroArt extends StatelessWidget {
               children: [
                 _MetaPill(
                   label: tag.toUpperCase(),
-                  accent: Colors.white,
-                  background: Colors.black.withValues(alpha: 0.22),
-                  borderColor: Colors.white.withValues(alpha: 0.18),
+                  accent: c.textPrimary,
+                  background: c.background.withValues(alpha: 0.22),
+                  borderColor: c.textPrimary.withValues(alpha: 0.18),
                 ),
                 const Spacer(),
                 if (blocking)
                   _MetaPill(
                     label: 'ACTION REQUIRED',
-                    accent: Colors.white,
+                    accent: c.onPrimary,
                     background: accent.withValues(alpha: 0.88),
                     borderColor: accent.withValues(alpha: 0.9),
                   )
                 else if (linked)
                   _MetaPill(
                     label: 'OPEN LINK',
-                    accent: Colors.white,
-                    background: Colors.black.withValues(alpha: 0.22),
-                    borderColor: Colors.white.withValues(alpha: 0.18),
+                    accent: c.textPrimary,
+                    background: c.background.withValues(alpha: 0.22),
+                    borderColor: c.textPrimary.withValues(alpha: 0.18),
                   ),
               ],
             ),
@@ -464,18 +469,17 @@ class _FallbackArt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColor.of(context);
     return Center(
       child: Container(
         width: 82,
         height: 82,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.22),
+          color: colors.textPrimary.withValues(alpha: 0.22),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          border: Border.all(color: colors.textPrimary.withValues(alpha: 0.2)),
         ),
-        child: Center(
-          child: Icon(icon, size: 34, color: Colors.white),
-        ),
+        child: Center(child: Icon(icon, size: 34, color: colors.textPrimary)),
       ),
     );
   }
@@ -540,4 +544,3 @@ class _MetaPill extends StatelessWidget {
     );
   }
 }
-

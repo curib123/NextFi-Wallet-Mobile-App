@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/services/merchant_profile/merchant_onboarding_flow_service.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/features/merchant_flow/presentation/screens/merchant_profile_setup_screen.dart';
+import 'package:next_fi/features/merchant_flow/presentation/viewmodels/merchant_onboarding_flow_controller.dart';
 import 'package:next_fi/features/verification_flow/presentation/screens/payment_method_setup_screen.dart';
-import 'package:next_fi/core/services/merchant_profile/merchant_onboarding_flow_service.dart';
 import 'package:next_fi/core/services/merchant_profile/models/merchant_profile_models.dart';
 
-class MerchantOnboardingFlowScreen extends StatefulWidget {
+class MerchantOnboardingFlowScreen extends ConsumerStatefulWidget {
   const MerchantOnboardingFlowScreen({super.key});
 
   @override
-  State<MerchantOnboardingFlowScreen> createState() =>
+  ConsumerState<MerchantOnboardingFlowScreen> createState() =>
       _MerchantOnboardingFlowScreenState();
 }
 
-class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScreen>
+class _MerchantOnboardingFlowScreenState
+    extends ConsumerState<MerchantOnboardingFlowScreen>
     with SingleTickerProviderStateMixin {
-  MerchantOnboardingSnapshot? _snapshot;
-  String? _error;
-  bool _loading = true;
-
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fadeAnim;
 
@@ -32,7 +31,6 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
       duration: const Duration(milliseconds: 420),
     );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
-    _load();
   }
 
   @override
@@ -42,29 +40,18 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final snapshot = await MerchantOnboardingFlowService.I.getSnapshot();
-      if (!mounted) return;
-      setState(() {
-        _snapshot = snapshot;
-        _loading = false;
-      });
-      _fadeCtrl.forward(from: 0);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
+    await ref.read(merchantOnboardingFlowControllerProvider.notifier).load();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(merchantOnboardingFlowControllerProvider);
+    ref.listen(merchantOnboardingFlowControllerProvider, (previous, next) {
+      final snapshotChanged = previous?.snapshot != next.snapshot;
+      if (snapshotChanged && !next.loading && next.error == null) {
+        _fadeCtrl.forward(from: 0);
+      }
+    });
     final c = AppColor.of(context);
     return Scaffold(
       backgroundColor: c.background,
@@ -89,12 +76,15 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
   }
 
   Widget _buildBody(AppColor c) {
-    if (_loading) {
+    final state = ref.watch(merchantOnboardingFlowControllerProvider);
+    if (state.loading) {
       return const PageLoader(label: 'Checking merchant setup...');
     }
-    if (_error != null) return _ErrorState(c: c, error: _error!, onRetry: _load);
+    if (state.error != null) {
+      return _ErrorState(c: c, error: state.error!, onRetry: _load);
+    }
 
-    final snapshot = _snapshot;
+    final snapshot = state.snapshot;
     if (snapshot == null) return const SizedBox.shrink();
     final status = snapshot.merchantProfile?.status ?? MerchantStatus.unknown;
     final canContinue = snapshot.canProceed && !snapshot.isCompleted;
@@ -147,11 +137,14 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
               child: AppElevatedButton(
                 onPressed: canContinue ? _continueFlow : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      canContinue ? c.primary : c.border.withValues(alpha: 0.15),
+                  backgroundColor: canContinue
+                      ? c.primary
+                      : c.border.withValues(alpha: 0.15),
                   foregroundColor: canContinue ? c.onPrimary : c.textSecondary,
                   disabledBackgroundColor: c.border.withValues(alpha: 0.12),
-                  disabledForegroundColor: c.textSecondary.withValues(alpha: 0.5),
+                  disabledForegroundColor: c.textSecondary.withValues(
+                    alpha: 0.5,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -190,15 +183,16 @@ class _MerchantOnboardingFlowScreenState extends State<MerchantOnboardingFlowScr
   }
 
   Future<void> _continueFlow() async {
-    final snapshot = _snapshot;
+    final snapshot = ref
+        .read(merchantOnboardingFlowControllerProvider)
+        .snapshot;
     if (snapshot == null) return;
 
     if (snapshot.nextStep == MerchantOnboardingStep.profile) {
       final changed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (_) => MerchantProfileSetupScreen(
-            initial: snapshot.merchantProfile,
-          ),
+          builder: (_) =>
+              MerchantProfileSetupScreen(initial: snapshot.merchantProfile),
         ),
       );
       if (changed == true && mounted) await _load();
@@ -242,7 +236,10 @@ class _HeroCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -270,7 +267,9 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            snapshot.isCompleted ? 'Merchant onboarding complete' : 'Step $step of 2',
+            snapshot.isCompleted
+                ? 'Merchant onboarding complete'
+                : 'Step $step of 2',
             style: TextStyle(
               color: c.textPrimary,
               fontSize: 20,
@@ -366,7 +365,8 @@ class _StatusNotice extends StatelessWidget {
       case MerchantStatus.rejected:
         icon = Icons.restart_alt_rounded;
         title = 'Request Rejected';
-        body = snapshot.merchantProfile?.rejectionReason?.trim().isNotEmpty == true
+        body =
+            snapshot.merchantProfile?.rejectionReason?.trim().isNotEmpty == true
             ? snapshot.merchantProfile!.rejectionReason!
             : 'You can update details and submit a new merchant request.';
         accent = c.error;
@@ -374,7 +374,8 @@ class _StatusNotice extends StatelessWidget {
       case MerchantStatus.suspended:
         icon = Icons.block_rounded;
         title = 'Request Suspended';
-        body = snapshot.merchantProfile?.suspendReason?.trim().isNotEmpty == true
+        body =
+            snapshot.merchantProfile?.suspendReason?.trim().isNotEmpty == true
             ? snapshot.merchantProfile!.suspendReason!
             : 'Your merchant request is suspended. Please contact support.';
         accent = c.error;
@@ -382,7 +383,8 @@ class _StatusNotice extends StatelessWidget {
       case MerchantStatus.unknown:
         icon = Icons.info_outline_rounded;
         title = 'Start Merchant Onboarding';
-        body = 'Submit your merchant profile request first, then wait for approval.';
+        body =
+            'Submit your merchant profile request first, then wait for approval.';
         accent = c.primary;
         break;
     }
@@ -462,10 +464,12 @@ class _StepTile extends StatelessWidget {
     final bgColor = isDone
         ? c.success
         : isCurrent
-            ? c.primary
-            : c.textSecondary.withValues(alpha: 0.12);
+        ? c.primary
+        : c.textSecondary.withValues(alpha: 0.12);
     final fgColor = (isDone || isCurrent) ? c.onPrimary : c.textSecondary;
-    final lineColor = (isDone ? c.success : c.textSecondary).withValues(alpha: 0.25);
+    final lineColor = (isDone ? c.success : c.textSecondary).withValues(
+      alpha: 0.25,
+    );
 
     return IntrinsicHeight(
       child: Row(
@@ -507,9 +511,14 @@ class _StepTile extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.only(top: 6, bottom: isLast ? 0 : 16),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
-                  color: isCurrent ? c.primary.withValues(alpha: 0.04) : c.surface,
+                  color: isCurrent
+                      ? c.primary.withValues(alpha: 0.04)
+                      : c.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isCurrent
@@ -575,7 +584,11 @@ class _ErrorState extends StatelessWidget {
                 color: c.error.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.error_outline_rounded, color: c.error, size: 26),
+              child: Icon(
+                Icons.error_outline_rounded,
+                color: c.error,
+                size: 26,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -609,5 +622,3 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-
-

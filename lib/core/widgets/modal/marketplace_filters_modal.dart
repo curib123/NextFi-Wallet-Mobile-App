@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/button/app_buttons.dart';
+import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
 import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 import 'package:next_fi/core/services/payment_method_and_accounts/models/payment_method_and_accounts_models.dart';
@@ -12,10 +14,8 @@ Future<MarketOfferFilters?> showMarketplaceFiltersModal(
   required MarketOfferFilters initialFilters,
   required List<PaymentMethodModel> paymentMethods,
 }) {
-  return showModalBottomSheet<MarketOfferFilters>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColor.of(context).surface,
+  return showAppModalBottomSheet<MarketOfferFilters>(
+    context,
     builder: (_) => _MarketplaceFiltersSheet(
       initialFilters: initialFilters,
       paymentMethods: paymentMethods,
@@ -306,24 +306,15 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
         )
         .normalized()
         .activeCount;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 16),
+    return AppModalBase(
+      maxWidth: 760,
+      maxHeightFactor: 0.94,
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 16),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: c.border.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -608,7 +599,7 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
               child: Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: AppOutlinedButton(
                       onPressed: () => _close(const MarketOfferFilters()),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 52),
@@ -630,7 +621,7 @@ class _MarketplaceFiltersSheetState extends State<_MarketplaceFiltersSheet> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
+                    child: AppElevatedButton(
                       onPressed: _apply,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: c.primary,
@@ -1006,4 +997,3 @@ class _SegmentRow<T> extends StatelessWidget {
     );
   }
 }
-

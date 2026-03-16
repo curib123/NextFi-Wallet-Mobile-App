@@ -1,4 +1,4 @@
-import 'package:next_fi/core/services/oath2.0/auth_service.dart';
+import 'package:next_fi/core/services/auth/auth_service.dart';
 import 'package:next_fi/core/services/verification/models/verification_models.dart';
 import 'package:next_fi/core/services/verification/verification_core_service.dart';
 import 'package:next_fi/core/services/wallet/wallet_manager.dart';
@@ -41,3 +41,4 @@ class WalletHomeFlowService {
     return verification.status == TrustStatus.ready;
   }
 }
+
