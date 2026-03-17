@@ -26,6 +26,12 @@ class StellarAccountService extends StellarBaseService {
   Asset get xlm => Asset.NATIVE;
   Asset get usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
+  String _assetLabel(Asset asset) {
+    if (asset is AssetTypeNative) return 'XLM';
+    if (asset is AssetTypeCreditAlphaNum) return asset.code;
+    return 'asset';
+  }
+
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Reserve Calculation (Stellar Protocol)
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -261,23 +267,7 @@ class StellarAccountService extends StellarBaseService {
   /// Get available (spendable) balance for an asset
   /// For XLM: Returns spendable amount (total - reserves - selling liabilities)
   /// For other assets: Returns available amount (balance - selling liabilities)
-  Future<double> getUsdcBalance(String accountId) async {
-    try {
-      final acc = await loadAccount(accountId);
-      for (final b in acc.balances) {
-        if (b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer) {
-          return _availableCreditBalance(b);
-        }
-      }
-      return 0.0;
-    } catch (e) {
-      fail(
-        'Unable to fetch USDC balance',
-        technicalError: e,
-        advice: 'Please check your internet connection and try again',
-      );
-    }
-  }
+  Future<double> getUsdcBalance(String accountId) => getAssetBalance(accountId, usdc);
 
   /// Get available (spendable) balance for any asset
   /// For XLM: Returns spendable amount (total - reserves - selling liabilities)
@@ -385,20 +375,7 @@ class StellarAccountService extends StellarBaseService {
   // Trustlines
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  Future<bool> hasUsdcTrustline(String accountId) async {
-    try {
-      final acc = await loadAccount(accountId);
-      return acc.balances.any(
-        (b) => b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer,
-      );
-    } catch (e) {
-      fail(
-        'Unable to check USDC status',
-        technicalError: e,
-        advice: 'Please check your internet connection and try again',
-      );
-    }
-  }
+  Future<bool> hasUsdcTrustline(String accountId) => hasTrustline(accountId, usdc);
 
   Future<bool> hasTrustline(String accountId, Asset asset) async {
     try {
@@ -423,27 +400,7 @@ class StellarAccountService extends StellarBaseService {
   Future<String> createUsdcTrustline({
     required KeyPair keyPair,
     String limit = '922337203685.4775807',
-  }) async {
-    try {
-      final acc = await loadAccount(keyPair.accountId);
-      final tx = TransactionBuilder(acc)
-          .addOperation(ChangeTrustOperationBuilder(usdc, limit).build())
-          .setMaxOperationFee(100)
-          .build();
-      tx.sign(keyPair, network);
-
-      final res = await sdk.submitTransaction(tx);
-      if (!res.success) failSubmit(res, prefix: 'Unable to add USDC');
-      return res.hash!;
-    } catch (e) {
-      if (e is StellarWalletError) rethrow;
-      fail(
-        'Unable to add USDC to your wallet',
-        technicalError: e,
-        advice: 'Please check your internet connection and try again',
-      );
-    }
-  }
+  }) => createTrustline(keyPair: keyPair, asset: usdc, limit: limit);
 
   Future<String> createTrustline({
     required KeyPair keyPair,
@@ -453,9 +410,9 @@ class StellarAccountService extends StellarBaseService {
     try {
       if (asset is AssetTypeNative) {
         fail(
-          'XLM is already in your wallet',
+          '${_assetLabel(asset)} is already in your wallet',
           advice:
-              'You don\'t need to add XLM - it\'s the native Stellar currency',
+              'You don\'t need to add ${_assetLabel(asset)} - it\'s the native Stellar currency',
           code: 'NATIVE_ASSET',
         );
       }
@@ -468,12 +425,14 @@ class StellarAccountService extends StellarBaseService {
       tx.sign(keyPair, network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) failSubmit(res, prefix: 'Unable to add asset');
+      if (!res.success) {
+        failSubmit(res, prefix: 'Unable to add ${_assetLabel(asset)}');
+      }
       return res.hash!;
     } catch (e) {
       if (e is StellarWalletError) rethrow;
       fail(
-        'Unable to add asset to your wallet',
+        'Unable to add ${_assetLabel(asset)} to your wallet',
         technicalError: e,
         advice: 'Please check your internet connection and try again',
       );
@@ -487,9 +446,9 @@ class StellarAccountService extends StellarBaseService {
     try {
       if (asset is AssetTypeNative) {
         fail(
-          'XLM cannot be removed',
+          '${_assetLabel(asset)} cannot be removed',
           advice:
-              'XLM is the native Stellar currency and is always in your wallet',
+              '${_assetLabel(asset)} is the native Stellar currency and is always in your wallet',
           code: 'NATIVE_ASSET',
         );
       }
@@ -514,12 +473,14 @@ class StellarAccountService extends StellarBaseService {
       tx.sign(keyPair, network);
 
       final res = await sdk.submitTransaction(tx);
-      if (!res.success) failSubmit(res, prefix: 'Unable to remove asset');
+      if (!res.success) {
+        failSubmit(res, prefix: 'Unable to remove ${_assetLabel(asset)}');
+      }
       return res.hash!;
     } catch (e) {
       if (e is StellarWalletError) rethrow;
       fail(
-        'Unable to remove asset from your wallet',
+        'Unable to remove ${_assetLabel(asset)} from your wallet',
         technicalError: e,
         advice:
             'Please try again. If the problem persists, check your internet connection',
@@ -531,11 +492,7 @@ class StellarAccountService extends StellarBaseService {
     KeyPair keyPair, {
     String limit = '922337203685.4775807',
     ProgressCallback? onProgress,
-  }) async {
-    if (await hasUsdcTrustline(keyPair.accountId)) return;
-    onProgress?.call('Setting up USDC in your wallet...');
-    await createUsdcTrustline(keyPair: keyPair, limit: limit);
-  }
+  }) => ensureTrustline(keyPair, usdc, limit: limit, onProgress: onProgress);
 
   Future<void> ensureTrustline(
     KeyPair keyPair,

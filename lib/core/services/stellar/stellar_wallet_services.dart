@@ -331,6 +331,17 @@ class StellarWalletServices {
     required KeyPair keyPair,
     String limit = '922337203685.4775807',
   }) => accountService.createUsdcTrustline(keyPair: keyPair, limit: limit);
+  Future<void> ensureTrustline(
+    KeyPair keyPair,
+    Asset asset, {
+    String limit = '922337203685.4775807',
+    ProgressCallback? onProgress,
+  }) => accountService.ensureTrustline(
+    keyPair,
+    asset,
+    limit: limit,
+    onProgress: onProgress,
+  );
 
   Future<String> createTrustline({
     required KeyPair keyPair,
@@ -453,6 +464,21 @@ class StellarWalletServices {
     keyPair: keyPair,
     destination: destination,
     usdcAmount: usdcAmount,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
+  Future<String> sendAsset({
+    required KeyPair keyPair,
+    required String destination,
+    required Asset asset,
+    required double amount,
+    String? memoText,
+    ProgressCallback? onProgress,
+  }) => paymentService.sendAsset(
+    keyPair: keyPair,
+    destination: destination,
+    asset: asset,
+    amount: amount,
     memoText: memoText,
     onProgress: onProgress,
   );
