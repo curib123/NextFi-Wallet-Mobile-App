@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
@@ -63,16 +64,16 @@ class MarketOffersController extends Notifier<MarketOffersState> {
     }
 
     try {
-      final hasUsdc = await _activeAddressHasUsdcTrustline();
       final paymentMethods = await _paymentCore.listPaymentMethods(
         activeOnly: true,
       );
       final offers = await _offersCore.listPublic(
         query: state.filters.toQuery(type: state.selectedType),
       );
+      final supportedAssets = await _loadSupportedAssetCodes(offers);
       final filtered = offers.where((OfferModel offer) {
         final asset = offer.asset.trim().toUpperCase();
-        return asset != 'USDC' || hasUsdc;
+        return supportedAssets.contains(asset);
       }).toList();
       final ranked = await _rankOffers(filtered);
 
@@ -82,7 +83,7 @@ class MarketOffersController extends Notifier<MarketOffersState> {
         error: null,
         paymentMethods: paymentMethods,
         offers: ranked,
-        lastHasUsdcTrustline: hasUsdc,
+        lastHasUsdcTrustline: supportedAssets.contains('USDC'),
       );
     } catch (error) {
       if (!ref.mounted) return;
@@ -112,35 +113,47 @@ class MarketOffersController extends Notifier<MarketOffersState> {
     await load();
   }
 
-  Future<bool> _activeAddressHasUsdcTrustline() async {
+  Future<Set<String>> _loadSupportedAssetCodes(List<OfferModel> offers) async {
     var accountId = _seedVm.accountId?.trim();
     if (accountId == null || accountId.isEmpty) {
       await _seedVm.refresh();
       accountId = _seedVm.accountId?.trim();
     }
-    if (accountId == null || accountId.isEmpty) return false;
-    if (state.lastTrustlineCheckedAddress == accountId) {
-      return state.lastHasUsdcTrustline;
+
+    final supported = <String>{'XLM'};
+    if (accountId == null || accountId.isEmpty) return supported;
+
+    final assetVm = ref.read(assetVmProvider);
+    final uniqueAssets = offers
+        .map((offer) => offer.asset.trim().toUpperCase())
+        .where((code) => code.isNotEmpty && code != 'XLM')
+        .toSet();
+
+    for (final assetCode in uniqueAssets) {
+      final asset = assetVm.findAsset(assetCode);
+      if (asset == null) continue;
+      if (asset.isNative) {
+        supported.add(assetCode);
+        continue;
+      }
+
+      final issuer = (asset.issuer ?? '').trim();
+      final code = (asset.assetCode ?? asset.symbol).trim().toUpperCase();
+      if (issuer.isEmpty || code.isEmpty) continue;
+
+      final stellarAsset = code.length <= 4
+          ? AssetTypeCreditAlphaNum4(code, issuer)
+          : AssetTypeCreditAlphaNum12(code, issuer);
+      try {
+        final hasTrustline = await _stellarService.hasTrustline(
+          accountId,
+          stellarAsset,
+        );
+        if (hasTrustline) supported.add(assetCode);
+      } catch (_) {}
     }
 
-    try {
-      final has = await _stellarService.accountService.hasUsdcTrustline(
-        accountId,
-      );
-      if (!ref.mounted) return false;
-      state = state.copyWith(
-        lastTrustlineCheckedAddress: accountId,
-        lastHasUsdcTrustline: has,
-      );
-      return has;
-    } catch (_) {
-      if (!ref.mounted) return false;
-      state = state.copyWith(
-        lastTrustlineCheckedAddress: accountId,
-        lastHasUsdcTrustline: false,
-      );
-      return false;
-    }
+    return supported;
   }
 
   Future<List<OfferModel>> _rankOffers(List<OfferModel> offers) async {

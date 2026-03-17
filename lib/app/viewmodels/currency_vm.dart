@@ -5,8 +5,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/io_client.dart';
 import 'package:intl/intl.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/secure_storage/currency_secure_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
+
+enum _AssetPricingKind { xlm, usdStable, unsupported }
+enum _AssetHistorySelection { h24, d7, d30, y1, all }
 
 /// CurrencyVM â€” authoritative live/cached exchange rate view model.
 ///
@@ -169,6 +173,16 @@ class CurrencyVM extends ChangeNotifier {
   List<double> _xlmHist30 = const [];
   List<double> _xlmHist365 = const [];
   List<double> _xlmHistAll = const [];
+
+  final Map<String, double> _assetUsdPriceById = {};
+  final Map<String, List<double>> _assetUsdHistoryById = {};
+  final Map<String, DateTime> _assetUsdPriceAt = {};
+  final Map<String, DateTime> _assetUsdHistoryAt = {};
+  final Set<String> _assetPriceLoadsInFlight = <String>{};
+  final Set<String> _assetHistoryLoadsInFlight = <String>{};
+
+  static const Duration _assetPriceCacheTtl = Duration(minutes: 10);
+  static const Duration _assetHistoryCacheTtl = Duration(hours: 6);
 
   // Consecutive error counter
   int _consecutiveErrors = 0;
@@ -343,6 +357,225 @@ class CurrencyVM extends ChangeNotifier {
 
   double fiatToXlm(double f) =>
       (f.isFinite && !f.isNaN && _xlmRate > 0) ? f / _xlmRate : 0.0;
+
+  bool supportsAssetPricing(AssetModel asset) =>
+      _pricingKindForAsset(asset) != _AssetPricingKind.unsupported ||
+      _coingeckoIdForAsset(asset) != null;
+
+  double assetUnitPriceFiat(AssetModel asset) {
+    switch (_pricingKindForAsset(asset)) {
+      case _AssetPricingKind.xlm:
+        return _xlmRate;
+      case _AssetPricingKind.usdStable:
+        return _usdcRate;
+      case _AssetPricingKind.unsupported:
+        _primeAssetMarketData(asset);
+        final usd = _assetUsdPriceById[asset.id] ?? 0.0;
+        final fx = _usdToFiatRate;
+        if (usd <= 0 || fx <= 0 || !usd.isFinite || !fx.isFinite) return 0.0;
+        return usd * fx;
+    }
+  }
+
+  double assetAmountToFiat(AssetModel asset, double amount) {
+    if (!amount.isFinite || amount.isNaN) return 0.0;
+    final unitPrice = assetUnitPriceFiat(asset);
+    if (unitPrice <= 0 || !unitPrice.isFinite) return 0.0;
+    return amount * unitPrice;
+  }
+
+  List<double> assetHistory24h(AssetModel asset) => _assetHistory(
+    asset,
+    selection: _AssetHistorySelection.h24,
+    xlmHistory: _xlmHist24h,
+    stableHistory: usdcHistory24h,
+  );
+
+  List<double> assetHistory7d(AssetModel asset) => _assetHistory(
+    asset,
+    selection: _AssetHistorySelection.d7,
+    xlmHistory: _xlmHist7,
+    stableHistory: usdcHistory7,
+  );
+
+  List<double> assetHistory30d(AssetModel asset) => _assetHistory(
+    asset,
+    selection: _AssetHistorySelection.d30,
+    xlmHistory: _xlmHist30,
+    stableHistory: usdcHistory30,
+  );
+
+  List<double> assetHistory1y(AssetModel asset) => _assetHistory(
+    asset,
+    selection: _AssetHistorySelection.y1,
+    xlmHistory: _xlmHist365,
+    stableHistory: usdcHistory365,
+  );
+
+  List<double> assetHistoryAll(AssetModel asset) => _assetHistory(
+    asset,
+    selection: _AssetHistorySelection.all,
+    xlmHistory: _xlmHistAll,
+    stableHistory: usdcHistory365,
+  );
+
+  List<double> _assetHistory(
+    AssetModel asset, {
+    required _AssetHistorySelection selection,
+    required List<double> xlmHistory,
+    required List<double> stableHistory,
+  }) {
+    switch (_pricingKindForAsset(asset)) {
+      case _AssetPricingKind.xlm:
+        return List<double>.from(xlmHistory);
+      case _AssetPricingKind.usdStable:
+        return List<double>.from(stableHistory);
+      case _AssetPricingKind.unsupported:
+        _primeAssetMarketData(asset, needHistory: true);
+        final usdSeries = _assetUsdHistoryById[asset.id] ?? const <double>[];
+        if (usdSeries.isEmpty) return const [];
+        return _historyForRange(_convertUsdSeriesToFiat(usdSeries), selection);
+    }
+  }
+
+  double get _usdToFiatRate {
+    if (_fiat == 'usd') return 1.0;
+    return (_usdcRate > 0 && _usdcRate.isFinite) ? _usdcRate : 0.0;
+  }
+
+  List<double> _convertUsdSeriesToFiat(List<double> usdSeries) {
+    final fx = _usdToFiatRate;
+    if (fx <= 0 || !fx.isFinite) return const [];
+    return usdSeries
+        .where((value) => value.isFinite && !value.isNaN && value > 0)
+        .map((value) => value * fx)
+        .toList(growable: false);
+  }
+
+  List<double> _historyForRange(
+    List<double> series,
+    _AssetHistorySelection selection,
+  ) {
+    if (series.isEmpty) return const [];
+    switch (selection) {
+      case _AssetHistorySelection.h24:
+        return _tail(series, 2);
+      case _AssetHistorySelection.d7:
+        return _tail(series, 7);
+      case _AssetHistorySelection.d30:
+        return _tail(series, 30);
+      case _AssetHistorySelection.y1:
+        return _tail(series, 365);
+      case _AssetHistorySelection.all:
+        return List<double>.from(series);
+    }
+  }
+
+  void _primeAssetMarketData(AssetModel asset, {bool needHistory = false}) {
+    final cgId = _coingeckoIdForAsset(asset);
+    if (cgId == null || cgId.isEmpty || _disposed) return;
+
+    final now = DateTime.now().toUtc();
+    final priceAt = _assetUsdPriceAt[asset.id];
+    if (!_assetPriceLoadsInFlight.contains(asset.id) &&
+        (priceAt == null || now.difference(priceAt) > _assetPriceCacheTtl)) {
+      _assetPriceLoadsInFlight.add(asset.id);
+      unawaited(_fetchAssetUsdPrice(asset, cgId));
+    }
+
+    if (!needHistory) return;
+
+    final historyAt = _assetUsdHistoryAt[asset.id];
+    if (!_assetHistoryLoadsInFlight.contains(asset.id) &&
+        (historyAt == null || now.difference(historyAt) > _assetHistoryCacheTtl)) {
+      _assetHistoryLoadsInFlight.add(asset.id);
+      unawaited(_fetchAssetUsdHistory(asset, cgId));
+    }
+  }
+
+  String? _coingeckoIdForAsset(AssetModel asset) {
+    const keys = <String>[
+      'coingecko',
+      'coingeckoId',
+      'coingecko_id',
+      'coinGecko',
+    ];
+    for (final key in keys) {
+      final value = asset.externalIds[key]?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  Future<void> _fetchAssetUsdPrice(AssetModel asset, String cgId) async {
+    try {
+      final url = Uri.parse(
+        'https://api.coingecko.com/api/v3/simple/price'
+        '?ids=${Uri.encodeQueryComponent(cgId)}'
+        '&vs_currencies=usd',
+      );
+      final payload = await _json(url);
+      final market = payload[cgId];
+      final usd = (market is Map ? market['usd'] : null);
+      final parsed = _toD(usd);
+      if (parsed != null) {
+        _assetUsdPriceById[asset.id] = parsed;
+        _assetUsdPriceAt[asset.id] = DateTime.now().toUtc();
+        if (!_disposed) notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('CurrencyVM: Asset price fetch failed for ${asset.symbol}: $e');
+    } finally {
+      _assetPriceLoadsInFlight.remove(asset.id);
+    }
+  }
+
+  Future<void> _fetchAssetUsdHistory(AssetModel asset, String cgId) async {
+    try {
+      final url = Uri.parse(
+        'https://api.coingecko.com/api/v3/coins/${Uri.encodeComponent(cgId)}/market_chart'
+        '?vs_currency=usd&days=max&interval=daily',
+      );
+      final payload = await _json(url);
+      final raw = (payload['prices'] as List?) ?? const [];
+      final history = <double>[];
+      for (final point in raw) {
+        if (point is! List || point.length < 2) continue;
+        final price = _toD(point[1]);
+        if (price != null) history.add(price);
+      }
+      if (history.isNotEmpty) {
+        _assetUsdHistoryById[asset.id] = history;
+        _assetUsdHistoryAt[asset.id] = DateTime.now().toUtc();
+        _assetUsdPriceById[asset.id] = history.last;
+        _assetUsdPriceAt[asset.id] = DateTime.now().toUtc();
+        if (!_disposed) notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('CurrencyVM: Asset history fetch failed for ${asset.symbol}: $e');
+    } finally {
+      _assetHistoryLoadsInFlight.remove(asset.id);
+    }
+  }
+
+  _AssetPricingKind _pricingKindForAsset(AssetModel asset) {
+    final symbol = asset.symbol.trim().toUpperCase();
+    final assetCode = (asset.assetCode ?? '').trim().toUpperCase();
+    final tags = asset.tags.map((e) => e.trim().toLowerCase()).toSet();
+
+    if (asset.isNative || symbol == 'XLM' || assetCode == 'XLM') {
+      return _AssetPricingKind.xlm;
+    }
+
+    if (tags.contains('stablecoin') ||
+        symbol == 'USDC' ||
+        assetCode == 'USDC' ||
+        symbol == 'USD') {
+      return _AssetPricingKind.usdStable;
+    }
+
+    return _AssetPricingKind.unsupported;
+  }
 
   // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Future<void> _boot() async {

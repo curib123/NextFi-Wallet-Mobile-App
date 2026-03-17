@@ -41,9 +41,11 @@ class _PriceChartCardState extends ConsumerState<PriceChartCard> {
   void initState() {
     super.initState();
     final currency = ref.read(currencyVmProvider);
+    final assets = ref.read(assetVmProvider);
     _vm = PriceChartVM(
       currency,
-      initialToken: PriceTokenX.parse(widget.token),
+      assets,
+      initialAssetKey: widget.token,
     );
   }
 
@@ -51,7 +53,7 @@ class _PriceChartCardState extends ConsumerState<PriceChartCard> {
   void didUpdateWidget(covariant PriceChartCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.token.toUpperCase() != widget.token.toUpperCase()) {
-      _vm.setToken(PriceTokenX.parse(widget.token));
+      _vm.setAsset(widget.token);
     }
   }
 
@@ -100,7 +102,10 @@ class _PriceChartView extends StatelessWidget {
     final pad = compact ? const EdgeInsets.all(12) : const EdgeInsets.all(16);
     final chartAccent = accentColor ?? (vm.isUp ? c.primary : c.error);
 
-    final displayTitle = title == 'XLM Price' ? '${vm.token.code} Price' : title;
+    final displayTitle =
+        title == 'XLM Price' ? '${vm.assetCode} Price' : title;
+    final availableAssets = vm.availableAssets;
+    final activeAsset = vm.activeAsset;
 
     // Single source of truth for values on the chart (already FIAT)
     final displaySeries = vm.displaySeries;
@@ -155,10 +160,11 @@ class _PriceChartView extends StatelessWidget {
                           ),
                           if (isForDashboard)
                             TokenTabs(
-                              token: vm.token.code,
-                              onChanged: (t) {
-                                vm.setToken(PriceTokenX.parse(t));
-                                onTokenChanged?.call(t);
+                              assets: availableAssets,
+                              token: activeAsset?.id ?? vm.selectedAssetKey,
+                              onChanged: (assetKey) {
+                                vm.setAsset(assetKey);
+                                onTokenChanged?.call(assetKey);
                               },
                             ),
                         ],
@@ -177,7 +183,7 @@ class _PriceChartView extends StatelessWidget {
                         duration: const Duration(milliseconds: 250),
                         child: Text(
                           '${fmtPrice(shown)} ${vm.fiatCode}',
-                          key: ValueKey('${vm.token.code}_${shown}_${vm.fiatCode}'),
+                          key: ValueKey('${vm.assetCode}_${shown}_${vm.fiatCode}'),
                           style: TextStyle(
                             fontSize: compact ? 20 : 24,
                             fontWeight: FontWeight.w800,

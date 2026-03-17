@@ -1,15 +1,25 @@
 // lib/features/price_chart/view/widgets/token_tabs.dart
 import 'package:flutter/material.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 
 class TokenTabs extends StatelessWidget {
-  const TokenTabs({super.key, required this.token, required this.onChanged});
-  final String token; // 'XLM' or 'USDC'
+  const TokenTabs({
+    super.key,
+    required this.assets,
+    required this.token,
+    required this.onChanged,
+  });
+  final List<AssetModel> assets;
+  final String token;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    const items = ['XLM', 'USDC'];
+    final items = assets;
+    if (items.length <= 1) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -18,14 +28,19 @@ class TokenTabs extends StatelessWidget {
         border: Border.all(color: c.outlineVariant.withValues(alpha: 0.4)),
       ),
       padding: const EdgeInsets.all(3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: items.map((t) {
-          final selected = t == token;
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: items.map((asset) {
+          final assetKey = asset.id;
+          final selected =
+              assetKey.toLowerCase() == token.toLowerCase() ||
+              asset.symbol.toLowerCase() == token.toLowerCase();
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: InkWell(
-              onTap: () => onChanged(t),
+              onTap: () => onChanged(assetKey),
               borderRadius: BorderRadius.circular(999),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
@@ -35,7 +50,7 @@ class TokenTabs extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  t,
+                  asset.symbol.toUpperCase(),
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 11,
@@ -47,6 +62,7 @@ class TokenTabs extends StatelessWidget {
             ),
           );
         }).toList(),
+        ),
       ),
     );
   }

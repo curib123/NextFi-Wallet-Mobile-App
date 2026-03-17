@@ -30,6 +30,24 @@ class StellarStreamService extends StellarBaseService {
   Asset get xlm => Asset.NATIVE;
   Asset get usdc => AssetTypeCreditAlphaNum4('USDC', usdcIssuer);
 
+  String _assetKey(Asset asset) => AccountState.assetKeyForAsset(asset);
+
+  void _putAssetQuery(
+    Map<String, String> query,
+    Asset asset, {
+    required String role,
+  }) {
+    if (asset is AssetTypeNative) {
+      query['${role}_asset_type'] = 'native';
+      return;
+    }
+    if (asset is AssetTypeCreditAlphaNum) {
+      query['${role}_asset_type'] = 'credit_alphanum${asset.code.length}';
+      query['${role}_asset_code'] = asset.code;
+      query['${role}_asset_issuer'] = asset.issuerId;
+    }
+  }
+
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Payment Streams
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -61,23 +79,33 @@ class StellarStreamService extends StellarBaseService {
       if (closed) return;
       try {
         final acc = await loadAccount(accountId);
-        double xlm = 0, usdc = 0;
-        bool tl = false;
+        final balancesByAssetKey = <String, double>{};
+        final trustlinesByAssetKey = <String, bool>{};
 
         for (final b in acc.balances) {
           if (b.assetType == Asset.TYPE_NATIVE) {
-            xlm = double.parse(b.balance);
+            balancesByAssetKey[AccountState.nativeAssetKey] =
+                double.tryParse(b.balance) ?? 0.0;
+            continue;
           }
-          if (b.assetCode == 'USDC' && b.assetIssuer == usdcIssuer) {
-            usdc = double.parse(b.balance);
-            tl = true;
+
+          final assetCode = b.assetCode;
+          if (assetCode == null || assetCode.isEmpty) continue;
+
+          balancesByAssetKey[assetCode] = double.tryParse(b.balance) ?? 0.0;
+          trustlinesByAssetKey[assetCode] = true;
+
+          if (b.limit != null && b.limit!.isNotEmpty) {
+            final limit = double.tryParse(b.limit!);
+            if (limit != null && limit <= 0) {
+              trustlinesByAssetKey[assetCode] = false;
+            }
           }
         }
 
         controller.add(AccountState(
-          xlm: xlm,
-          usdc: usdc,
-          hasUsdcTrustline: tl,
+          balancesByAssetKey: balancesByAssetKey,
+          trustlinesByAssetKey: trustlinesByAssetKey,
           updatedAt: DateTime.now(),
         ));
       } catch (e, st) {
@@ -208,13 +236,22 @@ class StellarStreamService extends StellarBaseService {
   // Price Streams
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  Stream<PairPrice> xlmUsdcPriceStream() {
+  Stream<PairPrice> assetPairPriceStream({
+    required Asset baseAsset,
+    required Asset counterAsset,
+  }) {
     Stream<PairPrice> build(StellarSDK s) {
       final tradesBuilder = s.trades;
-      tradesBuilder.queryParameters['base_asset_type'] = 'native';
-      tradesBuilder.queryParameters['counter_asset_type'] = 'credit_alphanum4';
-      tradesBuilder.queryParameters['counter_asset_code'] = 'USDC';
-      tradesBuilder.queryParameters['counter_asset_issuer'] = usdcIssuer;
+      _putAssetQuery(
+        tradesBuilder.queryParameters,
+        baseAsset,
+        role: 'base',
+      );
+      _putAssetQuery(
+        tradesBuilder.queryParameters,
+        counterAsset,
+        role: 'counter',
+      );
 
       return tradesBuilder.cursor('now').stream().map((t) {
         double? price;
@@ -228,7 +265,12 @@ class StellarStreamService extends StellarBaseService {
         price ??= double.tryParse('${t.price}');
 
         if (price != null && price > 0) {
-          return PairPrice(price, DateTime.now());
+          return PairPrice(
+            baseAssetKey: _assetKey(baseAsset),
+            counterAssetKey: _assetKey(counterAsset),
+            counterPerBase: price,
+            at: DateTime.now(),
+          );
         }
         throw StateError('Invalid trade price');
       });
@@ -237,9 +279,27 @@ class StellarStreamService extends StellarBaseService {
     return sseWithFallback<PairPrice>(build);
   }
 
+  Stream<double> quoteStrictSendStream({
+    required Asset sourceAsset,
+    required Asset destinationAsset,
+    required double sendAmount,
+  }) => assetPairPriceStream(
+    baseAsset: sourceAsset,
+    counterAsset: destinationAsset,
+  ).map((p) => sendAmount * p.counterPerBase);
+
+  Stream<PairPrice> xlmUsdcPriceStream() =>
+      assetPairPriceStream(baseAsset: xlm, counterAsset: usdc);
+
   Stream<double> quoteXlmToUsdcStream(double sendAmountXlm) =>
-      xlmUsdcPriceStream().map((p) => sendAmountXlm * p.usdcPerXlm);
+      quoteStrictSendStream(
+        sourceAsset: xlm,
+        destinationAsset: usdc,
+        sendAmount: sendAmountXlm,
+      );
 
   Stream<double> quoteUsdcToXlmStream(double sendAmountUsdc) =>
-      xlmUsdcPriceStream().map((p) => sendAmountUsdc * p.xlmPerUsdc);
+      assetPairPriceStream(baseAsset: usdc, counterAsset: xlm).map(
+        (p) => sendAmountUsdc * p.counterPerBase,
+      );
 }

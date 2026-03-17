@@ -186,6 +186,16 @@ class StellarFeeService extends StellarBaseService {
     }
   }
 
+  Future<double?> quoteAssetToAsset({
+    required Asset sourceAsset,
+    required double sendAmount,
+    required Asset destinationAsset,
+  }) => quoteStrictSend(
+    sourceAsset: sourceAsset,
+    sourceAmount: StellarBaseService.fmt7(sendAmount),
+    destinationAssets: [destinationAsset],
+  );
+
   Future<double?> quoteXlmToUsdc(double sendAmountXlm) => quoteStrictSend(
     sourceAsset: xlm,
     sourceAmount: StellarBaseService.fmt7(sendAmountXlm),

@@ -11,7 +11,6 @@ import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/offers/presentation/screens/trade_screen.dart';
 import 'package:next_fi/features/offers/presentation/viewmodels/market_offers_controller.dart';
 import 'package:next_fi/features/offers/presentation/widgets/public_offer_tile.dart';
-import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_vm.dart';
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
@@ -145,8 +144,8 @@ class _MarketOffersScreenState extends ConsumerState<MarketOffersScreen>
       isTestnet: config.isTestnet,
       usdcIssuer: config.usdcIssuer,
     );
-    _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
-    _usdcPriceVm = PriceChartVM(currency, initialToken: PriceToken.usdc);
+    _xlmPriceVm = PriceChartVM(currency, _assetVm, initialAssetKey: 'XLM');
+    _usdcPriceVm = PriceChartVM(currency, _assetVm, initialAssetKey: 'USDC');
     _priceListener = () {
       if (mounted) setState(() {});
     };
@@ -228,14 +227,10 @@ class _MarketOffersScreenState extends ConsumerState<MarketOffersScreen>
       return '${_formatFiat(fiatCode, offer.marketPrice!)} $fiatCode';
     }
     if (!_hasTrustedVmRates()) return null;
-    final code = offer.asset.trim().toUpperCase();
-    final vm = switch (code) {
-      'XLM' => _xlmPriceVm,
-      'USDC' => _usdcPriceVm,
-      _ => null,
-    };
-    if (vm == null || vm.fiatCode != fiatCode) return null;
-    final live = vm.priceNow;
+    final asset = _assetVm.findAsset(offer.asset);
+    final currency = ref.read(currencyVmProvider);
+    if (asset == null || currency.fiatCode != fiatCode) return null;
+    final live = currency.assetUnitPriceFiat(asset);
     if (!live.isFinite || live <= 0) return null;
     final margin = offer.marginPercent ?? 0.0;
     final isMerchantSell = offer.type == OfferType.sell;
@@ -246,26 +241,19 @@ class _MarketOffersScreenState extends ConsumerState<MarketOffersScreen>
   }
 
   double? _rawPriceForAsset(String assetCode) {
-    final vm = switch (assetCode.trim().toUpperCase()) {
-      'XLM' => _xlmPriceVm,
-      'USDC' => _usdcPriceVm,
-      _ => null,
-    };
-    if (vm == null) return null;
-    final p = vm.priceNow;
+    final asset = _assetVm.findAsset(assetCode);
+    if (asset == null) return null;
+    final p = ref.read(currencyVmProvider).assetUnitPriceFiat(asset);
     return (p.isFinite && p > 0) ? p : null;
   }
 
   bool _priceLoadingFor(OfferModel offer) {
     if (!_hasTrustedVmRates()) return false;
-    final vm = switch (offer.asset.trim().toUpperCase()) {
-      'XLM' => _xlmPriceVm,
-      'USDC' => _usdcPriceVm,
-      _ => null,
-    };
-    if (vm == null) return false;
-    if (vm.fiatCode != offer.fiatCurrency.trim().toUpperCase()) return false;
-    return vm.priceNow <= 0;
+    final asset = _assetVm.findAsset(offer.asset);
+    final currency = ref.read(currencyVmProvider);
+    if (asset == null) return false;
+    if (currency.fiatCode != offer.fiatCurrency.trim().toUpperCase()) return false;
+    return currency.assetUnitPriceFiat(asset) <= 0;
   }
 
   bool _offerEnabled(OfferModel offer) {

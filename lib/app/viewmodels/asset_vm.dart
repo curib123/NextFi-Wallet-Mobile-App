@@ -54,6 +54,7 @@ class AssetVM with ChangeNotifier {
         decimals: 7,
         aliases: const ['xlm', 'stellar', 'lumens'],
         tags: const ['layer1', 'featured'],
+        externalIds: const {'coingecko': 'stellar'},
         explorer: {
           'account': 'https://stellar.expert/explorer/$explorerNet/account/{hash}',
           'tx': 'https://stellar.expert/explorer/$explorerNet/tx/{hash}',
@@ -75,6 +76,7 @@ class AssetVM with ChangeNotifier {
         decimals: 7,
         aliases: const ['usdc', 'usd coin'],
         tags: const ['stablecoin', 'featured'],
+        externalIds: const {'coingecko': 'usd-coin'},
         explorer: {
           'asset':
               'https://stellar.expert/explorer/$explorerNet/asset/USDC-{issuer}',
@@ -192,41 +194,19 @@ class AssetVM with ChangeNotifier {
   }
 
   void _recompute() {
-    final deltas = <String, Map<String, double>>{
-      'xlm': {
-        '24h': _pct(currency.xlmHistory24h),
-        '7d': _pct(currency.xlmHistory7),
-        '30d': _pct(currency.xlmHistory30),
-        '1y': _pct(currency.xlmHistory365),
-      },
-      'usdc': {
-        '24h': _pct(currency.usdcHistory24h),
-        '7d': _pct(currency.usdcHistory7),
-        '30d': _pct(currency.usdcHistory30),
-        '1y': _pct(currency.usdcHistory365),
-      },
-    };
-
     for (int i = 0; i < _assets.length; i++) {
       final a = _assets[i];
       final k = a.symbol.toLowerCase();
-
-      final assetDeltas = deltas[k];
-      if (assetDeltas == null) {
-        _assets[i] = a.copyWith(
-          priceChangePercent24h: _cleanPct(k, '24h', 0),
-          priceChangePercent7d: _cleanPct(k, '7d', 0),
-          priceChangePercent30d: _cleanPct(k, '30d', 0),
-          priceChangePercent1y: _cleanPct(k, '1y', 0),
-        );
-        continue;
-      }
+      final h24 = _pct(currency.assetHistory24h(a));
+      final d7 = _pct(currency.assetHistory7d(a));
+      final d30 = _pct(currency.assetHistory30d(a));
+      final y1 = _pct(currency.assetHistory1y(a));
 
       _assets[i] = a.copyWith(
-        priceChangePercent24h: _cleanPct(k, '24h', assetDeltas['24h']!),
-        priceChangePercent7d: _cleanPct(k, '7d', assetDeltas['7d']!),
-        priceChangePercent30d: _cleanPct(k, '30d', assetDeltas['30d']!),
-        priceChangePercent1y: _cleanPct(k, '1y', assetDeltas['1y']!),
+        priceChangePercent24h: _cleanPct(k, '24h', h24),
+        priceChangePercent7d: _cleanPct(k, '7d', d7),
+        priceChangePercent30d: _cleanPct(k, '30d', d30),
+        priceChangePercent1y: _cleanPct(k, '1y', y1),
       );
     }
 

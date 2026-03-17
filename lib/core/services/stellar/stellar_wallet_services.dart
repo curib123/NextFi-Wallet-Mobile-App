@@ -860,6 +860,16 @@ class StellarWalletServices {
     destinationAssets: destinationAssets,
   );
 
+  Future<double?> quoteAssetToAsset({
+    required Asset sourceAsset,
+    required double sendAmount,
+    required Asset destinationAsset,
+  }) => feeService.quoteAssetToAsset(
+    sourceAsset: sourceAsset,
+    sendAmount: sendAmount,
+    destinationAsset: destinationAsset,
+  );
+
   Future<double?> quoteXlmToUsdc(double sendAmountXlm) =>
       feeService.quoteXlmToUsdc(sendAmountXlm);
   Future<double?> quoteUsdcToXlm(double sendAmountUsdc) =>
@@ -880,6 +890,24 @@ class StellarWalletServices {
     int percentile = 90,
   }) =>
       streamService.feeEstimateStream(opCount: opCount, percentile: percentile);
+
+  Stream<PairPrice> assetPairPriceStream({
+    required Asset baseAsset,
+    required Asset counterAsset,
+  }) => streamService.assetPairPriceStream(
+    baseAsset: baseAsset,
+    counterAsset: counterAsset,
+  );
+
+  Stream<double> quoteStrictSendStream({
+    required Asset sourceAsset,
+    required Asset destinationAsset,
+    required double sendAmount,
+  }) => streamService.quoteStrictSendStream(
+    sourceAsset: sourceAsset,
+    destinationAsset: destinationAsset,
+    sendAmount: sendAmount,
+  );
 
   Stream<PairPrice> xlmUsdcPriceStream() => streamService.xlmUsdcPriceStream();
 

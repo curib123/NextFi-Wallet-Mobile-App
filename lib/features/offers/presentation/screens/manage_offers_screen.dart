@@ -12,7 +12,6 @@ import 'package:next_fi/core/widgets/modal/show_fiat_picker_bottom_sheet.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/features/offers/presentation/widgets/public_offer_tile.dart';
-import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_state.dart';
 import 'package:next_fi/features/price_chart/presentation/viewmodels/price_chart_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
@@ -96,8 +95,8 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
       usdcIssuer: config.usdcIssuer,
     );
 
-    _xlmPriceVm = PriceChartVM(currency, initialToken: PriceToken.xlm);
-    _usdcPriceVm = PriceChartVM(currency, initialToken: PriceToken.usdc);
+    _xlmPriceVm = PriceChartVM(currency, _assetVm, initialAssetKey: 'XLM');
+    _usdcPriceVm = PriceChartVM(currency, _assetVm, initialAssetKey: 'USDC');
     _priceListener = () {
       if (mounted) setState(() {});
     };
@@ -169,14 +168,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   }
 
   double? _rawPriceForAsset(String assetCode, String fiatCode) {
-    final code = assetCode.trim().toUpperCase();
-    final vm = switch (code) {
-      'XLM' => _xlmPriceVm,
-      'USDC' => _usdcPriceVm,
-      _ => null,
-    };
-    if (vm == null || vm.fiatCode != fiatCode) return null;
-    final p = vm.priceNow;
+    final asset = _assetVm.findAsset(assetCode);
+    final currency = _container.read(currencyVmProvider);
+    if (asset == null || currency.fiatCode != fiatCode) return null;
+    final p = currency.assetUnitPriceFiat(asset);
     return (p.isFinite && p > 0) ? p : null;
   }
 
@@ -202,14 +197,10 @@ class _ManageOffersScreenState extends State<ManageOffersScreen>
   bool _priceLoadingFor(OfferModel offer) {
     if (!_hasTrustedVmRates()) return false;
     final fiatCode = offer.fiatCurrency.trim().toUpperCase();
-    final code = offer.asset.trim().toUpperCase();
-    final vm = switch (code) {
-      'XLM' => _xlmPriceVm,
-      'USDC' => _usdcPriceVm,
-      _ => null,
-    };
-    if (vm == null || vm.fiatCode != fiatCode) return false;
-    return vm.priceNow <= 0;
+    final asset = _assetVm.findAsset(offer.asset);
+    final currency = _container.read(currencyVmProvider);
+    if (asset == null || currency.fiatCode != fiatCode) return false;
+    return currency.assetUnitPriceFiat(asset) <= 0;
   }
 
   bool _offerEnabled(OfferModel offer) {

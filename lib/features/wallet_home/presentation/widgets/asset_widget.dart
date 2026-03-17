@@ -49,27 +49,11 @@ class AssetWidget extends ConsumerWidget {
   }
 
   double _fiatFor(CurrencyVM cur, AssetModel asset, double balance) {
-    final symbolUpper = asset.symbol.toUpperCase();
-    switch (symbolUpper) {
-      case 'XLM':
-        return cur.xlmToFiat(balance);
-      case 'USDC':
-        return cur.usdcToFiat(balance);
-      default:
-        return 0.0;
-    }
+    return cur.assetAmountToFiat(asset, balance);
   }
 
   double _coinPriceFor(CurrencyVM cur, AssetModel asset) {
-    final symbolUpper = asset.symbol.toUpperCase();
-    switch (symbolUpper) {
-      case 'XLM':
-        return cur.xlmToFiat(1.0);
-      case 'USDC':
-        return cur.usdcToFiat(1.0);
-      default:
-        return 0.0;
-    }
+    return cur.assetUnitPriceFiat(asset);
   }
 
   double _pctFor(AssetModel a, PriceWindow window) {
@@ -101,24 +85,15 @@ class AssetWidget extends ConsumerWidget {
     AssetModel asset,
     PriceWindow window,
   ) {
-    final symbolUpper = asset.symbol.toUpperCase();
-    switch (symbolUpper) {
-      case 'XLM':
-        return switch (window) {
-          PriceWindow.h24 => cur.xlmHistory24h,
-          PriceWindow.d7 => cur.xlmHistory7,
-          PriceWindow.d30 => cur.xlmHistory30,
-          PriceWindow.y1 => cur.xlmHistory365,
-        };
-      case 'USDC':
-        return switch (window) {
-          PriceWindow.h24 => cur.usdcHistory24h,
-          PriceWindow.d7 => cur.usdcHistory7,
-          PriceWindow.d30 => cur.usdcHistory30,
-          PriceWindow.y1 => cur.usdcHistory365,
-        };
-      default:
-        return const <double>[];
+    switch (window) {
+      case PriceWindow.h24:
+        return cur.assetHistory24h(asset);
+      case PriceWindow.d7:
+        return cur.assetHistory7d(asset);
+      case PriceWindow.d30:
+        return cur.assetHistory30d(asset);
+      case PriceWindow.y1:
+        return cur.assetHistory1y(asset);
     }
   }
 

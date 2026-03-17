@@ -254,7 +254,8 @@ final transactionsVmProvider = ChangeNotifierProvider<TransactionsVM>((ref) {
 
 final priceChartVmProvider = ChangeNotifierProvider<PriceChartVM>((ref) {
   final currency = ref.read(currencyVmProvider);
-  return PriceChartVM(currency);
+  final assets = ref.read(assetVmProvider);
+  return PriceChartVM(currency, assets);
 });
 
 final importWalletVmProvider = ChangeNotifierProvider<ImportWalletVM>((ref) {

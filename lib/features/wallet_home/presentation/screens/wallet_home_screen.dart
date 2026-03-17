@@ -282,15 +282,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     for (final asset in assets) {
       final balance = balancesByAssetId[asset.id] ?? 0.0;
       if (balance <= 0) continue;
-
-      switch (asset.symbol.toUpperCase()) {
-        case 'XLM':
-          total += currency.xlmToFiat(balance);
-          break;
-        case 'USDC':
-          total += currency.usdcToFiat(balance);
-          break;
-      }
+      total += currency.assetAmountToFiat(asset, balance);
     }
     return total.isFinite ? total : 0.0;
   }

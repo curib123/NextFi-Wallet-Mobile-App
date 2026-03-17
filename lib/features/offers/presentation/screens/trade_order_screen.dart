@@ -361,12 +361,22 @@ class _TradeOrderScreenState extends State<TradeOrderScreen>
   }
 
   Asset _tradeStellarAsset(StellarWalletServices stellarSvc) {
-    final assetCode = _trade.asset.toUpperCase();
-    return switch (assetCode) {
-      'XLM' => Asset.NATIVE,
-      'USDC' => AssetTypeCreditAlphaNum4('USDC', stellarSvc.usdcIssuer),
-      _ => throw Exception('Unsupported token: $assetCode'),
-    };
+    final assetVm = _container.read(assetVmProvider);
+    final asset = assetVm.findAsset(_trade.asset);
+    if (asset == null) {
+      throw Exception('Unsupported token: ${_trade.asset.toUpperCase()}');
+    }
+    if (asset.isNative) return Asset.NATIVE;
+
+    final code = (asset.assetCode ?? asset.symbol).trim().toUpperCase();
+    final issuer = (asset.issuer ?? '').trim();
+    if (code.isEmpty || issuer.isEmpty) {
+      throw Exception('Unsupported token: ${_trade.asset.toUpperCase()}');
+    }
+
+    return code.length <= 4
+        ? AssetTypeCreditAlphaNum4(code, issuer)
+        : AssetTypeCreditAlphaNum12(code, issuer);
   }
 
   Future<void> _refreshActiveAssetBalance({bool silent = true}) async {
