@@ -12,6 +12,7 @@ Future<void> showTokenSelector(
   String address,
   double xlmBalance,
   double usdcBalance, {
+  double Function(AssetModel asset)? balanceResolver,
   required Widget Function(String address, String token, double balance)
   screenBuilder,
   String title = 'Select Asset',
@@ -24,6 +25,9 @@ Future<void> showTokenSelector(
   final assets = assetVM.assets;
 
   double balanceFor(AssetModel a) {
+    if (balanceResolver != null) {
+      return balanceResolver(a);
+    }
     switch (a.symbol.toUpperCase()) {
       case 'XLM':
         return xlmBalance;

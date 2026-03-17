@@ -109,8 +109,9 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
     showTokenSelector(
       context,
       vm.accountId ?? '',
-      vm.xlmBalance,
-      vm.usdcBalance,
+      0,
+      0,
+      balanceResolver: (asset) => vm.getBalanceForSymbol(asset.id),
       title: 'Select Asset to Lock',
       screenBuilder: (address, token, balance) {
         return ClaimableCreateScreen(initialAsset: token.toUpperCase());
