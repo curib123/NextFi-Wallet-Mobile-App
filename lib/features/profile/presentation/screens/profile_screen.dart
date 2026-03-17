@@ -3,8 +3,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_phoenix/flutter_phoenix.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/widgets/empty_state/empty_state.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
@@ -189,6 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _loadVersion = 0;
 
   bool _loading = true;
+  bool _loggingOut = false;
   String? _error;
   User? _user;
   ProfileModel? _profileData;
@@ -305,6 +309,55 @@ class _ProfileScreenState extends State<ProfileScreen>
     final changed = await showProfileSetupModal(context, initial: _profileData);
     if (changed == true && mounted) {
       await _load(showLoader: false);
+    }
+  }
+
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final c = AppColor.of(dialogContext);
+        return AlertDialog(
+          backgroundColor: c.surface,
+          title: Text(
+            'Sign out?',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            'You will need to sign in again to access your wallet.',
+            style: TextStyle(color: c.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Sign Out'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _loggingOut = true);
+    try {
+      await _auth.logout();
+      final container = ProviderScope.containerOf(context, listen: false);
+      container.read(appShellProvider.notifier).setAuthenticated(false);
+      container.read(tabControllerProvider.notifier).setTab(0);
+      if (!mounted) return;
+      Phoenix.rebirth(context);
+    } finally {
+      if (mounted) {
+        setState(() => _loggingOut = false);
+      }
     }
   }
 
@@ -464,6 +517,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
 
+                      const SliverToBoxAdapter(child: SizedBox(height: 28)),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: _ProfileLogoutButton(
+                            loading: _loggingOut,
+                            c: c,
+                            onTap: _logout,
+                          ),
+                        ),
+                      ),
+
                       SliverToBoxAdapter(
                         child: SizedBox(height: mq.padding.bottom + 52),
                       ),
@@ -472,6 +537,54 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _ProfileLogoutButton extends StatelessWidget {
+  const _ProfileLogoutButton({
+    required this.loading,
+    required this.c,
+    required this.onTap,
+  });
+
+  final bool loading;
+  final AppColor c;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: loading ? null : onTap,
+        icon: loading
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(c.error),
+                ),
+              )
+            : Icon(LucideIcons.logOut, size: 16, color: c.error),
+        label: Text(
+          loading ? 'Signing out...' : 'Sign Out',
+          style: TextStyle(
+            color: c.error,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: c.error.withValues(alpha: 0.35)),
+          foregroundColor: c.error,
+          backgroundColor: c.error.withValues(alpha: 0.04),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
     );
   }
 }

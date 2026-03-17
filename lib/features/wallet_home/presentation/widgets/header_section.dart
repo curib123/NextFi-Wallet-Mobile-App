@@ -67,7 +67,7 @@ class _HeaderSectionState extends State<HeaderSection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
+          margin: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: widget.colors.surface,
             borderRadius: BorderRadius.circular(26),
@@ -103,8 +103,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                   Positioned(
                     left: -12,
                     right: -12,
-                    top: 56,
-                    bottom: 32,
+                    top: 48,
+                    bottom: 24,
                     child: IgnorePointer(
                       child: _BalanceTrendBackdrop(
                         series: widget.chartSeries,
@@ -116,8 +116,8 @@ class _HeaderSectionState extends State<HeaderSection> {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 24,
-                    height: 48,
+                    bottom: 18,
+                    height: 36,
                     child: IgnorePointer(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -156,7 +156,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 11, 18, 9),
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 7),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -212,7 +212,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 5),
                       LiveCountingBalance(
                         animate: widget.animateTotal,
                         hidden: _hideBalance,
@@ -227,7 +227,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                         forceBaseColor: true,
                         fontSize: 25,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         widget.lastBalancesAt == null
                             ? 'Not synced yet'
@@ -239,7 +239,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                           letterSpacing: 0.1,
                         ),
                       ),
-                      SizedBox(height: hasChartData ? 48 : 10),
+                      SizedBox(height: hasChartData ? 36 : 8),
                       if (hasChartData)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
@@ -258,7 +258,7 @@ class _HeaderSectionState extends State<HeaderSection> {
                             );
                           }).toList(),
                         ),
-                      if (hasChartData) const SizedBox(height: 6),
+                      if (hasChartData) const SizedBox(height: 4),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: ConstrainedBox(
@@ -285,7 +285,7 @@ class _HeaderSectionState extends State<HeaderSection> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(
@@ -329,7 +329,7 @@ class _HeaderSectionState extends State<HeaderSection> {
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         widget.incomingStrip,
       ],
     );

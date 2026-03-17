@@ -19,6 +19,7 @@ import 'package:next_fi/features/offers/presentation/screens/manage_offers_scree
 import 'package:next_fi/features/verification_flow/presentation/screens/payment_method_setup_screen.dart';
 import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
 import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
+import 'package:next_fi/features/wallet_home/presentation/screens/manage_wallet_assets_screen.dart';
 import 'package:next_fi/features/wallet_settings/presentation/screens/wallet_settings_screen.dart';
 import 'package:next_fi/core/utils/link_opener.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -618,6 +619,17 @@ class _AppDrawerState extends State<AppDrawer>
                     _staggered(
                       14,
                       _Tile(
+                        icon: LucideIcons.coins,
+                        label: 'View More Assets',
+                        sub: 'Choose assets shown on home',
+                        accent: c.accent,
+                        c: c,
+                        onTap: () => _push(const ManageWalletAssetsScreen()),
+                      ),
+                    ),
+                    _staggered(
+                      15,
+                      _Tile(
                         icon: LucideIcons.slidersHorizontal,
                         label: 'Preferences',
                         sub: 'App settings',
@@ -627,7 +639,7 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
                     _staggered(
-                      15,
+                      16,
                       _Tile(
                         icon: LucideIcons.fileText,
                         label: 'Terms & Conditions',
@@ -638,7 +650,7 @@ class _AppDrawerState extends State<AppDrawer>
                       ),
                     ),
                     _staggered(
-                      16,
+                      17,
                       _Tile(
                         icon: LucideIcons.shield,
                         label: 'Privacy Policy',
@@ -651,7 +663,7 @@ class _AppDrawerState extends State<AppDrawer>
 
                     const SizedBox(height: 20),
                     if (_appInfo != null)
-                      _staggered(17, _VersionRow(info: _appInfo!, c: c)),
+                      _staggered(18, _VersionRow(info: _appInfo!, c: c)),
                     const SizedBox(height: 8),
                   ],
                 ),

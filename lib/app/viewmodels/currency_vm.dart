@@ -559,22 +559,90 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   _AssetPricingKind _pricingKindForAsset(AssetModel asset) {
-    final symbol = asset.symbol.trim().toUpperCase();
-    final assetCode = (asset.assetCode ?? '').trim().toUpperCase();
+    final keys = _assetKeys(asset);
     final tags = asset.tags.map((e) => e.trim().toLowerCase()).toSet();
 
-    if (asset.isNative || symbol == 'XLM' || assetCode == 'XLM') {
+    if (asset.isNative || keys.contains('XLM')) {
       return _AssetPricingKind.xlm;
     }
 
-    if (tags.contains('stablecoin') ||
-        symbol == 'USDC' ||
-        assetCode == 'USDC' ||
-        symbol == 'USD') {
+    if (_isUsdStableAsset(asset, keys: keys, tags: tags)) {
       return _AssetPricingKind.usdStable;
     }
 
     return _AssetPricingKind.unsupported;
+  }
+
+  Set<String> _assetKeys(AssetModel asset) {
+    return <String>{
+      asset.symbol.trim().toUpperCase(),
+      (asset.assetCode ?? '').trim().toUpperCase(),
+      ...asset.aliases.map((alias) => alias.trim().toUpperCase()),
+    }.where((value) => value.isNotEmpty).toSet();
+  }
+
+  bool _isUsdStableAsset(
+    AssetModel asset, {
+    required Set<String> keys,
+    required Set<String> tags,
+  }) {
+    if (tags.contains('stablecoin') ||
+        tags.contains('usd-stable') ||
+        tags.contains('fiat-pegged') ||
+        tags.contains('dollar-pegged')) {
+      return true;
+    }
+
+    const stableSymbols = <String>{
+      'USD',
+      'USDC',
+      'USDT',
+      'PYUSD',
+      'FDUSD',
+      'USDB',
+      'USDL',
+      'RLUSD',
+    };
+    if (keys.any(stableSymbols.contains)) return true;
+
+    const externalFiatKeys = <String>[
+      'peg',
+      'pegCurrency',
+      'peg_currency',
+      'quote',
+      'quoteCurrency',
+      'quote_currency',
+      'fiat',
+      'fiatCurrency',
+      'fiat_currency',
+    ];
+    for (final key in externalFiatKeys) {
+      final value = asset.externalIds[key]?.trim().toUpperCase();
+      if (value == 'USD') return true;
+    }
+
+    final cgId = _coingeckoIdForAsset(asset)?.trim().toLowerCase();
+    const stableCoinGeckoIds = <String>{
+      'usd-coin',
+      'tether',
+      'paypal-usd',
+      'first-digital-usd',
+      'global-dollar',
+      'rlusd',
+      'usdb',
+      'mountain-protocol-usdm',
+    };
+    if (cgId != null && stableCoinGeckoIds.contains(cgId)) return true;
+
+    final normalizedName = asset.name.trim().toLowerCase();
+    if (normalizedName.contains('usd') &&
+        (normalizedName.contains('stable') ||
+            normalizedName.contains('tether') ||
+            normalizedName.contains('dollar'))) {
+      return true;
+    }
+
+    return false;
   }
 
   // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

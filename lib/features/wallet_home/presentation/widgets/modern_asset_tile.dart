@@ -64,7 +64,8 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     _scaleAnimation = Tween<double>(
       begin: 1.0,
       end: 0.986,
-    ).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
+    ).animate(
+        CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
   }
 
   @override
@@ -97,14 +98,14 @@ class _ModernAssetTileState extends State<ModernAssetTile>
   @override
   Widget build(BuildContext context) {
     final trendUp = widget.priceDelta >= 0;
-    final trendColor = trendUp ? widget.colors.success : widget.colors.error;
-    final pctColor = widget.pct >= 0
-        ? widget.colors.success
-        : widget.colors.error;
+    final trendColor =
+    trendUp ? widget.colors.success : widget.colors.error;
+    final pctColor =
+    widget.pct >= 0 ? widget.colors.success : widget.colors.error;
     final symbol = widget.asset.symbol.toUpperCase();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
       child: ScaleTransition(
         scale: _scaleAnimation,
         child: GestureDetector(
@@ -115,7 +116,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+            padding: const EdgeInsets.fromLTRB(11, 9, 11, 9),
             decoration: BoxDecoration(
               color: _isPressed
                   ? widget.colors.background
@@ -123,9 +124,9 @@ class _ModernAssetTileState extends State<ModernAssetTile>
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppColor.of(
-                    context,
-                  ).textPrimary.withValues(alpha: _isPressed ? 0.03 : 0.06),
+                  color: AppColor.of(context)
+                      .textPrimary
+                      .withValues(alpha: _isPressed ? 0.03 : 0.06),
                   blurRadius: _isPressed ? 8 : 18,
                   spreadRadius: _isPressed ? 0 : 0.5,
                   offset: Offset(0, _isPressed ? 2 : 6),
@@ -135,6 +136,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // ── Logo (fixed width, never shrinks) ──────────────────
                 _AssetLogo(
                   url: widget.logoUrl,
                   colors: widget.colors,
@@ -147,31 +149,29 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                       ? LucideIcons.activity
                       : LucideIcons.shieldCheck,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
+
+                // ── Left info column (takes all remaining space) ────────
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${widget.formatTokenAmount(widget.balance)} $symbol',
-                              style: TextStyle(
-                                fontSize: 14.8,
-                                fontWeight: FontWeight.w800,
-                                color: widget.colors.textPrimary,
-                                letterSpacing: -0.2,
-                                height: 1.05,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                      // Token amount + symbol – single line, ellipsis
+                      Text(
+                        '${widget.formatTokenAmount(widget.balance)} $symbol',
+                        style: TextStyle(
+                          fontSize: 14.8,
+                          fontWeight: FontWeight.w800,
+                          color: widget.colors.textPrimary,
+                          letterSpacing: -0.2,
+                          height: 1.05,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
+                      // Asset name
                       Text(
                         widget.asset.name,
                         style: TextStyle(
@@ -184,6 +184,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      // Price line
                       Text(
                         _priceLine(symbol),
                         style: TextStyle(
@@ -199,27 +200,36 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
+
+                // ── Divider (fixed, never flexible) ────────────────────
                 Container(
                   width: 1,
-                  height: 48,
+                  height: 42,
                   color: widget.colors.border.withValues(alpha: 0.7),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
+
+                // ── Right value column (intrinsic, bounded) ─────────────
+                //
+                // Using IntrinsicWidth so the column is only as wide as its
+                // widest child, but we cap it with ConstrainedBox so it
+                // never overflows on narrow screens.
                 ConstrainedBox(
                   constraints: const BoxConstraints(
-                    minWidth: 104,
-                    maxWidth: 132,
+                    minWidth: 72,
+                    maxWidth: 118,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Fiat value
                       Text(
                         widget.money.format(widget.fiatNow),
                         textAlign: TextAlign.right,
                         style: TextStyle(
-                          fontSize: 15.2,
+                          fontSize: 14.6,
                           fontWeight: FontWeight.w800,
                           color: widget.colors.textPrimary,
                           letterSpacing: -0.25,
@@ -229,32 +239,48 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+
+                      // Sparkline + trend badge row
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Sparkline: fixed size, never flexible
                           _MiniSparkline(
                             series: widget.miniSeries,
                             color: trendColor,
                           ),
-                          const SizedBox(width: 6),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                trendUp
-                                    ? LucideIcons.trendingUp
-                                    : LucideIcons.trendingDown,
-                                size: 12,
-                                color: trendColor,
+                          const SizedBox(width: 4),
+                          // Trend icon + pct badge: shrinks via FittedBox
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    trendUp
+                                        ? LucideIcons.trendingUp
+                                        : LucideIcons.trendingDown,
+                                    size: 12,
+                                    color: trendColor,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  _PctBadge(
+                                    pct: widget.pct,
+                                    color: pctColor,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              _PctBadge(pct: widget.pct, color: pctColor),
-                            ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
+
+                      // Signed price delta
                       Text(
                         widget.formatSignedMoney(
                           widget.money,
@@ -262,7 +288,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                         ),
                         textAlign: TextAlign.right,
                         style: TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 11.0,
                           fontWeight: FontWeight.w700,
                           color: trendColor,
                           letterSpacing: -0.05,
@@ -282,6 +308,10 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _AssetLogo
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _AssetLogo extends StatelessWidget {
   const _AssetLogo({
@@ -308,66 +338,78 @@ class _AssetLogo extends StatelessWidget {
         borderRadius: BorderRadius.circular(11),
         border: Border.all(color: colors.border, width: 1),
       ),
-      child: Icon(LucideIcons.coins, size: 22, color: colors.primary),
+      child: Center(
+        child: Icon(LucideIcons.coins, size: 22, color: colors.primary),
+      ),
     );
 
     return SizedBox(
-      width: 52,
-      height: 52,
+      width: 46,
+      height: 48,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Logo image – fixed 36×36 slot
           Positioned(
-            left: 0,
             top: 0,
+            left: 5,
             child: SizedBox(
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
                 child: (url == null || url!.isEmpty)
                     ? fallback
                     : Hero(
-                        tag: 'asset_logo_$assetId',
-                        child: Image.network(
-                          url!,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          errorBuilder: (_, __, ___) => fallback,
-                          loadingBuilder: (ctx, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: colors.background,
-                                border: Border.all(
-                                  color: colors.border,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: colors.primary,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                  tag: 'asset_logo_$assetId',
+                  child: Image.network(
+                    url!,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, __, ___) => fallback,
+                    loadingBuilder: (ctx, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: colors.background,
+                          border: Border.all(
+                            color: colors.border,
+                            width: 1,
+                          ),
                         ),
-                      ),
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.primary,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ),
+
+          // Badge – anchored to the bottom, constrained so it never spills
           Positioned(
+            left: 0,
             right: 0,
-            bottom: 2,
-            child: _TypeBadge(
-              label: badgeLabel,
-              color: badgeColor,
-              icon: badgeIcon,
+            bottom: 0,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 42),
+                child: _TypeBadge(
+                  label: badgeLabel,
+                  color: badgeColor,
+                  icon: badgeIcon,
+                ),
+              ),
             ),
           ),
         ],
@@ -375,6 +417,10 @@ class _AssetLogo extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _PctBadge
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _PctBadge extends StatelessWidget {
   const _PctBadge({required this.pct, required this.color});
@@ -388,14 +434,20 @@ class _PctBadge extends StatelessWidget {
     return Text(
       '${up ? '+' : '-'}${pct.abs().toStringAsFixed(2)}%',
       style: TextStyle(
-        fontSize: 10.8,
+        fontSize: 10.2,
         fontWeight: FontWeight.w700,
         color: color,
         letterSpacing: -0.05,
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _MiniSparkline
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _MiniSparkline extends StatelessWidget {
   const _MiniSparkline({required this.series, required this.color});
@@ -407,12 +459,13 @@ class _MiniSparkline extends StatelessWidget {
   Widget build(BuildContext context) {
     final valid = series.where((v) => v.isFinite).toList(growable: false);
     if (valid.length < 2) {
-      return const SizedBox(width: 36, height: 22);
+      // Reserve space so the row doesn't collapse
+      return const SizedBox(width: 30, height: 20);
     }
 
     return SizedBox(
-      width: 36,
-      height: 22,
+      width: 30,
+      height: 20,
       child: CustomPaint(
         painter: _MiniSparklinePainter(series: valid, color: color),
       ),
@@ -451,12 +504,9 @@ class _MiniSparklinePainter extends CustomPainter {
       final current = points[i];
       final controlX = (previous.dx + current.dx) / 2;
       path.cubicTo(
-        controlX,
-        previous.dy,
-        controlX,
-        current.dy,
-        current.dx,
-        current.dy,
+        controlX, previous.dy,
+        controlX, current.dy,
+        current.dx, current.dy,
       );
     }
 
@@ -471,7 +521,10 @@ class _MiniSparklinePainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.0)],
+          colors: [
+            color.withValues(alpha: 0.18),
+            color.withValues(alpha: 0.0),
+          ],
         ).createShader(Offset.zero & size),
     );
 
@@ -487,10 +540,13 @@ class _MiniSparklinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MiniSparklinePainter oldDelegate) {
-    return oldDelegate.series != series || oldDelegate.color != color;
-  }
+  bool shouldRepaint(covariant _MiniSparklinePainter oldDelegate) =>
+      oldDelegate.series != series || oldDelegate.color != color;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _TypeBadge
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _TypeBadge extends StatelessWidget {
   const _TypeBadge({
@@ -505,18 +561,19 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = colorsFor(context);
+    final palette = AppColor.of(context);
     final isStable = label.toLowerCase() == 'stable';
     final accent = isStable ? color : const Color(0xFFE28A2B);
     final bgTop = isStable
         ? accent.withValues(alpha: 0.16)
         : accent.withValues(alpha: 0.20);
-    final bgBottom = isStable
-        ? palette.surface
-        : accent.withValues(alpha: 0.08);
+    final bgBottom =
+    isStable ? palette.surface : accent.withValues(alpha: 0.08);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      // Horizontal padding only; vertical padding is fixed so the badge
+      // height is predictable and never causes layout surprises.
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -536,32 +593,42 @@ class _TypeBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: isStable ? 0.16 : 0.18),
-              shape: BoxShape.circle,
+          // Icon dot
+          SizedBox(
+            width: 10,
+            height: 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: isStable ? 0.16 : 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(icon, size: 6, color: accent),
+              ),
             ),
-            child: Icon(icon, size: 8, color: accent),
           ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 8.9,
-              fontWeight: FontWeight.w800,
-              color: accent,
-              letterSpacing: 0.15,
-              height: 1.0,
+          const SizedBox(width: 3),
+          // Label – FittedBox prevents text overflow inside the pill
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 7.1,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                  letterSpacing: 0.15,
+                  height: 1.0,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
-
-  AppColor colorsFor(BuildContext context) => AppColor.of(context);
 }
