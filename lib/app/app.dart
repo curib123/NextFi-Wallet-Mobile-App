@@ -14,6 +14,7 @@ import 'package:next_fi/core/services/device_meta/device_meta_service.dart';
 import 'package:next_fi/core/services/fcm_notification/fcm_notification_core.dart';
 import 'package:next_fi/core/services/fcm_notification/fcm_bootstrap.dart';
 import 'package:next_fi/core/services/local_notif/local_notification_service.dart';
+import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ App core Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 import 'package:next_fi/app/app_shell.dart';
@@ -107,6 +108,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   static const TextScaler _kClampedTextScaler = TextScaler.linear(1.0);
+  final TokenStorage _tokenStorage = TokenStorage();
 
   bool get _isRunningWidgetTest {
     final bindingName = WidgetsBinding.instance.runtimeType.toString();
@@ -145,12 +147,17 @@ class _MyAppState extends State<MyApp> {
     // Ã¢Å“â€¦ Register token with backend
     if (token != null) {
       try {
-        await FcmNotificationCore().upsertDeviceToken(
-          fcmToken: token,
-          deviceId: deviceMeta.deviceId,
-          platform: deviceMeta.platform,
-          appVersion: deviceMeta.appVersion,
-        );
+        final accessToken = await _tokenStorage.accessToken;
+        if (accessToken == null || accessToken.isEmpty) {
+          debugPrint('[FCM] upsert skipped: no access token yet');
+        } else {
+          await FcmNotificationCore().upsertDeviceToken(
+            fcmToken: token,
+            deviceId: deviceMeta.deviceId,
+            platform: deviceMeta.platform,
+            appVersion: deviceMeta.appVersion,
+          );
+        }
       } catch (e) {
         debugPrint('[FCM] upsert skipped (likely not logged in yet): $e');
       }
@@ -160,6 +167,12 @@ class _MyAppState extends State<MyApp> {
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       debugPrint('[FCM] token refreshed=$newToken');
       try {
+        final accessToken = await _tokenStorage.accessToken;
+        if (accessToken == null || accessToken.isEmpty) {
+          debugPrint('[FCM] refresh upsert skipped: no access token yet');
+          return;
+        }
+
         await FcmNotificationCore().upsertDeviceToken(
           fcmToken: newToken,
           deviceId: deviceMeta.deviceId,

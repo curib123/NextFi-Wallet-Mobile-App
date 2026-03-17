@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/features/claimable/data/models/claimable_item.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
 /// View model for managing claimable balances.
@@ -15,7 +17,7 @@ import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 /// Supports both received (claimable by user) and sent (created by user) balances.
 /// Supports expiration predicates for both instant and time-locked modes.
 ///
-/// **FILTER**: Only shows XLM and USDC claimable balances.
+/// Filters claimable balances to assets supported by AssetVM.
 ///
 /// **Best Practice**: Uses WalletHomeVM for balance retrieval to ensure
 /// consistency and avoid redundant API calls.
@@ -24,9 +26,11 @@ class ClaimableVM extends ChangeNotifier {
     required StellarWalletServices service,
     required SeedKeypairVM seedVM,
     required WalletHomeVM walletHomeVM,
+    required AssetVM assetVM,
   }) : _svc = service,
        _seedVM = seedVM,
-       _walletHomeVM = walletHomeVM {
+       _walletHomeVM = walletHomeVM,
+       _assetVM = assetVM {
     // Listen to wallet home state changes for balance updates
     _walletHomeVM.addListener(_onWalletHomeStateChanged);
   }
@@ -34,6 +38,7 @@ class ClaimableVM extends ChangeNotifier {
   final StellarWalletServices _svc;
   final SeedKeypairVM _seedVM;
   final WalletHomeVM _walletHomeVM;
+  final AssetVM _assetVM;
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   // State
@@ -89,22 +94,50 @@ class ClaimableVM extends ChangeNotifier {
   // Balance access via WalletHomeVM
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-  /// Get current XLM balance from WalletHomeVM
-  double get xlmBalance => _walletHomeVM.state.xlm;
+  Iterable<AssetModel> get _claimableAssets =>
+      _assetVM.assets.where((asset) => asset.chain.toLowerCase() == 'stellar');
 
-  /// Get current USDC balance from WalletHomeVM
-  double get usdcBalance => _walletHomeVM.state.usdc;
+  AssetModel? _resolveAsset(String key) {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) return null;
+
+    final direct = _assetVM.findAsset(trimmed);
+    if (direct != null) return direct;
+
+    for (final asset in _claimableAssets) {
+      if (asset.matchesKey(trimmed)) return asset;
+    }
+    return null;
+  }
+
+  AssetModel? _assetForClaimableItem(ClaimableItem item) {
+    final itemCode = item.assetCode.trim().toUpperCase();
+    final itemIssuer = item.assetIssuer?.trim();
+
+    for (final asset in _claimableAssets) {
+      if (asset.isNative && itemCode == 'XLM') {
+        return asset;
+      }
+
+      final candidateCode = (asset.assetCode ?? asset.symbol)
+          .trim()
+          .toUpperCase();
+      if (candidateCode != itemCode) continue;
+
+      final candidateIssuer = asset.issuer?.trim();
+      if ((candidateIssuer ?? '').isEmpty || candidateIssuer == itemIssuer) {
+        return asset;
+      }
+    }
+
+    return null;
+  }
 
   /// Get balance for a given asset symbol
   double getBalanceForSymbol(String symbol) {
-    switch (symbol.toUpperCase()) {
-      case 'XLM':
-        return xlmBalance;
-      case 'USDC':
-        return usdcBalance;
-      default:
-        return 0.0;
-    }
+    final asset = _resolveAsset(symbol);
+    if (asset == null) return 0.0;
+    return _walletHomeVM.state.balanceFor(asset.id);
   }
 
   /// Whether wallet has sufficient balance for amount (no reserve deduction)
@@ -139,21 +172,8 @@ class ClaimableVM extends ChangeNotifier {
   // Filtering helpers
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-  /// Check if a claimable item is XLM or USDC
-  bool _isXlmOrUsdc(ClaimableItem item) {
-    final assetCode = item.assetCode.toUpperCase();
-
-    // Native XLM
-    if (assetCode == 'XLM') return true;
-
-    // USDC - check against issuer
-    if (assetCode == 'USDC') {
-      // Allow if no issuer specified (shouldn't happen) or matches USDC issuer
-      if (item.assetIssuer == null) return true;
-      return item.assetIssuer == _svc.usdcIssuer;
-    }
-
-    return false;
+  bool _isSupportedAsset(ClaimableItem item) {
+    return _assetForClaimableItem(item) != null;
   }
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -488,14 +508,14 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Fetch balances that can be claimed by this account
   ///
-  /// **FILTERED**: Only returns XLM and USDC claimable balances
+  /// Filters to claimable assets supported by AssetVM.
   Future<List<ClaimableItem>> _fetchReceivedBalances(String accountId) async {
     final raw = await _svc.getClaimableBalances(accountId: accountId);
     final now = DateTime.now();
 
     final items = raw
         .map((r) => _parseResponse(r, accountId, now))
-        .where(_isXlmOrUsdc) // Ã¢â€ Â FILTER: Only XLM and USDC
+        .where(_isSupportedAsset)
         .toList();
 
     _sortReceivedItems(items);
@@ -505,7 +525,7 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Fetch balances created/sponsored by this account
   ///
-  /// **FILTERED**: Only returns XLM and USDC claimable balances
+  /// Filters to claimable assets supported by AssetVM.
   Future<List<ClaimableItem>> _fetchSentBalances(String accountId) async {
     final raw = await _svc.getSentClaimableBalances(accountId: accountId);
     final now = DateTime.now();
@@ -528,7 +548,7 @@ class ClaimableVM extends ChangeNotifier {
         );
 
         // Ã¢â€ Â FILTER: Only add XLM and USDC items
-        if (_isXlmOrUsdc(item)) {
+        if (_isSupportedAsset(item)) {
           items.add(item);
         }
       }
@@ -852,11 +872,22 @@ class ClaimableVM extends ChangeNotifier {
 
   /// Get the correct asset based on symbol
   Asset _assetFromSymbol(String symbol) {
-    if (symbol.toUpperCase() == 'XLM') return Asset.NATIVE;
-    if (symbol.toUpperCase() == 'USDC') {
-      return AssetTypeCreditAlphaNum4('USDC', _svc.usdcIssuer);
+    final asset = _resolveAsset(symbol);
+    if (asset == null) {
+      throw StateError('Unsupported asset: $symbol');
     }
-    return Asset.NATIVE;
+
+    if (asset.isNative) return Asset.NATIVE;
+
+    final code = (asset.assetCode ?? asset.symbol).trim();
+    final issuer = asset.issuer?.trim();
+    if (code.isEmpty || issuer == null || issuer.isEmpty) {
+      throw StateError('Asset is missing Stellar issuer metadata: ${asset.id}');
+    }
+
+    return code.length <= 4
+        ? AssetTypeCreditAlphaNum4(code, issuer)
+        : AssetTypeCreditAlphaNum12(code, issuer);
   }
 
   /// Create an unconditional claimable balance (recipient can claim anytime).
@@ -996,16 +1027,15 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  // USDC Trustline Check
+  // Trustline Check
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-  /// Check if the account has a USDC trustline
-  Future<bool> hasUsdcTrustline() async {
+  Future<bool> hasTrustline(String symbol) async {
     try {
       final aid = _accountId ?? _walletHomeVM.state.address;
       if (aid == null || aid.isEmpty) return false;
 
-      return await _svc.hasUsdcTrustline(aid);
+      return await _svc.hasTrustline(aid, _assetFromSymbol(symbol));
     } catch (e) {
       if (kDebugMode) {
         print('[ClaimableVM] Check trustline error: $e');
@@ -1013,6 +1043,8 @@ class ClaimableVM extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> hasUsdcTrustline() => hasTrustline('USDC');
 }
 
 /// Internal result type for predicate parsing.

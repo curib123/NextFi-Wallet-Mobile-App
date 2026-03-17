@@ -14,7 +14,6 @@ import 'package:next_fi/features/receive/presentation/viewmodels/receive_state.d
 import 'package:next_fi/features/receive/presentation/viewmodels/receive_controller.dart';
 import 'package:next_fi/features/receive/presentation/viewmodels/receive_view_state.dart';
 import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/features/receive/presentation/widgets/token_switch.dart';
 import 'package:next_fi/features/receive/presentation/widgets/qr_preview_card.dart';
 import 'package:next_fi/features/receive/presentation/widgets/address_row.dart';
 import 'package:next_fi/features/receive/presentation/widgets/safety_note.dart';
@@ -38,13 +37,9 @@ class ReceiveScreen extends ConsumerWidget {
       address: address,
       initialToken: initialToken,
     );
-    final controller = ref.read(receiveControllerProvider(args).notifier);
     final s = ref.watch(receiveControllerProvider(args));
     final asset = _resolveSelectedAsset(assetVm, assets, s.selectedAssetKey);
     final token = asset.symbol;
-    final switchItems = assets
-        .map((a) => TokenSwitchItem(key: a.id, label: a.symbol))
-        .toList();
 
     return Scaffold(
       backgroundColor: c.background,
@@ -65,12 +60,7 @@ class ReceiveScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
-          _ReceiveHeroCard(
-            token: token,
-            items: switchItems,
-            selectedKey: asset.id,
-            onSelected: controller.selectAsset,
-          ),
+          const _ReceiveHeroCard(),
           const SizedBox(height: 12),
           QrPreviewCard(
             address: s.address,
@@ -82,8 +72,8 @@ class ReceiveScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           _SectionLabel(
-            title: '$token Wallet Address',
-            subtitle: 'Use this address to receive on Stellar.',
+            title: 'Stellar Wallet Address',
+            subtitle: 'Use this same address to receive supported Stellar assets.',
           ),
           const SizedBox(height: 10),
           AddressRow(address: s.address),
@@ -387,17 +377,7 @@ class ReceiveScreen extends ConsumerWidget {
 }
 
 class _ReceiveHeroCard extends StatelessWidget {
-  const _ReceiveHeroCard({
-    required this.token,
-    required this.items,
-    required this.selectedKey,
-    required this.onSelected,
-  });
-
-  final String token;
-  final List<TokenSwitchItem> items;
-  final String selectedKey;
-  final ValueChanged<String> onSelected;
+  const _ReceiveHeroCard();
 
   @override
   Widget build(BuildContext context) {
@@ -437,7 +417,7 @@ class _ReceiveHeroCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Receive $token',
+                      'Receive on Stellar',
                       style: TextStyle(
                         color: c.textPrimary,
                         fontSize: 18,
@@ -447,7 +427,7 @@ class _ReceiveHeroCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Share your QR code or wallet address. Network and wallet logic stay unchanged.',
+                      'Your public address is the same for supported Stellar assets. Share the QR code or address below.',
                       style: TextStyle(
                         color: c.textSecondary,
                         fontSize: 12.5,
@@ -458,12 +438,6 @@ class _ReceiveHeroCard extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          TokenSwitch(
-            items: items,
-            selectedKey: selectedKey,
-            onSelected: onSelected,
           ),
         ],
       ),

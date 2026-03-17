@@ -121,14 +121,14 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                   ? widget.colors.background
                   : widget.colors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: widget.colors.border, width: 1),
               boxShadow: [
                 BoxShadow(
                   color: AppColor.of(
                     context,
-                  ).textPrimary.withValues(alpha: 0.045),
-                  blurRadius: _isPressed ? 4 : 10,
-                  offset: Offset(0, _isPressed ? 1 : 3),
+                  ).textPrimary.withValues(alpha: _isPressed ? 0.03 : 0.06),
+                  blurRadius: _isPressed ? 8 : 18,
+                  spreadRadius: _isPressed ? 0 : 0.5,
+                  offset: Offset(0, _isPressed ? 2 : 6),
                 ),
               ],
             ),
@@ -505,32 +505,54 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = colorsFor(context);
+    final isStable = label.toLowerCase() == 'stable';
+    final accent = isStable ? color : const Color(0xFFE28A2B);
+    final bgTop = isStable
+        ? accent.withValues(alpha: 0.16)
+        : accent.withValues(alpha: 0.20);
+    final bgBottom = isStable
+        ? palette.surface
+        : accent.withValues(alpha: 0.08);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: colorsFor(context).surface,
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [bgTop, bgBottom],
+        ),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: accent.withValues(alpha: 0.10),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 9, color: color),
-          const SizedBox(width: 4),
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: isStable ? 0.16 : 0.18),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 8, color: accent),
+          ),
+          const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
-              fontSize: 8.8,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 0.1,
+              fontSize: 8.9,
+              fontWeight: FontWeight.w800,
+              color: accent,
+              letterSpacing: 0.15,
               height: 1.0,
             ),
             maxLines: 1,

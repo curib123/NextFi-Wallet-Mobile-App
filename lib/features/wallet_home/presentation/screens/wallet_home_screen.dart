@@ -19,6 +19,7 @@ import 'package:next_fi/features/wallet_home/presentation/widgets/header_section
 import 'package:next_fi/features/wallet_home/presentation/widgets/incoming_hints_strip.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/recipient_list_widget.dart';
 import 'package:next_fi/features/wallet_home/presentation/widgets/top_bar.dart';
+import 'package:next_fi/features/wallet_home/presentation/widgets/wallet_header_guide.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
@@ -131,14 +132,15 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final assetsVM = ref.watch(assetVmProvider);
     final tradeInboxSummary = ref.watch(tradeInboxSummaryProvider);
     final appShell = ref.watch(appShellProvider);
-    final assetList = assetsVM.assets;
+    final allAssetList = assetsVM.assets;
+    final walletHomeAssetList = assetsVM.walletHomeAssets;
 
     final currencyFmt = NumberFormat.simpleCurrency(
       name: currency.fiat.toUpperCase(),
     );
     final totalFiat = _portfolioFiatTotal(
       currency: currency,
-      assets: assetList,
+      assets: allAssetList,
       balancesByAssetId: s.balancesByAssetId,
     );
     final chartSeries = _xlmPriceWindowSeries(currency, s.selectedWindow);
@@ -150,7 +152,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
           )
         : 0;
     final logosById = <String, String>{
-      for (final a in assetList)
+      for (final a in allAssetList)
         a.id: (a.primaryLogo.isNotEmpty
             ? a.primaryLogo
             : assetsVM.logoFor(a.symbol)),
@@ -228,11 +230,21 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                   ),
                 ),
               ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                  child: WalletHeaderGuide(
+                    colors: colors,
+                    xlmBalance: s.xlm,
+                    usdcBalance: s.usdc,
+                  ),
+                ),
+              ),
               SliverFillRemaining(
                 hasScrollBody: true,
                 child: AssetWidget(
                   colors: colors,
-                  assets: assetList,
+                  assets: walletHomeAssetList,
                   logos: logosById,
                   balancesByAssetId: s.balancesByAssetId,
                   address: s.address ?? '',

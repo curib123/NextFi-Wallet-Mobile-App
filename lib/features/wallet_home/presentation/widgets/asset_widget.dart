@@ -13,7 +13,7 @@ import 'package:shimmer/shimmer.dart';
 
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
-import 'package:next_fi/features/wallet_home/presentation/widgets/asset_guide_footer.dart';
+import 'package:next_fi/features/wallet_home/presentation/screens/manage_wallet_assets_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -159,6 +159,24 @@ class AssetWidget extends ConsumerWidget {
 
     final homeState = ref.watch(walletHomeVmProvider).state;
     final window = homeState.selectedWindow;
+    final sortedAssets = assets.toList()
+      ..sort((a, b) {
+        final balanceCompare = _liveBalance(homeState, b).compareTo(
+          _liveBalance(homeState, a),
+        );
+        if (balanceCompare != 0) return balanceCompare;
+
+        final fiatCompare = _fiatFor(
+          cur,
+          b,
+          _liveBalance(homeState, b),
+        ).compareTo(
+          _fiatFor(cur, a, _liveBalance(homeState, a)),
+        );
+        if (fiatCompare != 0) return fiatCompare;
+
+        return a.sortOrder.compareTo(b.sortOrder);
+      });
 
     if (loading) {
       final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -186,41 +204,111 @@ class AssetWidget extends ConsumerWidget {
     final listView = ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8, bottom: 120),
-      itemCount: assets.length + 1,
+      itemCount: sortedAssets.length + 1,
       itemBuilder: (context, index) {
-        if (index < assets.length) {
-          final a = assets[index];
-          final balance = _liveBalance(homeState, a);
-          final pct = _pctFor(a, window);
-          final coinPrice = _coinPriceFor(cur, a);
-
+        if (index == sortedAssets.length) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: ModernAssetTile(
-              asset: a,
-              colors: colors,
-              logoUrl: logos[a.id],
-              balance: balance,
-              isNative: a.isNative,
-              pct: pct,
-              coinPriceNow: coinPrice,
-              fiatNow: _fiatFor(cur, a, balance),
-              priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
-              miniSeries: _miniSeriesFor(cur, a, window),
-              money: money,
-              onTap: () => _openReceive(context, a, homeState),
-              formatTokenAmount: formatTokenAmount,
-              formatSignedMoney: _formatSignedMoney,
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ManageWalletAssetsScreen(),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.textPrimary.withValues(alpha: 0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: colors.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        LucideIcons.listPlus,
+                        color: colors.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'View more assets',
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Search assets and choose which ones appear on wallet home.',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 12.2,
+                              fontWeight: FontWeight.w600,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      LucideIcons.chevronRight,
+                      color: colors.textSecondary,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         }
 
+        final a = sortedAssets[index];
+        final balance = _liveBalance(homeState, a);
+        final pct = _pctFor(a, window);
+        final coinPrice = _coinPriceFor(cur, a);
+
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: AssetGuideFooter(
-            colors: AppColor.of(context),
-            xlmBalance: balancesByAssetId['stellar'] ?? homeState.xlm,
-            usdcBalance: balancesByAssetId['usdc_stellar'] ?? homeState.usdc,
+          padding: const EdgeInsets.only(bottom: 16),
+          child: ModernAssetTile(
+            asset: a,
+            colors: colors,
+            logoUrl: logos[a.id],
+            balance: balance,
+            isNative: a.isNative,
+            pct: pct,
+            coinPriceNow: coinPrice,
+            fiatNow: _fiatFor(cur, a, balance),
+            priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
+            miniSeries: _miniSeriesFor(cur, a, window),
+            money: money,
+            onTap: () => _openReceive(context, a, homeState),
+            formatTokenAmount: formatTokenAmount,
+            formatSignedMoney: _formatSignedMoney,
           ),
         );
       },

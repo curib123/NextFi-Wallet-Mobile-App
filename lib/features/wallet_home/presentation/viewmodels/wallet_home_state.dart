@@ -58,6 +58,27 @@ class WalletHomeState {
 
   double get totalLockedReserve => xlmTotalReserve;
 
+  static Map<String, double> _normalizeBalancesMap(Object? value) {
+    if (value is Map<String, double>) {
+      return Map<String, double>.unmodifiable(value);
+    }
+
+    if (value is Map) {
+      final next = <String, double>{};
+      for (final entry in value.entries) {
+        final key = entry.key?.toString();
+        if (key == null || key.isEmpty) continue;
+
+        final raw = entry.value;
+        final amount = raw is num ? raw.toDouble() : double.tryParse('$raw');
+        next[key] = amount ?? 0.0;
+      }
+      return Map<String, double>.unmodifiable(next);
+    }
+
+    return const <String, double>{};
+  }
+
   WalletHomeState copyWith({
     String? address,
     String? walletName,
@@ -79,9 +100,7 @@ class WalletHomeState {
       walletName: walletName ?? this.walletName,
       balancesByAssetId: identical(balancesByAssetId, _noChange)
           ? this.balancesByAssetId
-          : Map<String, double>.unmodifiable(
-              Map<String, double>.from(balancesByAssetId as Map<String, double>),
-            ),
+          : _normalizeBalancesMap(balancesByAssetId),
       xlmBaseReserve: xlmBaseReserve ?? this.xlmBaseReserve,
       xlmTrustlineReserve: xlmTrustlineReserve ?? this.xlmTrustlineReserve,
       xlmTotalReserve: xlmTotalReserve ?? this.xlmTotalReserve,

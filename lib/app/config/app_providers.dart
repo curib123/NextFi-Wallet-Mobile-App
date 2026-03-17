@@ -303,7 +303,13 @@ final claimableVmProvider = ChangeNotifierProvider<ClaimableVM>((ref) {
   final stellar = ref.read(stellarWalletServiceProvider);
   final seed = ref.read(seedKeypairProvider);
   final walletHome = ref.read(walletHomeVmProvider);
-  return ClaimableVM(service: stellar, seedVM: seed, walletHomeVM: walletHome);
+  final assets = ref.read(assetVmProvider);
+  return ClaimableVM(
+    service: stellar,
+    seedVM: seed,
+    walletHomeVM: walletHome,
+    assetVM: assets,
+  );
 });
 
 final appShellProvider = NotifierProvider<AppShellController, AppShellState>(

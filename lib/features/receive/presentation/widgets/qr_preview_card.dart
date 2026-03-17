@@ -12,6 +12,8 @@ class QrPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
+    const qrCanvas = Colors.white;
+    const qrForeground = Colors.black;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -65,8 +67,21 @@ class QrPreviewCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               child: Container(
                 padding: const EdgeInsets.all(18),
-                color: c.onPrimary,
-                child: QrImageView(data: address, version: QrVersions.auto, size: 210),
+                color: qrCanvas,
+                child: QrImageView(
+                  data: address,
+                  version: QrVersions.auto,
+                  size: 210,
+                  backgroundColor: qrCanvas,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: qrForeground,
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: qrForeground,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 10),

@@ -242,32 +242,83 @@ abstract class StellarBaseService {
   Stream<T> sseWithFallback<T>(Stream<T> Function(StellarSDK s) build) {
     final controller = StreamController<T>();
     StreamSubscription<T>? sub;
+    Timer? retryTimer;
     bool usingQuickNode = false;
+    bool closed = false;
+    int retryAttempt = 0;
+    late Future<void> Function(StellarSDK s) start;
 
-    Future<void> start(StellarSDK s) async {
-      sub = build(s).listen(
-        controller.add,
-        onError: (e, st) async {
-          if (!usingQuickNode && _sdkQuickNode != null) {
-            usingQuickNode = true;
-
-            try {
-              await sub?.cancel();
-            } catch (_) {}
-
-            await start(_sdkQuickNode);
-          } else {
-            controller.addError(e, st);
-            await controller.close();
-          }
-        },
-        onDone: () async => controller.close(),
-      );
+    Duration nextRetryDelay() {
+      final seconds = switch (retryAttempt) {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        3 => 8,
+        _ => 15,
+      };
+      retryAttempt += 1;
+      return Duration(seconds: seconds);
     }
 
-    start(sdk);
+    Future<void> scheduleRetry() async {
+      if (closed) return;
+      retryTimer?.cancel();
+      try {
+        await sub?.cancel();
+      } catch (_) {}
+      sub = null;
+      usingQuickNode = false;
+      retryTimer = Timer(nextRetryDelay(), () {
+        if (closed) return;
+        unawaited(start(sdk));
+      });
+    }
+
+    start = (StellarSDK s) async {
+      if (closed) return;
+      try {
+        final stream = build(s);
+        sub = stream.listen(
+          (event) {
+            retryAttempt = 0;
+            controller.add(event);
+          },
+          onError: (e, st) async {
+            if (!usingQuickNode &&
+                _sdkQuickNode != null &&
+                !identical(s, _sdkQuickNode)) {
+              usingQuickNode = true;
+
+              try {
+                await sub?.cancel();
+              } catch (_) {}
+
+              await start(_sdkQuickNode);
+            } else {
+              await scheduleRetry();
+            }
+          },
+          onDone: () async {
+            await scheduleRetry();
+          },
+        );
+      } catch (e) {
+        if (!usingQuickNode &&
+            _sdkQuickNode != null &&
+            !identical(s, _sdkQuickNode)) {
+          usingQuickNode = true;
+          await start(_sdkQuickNode);
+        } else {
+          await scheduleRetry();
+        }
+      }
+    };
+
+    unawaited(start(sdk));
 
     controller.onCancel = () async {
+      closed = true;
+      retryTimer?.cancel();
       try {
         await sub?.cancel();
       } catch (_) {}

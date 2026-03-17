@@ -15,6 +15,8 @@ Future<void> showReceiveQrModal(
   final c = AppColor.of(context);
   final address = state.address.trim();
   final token = state.token;
+  const qrCanvas = Colors.white;
+  const qrForeground = Colors.black;
 
   await showAppModalBottomSheet<void>(
     context,
@@ -80,7 +82,7 @@ Future<void> showReceiveQrModal(
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColor.of(context).onPrimary,
+                      color: qrCanvas,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: c.border.withValues(alpha: 0.35),
@@ -91,6 +93,15 @@ Future<void> showReceiveQrModal(
                         data: address,
                         version: QrVersions.auto,
                         size: 260,
+                        backgroundColor: qrCanvas,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: qrForeground,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: qrForeground,
+                        ),
                       ),
                     ),
                   ),

@@ -1,4 +1,4 @@
-// lib/Screen/WalletHomeScreenWidgets/asset_guide_footer.dart
+// lib/features/wallet_home/presentation/widgets/wallet_header_guide.dart
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -8,8 +8,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/services/announcements/announcements_service.dart';
 
-class AssetGuideFooter extends StatefulWidget {
-  const AssetGuideFooter({
+class WalletHeaderGuide extends StatefulWidget {
+  const WalletHeaderGuide({
     super.key,
     required this.colors,
 
@@ -55,7 +55,7 @@ class AssetGuideFooter extends StatefulWidget {
   final int? rngSeed;
 
   @override
-  State<AssetGuideFooter> createState() => _AssetGuideFooterState();
+  State<WalletHeaderGuide> createState() => _WalletHeaderGuideState();
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -404,7 +404,7 @@ final List<TipBlueprint> _tipCatalog = <TipBlueprint>[
 // Widget
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-class _AssetGuideFooterState extends State<AssetGuideFooter> {
+class _WalletHeaderGuideState extends State<WalletHeaderGuide> {
   late final math.Random _rng = widget.rngSeed == null
       ? math.Random()
       : math.Random(widget.rngSeed);
@@ -426,7 +426,7 @@ class _AssetGuideFooterState extends State<AssetGuideFooter> {
   }
 
   @override
-  void didUpdateWidget(covariant AssetGuideFooter oldWidget) {
+  void didUpdateWidget(covariant WalletHeaderGuide oldWidget) {
     super.didUpdateWidget(oldWidget);
     final balancesChanged =
         oldWidget.xlmBalance != widget.xlmBalance ||
