@@ -23,8 +23,7 @@ class AssetWidget extends ConsumerWidget {
     required this.colors,
     required this.assets,
     required this.logos,
-    required this.xlmBalance,
-    required this.usdcBalance,
+    required this.balancesByAssetId,
     required this.address,
     required this.hasUsdcTrustline,
     this.loading = false,
@@ -35,25 +34,22 @@ class AssetWidget extends ConsumerWidget {
   final AppColor colors;
   final List<AssetModel> assets;
   final Map<String, String> logos;
-  final double xlmBalance;
-  final double usdcBalance;
+  final Map<String, double> balancesByAssetId;
   final String address;
   final bool loading;
   final Future<void> Function()? onRefresh;
   final Object? hasUsdcTrustline;
   final void Function(String token)? onItemTap;
 
-  double _liveBalance(WalletHomeState? state, String symbolUpper) {
+  double _liveBalance(WalletHomeState? state, AssetModel asset) {
     if (state != null) {
-      if (symbolUpper == 'XLM') return state.xlm;
-      if (symbolUpper == 'USDC') return state.usdc;
+      return state.balanceFor(asset.id);
     }
-    return symbolUpper == 'XLM'
-        ? xlmBalance
-        : (symbolUpper == 'USDC' ? usdcBalance : 0.0);
+    return balancesByAssetId[asset.id] ?? 0.0;
   }
 
-  double _fiatFor(CurrencyVM cur, String symbolUpper, double balance) {
+  double _fiatFor(CurrencyVM cur, AssetModel asset, double balance) {
+    final symbolUpper = asset.symbol.toUpperCase();
     switch (symbolUpper) {
       case 'XLM':
         return cur.xlmToFiat(balance);
@@ -64,7 +60,8 @@ class AssetWidget extends ConsumerWidget {
     }
   }
 
-  double _coinPriceFor(CurrencyVM cur, String symbolUpper) {
+  double _coinPriceFor(CurrencyVM cur, AssetModel asset) {
+    final symbolUpper = asset.symbol.toUpperCase();
     switch (symbolUpper) {
       case 'XLM':
         return cur.xlmToFiat(1.0);
@@ -101,9 +98,10 @@ class AssetWidget extends ConsumerWidget {
 
   List<double> _miniSeriesFor(
     CurrencyVM cur,
-    String symbolUpper,
+    AssetModel asset,
     PriceWindow window,
   ) {
+    final symbolUpper = asset.symbol.toUpperCase();
     switch (symbolUpper) {
       case 'XLM':
         return switch (window) {
@@ -162,11 +160,8 @@ class AssetWidget extends ConsumerWidget {
     AssetModel a,
     WalletHomeState? homeState,
   ) {
-    final t = a.symbol.toUpperCase();
-    final token = (t == 'USDC') ? 'USDC' : 'XLM';
-
     if (onItemTap != null) {
-      onItemTap!(token);
+      onItemTap!(a.id);
       return;
     }
 
@@ -175,9 +170,7 @@ class AssetWidget extends ConsumerWidget {
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: address,
-          xlmBalance: _liveBalance(homeState, 'XLM'),
-          usdcBalance: _liveBalance(homeState, 'USDC'),
-          initialToken: token,
+          initialToken: a.id,
         ),
       ),
     );
@@ -222,9 +215,9 @@ class AssetWidget extends ConsumerWidget {
       itemBuilder: (context, index) {
         if (index < assets.length) {
           final a = assets[index];
-          final balance = _liveBalance(homeState, a.symbol.toUpperCase());
+          final balance = _liveBalance(homeState, a);
           final pct = _pctFor(a, window);
-          final coinPrice = _coinPriceFor(cur, a.symbol.toUpperCase());
+          final coinPrice = _coinPriceFor(cur, a);
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -236,9 +229,9 @@ class AssetWidget extends ConsumerWidget {
               isNative: a.isNative,
               pct: pct,
               coinPriceNow: coinPrice,
-              fiatNow: _fiatFor(cur, a.symbol.toUpperCase(), balance),
+              fiatNow: _fiatFor(cur, a, balance),
               priceDelta: _priceDeltaPerCoin(coinPriceNow: coinPrice, pct: pct),
-              miniSeries: _miniSeriesFor(cur, a.symbol.toUpperCase(), window),
+              miniSeries: _miniSeriesFor(cur, a, window),
               money: money,
               onTap: () => _openReceive(context, a, homeState),
               formatTokenAmount: formatTokenAmount,
@@ -251,8 +244,8 @@ class AssetWidget extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           child: AssetGuideFooter(
             colors: AppColor.of(context),
-            xlmBalance: _liveBalance(homeState, 'XLM'),
-            usdcBalance: _liveBalance(homeState, 'USDC'),
+            xlmBalance: balancesByAssetId['stellar'] ?? homeState.xlm,
+            usdcBalance: balancesByAssetId['usdc_stellar'] ?? homeState.usdc,
           ),
         );
       },

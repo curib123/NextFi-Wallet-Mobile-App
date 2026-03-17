@@ -11,30 +11,22 @@ final receiveFederationServiceProvider = Provider<ReceiveFederationService>(
 class ReceiveControllerArgs {
   const ReceiveControllerArgs({
     required this.address,
-    required this.xlmBalance,
-    required this.usdcBalance,
     required this.initialToken,
   });
 
   final String address;
-  final double xlmBalance;
-  final double usdcBalance;
   final String initialToken;
 
   @override
   bool operator ==(Object other) {
     return other is ReceiveControllerArgs &&
         other.address == address &&
-        other.xlmBalance == xlmBalance &&
-        other.usdcBalance == usdcBalance &&
         other.initialToken == initialToken;
   }
 
   @override
   int get hashCode => Object.hash(
     address,
-    xlmBalance,
-    usdcBalance,
     initialToken,
   );
 }
@@ -57,8 +49,6 @@ class ReceiveController extends Notifier<ReceiveViewState> {
     Future.microtask(_loadFederationAddresses);
     return ReceiveViewState.initial(
       address: args.address,
-      xlmBalance: args.xlmBalance,
-      usdcBalance: args.usdcBalance,
       initialToken: args.initialToken,
       federationDomain: service.defaultDomain,
     );
@@ -66,12 +56,10 @@ class ReceiveController extends Notifier<ReceiveViewState> {
 
   ReceiveFederationService get _service => ref.read(receiveFederationServiceProvider);
 
-  void selectXLM() {
-    state = state.copyWith(xlmSelected: true);
-  }
-
-  void selectUSDC() {
-    state = state.copyWith(xlmSelected: false);
+  void selectAsset(String assetKey) {
+    final normalized = assetKey.trim();
+    if (normalized.isEmpty || normalized == state.selectedAssetKey) return;
+    state = state.copyWith(selectedAssetKey: normalized);
   }
 
   void setFederationAliasDraft(String raw) {

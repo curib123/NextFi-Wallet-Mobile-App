@@ -114,8 +114,8 @@ class _ConfirmMarketSheetState extends ConsumerState<_ConfirmMarketSheet>
     final vm = ref.watch(swapVmProvider);
     final s = vm.state;
 
-    final fromSymbol = s.isXlmToUsdc ? 'XLM' : 'USDC';
-    final toSymbol = s.isXlmToUsdc ? 'USDC' : 'XLM';
+    final fromSymbol = vm.fromSymbol;
+    final toSymbol = vm.toSymbol;
 
     final estOut = s.estReceive;
     // currentMinOut = estOut ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â (1 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¹ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ slippage), already computed in VM.
@@ -197,9 +197,9 @@ class _ConfirmLimitSheetState extends ConsumerState<_ConfirmLimitSheet>
   Widget build(BuildContext context) {
     final c = AppColor.of(context);
     final vm = ref.watch(swapVmProvider);
-    final isXlmToUsdc = vm.state.isXlmToUsdc;
-    final fromSymbol = isXlmToUsdc ? 'XLM' : 'USDC';
-    final badgeColor = isXlmToUsdc ? c.error : c.success;
+    final fromSymbol = vm.fromSymbol;
+    final toSymbol = vm.toSymbol;
+    final badgeColor = c.primary;
 
     return wrapAnim(
       child: _SheetShell(
@@ -211,7 +211,7 @@ class _ConfirmLimitSheetState extends ConsumerState<_ConfirmLimitSheet>
           ),
           const SizedBox(height: 20),
           _OrderTypeBadge(
-            label: isXlmToUsdc ? 'SELL ORDER' : 'BUY ORDER',
+            label: 'LIMIT SWAP',
             color: badgeColor,
           ),
           const SizedBox(height: 20),
@@ -224,7 +224,7 @@ class _ConfirmLimitSheetState extends ConsumerState<_ConfirmLimitSheet>
               ),
               _DetailRow(
                 label: 'Limit Price',
-                value: '${widget.fmt.format(widget.price)} USDC per XLM',
+                value: '${widget.fmt.format(widget.price)} $toSymbol per $fromSymbol',
                 icon: LucideIcons.trendingUp,
                 highlight: true,
               ),
@@ -278,8 +278,7 @@ class _ConfirmScheduleSheetState extends ConsumerState<_ConfirmScheduleSheet>
   @override
   Widget build(BuildContext context) {
     final vm = ref.watch(swapVmProvider);
-    final isXlmToUsdc = vm.state.isXlmToUsdc;
-    final fromSymbol = isXlmToUsdc ? 'XLM' : 'USDC';
+    final fromSymbol = vm.fromSymbol;
 
     return wrapAnim(
       child: _SheetShell(

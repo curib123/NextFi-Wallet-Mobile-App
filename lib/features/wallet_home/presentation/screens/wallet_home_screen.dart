@@ -10,6 +10,7 @@ import 'package:next_fi/features/trades/presentation/screens/trade_history_scree
 import 'package:next_fi/features/wallet_home/presentation/widgets/asset_widget.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
 import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
@@ -130,14 +131,16 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final assetsVM = ref.watch(assetVmProvider);
     final tradeInboxSummary = ref.watch(tradeInboxSummaryProvider);
     final appShell = ref.watch(appShellProvider);
+    final assetList = assetsVM.assets;
 
     final currencyFmt = NumberFormat.simpleCurrency(
       name: currency.fiat.toUpperCase(),
     );
-    final fxXlm = currency.xlmToFiat(s.xlm);
-    final fxUsdc = currency.usdcToFiat(s.usdc);
-    final totalFiat =
-        (fxXlm.isFinite ? fxXlm : 0.0) + (fxUsdc.isFinite ? fxUsdc : 0.0);
+    final totalFiat = _portfolioFiatTotal(
+      currency: currency,
+      assets: assetList,
+      balancesByAssetId: s.balancesByAssetId,
+    );
     final chartSeries = _xlmPriceWindowSeries(currency, s.selectedWindow);
     final chartDeltaFiat = _seriesDelta(chartSeries);
     final activeTradeCount = appShell.isAuthenticated
@@ -146,8 +149,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
             orElse: () => 0,
           )
         : 0;
-
-    final assetList = assetsVM.assets;
     final logosById = <String, String>{
       for (final a in assetList)
         a.id: (a.primaryLogo.isNotEmpty
@@ -233,8 +234,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                   colors: colors,
                   assets: assetList,
                   logos: logosById,
-                  xlmBalance: s.xlm,
-                  usdcBalance: s.usdc,
+                  balancesByAssetId: s.balancesByAssetId,
                   address: s.address ?? '',
                   loading:
                       assetsVM.loading || currency.loading || s.loadingBalances,
@@ -271,6 +271,28 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final first = series.first.isFinite ? series.first : 0.0;
     final last = series.last.isFinite ? series.last : 0.0;
     return last - first;
+  }
+
+  double _portfolioFiatTotal({
+    required CurrencyVM currency,
+    required List<AssetModel> assets,
+    required Map<String, double> balancesByAssetId,
+  }) {
+    var total = 0.0;
+    for (final asset in assets) {
+      final balance = balancesByAssetId[asset.id] ?? 0.0;
+      if (balance <= 0) continue;
+
+      switch (asset.symbol.toUpperCase()) {
+        case 'XLM':
+          total += currency.xlmToFiat(balance);
+          break;
+        case 'USDC':
+          total += currency.usdcToFiat(balance);
+          break;
+      }
+    }
+    return total.isFinite ? total : 0.0;
   }
 
   Future<void> _openRecipientList() async {
@@ -492,8 +514,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         MaterialPageRoute(
           builder: (_) => ReceiveScreen(
             address: e.address,
-            xlmBalance: e.xlm,
-            usdcBalance: e.usdc,
             initialToken: e.initialToken ?? 'XLM',
           ),
         ),
@@ -556,8 +576,9 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
   }
 
   String _short(String addr) {
-    if (addr.isEmpty)
+    if (addr.isEmpty) {
       return '-';
+    }
     if (addr.length <= 12) return addr;
     return '${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}';
   }

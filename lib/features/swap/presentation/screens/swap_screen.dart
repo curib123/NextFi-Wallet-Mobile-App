@@ -232,6 +232,44 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     _syncBoth(vm);
   }
 
+  Future<void> _pickAsset(SwapVM vm, {required bool selectingFrom}) async {
+    final c = AppColor.of(context);
+    final selectedId = selectingFrom ? vm.fromAsset.id : vm.toAsset.id;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final asset in vm.swappableAssets)
+              ListTile(
+                leading: AssetLogo(keyOrSymbol: asset.symbol, size: 20),
+                title: Text(asset.symbol.toUpperCase()),
+                subtitle: Text(asset.name),
+                trailing: asset.id == selectedId
+                    ? Icon(LucideIcons.check, color: c.primary, size: 18)
+                    : null,
+                onTap: () => Navigator.of(ctx).pop(asset.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final asset = vm.swappableAssets.firstWhere((a) => a.id == picked);
+    if (selectingFrom) {
+      await vm.selectFromAsset(asset);
+    } else {
+      await vm.selectToAsset(asset);
+    }
+    _lastPct = null;
+    _syncBoth(vm);
+  }
+
   Future<void> _applyPct(SwapVM vm, double p) async {
     HapticFeedback.selectionClick();
     if (vm.mode != AmountMode.from) await vm.setAmountMode(AmountMode.from);
@@ -256,7 +294,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
         type: AppAlertType.warning,
         title: 'Insufficient balance',
         subtitle:
-            'Your available ${vm.state.isXlmToUsdc ? 'XLM' : 'USDC'} '
+            'Your available ${vm.fromSymbol} '
             'is not enough for this swap.',
         primaryText: 'OK',
       );
@@ -440,8 +478,8 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
     final s = vm.state;
     final c = AppColor.of(context);
 
-    final fromSymbol = s.isXlmToUsdc ? 'XLM' : 'USDC';
-    final toSymbol = s.isXlmToUsdc ? 'USDC' : 'XLM';
+    final fromSymbol = vm.fromSymbol;
+    final toSymbol = vm.toSymbol;
 
     final priceLine = (vm.amount > 0 && (s.estReceive ?? 0) > 0)
         ? '1 $fromSymbol = ${_tight(s.estReceive! / vm.amount)} $toSymbol'
@@ -452,9 +490,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
         ? '${_tight(minOut)} $toSymbol (min.)'
         : null;
 
-    final balanceStr = s.isXlmToUsdc
-        ? '${_fmt.format(s.xlmBal)} XLM'
-        : '${_fmt.format(s.usdcBal)} USDC';
+    final balanceStr = '${_fmt.format(vm.fromBalance)} $fromSymbol';
 
     return Scaffold(
       backgroundColor: c.surface,
@@ -566,7 +602,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
                 hint: '0.0',
                 balanceText: balanceStr,
                 onMax: () => _applyPct(vm, 1.0),
-                onAssetTap: () => _flip(vm),
+                onAssetTap: () => _pickAsset(vm, selectingFrom: true),
               ),
               const SizedBox(height: 20),
               _AmountTile(
@@ -574,7 +610,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
                 symbol: toSymbol,
                 controller: _toCtl,
                 hint: '0.0',
-                onAssetTap: () => _flip(vm),
+                onAssetTap: () => _pickAsset(vm, selectingFrom: false),
               ),
               if (minReceiveText != null) ...[
                 const SizedBox(height: 10),
@@ -703,7 +739,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         child: CustomButton(
-          text: s.isXlmToUsdc ? 'Swap XLM to USDC' : 'Swap USDC to XLM',
+          text: 'Swap ${vm.fromSymbol} to ${vm.toSymbol}',
           icon: LucideIcons.arrowRightLeft,
           type: vm.hasAmount ? ButtonType.filled : ButtonType.disabled,
           onPressed: !vm.hasAmount
@@ -717,7 +753,7 @@ class _SwapScreenState extends ConsumerState<SwapScreen>
                     type: AppAlertType.warning,
                     title: 'Insufficient balance',
                     subtitle:
-                        'Your available ${s.isXlmToUsdc ? 'XLM' : 'USDC'} '
+                        'Your available ${vm.fromSymbol} '
                         'is not enough for this swap.',
                     primaryText: 'OK',
                   );

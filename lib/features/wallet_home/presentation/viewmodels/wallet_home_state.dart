@@ -3,13 +3,14 @@ import 'package:next_fi/features/wallet_home/data/models/incoming_hint.dart';
 
 enum PriceWindow { h24, d7, d30, y1 }
 
+const Object _noChange = Object();
+
 class WalletHomeState {
   final String? address;
   final String? walletName;
 
-  // Spendable balances (XLM reserve already excluded).
-  final double xlm;
-  final double usdc;
+  // Spendable balances by asset id (XLM reserve already excluded).
+  final Map<String, double> balancesByAssetId;
 
   // Reserve balance tracking
   final double xlmBaseReserve;
@@ -31,8 +32,7 @@ class WalletHomeState {
   const WalletHomeState({
     this.address,
     this.walletName,
-    this.xlm = 0,
-    this.usdc = 0,
+    this.balancesByAssetId = const {},
     this.xlmBaseReserve = 1.0,
     this.xlmTrustlineReserve = 0.0,
     this.xlmTotalReserve = 1.0,
@@ -48,6 +48,11 @@ class WalletHomeState {
 
   bool get hasWallet => (address != null && address!.isNotEmpty);
 
+  double balanceFor(String assetId) => balancesByAssetId[assetId] ?? 0.0;
+
+  double get xlm => balanceFor('stellar');
+  double get usdc => balanceFor('usdc_stellar');
+
   // `xlm` is already spendable (total - reserve - liabilities).
   double get spendableXlm => xlm;
 
@@ -56,8 +61,7 @@ class WalletHomeState {
   WalletHomeState copyWith({
     String? address,
     String? walletName,
-    double? xlm,
-    double? usdc,
+    Object? balancesByAssetId = _noChange,
     double? xlmBaseReserve,
     double? xlmTrustlineReserve,
     double? xlmTotalReserve,
@@ -73,8 +77,11 @@ class WalletHomeState {
     return WalletHomeState(
       address: address ?? this.address,
       walletName: walletName ?? this.walletName,
-      xlm: xlm ?? this.xlm,
-      usdc: usdc ?? this.usdc,
+      balancesByAssetId: identical(balancesByAssetId, _noChange)
+          ? this.balancesByAssetId
+          : Map<String, double>.unmodifiable(
+              Map<String, double>.from(balancesByAssetId as Map<String, double>),
+            ),
       xlmBaseReserve: xlmBaseReserve ?? this.xlmBaseReserve,
       xlmTrustlineReserve: xlmTrustlineReserve ?? this.xlmTrustlineReserve,
       xlmTotalReserve: xlmTotalReserve ?? this.xlmTotalReserve,

@@ -19,6 +19,7 @@ import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
+import 'package:next_fi/core/services/assets/asset_catalog_service.dart';
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
@@ -168,6 +169,10 @@ final appCoverServiceProvider = Provider<AppCoverService>((ref) {
   return service;
 });
 
+final assetCatalogServiceProvider = Provider<AssetCatalogService>((ref) {
+  return AssetCatalogService();
+});
+
 final stellarWalletServiceProvider = Provider<StellarWalletServices>((ref) {
   final config = ref.watch(appConfigProvider);
   return StellarWalletServices(
@@ -211,17 +216,20 @@ final currencyVmProvider = ChangeNotifierProvider<CurrencyVM>((ref) {
 final assetVmProvider = ChangeNotifierProvider<AssetVM>((ref) {
   final currency = ref.read(currencyVmProvider);
   final config = ref.read(appConfigProvider);
+  final catalogService = ref.read(assetCatalogServiceProvider);
   return AssetVM(
     currency,
     isTestnet: config.isTestnet,
     usdcIssuer: config.usdcIssuer,
+    catalogService: catalogService,
   );
 });
 
 final walletHomeVmProvider = ChangeNotifierProvider<WalletHomeVM>((ref) {
   final stellar = ref.read(stellarWalletServiceProvider);
   final seed = ref.read(seedKeypairProvider);
-  final vm = WalletHomeVM(stellar: stellar, seedVM: seed)
+  final assets = ref.read(assetVmProvider);
+  final vm = WalletHomeVM(stellar: stellar, seedVM: seed, assetVM: assets)
     ..bindToAddress(seed.accountId);
 
   void syncSeed() => vm.bindToAddress(seed.accountId);
@@ -274,7 +282,13 @@ final swapVmProvider = ChangeNotifierProvider<SwapVM>((ref) {
   final stellar = ref.read(stellarWalletServiceProvider);
   final seed = ref.read(seedKeypairProvider);
   final walletHome = ref.read(walletHomeVmProvider);
-  final vm = SwapVM(svc: stellar, keypairVM: seed, walletHomeVM: walletHome)
+  final assets = ref.read(assetVmProvider);
+  final vm = SwapVM(
+    svc: stellar,
+    keypairVM: seed,
+    walletHomeVM: walletHome,
+    assetVM: assets,
+  )
     ..bindToAddress(seed.accountId);
 
   void syncSeed() => vm.bindToAddress(seed.accountId);

@@ -2,13 +2,15 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/features/wallet_home/data/services/wallet_home_flow_service.dart';
 import 'package:next_fi/features/wallet_home/data/models/incoming_hint.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/core/services/secure_storage/token_storage.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart'
     as stellar
-    show PaymentOperationResponse, Asset;
+    show PaymentOperationResponse, Asset, Balance;
 
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
@@ -123,15 +125,18 @@ class WalletHomeVM extends ChangeNotifier {
   WalletHomeVM({
     required StellarWalletServices stellar,
     required SeedKeypairVM seedVM,
+    required AssetVM assetVM,
     TokenStorage? tokenStorage,
     WalletHomeFlowService? flowService,
   }) : _stellar = stellar,
        _seedVM = seedVM,
+       _assetVM = assetVM,
        _tokenStorage = tokenStorage ?? TokenStorage(),
        _flowService = flowService ?? WalletHomeFlowService();
 
   final StellarWalletServices _stellar;
   final SeedKeypairVM _seedVM;
+  final AssetVM _assetVM;
   final TokenStorage _tokenStorage;
   final WalletHomeFlowService _flowService;
 
@@ -275,8 +280,7 @@ class WalletHomeVM extends ChangeNotifier {
         _set(
           _state.copyWith(
             address: null,
-            xlm: 0,
-            usdc: 0,
+            balancesByAssetId: const {},
             xlmBaseReserve: 1.0,
             xlmTrustlineReserve: 0.0,
             xlmTotalReserve: 1.0,
@@ -319,8 +323,7 @@ class WalletHomeVM extends ChangeNotifier {
           _state.copyWith(
             walletName: name,
             address: null,
-            xlm: 0,
-            usdc: 0,
+            balancesByAssetId: const {},
             lastBalancesAt: DateTime.now(),
             loadingWallet: false,
             loadingBalances: false,
@@ -380,23 +383,16 @@ class WalletHomeVM extends ChangeNotifier {
 
     try {
       final addr = _state.address!;
-
-      final results = await Future.wait<double>([
-        _stellar.getXlmBalance(addr).catchError((e) {
-          debugPrint('Error fetching XLM balance: $e');
-          return 0.0;
-        }),
-        _stellar.getUsdcBalance(addr).catchError((e) {
-          debugPrint('Error fetching USDC balance: $e');
-          return 0.0;
-        }),
-      ], eagerError: false);
+      final balancesByAssetId = await _fetchAssetBalances(addr);
 
       final now = DateTime.now();
       _lastFetch = now;
 
       _set(
-        _state.copyWith(xlm: results[0], usdc: results[1], lastBalancesAt: now),
+        _state.copyWith(
+          balancesByAssetId: balancesByAssetId,
+          lastBalancesAt: now,
+        ),
       );
 
       await _fetchReserves(addr);
@@ -681,6 +677,65 @@ class WalletHomeVM extends ChangeNotifier {
       }
     }
   }
+
+  Future<Map<String, double>> _fetchAssetBalances(String address) async {
+    final assets = _stellarAssets;
+    if (assets.isEmpty) {
+      return const {'stellar': 0.0, 'usdc_stellar': 0.0};
+    }
+
+    final rawBalances = await _stellar.getAllBalances(address).catchError((e) {
+      debugPrint('Error fetching account balances: $e');
+      return <stellar.Balance>[];
+    });
+    final spendableXlm = await _stellar.getXlmBalance(address).catchError((e) {
+      debugPrint('Error fetching spendable XLM balance: $e');
+      return 0.0;
+    });
+
+    final next = <String, double>{};
+    for (final asset in assets) {
+      if (asset.isNative) {
+        next[asset.id] = spendableXlm;
+        continue;
+      }
+
+      stellar.Balance? match;
+      for (final balance in rawBalances.whereType<stellar.Balance>()) {
+        if (balance.assetCode == asset.assetCode &&
+            balance.assetIssuer == asset.issuer) {
+          match = balance;
+          break;
+        }
+      }
+
+      if (match == null) {
+        next[asset.id] = 0.0;
+        continue;
+      }
+
+      final balance = double.tryParse(match.balance) ?? 0.0;
+      final liabilities =
+          double.tryParse(match.sellingLiabilities ?? '0') ?? 0.0;
+      final spendable = balance - liabilities;
+      next[asset.id] = spendable > 0 ? spendable : 0.0;
+    }
+
+    next.putIfAbsent('stellar', () => spendableXlm);
+    next.putIfAbsent('usdc_stellar', () => 0.0);
+    return Map<String, double>.unmodifiable(next);
+  }
+
+  List<AssetModel> get _stellarAssets => _assetVM.assets
+      .where(
+        (asset) =>
+            asset.enabled &&
+            asset.chain.toLowerCase() == 'stellar' &&
+            (asset.isNative ||
+                ((asset.assetCode ?? '').isNotEmpty &&
+                    (asset.issuer ?? '').isNotEmpty)),
+      )
+      .toList(growable: false);
 
   void _kickRefreshInBackground({bool force = false}) {
     refresh(force: force).catchError((e) {

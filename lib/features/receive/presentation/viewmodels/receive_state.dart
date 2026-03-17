@@ -1,30 +1,20 @@
 // lib/features/receive/model/receive_state.dart
 class ReceiveState {
   final String address;
-  final double xlmBalance;
-  final double usdcBalance;
-  final bool xlmSelected; // true => XLM, false => USDC
+  final String token;
 
   const ReceiveState({
     required this.address,
-    required this.xlmBalance,
-    required this.usdcBalance,
-    this.xlmSelected = true,
+    required this.token,
   });
-
-  String get token => xlmSelected ? 'XLM' : 'USDC';
 
   ReceiveState copyWith({
     String? address,
-    double? xlmBalance,
-    double? usdcBalance,
-    bool? xlmSelected,
+    String? token,
   }) {
     return ReceiveState(
       address: address ?? this.address,
-      xlmBalance: xlmBalance ?? this.xlmBalance,
-      usdcBalance: usdcBalance ?? this.usdcBalance,
-      xlmSelected: xlmSelected ?? this.xlmSelected,
+      token: token ?? this.token,
     );
   }
 }

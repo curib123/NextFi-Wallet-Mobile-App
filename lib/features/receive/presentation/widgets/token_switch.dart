@@ -5,14 +5,14 @@ import 'package:next_fi/app/theme/app_color.dart';
 class TokenSwitch extends StatelessWidget {
   const TokenSwitch({
     super.key,
-    required this.xlmSelected,
-    required this.onSelectXLM,
-    required this.onSelectUSDC,
+    required this.items,
+    required this.selectedKey,
+    required this.onSelected,
   });
 
-  final bool xlmSelected;
-  final VoidCallback onSelectXLM;
-  final VoidCallback onSelectUSDC;
+  final List<TokenSwitchItem> items;
+  final String selectedKey;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -26,13 +26,31 @@ class TokenSwitch extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: _SegmentButton(label: 'XLM', selected: xlmSelected, onTap: onSelectXLM, color: c)),
-          const SizedBox(width: 8),
-          Expanded(child: _SegmentButton(label: 'USDC', selected: !xlmSelected, onTap: onSelectUSDC, color: c)),
+          for (var i = 0; i < items.length; i++) ...[
+            Expanded(
+              child: _SegmentButton(
+                label: items[i].label,
+                selected: items[i].key == selectedKey,
+                onTap: () => onSelected(items[i].key),
+                color: c,
+              ),
+            ),
+            if (i != items.length - 1) const SizedBox(width: 8),
+          ],
         ],
       ),
     );
   }
+}
+
+class TokenSwitchItem {
+  const TokenSwitchItem({
+    required this.key,
+    required this.label,
+  });
+
+  final String key;
+  final String label;
 }
 
 class _SegmentButton extends StatelessWidget {

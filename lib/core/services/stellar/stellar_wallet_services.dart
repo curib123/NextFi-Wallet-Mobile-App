@@ -493,6 +493,26 @@ class StellarWalletServices {
     onProgress: onProgress,
   );
 
+  Future<String> swapAssets({
+    required KeyPair keyPair,
+    required Asset sending,
+    required Asset receiving,
+    required double sendAmount,
+    required double minOut,
+    String? destination,
+    String? memoText,
+    ProgressCallback? onProgress,
+  }) => swapService.swapAssets(
+    keyPair: keyPair,
+    sending: sending,
+    receiving: receiving,
+    sendAmount: sendAmount,
+    minOut: minOut,
+    destination: destination,
+    memoText: memoText,
+    onProgress: onProgress,
+  );
+
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // CLAIMABLE BALANCES WITH ACTIVITY LOGGING
   // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
+import 'package:next_fi/core/services/assets/asset_catalog_service.dart';
 
 /// Production-grade Asset Registry + Pricing Delta Engine
 class AssetVM with ChangeNotifier {
@@ -9,11 +10,14 @@ class AssetVM with ChangeNotifier {
     this.currency, {
     this.isTestnet = false,
     required this.usdcIssuer,
+    AssetCatalogService? catalogService,
   }) {
-    _initAssets();
+    _catalogService = catalogService ?? AssetCatalogService();
+    _initFallbackAssets();
     _buildLookupCache();
     _recompute();
     startRealtimeUpdates();
+    unawaited(refreshCatalog());
   }
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -21,20 +25,29 @@ class AssetVM with ChangeNotifier {
   final CurrencyVM currency;
   final bool isTestnet;
   final String usdcIssuer;
+  late final AssetCatalogService _catalogService;
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ASSETS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   final List<AssetModel> _assets = [];
   final Map<String, AssetModel> _lookup = {};
 
-  void _initAssets() {
-    _assets.addAll([
+  void _initFallbackAssets() {
+    _assets
+      ..clear()
+      ..addAll(_defaultAssets());
+  }
+
+  List<AssetModel> _defaultAssets() {
+    final net = isTestnet ? 'testnet' : 'mainnet';
+    final explorerNet = isTestnet ? 'testnet' : 'public';
+    return [
       AssetModel(
         id: 'stellar',
         name: 'Stellar Lumens',
         symbol: 'XLM',
         chain: 'stellar',
-        network: isTestnet ? 'testnet' : 'mainnet',
+        network: net,
         kind: AssetKind.native,
         isNative: true,
         assetCode: 'XLM',
@@ -42,8 +55,8 @@ class AssetVM with ChangeNotifier {
         aliases: const ['xlm', 'stellar', 'lumens'],
         tags: const ['layer1', 'featured'],
         explorer: {
-          'account': _explorer('account'),
-          'tx': _explorer('tx'),
+          'account': 'https://stellar.expert/explorer/$explorerNet/account/{hash}',
+          'tx': 'https://stellar.expert/explorer/$explorerNet/tx/{hash}',
         },
         logoUris: const [
           'https://cdn.jsdelivr.net/gh/trustwallet/assets@master/blockchains/stellar/info/logo.png',
@@ -55,7 +68,7 @@ class AssetVM with ChangeNotifier {
         name: 'USD Coin (Stellar)',
         symbol: 'USDC',
         chain: 'stellar',
-        network: isTestnet ? 'testnet' : 'mainnet',
+        network: net,
         kind: AssetKind.token,
         assetCode: 'USDC',
         issuer: usdcIssuer,
@@ -64,19 +77,29 @@ class AssetVM with ChangeNotifier {
         tags: const ['stablecoin', 'featured'],
         explorer: {
           'asset':
-          'https://stellar.expert/explorer/${isTestnet ? "testnet" : "public"}/asset/USDC-{issuer}',
+              'https://stellar.expert/explorer/$explorerNet/asset/USDC-{issuer}',
         },
         logoUris: const [
           'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/usdc.png',
         ],
         sortOrder: 1,
       ),
-    ]);
+    ];
   }
 
-  String _explorer(String type) {
-    final net = isTestnet ? 'testnet' : 'public';
-    return 'https://stellar.expert/explorer/$net/$type/{hash}';
+  Future<void> refreshCatalog() async {
+    try {
+      final remoteAssets = await _catalogService.fetchAssets();
+      if (remoteAssets.isEmpty) return;
+      _assets
+        ..clear()
+        ..addAll(remoteAssets);
+      _buildLookupCache();
+      _recompute();
+      _safeNotify();
+    } catch (_) {
+      // Keep fallback catalog when backend is unavailable.
+    }
   }
 
   void _buildLookupCache() {
@@ -102,10 +125,7 @@ class AssetVM with ChangeNotifier {
   Timer? _debounce;
 
   /// Cached deltas
-  final Map<String, Map<String, double>> _deltaCache = {
-    'xlm': {},
-    'usdc': {},
-  };
+  final Map<String, Map<String, double>> _deltaCache = {};
 
   List<AssetModel> _enabledSorted = [];
 
@@ -163,6 +183,7 @@ class AssetVM with ChangeNotifier {
   }
 
   double _cleanPct(String key, String tf, double v) {
+    _deltaCache.putIfAbsent(key, () => <String, double>{});
     if (v.isNaN || v.isInfinite) {
       return _deltaCache[key]?[tf] ?? 0;
     }
@@ -171,7 +192,7 @@ class AssetVM with ChangeNotifier {
   }
 
   void _recompute() {
-    final deltas = {
+    final deltas = <String, Map<String, double>>{
       'xlm': {
         '24h': _pct(currency.xlmHistory24h),
         '7d': _pct(currency.xlmHistory7),
@@ -190,14 +211,22 @@ class AssetVM with ChangeNotifier {
       final a = _assets[i];
       final k = a.symbol.toLowerCase();
 
-      if (!deltas.containsKey(k)) continue;
+      final assetDeltas = deltas[k];
+      if (assetDeltas == null) {
+        _assets[i] = a.copyWith(
+          priceChangePercent24h: _cleanPct(k, '24h', 0),
+          priceChangePercent7d: _cleanPct(k, '7d', 0),
+          priceChangePercent30d: _cleanPct(k, '30d', 0),
+          priceChangePercent1y: _cleanPct(k, '1y', 0),
+        );
+        continue;
+      }
 
       _assets[i] = a.copyWith(
-        issuer: k == 'usdc' ? usdcIssuer : a.issuer,
-        priceChangePercent24h: _cleanPct(k, '24h', deltas[k]!['24h']!),
-        priceChangePercent7d: _cleanPct(k, '7d', deltas[k]!['7d']!),
-        priceChangePercent30d: _cleanPct(k, '30d', deltas[k]!['30d']!),
-        priceChangePercent1y: _cleanPct(k, '1y', deltas[k]!['1y']!),
+        priceChangePercent24h: _cleanPct(k, '24h', assetDeltas['24h']!),
+        priceChangePercent7d: _cleanPct(k, '7d', assetDeltas['7d']!),
+        priceChangePercent30d: _cleanPct(k, '30d', assetDeltas['30d']!),
+        priceChangePercent1y: _cleanPct(k, '1y', assetDeltas['1y']!),
       );
     }
 

@@ -2,22 +2,28 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/features/swap/data/models/swap_dir.dart';
 import 'package:next_fi/features/swap/presentation/viewmodels/swap_state.dart';
 import 'package:next_fi/features/swap/data/models/swap_mode.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_vm.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 
 class SwapVM extends ChangeNotifier {
   SwapVM({
     required StellarWalletServices svc,
     required SeedKeypairVM keypairVM,
     required WalletHomeVM walletHomeVM,
+    required AssetVM assetVM,
   }) : _svc = svc,
        _keys = keypairVM,
-       _walletHomeVM = walletHomeVM {
+       _walletHomeVM = walletHomeVM,
+       _assetVM = assetVM {
+    _bootstrapAssets();
     _walletHomeVM.addListener(_onWalletHomeChanged);
     scheduleMicrotask(_wireFeeStream);
   }
@@ -39,6 +45,7 @@ class SwapVM extends ChangeNotifier {
   final StellarWalletServices _svc;
   final SeedKeypairVM _keys;
   final WalletHomeVM _walletHomeVM;
+  final AssetVM _assetVM;
 
   StreamSubscription? _feeSub;
   Timer? _quoteTimer;
@@ -56,45 +63,65 @@ class SwapVM extends ChangeNotifier {
   double? _txFeeXlm;
   double _trustlineReserveXlm =
       StellarWalletServices.defaultReceiverActivationXlm / 2.0;
+  String _fromAssetId = 'stellar';
+  String _toAssetId = 'usdc_stellar';
+  double _fromBalance = 0.0;
+  double _toBalance = 0.0;
 
   double get amount => _amount;
   double get slippagePct => _slippagePct;
   double get txFeeXlm => _txFeeXlm ?? 0.0;
   double get trustlineReserveXlm => _trustlineReserveXlm;
+  AssetModel get fromAsset => _resolveAsset(_fromAssetId);
+  AssetModel get toAsset => _resolveAsset(_toAssetId);
+  String get fromSymbol => fromAsset.symbol.toUpperCase();
+  String get toSymbol => toAsset.symbol.toUpperCase();
+  double get fromBalance => _fromBalance;
+  double get toBalance => _toBalance;
+  List<AssetModel> get swappableAssets => _assetVM.assets
+      .where(
+        (a) =>
+            a.chain.toLowerCase() == 'stellar' &&
+            (a.isNative ||
+                ((a.assetCode ?? '').isNotEmpty && (a.issuer ?? '').isNotEmpty)),
+      )
+      .toList(growable: false);
 
   double get slippagePctPercent => _roundFrac(_slippagePct * 100, 2);
   void setSlippagePctPercent(double pct) => setSlippagePct(pct / 100);
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ rate cache ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
-  double? _rateXlmToUsdc;
-  double? _rateUsdcToXlm;
-  DateTime? _rateUpdatedAt;
+  final Map<String, double> _rateCache = {};
+  final Map<String, DateTime> _rateUpdatedAt = {};
 
   void _bumpRate({
-    required bool xlmToUsdc,
+    required String fromId,
+    required String toId,
     required double from,
     required double to,
   }) {
     if (from <= 0 || to <= 0) return;
     final r = to / from;
-    if (xlmToUsdc) {
-      _rateXlmToUsdc = _rateXlmToUsdc == null ? r : _ema(_rateXlmToUsdc!, r);
-    } else {
-      _rateUsdcToXlm = _rateUsdcToXlm == null ? r : _ema(_rateUsdcToXlm!, r);
-    }
-    _rateUpdatedAt = DateTime.now();
+    final key = _pairKey(fromId, toId);
+    final prev = _rateCache[key];
+    _rateCache[key] = prev == null ? r : _ema(prev, r);
+    _rateUpdatedAt[key] = DateTime.now();
   }
 
-  double? _cachedRate({required bool xlmToUsdc}) {
-    final r = xlmToUsdc ? _rateXlmToUsdc : _rateUsdcToXlm;
+  double? _cachedRate({required String fromId, required String toId}) {
+    final key = _pairKey(fromId, toId);
+    final r = _rateCache[key];
     if (r == null) return null;
-    final stale = _rateUpdatedAt == null
+    final updatedAt = _rateUpdatedAt[key];
+    final stale = updatedAt == null
         ? true
-        : DateTime.now().difference(_rateUpdatedAt!) >
+        : DateTime.now().difference(updatedAt) >
               const Duration(seconds: 30);
     return stale ? null : r;
   }
+
+  String _pairKey(String fromId, String toId) => '$fromId->$toId';
 
   double _ema(double prev, double next) => prev + _emaAlpha * (next - prev);
 
@@ -110,13 +137,61 @@ class SwapVM extends ChangeNotifier {
 
   bool get isTestnet => _svc.isTestnet;
 
+  AssetModel _resolveAsset(String id) =>
+      _assetVM.findAsset(id) ??
+      _assetVM.findAsset('xlm') ??
+      swappableAssets.first;
+
+  void _bootstrapAssets() {
+    final assets = swappableAssets;
+    if (assets.isEmpty) return;
+
+    AssetModel? xlm;
+    AssetModel? usdc;
+    for (final asset in assets) {
+      final symbol = asset.symbol.toUpperCase();
+      if (xlm == null && symbol == 'XLM') xlm = asset;
+      if (usdc == null && symbol == 'USDC') usdc = asset;
+    }
+
+    final from = xlm ?? assets.first;
+    final to = usdc ??
+        assets.firstWhere(
+          (a) => a.id != from.id,
+          orElse: () => from,
+        );
+
+    _fromAssetId = from.id;
+    _toAssetId = to.id;
+  }
+
+  Asset _toStellarAsset(AssetModel model) {
+    if (model.isNative || model.symbol.toUpperCase() == 'XLM') {
+      return Asset.NATIVE;
+    }
+    final code = (model.assetCode ?? model.symbol).trim();
+    final issuer = (model.issuer ?? '').trim();
+    if (code.isEmpty || issuer.isEmpty) {
+      throw StateError('Asset ${model.symbol} is missing Stellar metadata.');
+    }
+    return code.length <= 4
+        ? AssetTypeCreditAlphaNum4(code, issuer)
+        : AssetTypeCreditAlphaNum12(code, issuer);
+  }
+
+  bool get _isSendingNative => fromAsset.isNative || fromSymbol == 'XLM';
+  bool get _isReceivingNative => toAsset.isNative || toSymbol == 'XLM';
+
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Wallet home sync ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 
   void _onWalletHomeChanged() {
-    final home = _walletHomeVM.state;
-    if (home.xlm == _state.xlmBal && home.usdc == _state.usdcBal) return;
-    _set(_state.copyWith(xlmBal: home.xlm, usdcBal: home.usdc));
-    if (_amount > 0) scheduleMicrotask(capAmountToAvailableAndRequote);
+    if ((_state.accountId ?? '').isEmpty) return;
+    scheduleMicrotask(() async {
+      await refreshBalances();
+      if (_amount > 0) {
+        await capAmountToAvailableAndRequote();
+      }
+    });
   }
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Fee getters ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -139,7 +214,7 @@ class SwapVM extends ChangeNotifier {
   ///   sendable = full USDC balance
   ///   (XLM fees come from the XLM balance, not the USDC amount)
   double get availableFrom {
-    if (_state.isXlmToUsdc) {
+    if (_isSendingNative) {
       // Reserve network fees + safety buffer. The 0.3% swap fee is deducted
       // inside the service from the send amount, so no division needed here.
       final kept = _requiredXlmNonAmountBudget(
@@ -148,7 +223,7 @@ class SwapVM extends ChangeNotifier {
       return _floor6((_state.xlmBal - kept).clamp(0.0, double.infinity));
     }
     // USDCÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢XLM: full balance is sendable; service deducts its fee internally.
-    return _floor6(_state.usdcBal);
+    return _floor6(_fromBalance);
   }
 
   bool hasEnough(double amount) => amount > 0 && amount <= availableFrom + _eps;
@@ -248,7 +323,7 @@ class SwapVM extends ChangeNotifier {
     final feeStr = fee <= 0
         ? ''
         : ' | Fee ~ ${fmt(fee)} XLM${_state.needsTrustline ? ' (incl. trustline)' : ''}';
-    return 'Est. receive: $recv ${_state.isXlmToUsdc ? 'USDC' : 'XLM'} | Slippage: $slStr%$feeStr';
+    return 'Est. receive: $recv $toSymbol | Slippage: $slStr%$feeStr';
   }
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Address / direction ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -260,6 +335,8 @@ class SwapVM extends ChangeNotifier {
     if (addr.isEmpty) {
       _teardownStreams();
       _txFeeXlm = null;
+      _fromBalance = 0.0;
+      _toBalance = 0.0;
       _set(
         _state.copyWith(
           accountId: null,
@@ -279,11 +356,13 @@ class SwapVM extends ChangeNotifier {
     _txFeeXlm = null;
 
     final home = _walletHomeVM.state;
+    _fromBalance = _balanceFromHome(home, _fromAssetId) ?? 0.0;
+    _toBalance = _balanceFromHome(home, _toAssetId) ?? 0.0;
     _set(
       _state.copyWith(
         accountId: addr,
         xlmBal: home.address == addr ? home.xlm : 0.0,
-        usdcBal: home.address == addr ? home.usdc : 0.0,
+        usdcBal: _fromBalance,
         estReceive: null,
         feeXlm: null,
         needsTrustline: false,
@@ -303,22 +382,62 @@ class SwapVM extends ChangeNotifier {
   }
 
   Future<void> setDir(SwapDir value) async {
-    if (_state.dir == value) return;
-    _set(
-      _state.copyWith(
-        dir: value,
-        needsTrustline: value == SwapDir.xlmToUsdc
-            ? _state.needsTrustline
-            : false,
-      ),
+    final xlm = swappableAssets.firstWhere(
+      (a) => a.symbol.toUpperCase() == 'XLM',
+      orElse: () => fromAsset,
     );
+    final usdc = swappableAssets.firstWhere(
+      (a) => a.symbol.toUpperCase() == 'USDC',
+      orElse: () => toAsset.id != xlm.id ? toAsset : fromAsset,
+    );
+    if (value == SwapDir.xlmToUsdc) {
+      await _setAssets(from: xlm, to: usdc);
+    } else {
+      await _setAssets(from: usdc, to: xlm);
+    }
+  }
+
+  Future<double> flipDirectionAndRequote() async {
+    await _setAssets(from: toAsset, to: fromAsset);
+    return _amount;
+  }
+
+  Future<void> selectFromAsset(AssetModel asset) async {
+    if (asset.id == _fromAssetId) return;
+    await _setAssets(
+      from: asset,
+      to: asset.id == _toAssetId ? fromAsset : toAsset,
+    );
+  }
+
+  Future<void> selectToAsset(AssetModel asset) async {
+    if (asset.id == _toAssetId) return;
+    await _setAssets(
+      from: asset.id == _fromAssetId ? toAsset : fromAsset,
+      to: asset,
+    );
+  }
+
+  Future<void> _setAssets({
+    required AssetModel from,
+    required AssetModel to,
+  }) async {
+    if (from.id == to.id) return;
+    _fromAssetId = from.id;
+    _toAssetId = to.id;
+    _quoteSeq++;
+    _set(_state.copyWith(estReceive: null));
+    await refreshBalances();
     await _wireFeeStream();
     await capAmountToAvailableAndRequote();
   }
 
-  Future<double> flipDirectionAndRequote() async {
-    await setDir(_state.isXlmToUsdc ? SwapDir.usdcToXlm : SwapDir.xlmToUsdc);
-    return _amount;
+  double? _balanceFromHome(dynamic home, String assetId) {
+    final asset = _resolveAsset(assetId);
+    final symbol = asset.symbol.toUpperCase();
+    if (symbol == 'XLM') return home.xlm as double;
+    if (symbol == 'USDC') return home.usdc as double;
+    return null;
   }
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Balances ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -328,24 +447,33 @@ class SwapVM extends ChangeNotifier {
     if (aid == null || aid.isEmpty) return;
 
     final home = _walletHomeVM.state;
-    if (home.address == aid) {
-      _set(_state.copyWith(xlmBal: home.xlm, usdcBal: home.usdc));
-    } else {
+    double? xlmBal = home.address == aid ? home.xlm : null;
+    double? fromBal = _balanceFromHome(home, _fromAssetId);
+    double? toBal = _balanceFromHome(home, _toAssetId);
+
+    try {
+      xlmBal ??= await _svc.getXlmBalance(aid);
+      fromBal ??= await _svc.getAssetBalance(aid, _toStellarAsset(fromAsset));
+      toBal ??= await _svc.getAssetBalance(aid, _toStellarAsset(toAsset));
+    } catch (_) {}
+
+    _fromBalance = fromBal ?? _fromBalance;
+    _toBalance = toBal ?? _toBalance;
+
+    bool needsTrustline = false;
+    if (!_isReceivingNative) {
       try {
-        final res = await Future.wait<double>([
-          _svc.getXlmBalance(aid),
-          _svc.getUsdcBalance(aid),
-        ]);
-        _set(_state.copyWith(xlmBal: res[0], usdcBal: res[1]));
+        needsTrustline = !await _svc.hasTrustline(aid, _toStellarAsset(toAsset));
       } catch (_) {}
     }
 
-    try {
-      final hasTl = await _svc.hasUsdcTrustline(aid);
-      _set(
-        _state.copyWith(needsTrustline: _state.isXlmToUsdc ? !hasTl : false),
-      );
-    } catch (_) {}
+    _set(
+      _state.copyWith(
+        xlmBal: xlmBal ?? _state.xlmBal,
+        usdcBal: _fromBalance,
+        needsTrustline: needsTrustline,
+      ),
+    );
   }
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Swap execution ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -355,7 +483,34 @@ class SwapVM extends ChangeNotifier {
     required double minOut,
   }) async {
     final aid = _state.accountId;
-    if (aid == null || aid.isEmpty) throw StateError('Wallet not ready');
+    if (aid == null || aid.isEmpty) {
+      throw StellarWalletError(
+        'Wallet not ready',
+        advice: 'Open or create a wallet, then try the swap again.',
+        code: 'SWAP_WALLET_NOT_READY',
+      );
+    }
+    if (amount <= 0) {
+      throw StellarWalletError(
+        'Enter an amount greater than 0',
+        advice: 'Try entering a valid $fromSymbol amount to swap.',
+        code: 'SWAP_INVALID_AMOUNT',
+      );
+    }
+    if (minOut <= 0) {
+      throw StellarWalletError(
+        'Minimum receive amount must be greater than 0',
+        advice: 'Wait for a live quote, then confirm the swap again.',
+        code: 'SWAP_INVALID_MIN_OUT',
+      );
+    }
+    if (fromAsset.id == toAsset.id) {
+      throw StellarWalletError(
+        'Choose two different assets to swap',
+        advice: 'Pick a different asset to receive.',
+        code: 'SWAP_SAME_ASSET',
+      );
+    }
 
     await _svc.ensureSwapFeeConfigLoaded(refresh: true);
 
@@ -367,55 +522,69 @@ class SwapVM extends ChangeNotifier {
         .toDouble();
     final liveXlmTotal = (liveBreakdown['total'] ?? liveXlmSpendable).toDouble();
     final liveXlmReserved = (liveBreakdown['reserved'] ?? 0).toDouble();
-    final hasUsdcTl =
-        await _svc.hasUsdcTrustline(kp.accountId).catchError((_) => true);
-    final liveNeedsTrustline = !hasUsdcTl;
+    final liveNeedsTrustline = !_isReceivingNative &&
+        !await _svc
+            .hasTrustline(kp.accountId, _toStellarAsset(toAsset))
+            .catchError((_) => true);
     final requiredXlm = _requiredXlmNonAmountBudget(
       includeTrustlineReserve: liveNeedsTrustline,
     );
 
-    if (_state.isXlmToUsdc) {
+    if (_isSendingNative) {
       final totalRequiredXlm = amount + requiredXlm;
       if (totalRequiredXlm > liveXlmSpendable + _eps) {
-        throw StateError(
-          'Insufficient spendable XLM for swap. '
-          'Spendable: ${_floorTo(liveXlmSpendable, 7).toStringAsFixed(7)} XLM, '
-          'Required: ${_floorTo(totalRequiredXlm, 7).toStringAsFixed(7)} XLM '
-          '(swap ${_floorTo(amount, 7).toStringAsFixed(7)} + fees/reserve ${_floorTo(requiredXlm, 7).toStringAsFixed(7)}). '
-          'Total: ${_floorTo(liveXlmTotal, 7).toStringAsFixed(7)} XLM, '
-          'Reserved: ${_floorTo(liveXlmReserved, 7).toStringAsFixed(7)} XLM.',
+        final missing = totalRequiredXlm - liveXlmSpendable;
+        throw StellarWalletError(
+          'Not enough spendable XLM for this swap',
+          technicalDetails:
+              'Spendable XLM: ${_floorTo(liveXlmSpendable, 7).toStringAsFixed(7)} | '
+              'Required XLM: ${_floorTo(totalRequiredXlm, 7).toStringAsFixed(7)} | '
+              'Total XLM: ${_floorTo(liveXlmTotal, 7).toStringAsFixed(7)} | '
+              'Reserved XLM: ${_floorTo(liveXlmReserved, 7).toStringAsFixed(7)}',
+          advice:
+              'You need ${_floorTo(missing, 7).toStringAsFixed(7)} more spendable XLM to cover the swap amount, fees, and any trustline reserve.',
+          code: 'SWAP_INSUFFICIENT_XLM',
         );
       }
     } else {
-      final liveUsdc =
-          await _svc.getUsdcBalance(kp.accountId).catchError((_) => _state.usdcBal);
-      if (amount > liveUsdc + _eps) {
-        throw StateError(
-          'Insufficient spendable USDC for swap. '
-          'Spendable: ${_floorTo(liveUsdc, 7).toStringAsFixed(7)} USDC, '
-          'Required: ${_floorTo(amount, 7).toStringAsFixed(7)} USDC.',
+      final liveFrom = await _svc
+          .getAssetBalance(kp.accountId, _toStellarAsset(fromAsset))
+          .catchError((_) => _fromBalance);
+      if (amount > liveFrom + _eps) {
+        final missing = amount - liveFrom;
+        throw StellarWalletError(
+          'Not enough $fromSymbol to complete this swap',
+          technicalDetails:
+              'Spendable $fromSymbol: ${_floorTo(liveFrom, 7).toStringAsFixed(7)} | '
+              'Required: ${_floorTo(amount, 7).toStringAsFixed(7)}',
+          advice:
+              'You need ${_floorTo(missing, 7).toStringAsFixed(7)} more $fromSymbol or a smaller swap amount.',
+          code: 'SWAP_INSUFFICIENT_SOURCE',
         );
       }
       if (requiredXlm > liveXlmSpendable + _eps) {
-        throw StateError(
-          'Insufficient spendable XLM for swap fees. '
-          'Spendable: ${_floorTo(liveXlmSpendable, 7).toStringAsFixed(7)} XLM, '
-          'Required for fees/reserve: ${_floorTo(requiredXlm, 7).toStringAsFixed(7)} XLM.',
+        final missing = requiredXlm - liveXlmSpendable;
+        throw StellarWalletError(
+          liveNeedsTrustline
+              ? 'Not enough XLM to cover swap fees and auto-add the ${toSymbol.toUpperCase()} trustline'
+              : 'Not enough XLM to cover swap fees',
+          technicalDetails:
+              'Spendable XLM: ${_floorTo(liveXlmSpendable, 7).toStringAsFixed(7)} | '
+              'Required XLM: ${_floorTo(requiredXlm, 7).toStringAsFixed(7)}',
+          advice:
+              'Add ${_floorTo(missing, 7).toStringAsFixed(7)} more XLM so the swap can complete cleanly.',
+          code: 'SWAP_INSUFFICIENT_XLM_FEES',
         );
       }
     }
 
-    final txid = _state.isXlmToUsdc
-        ? await _svc.swapXlmToUsdc(
-            keyPair: kp,
-            sendAmountXlm: amount,
-            minUsdcOut: minOut,
-          )
-        : await _svc.swapUsdcToXlm(
-            keyPair: kp,
-            sendAmountUsdc: amount,
-            minXlmOut: minOut,
-          );
+    final txid = await _svc.swapAssets(
+      keyPair: kp,
+      sending: _toStellarAsset(fromAsset),
+      receiving: _toStellarAsset(toAsset),
+      sendAmount: amount,
+      minOut: minOut,
+    );
 
     await _walletHomeVM.refresh(force: true);
     return txid;
@@ -463,7 +632,7 @@ class SwapVM extends ChangeNotifier {
     } catch (_) {}
 
     // 1 path-payment op + 1 extra if a trustline needs creating.
-    final ops = 1 + (_state.isXlmToUsdc && _state.needsTrustline ? 1 : 0);
+    final ops = 1 + (_state.needsTrustline ? 1 : 0);
 
     _feeSub = _svc.feeEstimateStream(opCount: ops, percentile: 95).listen((f) {
       if ((_state.feeXlm ?? 0.0) == f.totalXlm) return;
@@ -506,11 +675,18 @@ class SwapVM extends ChangeNotifier {
     final seq = ++_quoteSeq;
     _quoteTimer = Timer(_quoteDebounce, () async {
       try {
-        final q = _state.isXlmToUsdc
-            ? await _svc.quoteXlmToUsdc(amount)
-            : await _svc.quoteUsdcToXlm(amount);
+        final q = await _svc.quoteStrictSend(
+          sourceAsset: _toStellarAsset(fromAsset),
+          sourceAmount: amount.toStringAsFixed(7),
+          destinationAssets: [_toStellarAsset(toAsset)],
+        );
         if (seq != _quoteSeq || q == null || q <= 0) return;
-        _bumpRate(xlmToUsdc: _state.isXlmToUsdc, from: amount, to: q);
+        _bumpRate(
+          fromId: _fromAssetId,
+          toId: _toAssetId,
+          from: amount,
+          to: q,
+        );
         _set(_state.copyWith(estReceive: q));
       } catch (_) {}
     });
@@ -518,7 +694,7 @@ class SwapVM extends ChangeNotifier {
 
   double? _fastEstimate(double amount) {
     if (amount <= 0) return null;
-    final r = _cachedRate(xlmToUsdc: _state.isXlmToUsdc);
+    final r = _cachedRate(fromId: _fromAssetId, toId: _toAssetId);
     return r == null ? _state.estReceive : _roundFrac(amount * r, 7);
   }
 
@@ -530,20 +706,22 @@ class SwapVM extends ChangeNotifier {
     if (cap <= 0) return 0.0;
 
     // Start from cached rate or current amount as initial guess.
-    final r = _cachedRate(xlmToUsdc: _state.isXlmToUsdc);
+    final r = _cachedRate(fromId: _fromAssetId, toId: _toAssetId);
     double from = r != null
         ? desiredOut / r
         : (_amount > 0 ? _amount : desiredOut);
     if (from > cap) from = cap;
 
     // One real quote to calibrate the guess.
-    final q = await (_state.isXlmToUsdc
-        ? _svc.quoteXlmToUsdc(from)
-        : _svc.quoteUsdcToXlm(from));
+    final q = await _svc.quoteStrictSend(
+      sourceAsset: _toStellarAsset(fromAsset),
+      sourceAmount: from.toStringAsFixed(7),
+      destinationAssets: [_toStellarAsset(toAsset)],
+    );
     final qv = q ?? 0.0;
     if (qv <= 0) return from.clamp(0, cap);
 
-    _bumpRate(xlmToUsdc: _state.isXlmToUsdc, from: from, to: qv);
+    _bumpRate(fromId: _fromAssetId, toId: _toAssetId, from: from, to: qv);
 
     // Proportional Newton step.
     return _floorTo((from * desiredOut / qv).clamp(0.0, cap), 7);

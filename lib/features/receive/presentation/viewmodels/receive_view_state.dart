@@ -3,9 +3,7 @@ import 'package:next_fi/core/services/federation_address/models/federation_addre
 class ReceiveViewState {
   const ReceiveViewState({
     required this.address,
-    required this.xlmBalance,
-    required this.usdcBalance,
-    required this.xlmSelected,
+    required this.selectedAssetKey,
     required this.federationAddresses,
     required this.federationLoading,
     this.federationError,
@@ -22,16 +20,12 @@ class ReceiveViewState {
 
   factory ReceiveViewState.initial({
     required String address,
-    required double xlmBalance,
-    required double usdcBalance,
     required String initialToken,
     required String federationDomain,
   }) {
     return ReceiveViewState(
       address: address,
-      xlmBalance: xlmBalance,
-      usdcBalance: usdcBalance,
-      xlmSelected: initialToken.toUpperCase() != 'USDC',
+      selectedAssetKey: initialToken,
       federationAddresses: const [],
       federationLoading: true,
       generatingFederation: false,
@@ -42,9 +36,7 @@ class ReceiveViewState {
   }
 
   final String address;
-  final double xlmBalance;
-  final double usdcBalance;
-  final bool xlmSelected;
+  final String selectedAssetKey;
   final List<FederationAddressModel> federationAddresses;
   final bool federationLoading;
   final String? federationError;
@@ -58,12 +50,6 @@ class ReceiveViewState {
   final String? editingFederationId;
   final String? editFederationError;
 
-  String get token => xlmSelected ? 'XLM' : 'USDC';
-
-  String get safetyNote => xlmSelected
-      ? 'Send only XLM (native Stellar) to this address. Sending other assets or from other networks may result in permanent loss.'
-      : 'Send only USDC on the Stellar network to this address. A USDC trustline is required to receive funds.';
-
   String get federationAddressPreview {
     final alias = federationAliasDraft.trim();
     if (alias.isEmpty) return '';
@@ -73,9 +59,7 @@ class ReceiveViewState {
 
   ReceiveViewState copyWith({
     String? address,
-    double? xlmBalance,
-    double? usdcBalance,
-    bool? xlmSelected,
+    String? selectedAssetKey,
     List<FederationAddressModel>? federationAddresses,
     bool? federationLoading,
     Object? federationError = _sentinel,
@@ -91,9 +75,7 @@ class ReceiveViewState {
   }) {
     return ReceiveViewState(
       address: address ?? this.address,
-      xlmBalance: xlmBalance ?? this.xlmBalance,
-      usdcBalance: usdcBalance ?? this.usdcBalance,
-      xlmSelected: xlmSelected ?? this.xlmSelected,
+      selectedAssetKey: selectedAssetKey ?? this.selectedAssetKey,
       federationAddresses: federationAddresses ?? this.federationAddresses,
       federationLoading: federationLoading ?? this.federationLoading,
       federationError: identical(federationError, _sentinel)

@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/app/viewmodels/asset_vm.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/widgets/modal/edit_federation_modal.dart';
 import 'package:next_fi/core/widgets/modal/receive_qr_modal.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
@@ -20,28 +23,28 @@ class ReceiveScreen extends ConsumerWidget {
   const ReceiveScreen({
     super.key,
     required this.address,
-    required this.xlmBalance,
-    required this.usdcBalance,
     this.initialToken = 'XLM',
   });
 
   final String address;
-  final double xlmBalance;
-  final double usdcBalance;
   final String initialToken;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = AppColor.of(context);
+    final assetVm = ref.watch(assetVmProvider);
+    final assets = assetVm.assets.where((a) => a.chain == 'stellar').toList();
     final args = ReceiveControllerArgs(
       address: address,
-      xlmBalance: xlmBalance,
-      usdcBalance: usdcBalance,
       initialToken: initialToken,
     );
     final controller = ref.read(receiveControllerProvider(args).notifier);
     final s = ref.watch(receiveControllerProvider(args));
-    final token = s.token;
+    final asset = _resolveSelectedAsset(assetVm, assets, s.selectedAssetKey);
+    final token = asset.symbol;
+    final switchItems = assets
+        .map((a) => TokenSwitchItem(key: a.id, label: a.symbol))
+        .toList();
 
     return Scaffold(
       backgroundColor: c.background,
@@ -64,15 +67,18 @@ class ReceiveScreen extends ConsumerWidget {
         children: [
           _ReceiveHeroCard(
             token: token,
-            onSelectXLM: controller.selectXLM,
-            onSelectUSDC: controller.selectUSDC,
-            xlmSelected: s.xlmSelected,
+            items: switchItems,
+            selectedKey: asset.id,
+            onSelected: controller.selectAsset,
           ),
           const SizedBox(height: 12),
           QrPreviewCard(
             address: s.address,
             token: token,
-            onTap: () => showReceiveQrModal(context, _toReceiveState(s)),
+            onTap: () => showReceiveQrModal(
+              context,
+              _toReceiveState(s.address, token),
+            ),
           ),
           const SizedBox(height: 16),
           _SectionLabel(
@@ -89,18 +95,33 @@ class ReceiveScreen extends ConsumerWidget {
           const SizedBox(height: 10),
           _buildFederationSection(context, ref, args, s),
           const SizedBox(height: 16),
-          SafetyNote(text: s.safetyNote),
+          SafetyNote(text: _safetyNoteFor(asset)),
         ],
       ),
     );
   }
 
-  ReceiveState _toReceiveState(ReceiveViewState state) {
+  AssetModel _resolveSelectedAsset(
+    AssetVM assetVm,
+    List<AssetModel> assets,
+    String key,
+  ) {
+    final resolved = assetVm.findAsset(key);
+    if (resolved != null && assets.contains(resolved)) return resolved;
+    return assets.isNotEmpty ? assets.first : assetVm.assets.first;
+  }
+
+  String _safetyNoteFor(AssetModel asset) {
+    if (asset.isNative) {
+      return 'Send only ${asset.symbol} on the Stellar network to this address. Sending other assets or from other networks may result in permanent loss.';
+    }
+    return 'Send only ${asset.symbol} on the Stellar network to this address. A ${asset.symbol} trustline is required to receive funds.';
+  }
+
+  ReceiveState _toReceiveState(String address, String token) {
     return ReceiveState(
-      address: state.address,
-      xlmBalance: state.xlmBalance,
-      usdcBalance: state.usdcBalance,
-      xlmSelected: state.xlmSelected,
+      address: address,
+      token: token,
     );
   }
 
@@ -368,15 +389,15 @@ class ReceiveScreen extends ConsumerWidget {
 class _ReceiveHeroCard extends StatelessWidget {
   const _ReceiveHeroCard({
     required this.token,
-    required this.xlmSelected,
-    required this.onSelectXLM,
-    required this.onSelectUSDC,
+    required this.items,
+    required this.selectedKey,
+    required this.onSelected,
   });
 
   final String token;
-  final bool xlmSelected;
-  final VoidCallback onSelectXLM;
-  final VoidCallback onSelectUSDC;
+  final List<TokenSwitchItem> items;
+  final String selectedKey;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -440,9 +461,9 @@ class _ReceiveHeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           TokenSwitch(
-            xlmSelected: xlmSelected,
-            onSelectXLM: onSelectXLM,
-            onSelectUSDC: onSelectUSDC,
+            items: items,
+            selectedKey: selectedKey,
+            onSelected: onSelected,
           ),
         ],
       ),
