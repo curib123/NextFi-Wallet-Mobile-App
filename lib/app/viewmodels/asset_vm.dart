@@ -18,8 +18,9 @@ class AssetVM with ChangeNotifier {
     _buildLookupCache();
     _recompute();
     startRealtimeUpdates();
+    unawaited(_hydrateCachedCatalog());
     unawaited(_loadWalletHomeVisibility());
-    unawaited(refreshCatalog());
+    unawaited(refreshCatalog(retryUntilSuccess: true));
   }
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -45,25 +46,51 @@ class AssetVM with ChangeNotifier {
   final List<AssetModel> _assets = [];
   final Map<String, AssetModel> _lookup = {};
   Set<String>? _walletHomeVisibleIds;
+  bool _catalogRefreshRunning = false;
 
-  Future<void> refreshCatalog() async {
+  Future<void> refreshCatalog({bool retryUntilSuccess = false}) async {
+    if (_catalogRefreshRunning) return;
+    _catalogRefreshRunning = true;
+
     try {
-      final remoteAssets = await _catalogService.fetchAssets();
-      _assets
-        ..clear()
-        ..addAll(remoteAssets);
-      _reconcileWalletHomeVisibility();
-      _buildLookupCache();
-      _recompute();
-      await _persistWalletHomeVisibility();
-      _safeNotify();
-    } catch (_) {
-      _assets.clear();
-      _walletHomeVisibleIds = <String>{};
-      _buildLookupCache();
-      _recompute();
-      _safeNotify();
+      var attempt = 0;
+      while (!_disposed) {
+        try {
+          final remoteAssets = await _catalogService.fetchAssetsAndUpdateCache();
+          _applyCatalog(remoteAssets);
+          return;
+        } catch (_) {
+          attempt += 1;
+          if (!retryUntilSuccess) return;
+          final delaySeconds = attempt <= 3 ? 2 : attempt <= 6 ? 5 : 10;
+          await Future<void>.delayed(Duration(seconds: delaySeconds));
+        }
+      }
+    } finally {
+      _catalogRefreshRunning = false;
     }
+  }
+
+  Future<void> _hydrateCachedCatalog() async {
+    final cachedAssets = await _catalogService.readCachedAssets();
+    if (_disposed || cachedAssets.isEmpty) return;
+    _applyCatalog(cachedAssets, persistVisibility: false);
+  }
+
+  void _applyCatalog(
+    List<AssetModel> assets, {
+    bool persistVisibility = true,
+  }) {
+    _assets
+      ..clear()
+      ..addAll(assets);
+    _reconcileWalletHomeVisibility();
+    _buildLookupCache();
+    _recompute();
+    if (persistVisibility) {
+      unawaited(_persistWalletHomeVisibility());
+    }
+    _safeNotify();
   }
 
   void _buildLookupCache() {
