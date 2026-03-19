@@ -48,6 +48,7 @@ class AssetVM with ChangeNotifier {
   Set<String>? _walletHomeVisibleIds;
   bool _catalogRefreshRunning = false;
   bool _catalogHydrated = false;
+  bool _walletHomeVisibilityLoadedFromStorage = false;
 
   Future<void> refreshCatalog({bool retryUntilSuccess = false}) async {
     if (_catalogRefreshRunning) return;
@@ -218,7 +219,8 @@ class AssetVM with ChangeNotifier {
 
   bool isVisibleInWalletHome(String assetId) {
     final visible = _walletHomeVisibleIds;
-    if (visible == null || visible.isEmpty) return true;
+    if (visible == null) return true;
+    if (visible.isEmpty) return false;
     return visible.contains(assetId);
   }
 
@@ -247,6 +249,7 @@ class AssetVM with ChangeNotifier {
       if (raw == null || raw.trim().isEmpty) return;
       final decoded = jsonDecode(raw);
       if (decoded is! List) return;
+      _walletHomeVisibilityLoadedFromStorage = true;
       _walletHomeVisibleIds = decoded
           .map((value) => value.toString().trim())
           .where((value) => value.isNotEmpty)
@@ -268,13 +271,17 @@ class AssetVM with ChangeNotifier {
     if (enabledIds.isEmpty) return;
 
     final current = _walletHomeVisibleIds;
-    if (current == null || current.isEmpty) {
+    if (current == null) {
       _walletHomeVisibleIds = _defaultWalletHomeVisibleIds(enabledIds);
       return;
     }
 
     current.removeWhere((id) => !enabledIds.contains(id));
     if (current.isEmpty) {
+      if (_walletHomeVisibilityLoadedFromStorage) {
+        _walletHomeVisibleIds = current;
+        return;
+      }
       current.addAll(_defaultWalletHomeVisibleIds(enabledIds));
     }
     _walletHomeVisibleIds = current;
@@ -307,12 +314,13 @@ class AssetVM with ChangeNotifier {
 
   Future<void> _persistWalletHomeVisibility() async {
     final visible = _walletHomeVisibleIds;
-    if (visible == null || visible.isEmpty) return;
+    if (visible == null) return;
     try {
       await _store.write(
         key: _walletHomeVisibleAssetsKey,
         value: jsonEncode(visible.toList()..sort()),
       );
+      _walletHomeVisibilityLoadedFromStorage = true;
     } catch (_) {
       // Ignore persistence failures and keep in-memory state.
     }
