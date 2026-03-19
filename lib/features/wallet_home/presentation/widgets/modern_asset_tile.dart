@@ -89,7 +89,35 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     _scaleController.reverse();
   }
 
-  String get _volatilityLabel => widget.isNative ? 'Volatile' : 'Stable';
+  _BadgeSpec? get _primaryBadge {
+    final normalized = widget.asset.badges.map((badge) => badge.trim().toUpperCase()).toList();
+
+    if (normalized.contains('EARN')) {
+      return _BadgeSpec(
+        label: 'Earn',
+        color: widget.colors.warning,
+        icon: LucideIcons.coins,
+      );
+    }
+
+    if (normalized.contains('STABLE')) {
+      return _BadgeSpec(
+        label: 'Stable',
+        color: widget.colors.success,
+        icon: LucideIcons.shieldCheck,
+      );
+    }
+
+    if (normalized.contains('VOLATILE')) {
+      return _BadgeSpec(
+        label: 'Volatile',
+        color: widget.colors.primary,
+        icon: LucideIcons.activity,
+      );
+    }
+
+    return null;
+  }
 
   String _priceLine(String symbol) {
     return '1 $symbol ~ ${widget.money.format(widget.coinPriceNow)}';
@@ -103,6 +131,7 @@ class _ModernAssetTileState extends State<ModernAssetTile>
     final pctColor =
     widget.pct >= 0 ? widget.colors.success : widget.colors.error;
     final symbol = widget.asset.symbol.toUpperCase();
+    final primaryBadge = _primaryBadge;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
@@ -141,13 +170,9 @@ class _ModernAssetTileState extends State<ModernAssetTile>
                   url: widget.logoUrl,
                   colors: widget.colors,
                   assetId: widget.asset.id,
-                  badgeLabel: _volatilityLabel,
-                  badgeColor: widget.isNative
-                      ? widget.colors.primary
-                      : widget.colors.success,
-                  badgeIcon: widget.isNative
-                      ? LucideIcons.activity
-                      : LucideIcons.shieldCheck,
+                  badgeLabel: primaryBadge?.label,
+                  badgeColor: primaryBadge?.color,
+                  badgeIcon: primaryBadge?.icon,
                 ),
                 const SizedBox(width: 8),
 
@@ -326,9 +351,9 @@ class _AssetLogo extends StatelessWidget {
   final String? url;
   final AppColor colors;
   final String assetId;
-  final String badgeLabel;
-  final Color badgeColor;
-  final IconData badgeIcon;
+  final String? badgeLabel;
+  final Color? badgeColor;
+  final IconData? badgeIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -396,26 +421,39 @@ class _AssetLogo extends StatelessWidget {
           ),
 
           // Badge – anchored to the bottom, constrained so it never spills
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 42),
-                child: _TypeBadge(
-                  label: badgeLabel,
-                  color: badgeColor,
-                  icon: badgeIcon,
+          if (badgeLabel != null && badgeColor != null && badgeIcon != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 50),
+                  child: _TypeBadge(
+                    label: badgeLabel!,
+                    color: badgeColor!,
+                    icon: badgeIcon!,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
+}
+
+class _BadgeSpec {
+  const _BadgeSpec({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  final String label;
+  final Color color;
+  final IconData icon;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
