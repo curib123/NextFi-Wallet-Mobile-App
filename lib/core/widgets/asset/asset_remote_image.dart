@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
 
 class AssetRemoteImage extends StatefulWidget {
   const AssetRemoteImage({
@@ -25,23 +26,20 @@ class AssetRemoteImage extends StatefulWidget {
 }
 
 class _AssetRemoteImageState extends State<AssetRemoteImage> {
-  late bool _trySvgFirst;
+  static final Map<String, Future<bool>> _svgDetectionCache =
+      <String, Future<bool>>{};
 
   @override
   void initState() {
     super.initState();
-    _trySvgFirst = _looksLikeSvg(widget.url);
   }
 
   @override
   void didUpdateWidget(covariant AssetRemoteImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
-      _trySvgFirst = _looksLikeSvg(widget.url);
-    }
   }
 
-  bool _looksLikeSvg(String? rawUrl) {
+  bool _looksLikeSvgByUrl(String? rawUrl) {
     final url = (rawUrl ?? '').trim().toLowerCase();
     if (url.isEmpty) return false;
     if (url.endsWith('.svg') || url.contains('.svg?')) return true;
@@ -53,7 +51,29 @@ class _AssetRemoteImageState extends State<AssetRemoteImage> {
       }
     }
 
-    return url.contains('/ipfs/');
+    return false;
+  }
+
+  Future<bool> _detectSvg(String url) {
+    return _svgDetectionCache.putIfAbsent(url, () async {
+      if (_looksLikeSvgByUrl(url)) return true;
+
+      try {
+        final response = await http.head(Uri.parse(url));
+        final contentType =
+            (response.headers['content-type'] ?? '').toLowerCase().trim();
+        if (contentType.contains('image/svg+xml')) {
+          return true;
+        }
+        if (contentType.startsWith('image/')) {
+          return false;
+        }
+      } catch (_) {
+        // Fall back to URL hints below.
+      }
+
+      return _looksLikeSvgByUrl(url);
+    });
   }
 
   @override
@@ -61,29 +81,39 @@ class _AssetRemoteImageState extends State<AssetRemoteImage> {
     final url = widget.url?.trim() ?? '';
     if (url.isEmpty) return widget.fallback;
 
-    if (_trySvgFirst) {
-      return SvgPicture.network(
-        url,
-        width: widget.width,
-        height: widget.height,
-        fit: widget.fit,
-        placeholderBuilder: (_) =>
-            widget.placeholder ??
-            SizedBox(width: widget.width, height: widget.height),
-      );
-    }
+    return FutureBuilder<bool>(
+      future: _detectSvg(url),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return widget.placeholder ??
+              SizedBox(width: widget.width, height: widget.height);
+        }
 
-    return CachedNetworkImage(
-      imageUrl: url,
-      width: widget.width,
-      height: widget.height,
-      fit: widget.fit,
-      fadeInDuration: const Duration(milliseconds: 180),
-      fadeOutDuration: const Duration(milliseconds: 120),
-      placeholder: (_, __) =>
-          widget.placeholder ??
-          SizedBox(width: widget.width, height: widget.height),
-      errorWidget: (_, __, ___) => widget.fallback,
+        if (snapshot.data == true) {
+          return SvgPicture.network(
+            url,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            placeholderBuilder: (_) =>
+                widget.placeholder ??
+                SizedBox(width: widget.width, height: widget.height),
+          );
+        }
+
+        return CachedNetworkImage(
+          imageUrl: url,
+          width: widget.width,
+          height: widget.height,
+          fit: widget.fit,
+          fadeInDuration: const Duration(milliseconds: 180),
+          fadeOutDuration: const Duration(milliseconds: 120),
+          placeholder: (_, __) =>
+              widget.placeholder ??
+              SizedBox(width: widget.width, height: widget.height),
+          errorWidget: (_, __, ___) => widget.fallback,
+        );
+      },
     );
   }
 }
