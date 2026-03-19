@@ -47,6 +47,7 @@ class AssetVM with ChangeNotifier {
   final Map<String, AssetModel> _lookup = {};
   Set<String>? _walletHomeVisibleIds;
   bool _catalogRefreshRunning = false;
+  bool _catalogHydrated = false;
 
   Future<void> refreshCatalog({bool retryUntilSuccess = false}) async {
     if (_catalogRefreshRunning) return;
@@ -84,6 +85,7 @@ class AssetVM with ChangeNotifier {
     _assets
       ..clear()
       ..addAll(assets);
+    _catalogHydrated = true;
     _reconcileWalletHomeVisibility();
     _buildLookupCache();
     _recompute();
@@ -121,6 +123,7 @@ class AssetVM with ChangeNotifier {
   List<AssetModel> _enabledSorted = [];
 
   List<AssetModel> get assets => _enabledSorted;
+  bool get hasCatalogData => _catalogHydrated;
   List<AssetModel> get walletHomeAssets {
     final visible = _walletHomeVisibleIds;
     if (visible == null || visible.isEmpty) return _enabledSorted;
@@ -224,8 +227,7 @@ class AssetVM with ChangeNotifier {
     if (normalized.isEmpty) return;
 
     final current = <String>{
-      ...(_walletHomeVisibleIds ??
-          _enabledSorted.map((asset) => asset.id)),
+      ...(_walletHomeVisibleIds ?? _defaultWalletHomeVisibleIds()),
     };
 
     if (visible) {
@@ -267,13 +269,40 @@ class AssetVM with ChangeNotifier {
 
     final current = _walletHomeVisibleIds;
     if (current == null || current.isEmpty) {
-      _walletHomeVisibleIds = enabledIds;
+      _walletHomeVisibleIds = _defaultWalletHomeVisibleIds(enabledIds);
       return;
     }
 
     current.removeWhere((id) => !enabledIds.contains(id));
-    current.addAll(enabledIds);
+    if (current.isEmpty) {
+      current.addAll(_defaultWalletHomeVisibleIds(enabledIds));
+    }
     _walletHomeVisibleIds = current;
+  }
+
+  Set<String> _defaultWalletHomeVisibleIds([Set<String>? enabledIds]) {
+    final allowedIds = enabledIds ??
+        _assets
+            .where((asset) => asset.enabled)
+            .map((asset) => asset.id)
+            .toSet();
+
+    final preferred = _assets
+        .where(
+          (asset) =>
+              asset.enabled &&
+              (asset.symbol.toUpperCase() == 'XLM' ||
+                  asset.symbol.toUpperCase() == 'USDC'),
+        )
+        .map((asset) => asset.id)
+        .where(allowedIds.contains)
+        .toSet();
+
+    if (preferred.isNotEmpty) {
+      return preferred;
+    }
+
+    return _enabledSorted.take(2).map((asset) => asset.id).toSet();
   }
 
   Future<void> _persistWalletHomeVisibility() async {
