@@ -134,6 +134,10 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final appShell = ref.watch(appShellProvider);
     final allAssetList = assetsVM.assets;
     final walletHomeAssetList = assetsVM.walletHomeAssets;
+    final showAssetTileSkeleton =
+        !assetsVM.hasCatalogData &&
+        walletHomeAssetList.isEmpty &&
+        (allAssetList.isEmpty || s.loadingBalances);
 
     final currencyFmt = NumberFormat.simpleCurrency(
       name: currency.fiat.toUpperCase(),
@@ -163,13 +167,34 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
 
       /// DRAWER HERE
       drawer: const AppDrawer(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openRecipientList(),
-        backgroundColor: colors.primary,
-        foregroundColor: AppColor.of(context).onPrimary,
-        elevation: 8,
-        shape: const CircleBorder(),
-        child: Icon(LucideIcons.users, size: 20),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'wallet-home-theme-fab',
+            onPressed: () =>
+                ref.read(settingsVmProvider).showAppearanceSheet(context),
+            backgroundColor: colors.surface,
+            foregroundColor: colors.textPrimary,
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(color: colors.border),
+            ),
+            child: const Icon(LucideIcons.palette, size: 18),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: 'wallet-home-recipient-fab',
+            onPressed: () => _openRecipientList(),
+            backgroundColor: colors.primary,
+            foregroundColor: AppColor.of(context).onPrimary,
+            elevation: 8,
+            shape: const CircleBorder(),
+            child: Icon(LucideIcons.users, size: 20),
+          ),
+        ],
       ),
 
       body: SafeArea(
@@ -248,8 +273,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                   logos: logosById,
                   balancesByAssetId: s.balancesByAssetId,
                   address: s.address ?? '',
-                  loading:
-                      assetsVM.loading || currency.loading || s.loadingBalances,
+                  loading: showAssetTileSkeleton,
                   onItemTap: (token) {
                     vm.onReceivePressed(initialToken: token);
                   },

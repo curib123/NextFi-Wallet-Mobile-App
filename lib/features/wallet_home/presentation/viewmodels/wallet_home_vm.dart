@@ -172,6 +172,7 @@ class WalletHomeVM extends ChangeNotifier {
 
   // Realtime + timers
   static const Duration _minBalancesGap = Duration(minutes: 1);
+  static const Duration _inactiveRefreshThreshold = Duration(minutes: 5);
   static const Duration _debounceDelay = Duration(milliseconds: 400);
   static const int _maxHints = 4;
   static const int _maxSeenHashes = 100;
@@ -187,6 +188,7 @@ class WalletHomeVM extends ChangeNotifier {
   bool _disposed = false;
   bool _bootEventsArmed = true;
   DateTime? _lastFetch;
+  DateTime? _inactiveAt;
   String? _lastBoundAddress;
   String? _lastAutoSavedAddress;
 
@@ -620,13 +622,23 @@ class WalletHomeVM extends ChangeNotifier {
   }
 
   void onResumed() {
-    if (!_disposed) {
-      startRealtime();
-      _kickRefreshInBackground();
+    if (_disposed) return;
+
+    final inactiveFor = _inactiveAt == null
+        ? null
+        : DateTime.now().difference(_inactiveAt!);
+    _inactiveAt = null;
+
+    startRealtime();
+
+    if (inactiveFor == null ||
+        inactiveFor >= _inactiveRefreshThreshold) {
+      _kickRefreshInBackground(force: inactiveFor != null);
     }
   }
 
   void onPausedOrInactive() {
+    _inactiveAt ??= DateTime.now();
     stopRealtime();
   }
 
