@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/widgets/asset/asset_remote_image.dart';
 
 class AssetLogo extends ConsumerWidget {
   final String keyOrSymbol; // e.g. 'XLM', 'USDC', 'stellar', 'usdc_stellar'
@@ -23,11 +23,6 @@ class AssetLogo extends ConsumerWidget {
     final assetVM = ref.watch(assetVmProvider);
     final url = assetVM.logoFor(keyOrSymbol);
     final r = radius ?? (size / 2);
-
-    // help the cache pick the right resolution
-    final dpr = MediaQuery.of(context).devicePixelRatio;
-    final cacheW = (size * dpr).round();
-    final cacheH = (size * dpr).round();
 
     Widget fallbackBadge() {
       final ch = keyOrSymbol.isNotEmpty ? keyOrSymbol[0].toUpperCase() : '?';
@@ -52,17 +47,12 @@ class AssetLogo extends ConsumerWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(r),
-      child: CachedNetworkImage(
-        imageUrl: url,
+      child: AssetRemoteImage(
+        url: url,
         width: size,
         height: size,
         fit: BoxFit.cover,
-        memCacheWidth: cacheW,
-        memCacheHeight: cacheH,
-        fadeInDuration: const Duration(milliseconds: 180),
-        fadeOutDuration: const Duration(milliseconds: 120),
-
-        placeholder: (_, __) => Container(
+        placeholder: Container(
           width: size,
           height: size,
           alignment: Alignment.center,
@@ -80,8 +70,7 @@ class AssetLogo extends ConsumerWidget {
             ),
           ),
         ),
-
-        errorWidget: (_, __, ___) => fallbackBadge(),
+        fallback: fallbackBadge(),
       ),
     );
   }

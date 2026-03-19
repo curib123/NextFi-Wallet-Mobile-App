@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/widgets/asset/asset_remote_image.dart';
 
 const List<String> _kCurrencyFontFallback = <String>[
   'Noto Sans',
@@ -387,33 +388,31 @@ class _AssetLogo extends StatelessWidget {
                     ? fallback
                     : Hero(
                   tag: 'asset_logo_$assetId',
-                  child: Image.network(
-                    url!,
+                  child: AssetRemoteImage(
+                    url: url,
+                    width: 36,
+                    height: 36,
                     fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    errorBuilder: (_, __, ___) => fallback,
-                    loadingBuilder: (ctx, child, progress) {
-                      if (progress == null) return child;
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: colors.background,
-                          border: Border.all(
-                            color: colors.border,
-                            width: 1,
+                    fallback: fallback,
+                    placeholder: Container(
+                      decoration: BoxDecoration(
+                        color: colors.background,
+                        border: Border.all(
+                          color: colors.border,
+                          width: 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colors.primary,
                           ),
                         ),
-                        child: Center(
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colors.primary,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                      ),
+                    ),
                   ),
                 ),
               ),

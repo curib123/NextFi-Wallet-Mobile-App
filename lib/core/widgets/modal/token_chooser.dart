@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
+import 'package:next_fi/core/widgets/asset/asset_remote_image.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
@@ -494,25 +495,22 @@ class _TokenLogo extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(size / 2),
-        child: Image.network(
-          logoUrl!,
+        child: AssetRemoteImage(
+          url: logoUrl,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback(),
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colors.primary,
-                ),
+          fallback: fallback(),
+          placeholder: Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colors.primary,
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
