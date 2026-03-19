@@ -10,8 +10,8 @@ import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 Future<void> showTokenSelector(
   BuildContext context,
   String address,
-  double xlmBalance,
-  double usdcBalance, {
+  double xlmBalance = 0,
+  double usdcBalance = 0, {
   double Function(AssetModel asset)? balanceResolver,
   required Widget Function(String address, String token, double balance)
   screenBuilder,
@@ -28,10 +28,12 @@ Future<void> showTokenSelector(
     if (balanceResolver != null) {
       return balanceResolver(a);
     }
-    switch (a.symbol.toUpperCase()) {
-      case 'XLM':
+    switch (a.id.toLowerCase()) {
+      case 'stellar':
+      case 'xlm':
         return xlmBalance;
-      case 'USDC':
+      case 'usdc_stellar':
+      case 'usdc':
         return usdcBalance;
       default:
         return 0.0;
@@ -60,7 +62,7 @@ Future<void> showTokenSelector(
     Navigator.of(context).pop();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => screenBuilder(address, a.symbol, bal)),
+      MaterialPageRoute(builder: (_) => screenBuilder(address, a.id, bal)),
     );
   }
 

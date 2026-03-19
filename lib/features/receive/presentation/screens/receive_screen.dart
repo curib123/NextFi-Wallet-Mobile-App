@@ -22,11 +22,11 @@ class ReceiveScreen extends ConsumerWidget {
   const ReceiveScreen({
     super.key,
     required this.address,
-    this.initialToken = 'XLM',
+    this.initialAssetId = 'stellar',
   });
 
   final String address;
-  final String initialToken;
+  final String initialAssetId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,11 +35,11 @@ class ReceiveScreen extends ConsumerWidget {
     final assets = assetVm.assets.where((a) => a.chain == 'stellar').toList();
     final args = ReceiveControllerArgs(
       address: address,
-      initialToken: initialToken,
+      initialAssetId: initialAssetId,
     );
     final s = ref.watch(receiveControllerProvider(args));
-    final asset = _resolveSelectedAsset(assetVm, assets, s.selectedAssetKey);
-    final token = asset.symbol;
+    final asset = _resolveSelectedAsset(assetVm, assets, s.selectedAssetId);
+    final assetSymbol = asset.symbol.toUpperCase();
 
     return Scaffold(
       backgroundColor: c.background,
@@ -64,10 +64,10 @@ class ReceiveScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           QrPreviewCard(
             address: s.address,
-            token: token,
+            token: assetSymbol,
             onTap: () => showReceiveQrModal(
               context,
-              _toReceiveState(s.address, token),
+              _toReceiveState(s.address, assetSymbol),
             ),
           ),
           const SizedBox(height: 16),
@@ -103,15 +103,15 @@ class ReceiveScreen extends ConsumerWidget {
 
   String _safetyNoteFor(AssetModel asset) {
     if (asset.isNative) {
-      return 'Send only ${asset.symbol} on the Stellar network to this address. Sending other assets or from other networks may result in permanent loss.';
+      return 'This Stellar account address is universal. Use the same address for supported Stellar assets, but only send funds on Stellar.';
     }
-    return 'Send only ${asset.symbol} on the Stellar network to this address. A ${asset.symbol} trustline is required to receive funds.';
+    return 'This Stellar account address is universal. To receive ${asset.symbol.toUpperCase()}, the wallet must have an active trustline for that asset.';
   }
 
-  ReceiveState _toReceiveState(String address, String token) {
+  ReceiveState _toReceiveState(String address, String assetSymbol) {
     return ReceiveState(
       address: address,
-      token: token,
+      assetSymbol: assetSymbol,
     );
   }
 

@@ -1,30 +1,27 @@
 import 'package:next_fi/features/contact/data/models/recipient_address_model.dart';
-import 'package:next_fi/features/send/data/models/send_token.dart';
+import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/services/federation_address/models/federation_address_models.dart';
 
 class SendControllerArgs {
   const SendControllerArgs({
     required this.address,
-    required this.token,
+    required this.assetId,
     required this.balance,
     this.prefillAddress,
     this.prefillName,
   });
 
   final String address;
-  final String token;
+  final String assetId;
   final double balance;
   final String? prefillAddress;
   final String? prefillName;
-
-  SendToken get sendToken =>
-      token.toUpperCase() == 'XLM' ? SendToken.xlm : SendToken.usdc;
 
   @override
   bool operator ==(Object other) {
     return other is SendControllerArgs &&
         other.address == address &&
-        other.token == token &&
+        other.assetId == assetId &&
         other.balance == balance &&
         other.prefillAddress == prefillAddress &&
         other.prefillName == prefillName;
@@ -33,7 +30,7 @@ class SendControllerArgs {
   @override
   int get hashCode => Object.hash(
     address,
-    token,
+    assetId,
     balance,
     prefillAddress,
     prefillName,
@@ -42,7 +39,7 @@ class SendControllerArgs {
 
 class SendState {
   const SendState({
-    required this.token,
+    required this.assetId,
     required this.senderAddress,
     required this.senderBalanceToken,
     required this.recipientInput,
@@ -56,20 +53,28 @@ class SendState {
     required this.federationLoading,
     required this.federationDomain,
     required this.federationSuggestions,
+    required this.asset,
     this.accountId,
     this.prefillName,
     this.error,
     this.estNetworkFeeXlm,
-    this.destHasUsdcTL,
+    this.destinationHasTrustline,
     this.resolvedRecipient,
     this.resolvedFederation,
     this.federationError,
+    this.destinationMemoRequired,
+    this.destinationMemoHint,
+    this.merchantProfile,
   });
 
-  factory SendState.initial(SendControllerArgs args, String federationDomain) {
+  factory SendState.initial(
+    SendControllerArgs args,
+    String federationDomain,
+    AssetModel asset,
+  ) {
     final recipientInput = (args.prefillAddress ?? '').trim();
     return SendState(
-      token: args.sendToken,
+      assetId: args.assetId,
       senderAddress: args.address,
       senderBalanceToken: args.balance,
       recipientInput: recipientInput,
@@ -83,13 +88,14 @@ class SendState {
       federationLoading: false,
       federationDomain: federationDomain,
       federationSuggestions: const [],
+      asset: asset,
       prefillName: args.prefillName?.trim().isEmpty == true
           ? null
           : args.prefillName?.trim(),
     );
   }
 
-  final SendToken token;
+  final String assetId;
   final String senderAddress;
   final double senderBalanceToken;
   final String recipientInput;
@@ -103,18 +109,25 @@ class SendState {
   final bool federationLoading;
   final String federationDomain;
   final List<String> federationSuggestions;
+  final AssetModel asset;
   final String? accountId;
   final String? prefillName;
   final String? error;
   final double? estNetworkFeeXlm;
-  final bool? destHasUsdcTL;
+  final bool? destinationHasTrustline;
   final RecipientAddressModel? resolvedRecipient;
   final FederationResolveResponse? resolvedFederation;
   final String? federationError;
+  final bool? destinationMemoRequired;
+  final String? destinationMemoHint;
+  final Map<String, dynamic>? merchantProfile;
 
-  bool get isXlm => token == SendToken.xlm;
+  bool get isXlm => asset.isNative;
+  bool get requiresTrustline => asset.requiresTrustline;
   double get networkFee => estNetworkFeeXlm ?? 0;
   String? get recipientLabel => resolvedRecipient?.name ?? prefillName;
+  String get assetSymbol => asset.symbol.toUpperCase();
+  String get assetName => asset.name;
 
   double _floor7(double v) => (v * 1e7).floor() / 1e7;
 
@@ -143,14 +156,16 @@ class SendState {
       return null;
     }
     if (typedAmount > senderBalanceToken + 1e-9) {
-      return 'Amount exceeds USDC balance';
+      return 'Amount exceeds $assetSymbol balance';
     }
-    if (destHasUsdcTL == false) return 'Recipient has no USDC trustline';
+    if (destinationHasTrustline == false) {
+      return 'Recipient needs a $assetSymbol trustline first';
+    }
     return null;
   }
 
   SendState copyWith({
-    SendToken? token,
+    String? assetId,
     String? senderAddress,
     double? senderBalanceToken,
     String? recipientInput,
@@ -164,17 +179,21 @@ class SendState {
     bool? federationLoading,
     String? federationDomain,
     List<String>? federationSuggestions,
+    AssetModel? asset,
     Object? accountId = _sentinel,
     Object? prefillName = _sentinel,
     Object? error = _sentinel,
     Object? estNetworkFeeXlm = _sentinel,
-    Object? destHasUsdcTL = _sentinel,
+    Object? destinationHasTrustline = _sentinel,
     Object? resolvedRecipient = _sentinel,
     Object? resolvedFederation = _sentinel,
     Object? federationError = _sentinel,
+    Object? destinationMemoRequired = _sentinel,
+    Object? destinationMemoHint = _sentinel,
+    Object? merchantProfile = _sentinel,
   }) {
     return SendState(
-      token: token ?? this.token,
+      assetId: assetId ?? this.assetId,
       senderAddress: senderAddress ?? this.senderAddress,
       senderBalanceToken: senderBalanceToken ?? this.senderBalanceToken,
       recipientInput: recipientInput ?? this.recipientInput,
@@ -188,6 +207,7 @@ class SendState {
       federationLoading: federationLoading ?? this.federationLoading,
       federationDomain: federationDomain ?? this.federationDomain,
       federationSuggestions: federationSuggestions ?? this.federationSuggestions,
+      asset: asset ?? this.asset,
       accountId: identical(accountId, _sentinel)
           ? this.accountId
           : accountId as String?,
@@ -198,9 +218,9 @@ class SendState {
       estNetworkFeeXlm: identical(estNetworkFeeXlm, _sentinel)
           ? this.estNetworkFeeXlm
           : estNetworkFeeXlm as double?,
-      destHasUsdcTL: identical(destHasUsdcTL, _sentinel)
-          ? this.destHasUsdcTL
-          : destHasUsdcTL as bool?,
+      destinationHasTrustline: identical(destinationHasTrustline, _sentinel)
+          ? this.destinationHasTrustline
+          : destinationHasTrustline as bool?,
       resolvedRecipient: identical(resolvedRecipient, _sentinel)
           ? this.resolvedRecipient
           : resolvedRecipient as RecipientAddressModel?,
@@ -210,6 +230,15 @@ class SendState {
       federationError: identical(federationError, _sentinel)
           ? this.federationError
           : federationError as String?,
+      destinationMemoRequired: identical(destinationMemoRequired, _sentinel)
+          ? this.destinationMemoRequired
+          : destinationMemoRequired as bool?,
+      destinationMemoHint: identical(destinationMemoHint, _sentinel)
+          ? this.destinationMemoHint
+          : destinationMemoHint as String?,
+      merchantProfile: identical(merchantProfile, _sentinel)
+          ? this.merchantProfile
+          : merchantProfile as Map<String, dynamic>?,
     );
   }
 }

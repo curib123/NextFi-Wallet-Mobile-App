@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/services/assets/asset_stellar_helper.dart';
 import 'package:next_fi/features/contact/presentation/viewmodels/contact_list_notifier.dart';
 import 'package:next_fi/features/send/presentation/viewmodels/send_state.dart';
 import 'package:next_fi/app/viewmodels/seed_keypair_vm.dart';
@@ -35,9 +37,11 @@ class SendController extends Notifier<SendState> {
       _feeSub?.cancel();
       _debounce?.cancel();
     });
+    final asset = _resolveAsset();
     final initial = SendState.initial(
       args,
       ref.read(sendFederationDomainProvider),
+      asset,
     );
     Future.microtask(_start);
     return initial;
@@ -45,6 +49,11 @@ class SendController extends Notifier<SendState> {
 
   StellarWalletServices get _service => ref.read(stellarWalletServiceProvider);
   SeedKeypairVM get _seedVM => ref.read(seedKeypairProvider);
+  AssetModel _resolveAsset() {
+    final assetVm = ref.read(assetVmProvider);
+    return assetVm.findAsset(args.assetId) ??
+        assetVm.assets.firstWhere((asset) => asset.isNative);
+  }
 
   Future<void> _start() async {
     try {
@@ -95,6 +104,7 @@ class SendController extends Notifier<SendState> {
       federationSuggestions: suggestions,
       recipientLoading: false,
       federationLoading: false,
+      merchantProfile: null,
     );
 
     if (input.isEmpty) {
@@ -103,7 +113,8 @@ class SendController extends Notifier<SendState> {
         resolvedRecipient: null,
         resolvedFederation: null,
         federationError: null,
-        destHasUsdcTL: null,
+        destinationHasTrustline: null,
+        merchantProfile: null,
       );
       return;
     }
@@ -184,10 +195,11 @@ class SendController extends Notifier<SendState> {
           memoText: memo,
         );
       } else {
-        txId = await _service.sendUsdc(
+        txId = await _service.sendAsset(
           keyPair: keyPair,
           destination: destination,
-          usdcAmount: state.typedAmount,
+          asset: AssetStellarHelper.toStellarAsset(state.asset),
+          amount: state.typedAmount,
           memoText: memo,
         );
       }
@@ -226,7 +238,8 @@ class SendController extends Notifier<SendState> {
       recipientLoading: true,
       resolvedRecipient: null,
       destinationAddress: '',
-      destHasUsdcTL: null,
+      destinationHasTrustline: null,
+      merchantProfile: null,
     );
 
     try {
@@ -253,6 +266,7 @@ class SendController extends Notifier<SendState> {
         resolvedFederation: null,
         destinationAddress: '',
         federationError: 'Federation not found or unavailable.',
+        merchantProfile: null,
       );
     }
   }
@@ -293,8 +307,10 @@ class SendController extends Notifier<SendState> {
     final id = (state.accountId ?? state.senderAddress).trim();
     if (id.isEmpty) return state.senderBalanceToken;
     try {
-      if (state.isXlm) return await _service.getXlmBalance(id);
-      return await _service.getUsdcBalance(id);
+      return await _service.getAssetBalance(
+        id,
+        AssetStellarHelper.toStellarAsset(state.asset),
+      );
     } catch (_) {
       return state.senderBalanceToken;
     }
@@ -310,16 +326,22 @@ class SendController extends Notifier<SendState> {
 
   Future<void> _checkTrustlineIfNeeded() async {
     final destination = state.destinationAddress.trim();
-    if (!_looksLikeStellarPk(destination) || state.isXlm) {
-      state = state.copyWith(destHasUsdcTL: null, checking: false);
+    if (!_looksLikeStellarPk(destination) || !state.requiresTrustline) {
+      state = state.copyWith(destinationHasTrustline: null, checking: false);
       return;
     }
-    state = state.copyWith(checking: true, destHasUsdcTL: null);
+    state = state.copyWith(checking: true, destinationHasTrustline: null);
     try {
-      final hasTrustline = await _service.hasUsdcTrustline(destination);
-      state = state.copyWith(checking: false, destHasUsdcTL: hasTrustline);
+      final hasTrustline = await _service.hasTrustline(
+        destination,
+        AssetStellarHelper.toStellarAsset(state.asset),
+      );
+      state = state.copyWith(
+        checking: false,
+        destinationHasTrustline: hasTrustline,
+      );
     } catch (_) {
-      state = state.copyWith(checking: false, destHasUsdcTL: null);
+      state = state.copyWith(checking: false, destinationHasTrustline: null);
     }
   }
 

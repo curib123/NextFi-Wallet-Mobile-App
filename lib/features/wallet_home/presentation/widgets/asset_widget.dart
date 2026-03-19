@@ -145,7 +145,7 @@ class AssetWidget extends ConsumerWidget {
       MaterialPageRoute(
         builder: (_) => ReceiveScreen(
           address: address,
-          initialToken: a.id,
+          initialAssetId: a.id,
         ),
       ),
     );

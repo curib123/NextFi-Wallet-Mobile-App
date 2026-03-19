@@ -440,9 +440,16 @@ class _RecipientList extends StatelessWidget {
                 sender,
                 xlmBalance ?? 0,
                 usdcBalance ?? 0,
+                balanceResolver: (asset) {
+                  final walletState = ProviderScope.containerOf(
+                    context,
+                    listen: false,
+                  ).read(walletHomeVmProvider).state;
+                  return walletState.balancesByAssetId[asset.id] ?? 0.0;
+                },
                 screenBuilder: (address, token, balance) => SendScreen(
                   address: address,
-                  token: token,
+                  assetId: token,
                   balance: balance,
                   prefillAddress: r.address,
                   prefillName: r.name,
@@ -453,7 +460,7 @@ class _RecipientList extends StatelessWidget {
                     ).read(walletHomeVmProvider).refresh(force: true);
                   },
                 ),
-                title: 'Select Token',
+                title: 'Select Asset',
               );
             },
             onEdit: () async {

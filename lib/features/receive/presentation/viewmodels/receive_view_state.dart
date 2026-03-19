@@ -3,7 +3,7 @@ import 'package:next_fi/core/services/federation_address/models/federation_addre
 class ReceiveViewState {
   const ReceiveViewState({
     required this.address,
-    required this.selectedAssetKey,
+    required this.selectedAssetId,
     required this.federationAddresses,
     required this.federationLoading,
     this.federationError,
@@ -20,12 +20,12 @@ class ReceiveViewState {
 
   factory ReceiveViewState.initial({
     required String address,
-    required String initialToken,
+    required String initialAssetId,
     required String federationDomain,
   }) {
     return ReceiveViewState(
       address: address,
-      selectedAssetKey: initialToken,
+      selectedAssetId: initialAssetId,
       federationAddresses: const [],
       federationLoading: true,
       generatingFederation: false,
@@ -36,7 +36,7 @@ class ReceiveViewState {
   }
 
   final String address;
-  final String selectedAssetKey;
+  final String selectedAssetId;
   final List<FederationAddressModel> federationAddresses;
   final bool federationLoading;
   final String? federationError;
@@ -59,7 +59,7 @@ class ReceiveViewState {
 
   ReceiveViewState copyWith({
     String? address,
-    String? selectedAssetKey,
+    String? selectedAssetId,
     List<FederationAddressModel>? federationAddresses,
     bool? federationLoading,
     Object? federationError = _sentinel,
@@ -75,7 +75,7 @@ class ReceiveViewState {
   }) {
     return ReceiveViewState(
       address: address ?? this.address,
-      selectedAssetKey: selectedAssetKey ?? this.selectedAssetKey,
+      selectedAssetId: selectedAssetId ?? this.selectedAssetId,
       federationAddresses: federationAddresses ?? this.federationAddresses,
       federationLoading: federationLoading ?? this.federationLoading,
       federationError: identical(federationError, _sentinel)

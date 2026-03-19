@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 /// What kind of asset this is.
 enum AssetKind { native, token, fiat }
 
+enum AssetVerificationStatus { verified, unverified, warning }
+enum AssetSource { defaultSource, manual, trustedSync }
+
 @immutable
 class AssetModel {
   // ---- Identity -------------------------------------------------------------
@@ -40,6 +43,22 @@ class AssetModel {
   final bool enabled;
   final int sortOrder; // lower shows earlier (0..n)
 
+  // ---- Wallet/product metadata ---------------------------------------------
+  final String description;
+  final String category;
+  final String website;
+  final List<String> riskNotes;
+  final bool earnSupported;
+  final bool trustlineRemovable;
+  final List<String> badges;
+  final AssetVerificationStatus verificationStatus;
+  final bool memoRequired;
+  final String memoLabel;
+  final String memoDescription;
+  final List<String> supportedSwapAssetIds;
+  final double? estimatedApr;
+  final AssetSource source;
+
   // ---- Market deltas --------------------------------------------------------
   final double priceChangePercent24h;
   final double priceChangePercent7d;
@@ -68,6 +87,20 @@ class AssetModel {
     this.explorer = const {},
     this.enabled = true,
     this.sortOrder = 0,
+    this.description = '',
+    this.category = '',
+    this.website = '',
+    this.riskNotes = const [],
+    this.earnSupported = false,
+    this.trustlineRemovable = true,
+    this.badges = const [],
+    this.verificationStatus = AssetVerificationStatus.unverified,
+    this.memoRequired = false,
+    this.memoLabel = 'Memo',
+    this.memoDescription = '',
+    this.supportedSwapAssetIds = const [],
+    this.estimatedApr,
+    this.source = AssetSource.manual,
 
     // market deltas
     this.priceChangePercent24h = 0.0,
@@ -79,6 +112,12 @@ class AssetModel {
   // ---- Convenience ----------------------------------------------------------
   String get primaryLogo =>
       logoUris.firstWhere((u) => u.trim().isNotEmpty, orElse: () => '');
+
+  bool get requiresTrustline => !isNative && chain.toLowerCase() == 'stellar';
+  bool get isIssuedStellarAsset => requiresTrustline;
+  bool get canManageTrustline => requiresTrustline;
+  bool supportsSwapTo(String assetId) =>
+      supportedSwapAssetIds.isEmpty || supportedSwapAssetIds.contains(assetId);
 
   bool matchesKey(String key) {
     final k = key.trim().toLowerCase();
@@ -114,6 +153,20 @@ class AssetModel {
     Map<String, String>? explorer,
     bool? enabled,
     int? sortOrder,
+    String? description,
+    String? category,
+    String? website,
+    List<String>? riskNotes,
+    bool? earnSupported,
+    bool? trustlineRemovable,
+    List<String>? badges,
+    AssetVerificationStatus? verificationStatus,
+    bool? memoRequired,
+    String? memoLabel,
+    String? memoDescription,
+    List<String>? supportedSwapAssetIds,
+    double? estimatedApr,
+    AssetSource? source,
     double? priceChangePercent24h,
     double? priceChangePercent7d,
     double? priceChangePercent30d,
@@ -138,6 +191,20 @@ class AssetModel {
       explorer: explorer ?? this.explorer,
       enabled: enabled ?? this.enabled,
       sortOrder: sortOrder ?? this.sortOrder,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      website: website ?? this.website,
+      riskNotes: riskNotes ?? this.riskNotes,
+      earnSupported: earnSupported ?? this.earnSupported,
+      trustlineRemovable: trustlineRemovable ?? this.trustlineRemovable,
+      badges: badges ?? this.badges,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      memoRequired: memoRequired ?? this.memoRequired,
+      memoLabel: memoLabel ?? this.memoLabel,
+      memoDescription: memoDescription ?? this.memoDescription,
+      supportedSwapAssetIds: supportedSwapAssetIds ?? this.supportedSwapAssetIds,
+      estimatedApr: estimatedApr ?? this.estimatedApr,
+      source: source ?? this.source,
       priceChangePercent24h:
       priceChangePercent24h ?? this.priceChangePercent24h,
       priceChangePercent7d: priceChangePercent7d ?? this.priceChangePercent7d,
@@ -170,6 +237,27 @@ class AssetModel {
       (json['explorer'] as Map?)?.cast<String, String>() ?? const {},
       enabled: json['enabled'] ?? true,
       sortOrder: json['sortOrder'] ?? 0,
+      description: json['description']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+      website: json['website']?.toString() ?? '',
+      riskNotes: (json['riskNotes'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
+      earnSupported: json['earnSupported'] == true,
+      trustlineRemovable: json['trustlineRemovable'] != false,
+      badges:
+          (json['badges'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      verificationStatus:
+          _verificationStatusFromString(json['verificationStatus']),
+      memoRequired: json['memoRequired'] == true,
+      memoLabel: json['memoLabel']?.toString() ?? 'Memo',
+      memoDescription: json['memoDescription']?.toString() ?? '',
+      supportedSwapAssetIds:
+          (json['supportedSwapAssetIds'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      estimatedApr: (json['estimatedApr'] as num?)?.toDouble(),
+      source: _sourceFromString(json['source']),
       priceChangePercent24h:
       (json['priceChangePercent24h'] ?? 0).toDouble(),
       priceChangePercent7d: (json['priceChangePercent7d'] ?? 0).toDouble(),
@@ -198,6 +286,20 @@ class AssetModel {
       'explorer': explorer,
       'enabled': enabled,
       'sortOrder': sortOrder,
+      'description': description,
+      'category': category,
+      'website': website,
+      'riskNotes': riskNotes,
+      'earnSupported': earnSupported,
+      'trustlineRemovable': trustlineRemovable,
+      'badges': badges,
+      'verificationStatus': verificationStatus.name,
+      'memoRequired': memoRequired,
+      'memoLabel': memoLabel,
+      'memoDescription': memoDescription,
+      'supportedSwapAssetIds': supportedSwapAssetIds,
+      'estimatedApr': estimatedApr,
+      'source': _sourceToJson(source),
       'priceChangePercent24h': priceChangePercent24h,
       'priceChangePercent7d': priceChangePercent7d,
       'priceChangePercent30d': priceChangePercent30d,
@@ -215,6 +317,43 @@ class AssetModel {
       case 'token':
       default:
         return AssetKind.token;
+    }
+  }
+
+  static AssetVerificationStatus _verificationStatusFromString(dynamic v) {
+    final s = (v ?? '').toString().toLowerCase();
+    switch (s) {
+      case 'verified':
+        return AssetVerificationStatus.verified;
+      case 'warning':
+        return AssetVerificationStatus.warning;
+      case 'unverified':
+      default:
+        return AssetVerificationStatus.unverified;
+    }
+  }
+
+  static AssetSource _sourceFromString(dynamic v) {
+    final s = (v ?? '').toString().toLowerCase();
+    switch (s) {
+      case 'default':
+        return AssetSource.defaultSource;
+      case 'trusted_sync':
+        return AssetSource.trustedSync;
+      case 'manual':
+      default:
+        return AssetSource.manual;
+    }
+  }
+
+  static String _sourceToJson(AssetSource source) {
+    switch (source) {
+      case AssetSource.defaultSource:
+        return 'default';
+      case AssetSource.trustedSync:
+        return 'trusted_sync';
+      case AssetSource.manual:
+        return 'manual';
     }
   }
 

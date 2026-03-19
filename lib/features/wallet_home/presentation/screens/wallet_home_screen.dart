@@ -348,10 +348,11 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         address,
         xlmBalance,
         usdcBalance,
-        title: 'Select Coin',
+        balanceResolver: (asset) => state.balancesByAssetId[asset.id] ?? 0.0,
+        title: 'Select Asset',
         screenBuilder: (addr, token, balance) => SendScreen(
           address: addr,
-          token: token,
+          assetId: token,
           balance: balance,
           autoOpenScanner: true,
           onTransactionCompleted: () => vm.refresh(force: true),
@@ -363,7 +364,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         MaterialPageRoute(
           builder: (_) => SendScreen(
             address: address,
-            token: 'XLM',
+            assetId: 'stellar',
             balance: xlmBalance,
             autoOpenScanner: true,
             onTransactionCompleted: () => vm.refresh(force: true),
@@ -497,10 +498,12 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         e.address,
         e.xlm,
         e.usdc,
-        title: 'Send Token',
+        balanceResolver: (asset) =>
+            vm.state.balancesByAssetId[asset.id] ?? 0.0,
+        title: 'Select Asset',
         screenBuilder: (address, token, balance) => SendScreen(
           address: address,
-          token: token,
+          assetId: token,
           balance: balance,
           onTransactionCompleted: () => vm.refresh(force: true),
         ),
@@ -518,7 +521,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
         MaterialPageRoute(
           builder: (_) => ReceiveScreen(
             address: e.address,
-            initialToken: e.initialToken ?? 'XLM',
+            initialAssetId: e.initialToken ?? 'stellar',
           ),
         ),
       );

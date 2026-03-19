@@ -14,7 +14,7 @@ Future<void> showReceiveQrModal(
 ) async {
   final c = AppColor.of(context);
   final address = state.address.trim();
-  final token = state.token;
+  final assetSymbol = state.assetSymbol;
   const qrCanvas = Colors.white;
   const qrForeground = Colors.black;
 
@@ -60,7 +60,7 @@ Future<void> showReceiveQrModal(
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Receive $token',
+                    'Receive on Stellar',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: c.textPrimary,
@@ -70,7 +70,7 @@ Future<void> showReceiveQrModal(
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Share this QR code to receive funds.',
+                    'Share this wallet QR to receive supported Stellar assets. $assetSymbol is shown for context only.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: c.textSecondary,
@@ -139,7 +139,7 @@ Future<void> showReceiveQrModal(
                             if (!sheetContext.mounted) return;
                             showFloatingSnackBar(
                               sheetContext,
-                              message: '$token address copied',
+                              message: 'Wallet address copied',
                               type: SnackBarType.success,
                             );
                           },

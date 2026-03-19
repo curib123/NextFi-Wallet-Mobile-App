@@ -11,23 +11,23 @@ final receiveFederationServiceProvider = Provider<ReceiveFederationService>(
 class ReceiveControllerArgs {
   const ReceiveControllerArgs({
     required this.address,
-    required this.initialToken,
+    required this.initialAssetId,
   });
 
   final String address;
-  final String initialToken;
+  final String initialAssetId;
 
   @override
   bool operator ==(Object other) {
     return other is ReceiveControllerArgs &&
         other.address == address &&
-        other.initialToken == initialToken;
+        other.initialAssetId == initialAssetId;
   }
 
   @override
   int get hashCode => Object.hash(
     address,
-    initialToken,
+    initialAssetId,
   );
 }
 
@@ -49,7 +49,7 @@ class ReceiveController extends Notifier<ReceiveViewState> {
     Future.microtask(_loadFederationAddresses);
     return ReceiveViewState.initial(
       address: args.address,
-      initialToken: args.initialToken,
+      initialAssetId: args.initialAssetId,
       federationDomain: service.defaultDomain,
     );
   }
@@ -58,8 +58,8 @@ class ReceiveController extends Notifier<ReceiveViewState> {
 
   void selectAsset(String assetKey) {
     final normalized = assetKey.trim();
-    if (normalized.isEmpty || normalized == state.selectedAssetKey) return;
-    state = state.copyWith(selectedAssetKey: normalized);
+    if (normalized.isEmpty || normalized == state.selectedAssetId) return;
+    state = state.copyWith(selectedAssetId: normalized);
   }
 
   void setFederationAliasDraft(String raw) {
