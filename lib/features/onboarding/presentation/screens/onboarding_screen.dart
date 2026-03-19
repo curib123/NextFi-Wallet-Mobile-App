@@ -15,14 +15,12 @@ class _OnboardingSlide {
     required this.eyebrow,
     required this.title,
     required this.body,
-    required this.icon,
     required this.bullets,
   });
 
   final String eyebrow;
   final String title;
   final String body;
-  final IconData icon;
   final List<String> bullets;
 }
 
@@ -31,7 +29,6 @@ const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
     eyebrow: 'SELF-CUSTODY',
     title: 'Your keys.\nYour wallet.',
     body: 'Your recovery phrase never leaves your device.',
-    icon: Icons.verified_user_rounded,
     bullets: <String>[
       'Own your private keys',
       'PIN or biometric lock',
@@ -42,7 +39,6 @@ const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
     eyebrow: 'PAYMENTS',
     title: 'Send & receive\nin seconds.',
     body: 'XLM and USDC, built for everyday use.',
-    icon: Icons.send_rounded,
     bullets: <String>[
       'Quick send & receive',
       'Review before confirming',
@@ -53,7 +49,6 @@ const List<_OnboardingSlide> _slides = <_OnboardingSlide>[
     eyebrow: 'P2P',
     title: 'Cash out\nanytime.',
     body: 'Convert crypto to cash through peer-to-peer trades.',
-    icon: Icons.swap_horiz_rounded,
     bullets: <String>[
       'Simple trade flows',
       'Step-by-step review',
@@ -235,6 +230,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
 class _Header extends StatelessWidget {
   const _Header({required this.colors, required this.onSkip});
 
+  static const String _appIconAsset = 'assets/icon/icon.png';
+
   final AppColor colors;
   final Future<void> Function()? onSkip;
 
@@ -246,13 +243,14 @@ class _Header extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: colors.primary,
+            color: colors.surfaceRaised,
             borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: colors.border),
           ),
-          child: Icon(
-            Icons.account_balance_wallet_rounded,
-            color: colors.onPrimary,
-            size: 18,
+          padding: const EdgeInsets.all(6),
+          child: Image.asset(
+            _appIconAsset,
+            fit: BoxFit.contain,
           ),
         ),
         const SizedBox(width: 10),
@@ -300,6 +298,7 @@ class _SlideContent extends StatelessWidget {
   final bool isDark;
   final bool compact;
   final bool isActive;
+  static const String _appIconAsset = 'assets/icon/icon.png';
 
   @override
   Widget build(BuildContext context) {
@@ -316,8 +315,15 @@ class _SlideContent extends StatelessWidget {
             decoration: BoxDecoration(
               color: accent.withValues(alpha: isDark ? 0.15 : 0.10),
               borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: accent.withValues(alpha: isDark ? 0.24 : 0.16),
+              ),
             ),
-            child: Icon(slide.icon, color: accent, size: compact ? 24 : 28),
+            padding: EdgeInsets.all(compact ? 10 : 12),
+            child: Image.asset(
+              _appIconAsset,
+              fit: BoxFit.contain,
+            ),
           ),
 
           SizedBox(height: compact ? 28 : 40),
