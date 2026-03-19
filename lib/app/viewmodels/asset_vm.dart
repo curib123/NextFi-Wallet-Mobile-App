@@ -58,7 +58,11 @@ class AssetVM with ChangeNotifier {
       await _persistWalletHomeVisibility();
       _safeNotify();
     } catch (_) {
-      // Keep the current in-memory catalog when backend is unavailable.
+      _assets.clear();
+      _walletHomeVisibleIds = <String>{};
+      _buildLookupCache();
+      _recompute();
+      _safeNotify();
     }
   }
 

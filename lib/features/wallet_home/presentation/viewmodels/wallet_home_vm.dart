@@ -681,7 +681,7 @@ class WalletHomeVM extends ChangeNotifier {
   Future<Map<String, double>> _fetchAssetBalances(String address) async {
     final assets = _stellarAssets;
     if (assets.isEmpty) {
-      return const {'stellar': 0.0, 'usdc_stellar': 0.0};
+      return const {};
     }
 
     final rawBalances = await _stellar.getAllBalances(address).catchError((e) {
@@ -720,9 +720,6 @@ class WalletHomeVM extends ChangeNotifier {
       final spendable = balance - liabilities;
       next[asset.id] = spendable > 0 ? spendable : 0.0;
     }
-
-    next.putIfAbsent('stellar', () => spendableXlm);
-    next.putIfAbsent('usdc_stellar', () => 0.0);
     return Map<String, double>.unmodifiable(next);
   }
 

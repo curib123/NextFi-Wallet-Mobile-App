@@ -11,7 +11,7 @@ class PriceChartVM extends ChangeNotifier {
   PriceChartVM(
     this._currency,
     this._assets, {
-    String initialAssetKey = 'XLM',
+    String initialAssetKey = '',
   }) : _selectedAssetKey = initialAssetKey {
     // Relay CurrencyVM updates so the chart refreshes automatically.
     _currencyListener = () => notifyListeners();
@@ -31,7 +31,7 @@ class PriceChartVM extends ChangeNotifier {
       _assets.findAsset(_selectedAssetKey) ??
       _assets.findAsset(_selectedAssetKey.toUpperCase());
   AssetModel? get _fallbackAsset =>
-      _assets.findAsset('XLM') ?? _assets.assets.cast<AssetModel?>().firstWhere(
+      _assets.assets.cast<AssetModel?>().firstWhere(
         (asset) => asset != null,
         orElse: () => null,
       );
@@ -132,7 +132,7 @@ class PriceChartVM extends ChangeNotifier {
 
   String get fiatCode => _currency.fiat.toUpperCase();
   String get fiatSym => fiatSymbol(fiatCode);
-  String get assetCode => activeAsset?.symbol.toUpperCase() ?? 'XLM';
+  String get assetCode => activeAsset?.symbol.toUpperCase() ?? '';
 
   double get _liveFiatNow {
     final asset = activeAsset;
