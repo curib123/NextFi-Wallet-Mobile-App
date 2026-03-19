@@ -103,7 +103,7 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
       }
     }
   }
- 
+
   void _openCreate() {
     final vm = ref.read(claimableVmProvider);
     showTokenSelector(
