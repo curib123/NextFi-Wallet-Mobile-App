@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
-import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/features/wallet_creation/presentation/viewmodels/wallet_creation_state.dart';
 
 final walletCreationPackageInfoProvider = Provider<Future<PackageInfo>>((

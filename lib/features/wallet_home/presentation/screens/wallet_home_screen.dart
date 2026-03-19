@@ -339,15 +339,10 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
       return;
     }
 
-    final xlmBalance = state.xlm;
-    final usdcBalance = state.usdc;
-
     try {
       await showTokenSelector(
         context,
         address,
-        xlmBalance,
-        usdcBalance,
         balanceResolver: (asset) => state.balancesByAssetId[asset.id] ?? 0.0,
         title: 'Select Asset',
         screenBuilder: (addr, token, balance) => SendScreen(
@@ -365,7 +360,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
           builder: (_) => SendScreen(
             address: address,
             assetId: 'stellar',
-            balance: xlmBalance,
+            balance: state.xlm,
             autoOpenScanner: true,
             onTransactionCompleted: () => vm.refresh(force: true),
           ),
@@ -496,8 +491,6 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
       await showTokenSelector(
         context,
         e.address,
-        e.xlm,
-        e.usdc,
         balanceResolver: (asset) =>
             vm.state.balancesByAssetId[asset.id] ?? 0.0,
         title: 'Select Asset',

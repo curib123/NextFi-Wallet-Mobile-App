@@ -290,7 +290,7 @@ class _SnackSurface extends StatelessWidget {
                               children: [
                                 messageWidget,
                                 const SizedBox(height: 10),
-                                actionWidget!,
+                                actionWidget,
                               ],
                             )
                           : Row(

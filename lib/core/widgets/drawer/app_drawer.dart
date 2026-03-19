@@ -332,6 +332,7 @@ class _AppDrawerState extends State<AppDrawer>
   Future<void> _handleLogout() async {
     if (_loggingOut) return;
     HapticFeedback.mediumImpact();
+    final container = ProviderScope.containerOf(context, listen: false);
     final confirm = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -342,7 +343,6 @@ class _AppDrawerState extends State<AppDrawer>
     setState(() => _loggingOut = true);
     await _auth.logout();
     _DrawerCache.invalidateAll();
-    final container = ProviderScope.containerOf(context, listen: false);
     container.read(appShellProvider.notifier).setAuthenticated(false);
     container.read(tabControllerProvider.notifier).setTab(0);
     container.invalidate(tradeInboxSummaryProvider);

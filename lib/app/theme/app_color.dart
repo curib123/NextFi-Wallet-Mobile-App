@@ -174,7 +174,7 @@ class AppColor {
   //   textSecondary max 45% brightness  — clearly secondary, not competing
   //   textMuted     max 25% brightness  — hint-level only
   //
-  static const List<_ThemePalette> themePalettes = <_ThemePalette>[
+  static const List<_ThemePalette> _themePalettes = <_ThemePalette>[
 
     // 0 ── Monochrome ─────────────────────────────────────────────────────────
     _ThemePalette(
@@ -510,7 +510,7 @@ class AppColor {
   // ─── Style helpers ────────────────────────────────────────────────────────
 
   static AppColor lightStyle(int index) {
-    final palette = themePalettes[normalizeThemeStyleIndex(index)];
+    final palette = _themePalettes[normalizeThemeStyleIndex(index)];
     return light.copyWith(
       primary: palette.light.primary,
       primaryDark: palette.light.primaryDark,
@@ -537,8 +537,8 @@ class AppColor {
       ),
       darkGlassGradient: LinearGradient(
         colors: [
-          palette.light.primary.withOpacity(0.08),
-          palette.light.primary.withOpacity(0.03),
+          palette.light.primary.withValues(alpha: 0.08),
+          palette.light.primary.withValues(alpha: 0.03),
         ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -547,7 +547,7 @@ class AppColor {
   }
 
   static AppColor darkStyle(int index) {
-    final palette = themePalettes[normalizeThemeStyleIndex(index)];
+    final palette = _themePalettes[normalizeThemeStyleIndex(index)];
     return dark.copyWith(
       primary: palette.dark.primary,
       primaryDark: palette.dark.primaryDark,
@@ -574,8 +574,8 @@ class AppColor {
       ),
       darkGlassGradient: LinearGradient(
         colors: [
-          palette.dark.primary.withOpacity(0.15),
-          palette.dark.primary.withOpacity(0.05),
+          palette.dark.primary.withValues(alpha: 0.15),
+          palette.dark.primary.withValues(alpha: 0.05),
         ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -584,18 +584,18 @@ class AppColor {
   }
 
   static int normalizeThemeStyleIndex(int index) {
-    return ((index % themePalettes.length) + themePalettes.length) %
-        themePalettes.length;
+    return ((index % _themePalettes.length) + _themePalettes.length) %
+        _themePalettes.length;
   }
 
-  static int get themeStyleCount => themePalettes.length;
+  static int get themeStyleCount => _themePalettes.length;
 
   static String themeStyleLabel(int index) {
-    return themePalettes[normalizeThemeStyleIndex(index)].label;
+    return _themePalettes[normalizeThemeStyleIndex(index)].label;
   }
 
   static Color themeStylePreview(int index, Brightness brightness) {
-    final palette = themePalettes[normalizeThemeStyleIndex(index)];
+    final palette = _themePalettes[normalizeThemeStyleIndex(index)];
     return brightness == Brightness.dark
         ? palette.dark.primary
         : palette.light.primary;
@@ -634,7 +634,7 @@ class AppColor {
   static AppColor fromTheme(ThemeData theme) {
     final brightness = theme.brightness;
     final primary = theme.colorScheme.primary;
-    final index = themePalettes.indexWhere((palette) {
+    final index = _themePalettes.indexWhere((palette) {
       return brightness == Brightness.dark
           ? palette.dark.primary == primary
           : palette.light.primary == primary;

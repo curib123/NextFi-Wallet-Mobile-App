@@ -9,9 +9,7 @@ import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
 
 Future<void> showTokenSelector(
   BuildContext context,
-  String address,
-  double xlmBalance = 0,
-  double usdcBalance = 0, {
+  String address, {
   double Function(AssetModel asset)? balanceResolver,
   required Widget Function(String address, String token, double balance)
   screenBuilder,
@@ -28,16 +26,7 @@ Future<void> showTokenSelector(
     if (balanceResolver != null) {
       return balanceResolver(a);
     }
-    switch (a.id.toLowerCase()) {
-      case 'stellar':
-      case 'xlm':
-        return xlmBalance;
-      case 'usdc_stellar':
-      case 'usdc':
-        return usdcBalance;
-      default:
-        return 0.0;
-    }
+    return 0.0;
   }
 
   String subtitleFor(AssetModel a) {

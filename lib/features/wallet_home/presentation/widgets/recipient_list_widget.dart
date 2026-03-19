@@ -438,8 +438,6 @@ class _RecipientList extends StatelessWidget {
               await showTokenSelector(
                 context,
                 sender,
-                xlmBalance ?? 0,
-                usdcBalance ?? 0,
                 balanceResolver: (asset) {
                   final walletState = ProviderScope.containerOf(
                     context,

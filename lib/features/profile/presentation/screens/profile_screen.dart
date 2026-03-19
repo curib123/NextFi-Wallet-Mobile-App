@@ -347,9 +347,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (confirm != true || !mounted) return;
 
     setState(() => _loggingOut = true);
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
       await _auth.logout();
-      final container = ProviderScope.containerOf(context, listen: false);
       container.read(appShellProvider.notifier).setAuthenticated(false);
       container.read(tabControllerProvider.notifier).setTab(0);
       if (!mounted) return;
@@ -1607,27 +1607,6 @@ class _Row {
   final String key;
   final String value;
   final bool isLast;
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.rows});
-  final List<_Row> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: c.border.withValues(alpha: 0.78)),
-        ),
-        child: Column(children: rows.map((r) => _InfoRow(row: r)).toList()),
-      ),
-    );
-  }
 }
 
 class _EmbeddedInfoCard extends StatelessWidget {

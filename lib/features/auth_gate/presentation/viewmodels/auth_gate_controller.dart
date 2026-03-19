@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:next_fi/app/config/app_providers.dart';
 import 'package:next_fi/features/auth_gate/presentation/viewmodels/auth_gate_view_state.dart';
-import 'package:next_fi/core/services/app_cover/app_cover_service.dart';
 import 'package:next_fi/core/services/secure_storage/security_storage.dart';
 
 enum PinStatus {
