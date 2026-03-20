@@ -5,6 +5,7 @@ import 'package:next_fi/core/services/stellar/soroban_rpc.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
+import 'package:next_fi/core/services/stellar/stellar_pair_guard.dart';
 import 'package:next_fi/core/services/stellar/stellar_fee_service.dart';
 import 'package:next_fi/core/services/stellar/wallet_models.dart';
 
@@ -268,10 +269,20 @@ class StellarStreamService extends StellarBaseService {
     required Asset sourceAsset,
     required Asset destinationAsset,
     required double sendAmount,
-  }) => assetPairPriceStream(
-    baseAsset: sourceAsset,
-    counterAsset: destinationAsset,
-  ).map((p) => sendAmount * p.counterPerBase);
+  }) {
+    if (!isSupportedXlmUsdcPair(
+      first: sourceAsset,
+      second: destinationAsset,
+      usdcIssuer: usdcIssuer,
+    )) {
+      throw StateError('Only XLM/USDC price streams are supported.');
+    }
+
+    return assetPairPriceStream(
+      baseAsset: sourceAsset,
+      counterAsset: destinationAsset,
+    ).map((p) => sendAmount * p.counterPerBase);
+  }
 
   Stream<PairPrice> xlmUsdcPriceStream() =>
       assetPairPriceStream(baseAsset: xlm, counterAsset: usdc);

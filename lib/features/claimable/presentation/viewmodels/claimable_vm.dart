@@ -54,6 +54,7 @@ class ClaimableVM extends ChangeNotifier {
   StreamSubscription<dynamic>? _accountStateSub;
   Timer? _refreshDebounce;
   Timer? _statusTimer;
+  final Set<String> _pendingBalanceIds = <String>{};
 
   int _currentTab = 0;
   int get currentTab => _currentTab;
@@ -694,6 +695,9 @@ class ClaimableVM extends ChangeNotifier {
   }
 
   Future<String> claim(String balanceId) async {
+    if (!_pendingBalanceIds.add(balanceId)) {
+      throw StateError('This claimable balance is already being processed.');
+    }
     try {
       final kp = await _seedVM.deriveKeyPair();
       final txHash = await _svc.claimClaimableBalance(
@@ -712,10 +716,15 @@ class ClaimableVM extends ChangeNotifier {
         print('[ClaimableVM] Claim error: $e');
       }
       rethrow;
+    } finally {
+      _pendingBalanceIds.remove(balanceId);
     }
   }
 
   Future<String> reclaim(String balanceId) async {
+    if (!_pendingBalanceIds.add(balanceId)) {
+      throw StateError('This claimable balance is already being processed.');
+    }
     try {
       final kp = await _seedVM.deriveKeyPair();
       final txHash = await _svc.claimClaimableBalance(
@@ -734,6 +743,8 @@ class ClaimableVM extends ChangeNotifier {
         print('[ClaimableVM] Reclaim error: $e');
       }
       rethrow;
+    } finally {
+      _pendingBalanceIds.remove(balanceId);
     }
   }
 

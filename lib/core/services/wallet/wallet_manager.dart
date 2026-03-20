@@ -156,7 +156,8 @@ class WalletManager {
       final localSuccess = await SeedStorage.renameWallet(localId, newName);
       if (!localSuccess) return false;
 
-      final meta = await SeedStorage.getActiveWalletMeta();
+      final wallets = await SeedStorage.listWallets();
+      final meta = wallets.firstWhereOrNull((wallet) => wallet.id == localId);
       if (meta?.publicAddress == null) return localSuccess;
 
       try {

@@ -5,6 +5,24 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 
+class TrustlineRemovalCheck {
+  const TrustlineRemovalCheck({
+    required this.hasTrustline,
+    required this.balance,
+    required this.availableBalance,
+    required this.sellingLiabilities,
+    required this.canRemove,
+    this.blockingReason,
+  });
+
+  final bool hasTrustline;
+  final double balance;
+  final double availableBalance;
+  final double sellingLiabilities;
+  final bool canRemove;
+  final String? blockingReason;
+}
+
 class StellarAccountService extends StellarBaseService {
   final String usdcIssuer;
   static const double fallbackAccountActivationMinXlm = 1.0;
@@ -415,15 +433,21 @@ class StellarAccountService extends StellarBaseService {
         );
       }
 
-      final balance = await getAssetBalance(keyPair.accountId, asset);
-      if (balance > 0) {
+      final eligibility = await getTrustlineRemovalCheck(
+        accountId: keyPair.accountId,
+        asset: asset,
+      );
+      if (!eligibility.canRemove) {
         fail(
           'Can\'t remove this asset yet',
           technicalError:
-              'Current balance: ${StellarBaseService.fmt7(balance)}',
+              'Balance: ${StellarBaseService.fmt7(eligibility.balance)} | '
+              'Available: ${StellarBaseService.fmt7(eligibility.availableBalance)} | '
+              'Selling liabilities: ${StellarBaseService.fmt7(eligibility.sellingLiabilities)}',
           advice:
-              'You need to send or swap all your funds before removing this asset from your wallet',
-          code: 'NON_ZERO_BALANCE',
+              eligibility.blockingReason ??
+              'You need to clear the balance and any in-flight obligations before removing this trustline.',
+          code: 'TRUSTLINE_NOT_REMOVABLE',
         );
       }
 
@@ -467,6 +491,80 @@ class StellarAccountService extends StellarBaseService {
     final assetName = asset is AssetTypeCreditAlphaNum ? asset.code : 'asset';
     onProgress?.call('Setting up $assetName in your wallet...');
     await createTrustline(keyPair: keyPair, asset: asset, limit: limit);
+  }
+
+  Future<TrustlineRemovalCheck> getTrustlineRemovalCheck({
+    required String accountId,
+    required Asset asset,
+  }) async {
+    if (asset is AssetTypeNative) {
+      return const TrustlineRemovalCheck(
+        hasTrustline: false,
+        balance: 0.0,
+        availableBalance: 0.0,
+        sellingLiabilities: 0.0,
+        canRemove: false,
+        blockingReason:
+            'XLM is the native Stellar asset and cannot be removed.',
+      );
+    }
+
+    final acc = await loadAccount(accountId);
+    if (asset is! AssetTypeCreditAlphaNum) {
+      return const TrustlineRemovalCheck(
+        hasTrustline: false,
+        balance: 0.0,
+        availableBalance: 0.0,
+        sellingLiabilities: 0.0,
+        canRemove: false,
+        blockingReason: 'Unsupported asset type for trustline removal.',
+      );
+    }
+
+    final match = acc.balances
+        .where((balance) {
+          return balance.assetCode == asset.code &&
+              balance.assetIssuer == asset.issuerId;
+        })
+        .cast<Balance?>()
+        .firstWhere((balance) => balance != null, orElse: () => null);
+
+    if (match == null) {
+      return const TrustlineRemovalCheck(
+        hasTrustline: false,
+        balance: 0.0,
+        availableBalance: 0.0,
+        sellingLiabilities: 0.0,
+        canRemove: false,
+        blockingReason: 'No active trustline was found for this asset.',
+      );
+    }
+
+    final balance = _parseAmount(match.balance);
+    final sellingLiabilities = _parseAmount(match.sellingLiabilities ?? '0');
+    final availableBalance = _availableCreditBalance(match);
+    final canRemove =
+        balance <= 0.0000001 &&
+        availableBalance <= 0.0000001 &&
+        sellingLiabilities <= 0.0000001;
+
+    String? reason;
+    if (balance > 0.0000001) {
+      reason =
+          'Send, swap, or claim out the remaining ${_assetLabel(asset)} balance before removing the trustline.';
+    } else if (sellingLiabilities > 0.0000001) {
+      reason =
+          'This trustline still has open liabilities or pending market obligations. Wait for them to clear before removing it.';
+    }
+
+    return TrustlineRemovalCheck(
+      hasTrustline: true,
+      balance: balance,
+      availableBalance: availableBalance,
+      sellingLiabilities: sellingLiabilities,
+      canRemove: canRemove,
+      blockingReason: reason,
+    );
   }
 
   Future<String> setAccountData({

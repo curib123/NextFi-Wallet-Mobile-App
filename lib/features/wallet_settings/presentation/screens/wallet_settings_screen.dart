@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:next_fi/core/widgets/button/app_buttons.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
-import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
@@ -139,6 +138,8 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
       context,
     ).push(MaterialPageRoute(builder: (_) => const ImportWalletScreen()));
     if (!context.mounted) return;
+    await ref.read(seedKeypairProvider).refresh();
+    await ref.read(walletHomeVmProvider).boot();
     await vm.refresh();
   }
 
@@ -193,9 +194,9 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
         MaterialPageRoute(builder: (_) => const ImportWalletScreen()),
       );
       if (!context.mounted) return;
+      await ref.read(seedKeypairProvider).refresh();
+      await ref.read(walletHomeVmProvider).boot();
       await vm.refresh();
-      if (!context.mounted) return;
-      Phoenix.rebirth(context);
       return;
     }
 
@@ -205,24 +206,25 @@ class _WalletScreenSettingsState extends ConsumerState<WalletScreenSettings>
         MaterialPageRoute(builder: (_) => const SeedPhraseScreen()),
       );
       if (!context.mounted) return;
+      await ref.read(seedKeypairProvider).refresh();
+      await ref.read(walletHomeVmProvider).boot();
       await vm.refresh();
-      if (!context.mounted) return;
-      Phoenix.rebirth(context);
       return;
     }
 
     final chosenId = res.chosenWalletId;
     if (chosenId != null && chosenId != vm.state.activeWalletId) {
-      final ok = await vm.switchActive(chosenId);
+      final ok = await ref.read(walletHomeVmProvider).switchTo(chosenId);
       if (!context.mounted) return;
 
       if (ok) {
+        await vm.refresh();
+        if (!context.mounted) return;
         showFloatingSnackBar(
           context,
           message: "Switched active wallet",
           type: SnackBarType.success,
         );
-        Phoenix.rebirth(context);
       } else {
         showFloatingSnackBar(
           context,

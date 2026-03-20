@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/app/viewmodels/asset_catalog_deduper.dart';
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/core/services/assets/asset_catalog_service.dart';
 
@@ -78,9 +79,10 @@ class AssetVM with ChangeNotifier {
   }
 
   void _applyCatalog(List<AssetModel> assets, {bool persistVisibility = true}) {
+    final uniqueAssets = dedupeAssetCatalog(assets);
     _assets
       ..clear()
-      ..addAll(assets);
+      ..addAll(uniqueAssets);
     _catalogHydrated = true;
     _reconcileWalletHomeVisibility();
     _buildLookupCache();

@@ -191,6 +191,7 @@ class WalletHomeVM extends ChangeNotifier {
   DateTime? _inactiveAt;
   String? _lastBoundAddress;
   String? _lastAutoSavedAddress;
+  int _walletRevision = 0;
 
   Future<bool> _isAuthenticated() async {
     try {
@@ -268,12 +269,15 @@ class WalletHomeVM extends ChangeNotifier {
 
   void bindToAddress(String? addr) {
     final address = (addr ?? '').trim();
+    final walletName = _seedVM.meta?.name;
 
     if (address.isEmpty) {
       if (_state.address != null) {
+        _walletRevision++;
         _set(
           _state.copyWith(
             address: null,
+            walletName: walletName,
             balancesByAssetId: const {},
             hasHydratedBalances: false,
             xlmBaseReserve: 1.0,
@@ -282,6 +286,7 @@ class WalletHomeVM extends ChangeNotifier {
             trustlineCount: 0,
             lastBalancesAt: null,
             lastReservesAt: null,
+            hints: const [],
           ),
         );
         _lastBoundAddress = null;
@@ -290,13 +295,24 @@ class WalletHomeVM extends ChangeNotifier {
       return;
     }
 
-    if (_state.address == address && _lastBoundAddress == address) return;
+    if (_state.address == address &&
+        _lastBoundAddress == address &&
+        _state.walletName == walletName) {
+      return;
+    }
 
     final changed = _state.address != address;
+    if (changed) {
+      _walletRevision++;
+      _lastFetch = null;
+      _lastAutoSavedAddress = null;
+      _seen.clear();
+    }
     _lastBoundAddress = address;
     _set(
       _state.copyWith(
         address: address,
+        walletName: walletName,
         balancesByAssetId: changed ? const {} : _state.balancesByAssetId,
         hasHydratedBalances: changed ? false : _state.hasHydratedBalances,
         xlmBaseReserve: changed ? 1.0 : _state.xlmBaseReserve,
@@ -305,6 +321,7 @@ class WalletHomeVM extends ChangeNotifier {
         trustlineCount: changed ? 0 : _state.trustlineCount,
         lastBalancesAt: changed ? null : _state.lastBalancesAt,
         lastReservesAt: changed ? null : _state.lastReservesAt,
+        hints: changed ? const [] : _state.hints,
       ),
     );
     _restartRealtime();
@@ -354,6 +371,12 @@ class WalletHomeVM extends ChangeNotifier {
       }
 
       final changed = _state.address != address;
+      if (changed) {
+        _walletRevision++;
+        _lastFetch = null;
+        _lastAutoSavedAddress = null;
+        _seen.clear();
+      }
       _set(
         _state.copyWith(
           walletName: name,
@@ -366,6 +389,7 @@ class WalletHomeVM extends ChangeNotifier {
           trustlineCount: changed ? 0 : _state.trustlineCount,
           lastBalancesAt: changed ? null : _state.lastBalancesAt,
           lastReservesAt: changed ? null : _state.lastReservesAt,
+          hints: changed ? const [] : _state.hints,
         ),
       );
       _lastBoundAddress = address;
@@ -409,6 +433,7 @@ class WalletHomeVM extends ChangeNotifier {
     if (!force && !_isStale(_lastFetch, _minBalancesGap)) return;
 
     _balancesInFlight = true;
+    final revision = _walletRevision;
     final shouldShowLoader = !_state.hasHydratedBalances;
     if (shouldShowLoader) {
       _set(_state.copyWith(loadingBalances: true));
@@ -417,6 +442,9 @@ class WalletHomeVM extends ChangeNotifier {
     try {
       final addr = _state.address!;
       final balancesByAssetId = await _fetchAssetBalances(addr);
+      if (_disposed || revision != _walletRevision || _state.address != addr) {
+        return;
+      }
 
       final now = DateTime.now();
       _lastFetch = now;
@@ -430,7 +458,7 @@ class WalletHomeVM extends ChangeNotifier {
       );
       unawaited(_persistCachedSnapshot());
 
-      await _fetchReserves(addr);
+      await _fetchReserves(addr, revision: revision);
     } catch (e) {
       debugPrint('WalletHomeVM.refresh error: $e');
       if (force) {
@@ -443,19 +471,25 @@ class WalletHomeVM extends ChangeNotifier {
       }
     } finally {
       _balancesInFlight = false;
-      if (_state.loadingBalances) {
+      if (!_disposed &&
+          revision == _walletRevision &&
+          _state.loadingBalances &&
+          _state.address != null) {
         _set(_state.copyWith(loadingBalances: false));
       }
     }
   }
 
-  Future<void> _fetchReserves(String addr) async {
+  Future<void> _fetchReserves(String addr, {required int revision}) async {
     if (!_state.hasWallet) return;
 
     _set(_state.copyWith(loadingReserves: true));
 
     try {
       final breakdown = await _stellar.getReserveBreakdown(addr);
+      if (_disposed || revision != _walletRevision || _state.address != addr) {
+        return;
+      }
 
       _set(
         _state.copyWith(
@@ -469,6 +503,9 @@ class WalletHomeVM extends ChangeNotifier {
       unawaited(_persistCachedSnapshot());
     } catch (e) {
       debugPrint('Error fetching reserves: $e');
+      if (_disposed || revision != _walletRevision || _state.address != addr) {
+        return;
+      }
       _set(
         _state.copyWith(
           xlmBaseReserve: 1.0,
@@ -478,7 +515,12 @@ class WalletHomeVM extends ChangeNotifier {
         ),
       );
     } finally {
-      _set(_state.copyWith(loadingReserves: false));
+      if (!_disposed &&
+          revision == _walletRevision &&
+          _state.address == addr &&
+          _state.loadingReserves) {
+        _set(_state.copyWith(loadingReserves: false));
+      }
     }
   }
 

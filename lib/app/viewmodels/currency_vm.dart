@@ -6,6 +6,7 @@ import 'package:http/io_client.dart';
 import 'package:intl/intl.dart';
 import 'package:next_fi/app/env/app_env.dart';
 import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/app/viewmodels/currency_math.dart';
 import 'package:next_fi/core/services/secure_storage/currency_secure_storage.dart';
 import 'package:next_fi/core/services/stellar/stellar_wallet_services.dart';
 
@@ -290,12 +291,12 @@ class CurrencyVM extends ChangeNotifier {
       NumberFormat.simpleCurrency(name: fiatCode, decimalDigits: decimalDigits);
 
   String formatFiat(double amount, {int? decimalDigits}) {
-    final safe = amount.isFinite ? amount : 0.0;
+    final safe = CurrencyMath.sanitize(amount);
     return fiatFormatter(decimalDigits: decimalDigits).format(safe);
   }
 
   String formatFiatWithCode(double amount, {int? decimalDigits}) {
-    final safe = amount.isFinite ? amount : 0.0;
+    final safe = CurrencyMath.sanitize(amount);
     final number = NumberFormat.currency(
       name: '',
       symbol: '',
@@ -339,10 +340,8 @@ class CurrencyVM extends ChangeNotifier {
   }
 
   double assetAmountToFiat(AssetModel asset, double amount) {
-    if (!amount.isFinite || amount.isNaN) return 0.0;
     final unitPrice = assetUnitPriceFiat(asset);
-    if (unitPrice <= 0 || !unitPrice.isFinite) return 0.0;
-    return amount * unitPrice;
+    return CurrencyMath.assetAmountToFiat(amount: amount, unitPrice: unitPrice);
   }
 
   List<double> assetHistory24h(AssetModel asset) => _assetHistory(

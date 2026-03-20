@@ -338,7 +338,7 @@ class StellarClaimableBalanceService extends StellarBaseService {
     required String balanceId,
   }) async {
     try {
-      return await sdk.claimableBalances.claimableBalance(balanceId as Uri);
+      return await sdk.claimableBalances.claimableBalance(Uri.parse(balanceId));
     } catch (e) {
       return null;
     }

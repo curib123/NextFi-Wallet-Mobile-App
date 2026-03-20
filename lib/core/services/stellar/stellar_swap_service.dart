@@ -3,6 +3,7 @@ import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 import 'package:next_fi/core/services/stellar/stellar_account_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
 import 'package:next_fi/core/services/stellar/stellar_fee_service.dart';
+import 'package:next_fi/core/services/stellar/stellar_pair_guard.dart';
 
 class StellarSwapService extends StellarBaseService {
   static const double _safetyBufferXlm = 0.0002;
@@ -146,6 +147,19 @@ class StellarSwapService extends StellarBaseService {
         technicalError: 'Min output: $minOut',
         advice: 'Please set a valid minimum receive amount',
         code: 'INVALID_MIN_OUTPUT',
+      );
+    }
+    if (!isSupportedXlmUsdcPair(
+      first: sending,
+      second: receiving,
+      usdcIssuer: accountService.usdcIssuer,
+    )) {
+      fail(
+        'Unsupported trading pair',
+        technicalError:
+            'Only XLM/USDC swaps are supported. Sending: ${_assetLabel(sending)} Receiving: ${_assetLabel(receiving)}',
+        advice: 'Switch the swap pair back to XLM/USDC and try again.',
+        code: 'UNSUPPORTED_TRADING_PAIR',
       );
     }
 

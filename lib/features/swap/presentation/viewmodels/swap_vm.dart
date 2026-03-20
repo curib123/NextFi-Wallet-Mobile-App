@@ -73,9 +73,8 @@ class SwapVM extends ChangeNotifier {
       .where(
         (a) =>
             a.chain.toLowerCase() == 'stellar' &&
-            (a.isNative ||
-                ((a.assetCode ?? '').isNotEmpty &&
-                    (a.issuer ?? '').isNotEmpty)),
+            (a.symbol.toUpperCase() == 'XLM' ||
+                a.symbol.toUpperCase() == 'USDC'),
       )
       .toList(growable: false);
 
@@ -364,7 +363,7 @@ class SwapVM extends ChangeNotifier {
   }
 
   Future<void> selectFromAsset(AssetModel asset) async {
-    if (asset.id == _fromAssetId) return;
+    if (!_isSupportedAsset(asset) || asset.id == _fromAssetId) return;
     await _setAssets(
       from: asset,
       to: asset.id == _toAssetId ? fromAsset : toAsset,
@@ -372,7 +371,7 @@ class SwapVM extends ChangeNotifier {
   }
 
   Future<void> selectToAsset(AssetModel asset) async {
-    if (asset.id == _toAssetId) return;
+    if (!_isSupportedAsset(asset) || asset.id == _toAssetId) return;
     await _setAssets(
       from: asset.id == _fromAssetId ? toAsset : fromAsset,
       to: asset,
@@ -383,6 +382,18 @@ class SwapVM extends ChangeNotifier {
     required AssetModel from,
     required AssetModel to,
   }) async {
+    if (!_isSupportedPair(from, to)) {
+      final xlm = swappableAssets.firstWhere(
+        (asset) => asset.symbol.toUpperCase() == 'XLM',
+        orElse: () => fromAsset,
+      );
+      final usdc = swappableAssets.firstWhere(
+        (asset) => asset.symbol.toUpperCase() == 'USDC',
+        orElse: () => toAsset,
+      );
+      from = from.symbol.toUpperCase() == 'USDC' ? usdc : xlm;
+      to = from.id == usdc.id ? xlm : usdc;
+    }
     if (from.id == to.id) return;
     _fromAssetId = from.id;
     _toAssetId = to.id;
@@ -391,6 +402,16 @@ class SwapVM extends ChangeNotifier {
     await refreshBalances();
     await _wireFeeStream();
     await capAmountToAvailableAndRequote();
+  }
+
+  bool _isSupportedAsset(AssetModel asset) {
+    final symbol = asset.symbol.trim().toUpperCase();
+    return symbol == 'XLM' || symbol == 'USDC';
+  }
+
+  bool _isSupportedPair(AssetModel from, AssetModel to) {
+    if (!_isSupportedAsset(from) || !_isSupportedAsset(to)) return false;
+    return from.symbol.toUpperCase() != to.symbol.toUpperCase();
   }
 
   double? _balanceFromHome(dynamic home, String assetId) {

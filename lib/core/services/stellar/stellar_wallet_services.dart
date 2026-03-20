@@ -334,6 +334,13 @@ class StellarWalletServices {
     required KeyPair keyPair,
     required Asset asset,
   }) => accountService.removeTrustline(keyPair: keyPair, asset: asset);
+  Future<TrustlineRemovalCheck> getTrustlineRemovalCheck({
+    required String accountId,
+    required Asset asset,
+  }) => accountService.getTrustlineRemovalCheck(
+    accountId: accountId,
+    asset: asset,
+  );
 
   Future<String> setAccountData({
     required KeyPair keyPair,

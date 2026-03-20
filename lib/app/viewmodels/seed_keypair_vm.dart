@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
+import 'dart:async';
 
 import 'package:next_fi/core/services/secure_storage/seed_storage.dart';
 import 'package:next_fi/core/models/wallet_meta_model.dart';
@@ -37,6 +38,8 @@ class SeedKeypairVM extends ChangeNotifier {
   WalletMetaModel? _meta;
   String? _accountId;
   DateTime? _lastSyncedAt;
+  StreamSubscription<WalletStorageEvent>? _storageSub;
+  int _loadEpoch = 0;
 
   int _index = 0;
 
@@ -63,16 +66,10 @@ class SeedKeypairVM extends ChangeNotifier {
     _isLoading = true;
     _safeNotify();
     try {
-      await SeedStorage.migrateLegacyIfNeeded();
-      await SeedStorage.ensureActiveExists();
-
-      _activeId = await SeedStorage.getActiveWalletId();
-      _meta = await SeedStorage.getActiveWalletMeta();
-      _accountId = _meta?.publicAddress;
-
-      if (_accountId == null) {
-        await _deriveAndCachePublicAddress();
-      }
+      _storageSub ??= SeedStorage.changes.listen((_) {
+        unawaited(refresh());
+      });
+      await _loadFromStorage(markLoading: false);
     } finally {
       _isLoading = false;
       _safeNotify();
@@ -84,13 +81,7 @@ class SeedKeypairVM extends ChangeNotifier {
     _isBusy = true;
     _safeNotify();
     try {
-      _activeId = await SeedStorage.getActiveWalletId();
-      _meta = await SeedStorage.getActiveWalletMeta();
-      _accountId = _meta?.publicAddress ?? _accountId;
-
-      if (_accountId == null) {
-        await _deriveAndCachePublicAddress();
-      }
+      await _loadFromStorage(markLoading: false, preserveAccountId: true);
     } finally {
       _isBusy = false;
       _safeNotify();
@@ -105,19 +96,38 @@ class SeedKeypairVM extends ChangeNotifier {
       final ok = await SeedStorage.setActiveWallet(id);
       if (!ok) return false;
 
-      _activeId = await SeedStorage.getActiveWalletId();
-      _meta = await SeedStorage.getActiveWalletMeta();
-      _accountId = _meta?.publicAddress;
       _lastSyncedAt = null;
-
-      if (_accountId == null) {
-        await _deriveAndCachePublicAddress();
-      }
+      await _loadFromStorage(markLoading: false);
       return true;
     } finally {
       _isBusy = false;
       _safeNotify();
     }
+  }
+
+  Future<void> _loadFromStorage({
+    required bool markLoading,
+    bool preserveAccountId = false,
+  }) async {
+    final epoch = ++_loadEpoch;
+    await SeedStorage.migrateLegacyIfNeeded();
+    await SeedStorage.ensureActiveExists();
+
+    final activeId = await SeedStorage.getActiveWalletId();
+    final meta = await SeedStorage.getActiveWalletMeta();
+    var accountId = meta?.publicAddress;
+
+    if (accountId == null && (!preserveAccountId || _accountId == null)) {
+      accountId = await _derivePublicAddress(activeId);
+    } else if (accountId == null && preserveAccountId) {
+      accountId = _accountId;
+    }
+
+    if (epoch != _loadEpoch) return;
+
+    _activeId = activeId;
+    _meta = meta;
+    _accountId = accountId;
   }
 
   Future<KeyPair> deriveKeyPair({String passphrase = ''}) async {
@@ -145,22 +155,21 @@ class SeedKeypairVM extends ChangeNotifier {
 
   DateTime? get lastSyncedAt => _lastSyncedAt;
 
-  Future<void> _deriveAndCachePublicAddress() async {
+  Future<String?> _derivePublicAddress(String? walletId) async {
     final mnemonic = await SeedStorage.getActiveSeed();
-    if (mnemonic == null || mnemonic.trim().isEmpty) return;
+    if (mnemonic == null || mnemonic.trim().isEmpty) return null;
 
     final pub = await StellarDerivation.deriveAccountId(
       mnemonic,
       index: _index,
     );
-    _accountId = pub;
-    _lastSyncedAt = DateTime.now();
 
-    final id = _activeId;
+    final id = walletId;
     if (id != null) {
       await SeedStorage.setWalletPublicAddress(id, pub);
       _meta = await SeedStorage.getActiveWalletMeta();
     }
+    return pub;
   }
 
   void _safeNotify() {
@@ -170,6 +179,7 @@ class SeedKeypairVM extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _storageSub?.cancel();
     super.dispose();
   }
 }

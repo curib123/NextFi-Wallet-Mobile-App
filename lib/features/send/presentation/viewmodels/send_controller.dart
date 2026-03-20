@@ -151,6 +151,10 @@ class SendController extends Notifier<SendState> {
   }
 
   Future<String> submit() async {
+    if (state.submitting) {
+      throw StateError('A send transaction is already being submitted.');
+    }
+
     final reason = state.blockingReason;
     if (reason != null) throw StateError(reason);
 

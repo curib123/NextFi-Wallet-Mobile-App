@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:next_fi/core/services/fee_config/fee_config_core_service.dart';
 import 'package:next_fi/core/services/fee_config/models/fee_config_models.dart';
+import 'package:next_fi/core/services/stellar/stellar_pair_guard.dart';
 import 'package:stellar_flutter_sdk/stellar_flutter_sdk.dart';
 
 import 'package:next_fi/core/services/stellar/stellar_base_service.dart';
@@ -145,6 +146,21 @@ class StellarFeeService extends StellarBaseService {
     required String sourceAmount,
     required List<Asset> destinationAssets,
   }) async {
+    if (destinationAssets.length != 1 ||
+        !isSupportedXlmUsdcPair(
+          first: sourceAsset,
+          second: destinationAssets.first,
+          usdcIssuer: usdcIssuer,
+        )) {
+      fail(
+        'Unsupported trading pair',
+        technicalError:
+            'Only XLM/USDC quotes are allowed. Source: $sourceAsset Destination: $destinationAssets',
+        advice: 'Use the XLM/USDC market pair for quotes and swaps.',
+        code: 'UNSUPPORTED_TRADING_PAIR',
+      );
+    }
+
     String destAssetToQuery(Asset a) {
       if (a is AssetTypeNative) return 'native';
       if (a is AssetTypeCreditAlphaNum) return '${a.code}:${a.issuerId}';

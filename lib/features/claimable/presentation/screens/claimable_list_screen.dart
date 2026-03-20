@@ -68,6 +68,7 @@ class _ClaimableListScreenState extends ConsumerState<ClaimableListScreen>
   }
 
   Future<void> _claim(String balanceId) async {
+    if (_claimingId != null) return;
     setState(() => _claimingId = balanceId);
 
     try {

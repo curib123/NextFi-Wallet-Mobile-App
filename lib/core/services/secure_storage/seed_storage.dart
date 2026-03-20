@@ -1,7 +1,27 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/core/models/wallet_meta_model.dart';
+
+enum WalletStorageChangeReason {
+  walletAdded,
+  walletUpdated,
+  walletRemoved,
+  activeWalletChanged,
+}
+
+class WalletStorageEvent {
+  const WalletStorageEvent({
+    required this.reason,
+    this.walletId,
+    this.activeWalletId,
+  });
+
+  final WalletStorageChangeReason reason;
+  final String? walletId;
+  final String? activeWalletId;
+}
 
 class SeedStorage {
   static const _kIndexKey = 'nextfi.wallets.index.v1';
@@ -17,6 +37,10 @@ class SeedStorage {
   );
 
   static const _alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  static final StreamController<WalletStorageEvent> _changes =
+      StreamController<WalletStorageEvent>.broadcast();
+
+  static Stream<WalletStorageEvent> get changes => _changes.stream;
 
   static String _makeId() {
     final r = Random.secure();
@@ -28,6 +52,24 @@ class SeedStorage {
   }
 
   static String _nowIso() => DateTime.now().toUtc().toIso8601String();
+
+  static String _normalizeMnemonic(String mnemonic) =>
+      mnemonic.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  static Future<void> _emitChange(
+    WalletStorageChangeReason reason, {
+    String? walletId,
+    String? activeWalletId,
+  }) async {
+    if (_changes.isClosed) return;
+    _changes.add(
+      WalletStorageEvent(
+        reason: reason,
+        walletId: walletId,
+        activeWalletId: activeWalletId ?? await getActiveWalletId(),
+      ),
+    );
+  }
 
   static Future<List<String>> _readIndex() async {
     final raw = await _storage.read(key: _kIndexKey);
@@ -46,7 +88,14 @@ class SeedStorage {
   }
 
   static Future<void> _writeIndex(List<String> ids) async {
-    await _storage.write(key: _kIndexKey, value: jsonEncode(ids));
+    final seen = <String>{};
+    final unique = <String>[];
+    for (final id in ids) {
+      final normalized = id.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) continue;
+      unique.add(normalized);
+    }
+    await _storage.write(key: _kIndexKey, value: jsonEncode(unique));
   }
 
   static Future<WalletMetaModel?> _readMeta(String id) async {
@@ -70,6 +119,11 @@ class SeedStorage {
       meta.lastUsedAt = _nowIso();
       await _writeMeta(meta);
     }
+    await _emitChange(
+      WalletStorageChangeReason.activeWalletChanged,
+      walletId: id,
+      activeWalletId: id,
+    );
   }
 
   static Future<void> ensureActiveExists() async {
@@ -100,12 +154,42 @@ class SeedStorage {
     String? publicAddress,
     bool makeActive = true,
   }) async {
-    final value = mnemonic.trim();
+    final value = _normalizeMnemonic(mnemonic);
     if (value.isEmpty) {
       throw ArgumentError('Mnemonic is empty.');
     }
 
     final index = await _readIndex();
+    final normalizedAddress = publicAddress?.trim();
+
+    for (final existingId in index) {
+      final existingSeed = await readSeed(existingId);
+      final existingMeta = await _readMeta(existingId);
+      final sameMnemonic =
+          existingSeed != null && _normalizeMnemonic(existingSeed) == value;
+      final sameAddress =
+          normalizedAddress != null &&
+          normalizedAddress.isNotEmpty &&
+          existingMeta?.publicAddress?.trim() == normalizedAddress;
+      if (!sameMnemonic && !sameAddress) continue;
+
+      if (name != null && name.trim().isNotEmpty && existingMeta != null) {
+        existingMeta.name = name.trim();
+        if (normalizedAddress != null && normalizedAddress.isNotEmpty) {
+          existingMeta.publicAddress = normalizedAddress;
+        }
+        await _writeMeta(existingMeta);
+        await _emitChange(
+          WalletStorageChangeReason.walletUpdated,
+          walletId: existingId,
+        );
+      }
+
+      if (makeActive) {
+        await _setActive(existingId);
+      }
+      return existingId;
+    }
 
     if (index.isEmpty) {
       final id = _makeId();
@@ -124,6 +208,7 @@ class SeedStorage {
       await _storage.write(key: _seedKey(id), value: value);
       await _writeMeta(meta);
       await _setActive(id);
+      await _emitChange(WalletStorageChangeReason.walletAdded, walletId: id);
       return id;
     }
 
@@ -144,6 +229,7 @@ class SeedStorage {
     await _writeIndex(next);
     await _storage.write(key: _seedKey(id), value: value);
     await _writeMeta(meta);
+    await _emitChange(WalletStorageChangeReason.walletAdded, walletId: id);
 
     if (makeActive) {
       await _setActive(id);
@@ -152,7 +238,7 @@ class SeedStorage {
   }
 
   static Future<bool> updateSeed(String id, String mnemonic) async {
-    final value = mnemonic.trim();
+    final value = _normalizeMnemonic(mnemonic);
     if (value.isEmpty) return false;
     final exists = (await _readIndex()).contains(id);
     if (!exists) return false;
@@ -161,6 +247,7 @@ class SeedStorage {
     final back = await _storage.read(key: _seedKey(id));
 
     await _setActive(id);
+    await _emitChange(WalletStorageChangeReason.walletUpdated, walletId: id);
     return back == value;
   }
 
@@ -172,6 +259,7 @@ class SeedStorage {
     meta.name = nm;
     await _writeMeta(meta);
     await _setActive(id);
+    await _emitChange(WalletStorageChangeReason.walletUpdated, walletId: id);
     return true;
   }
 
@@ -182,6 +270,7 @@ class SeedStorage {
     meta.publicAddress = trimmed.isEmpty ? null : trimmed;
     await _writeMeta(meta);
     await _setActive(id);
+    await _emitChange(WalletStorageChangeReason.walletUpdated, walletId: id);
     return true;
   }
 
@@ -199,8 +288,13 @@ class SeedStorage {
         await _setActive(index.first);
       } else {
         await _storage.delete(key: _kActiveKey);
+        await _emitChange(
+          WalletStorageChangeReason.activeWalletChanged,
+          activeWalletId: null,
+        );
       }
     }
+    await _emitChange(WalletStorageChangeReason.walletRemoved, walletId: id);
     return true;
   }
 
