@@ -2,17 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:next_fi/app/config/app_providers.dart';
+import 'package:next_fi/app/navigation/app_navigation_bridge.dart';
 import 'package:next_fi/core/widgets/loader/page_loader.dart';
 import 'package:next_fi/core/widgets/snackbar/snack_bar.dart';
 import 'package:next_fi/features/auth_gate/presentation/screens/auth_gate_screen.dart';
 import 'package:next_fi/features/claimable/presentation/screens/claimable_list_screen.dart';
 import 'package:next_fi/features/onboarding/presentation/screens/onboarding_screen.dart';
-import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
+import 'package:next_fi/features/offers/presentation/screens/market_offers_screen.dart';
+import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
+import 'package:next_fi/features/send/presentation/screens/send_screen.dart';
 import 'package:next_fi/features/settings/presentation/screens/settings_screen.dart';
 import 'package:next_fi/features/swap/presentation/screens/swap_screen.dart';
+import 'package:next_fi/features/trades/presentation/screens/trade_history_screen.dart';
 import 'package:next_fi/features/transactions/presentation/screens/transaction_screen.dart';
+import 'package:next_fi/features/verification_flow/presentation/screens/verification_flow_screen.dart';
 import 'package:next_fi/features/wallet_creation/presentation/screens/wallet_creation_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/screens/wallet_home_screen.dart';
+import 'package:next_fi/core/services/offers/models/offers_dtos.dart';
 
 import 'widgets/app_bottom_navigation.dart';
 
@@ -31,40 +37,137 @@ class Home extends ConsumerStatefulWidget {
   ConsumerState<Home> createState() => _HomeState();
 }
 
-class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
+class _HomeState extends ConsumerState<Home> {
   bool _shownMissingWalletSnack = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _applySystemThemeToRoot();
-
-    WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged =
-        () {
-          _applySystemThemeToRoot();
-        };
+    AppNavigationBridge.register(_handleAppNavigation);
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    AppNavigationBridge.unregister(_handleAppNavigation);
     super.dispose();
   }
 
-  @override
-  void didChangePlatformBrightness() {
-    super.didChangePlatformBrightness();
-    _applySystemThemeToRoot();
-  }
+  Future<bool> _handleAppNavigation(
+    String route,
+    Map<String, dynamic> payload,
+  ) async {
+    if (!mounted) return false;
 
-  void _applySystemThemeToRoot() {
-    final brightness =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness;
-    final mode = brightness == Brightness.dark
-        ? ThemeMode.dark
-        : ThemeMode.light;
-    ThemeBridge.apply?.call(mode);
+    final normalizedRoute = route.trim().toLowerCase();
+    final shell = ref.read(appShellProvider);
+    if (shell.showSplash || shell.loading || !shell.hasMnemonic) {
+      return false;
+    }
+
+    final tabs = ref.read(tabControllerProvider.notifier);
+    final vm = ref.read(walletHomeVmProvider);
+    final wallet = vm.state;
+    final address = (wallet.address ?? '').trim();
+
+    switch (normalizedRoute) {
+      case 'wallet':
+      case '/wallet':
+      case 'home':
+      case '/home':
+        tabs.setTab(0);
+        return true;
+      case 'transactions':
+      case '/transactions':
+      case 'activity':
+      case '/activity':
+        tabs.setTab(1);
+        return true;
+      case 'swap':
+      case '/swap':
+        tabs.setTab(2);
+        return true;
+      case 'claimable':
+      case '/claimable':
+      case 'claims':
+      case '/claims':
+        tabs.setTab(3);
+        return true;
+      case 'settings':
+      case '/settings':
+        tabs.setTab(4);
+        return true;
+      case 'receive':
+      case '/receive':
+        if (address.isEmpty) return false;
+        tabs.setTab(0);
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ReceiveScreen(
+              address: address,
+              initialAssetId:
+                  (payload['assetId'] ?? payload['asset'] ?? 'stellar')
+                      .toString(),
+            ),
+          ),
+        );
+        return true;
+      case 'send':
+      case '/send':
+        if (address.isEmpty) return false;
+        tabs.setTab(0);
+        final assetId = (payload['assetId'] ?? payload['asset'] ?? 'stellar')
+            .toString();
+        final balance = wallet.balancesByAssetId[assetId] ??
+            (assetId == 'stellar' ? wallet.xlm : 0.0);
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SendScreen(
+              address: address,
+              assetId: assetId,
+              balance: balance,
+              autoOpenScanner:
+                  payload['scan']?.toString().toLowerCase() == 'true',
+              prefillAddress: payload['address']?.toString(),
+              prefillName: payload['name']?.toString(),
+              onTransactionCompleted: () => vm.refresh(force: true),
+            ),
+          ),
+        );
+        return true;
+      case 'offers':
+      case '/offers':
+      case 'market':
+      case '/market':
+      case 'p2p':
+      case '/p2p':
+        tabs.setTab(0);
+        final typeRaw = (payload['type'] ?? '').toString().toLowerCase();
+        final offerType = typeRaw == 'buy' ? OfferType.buy : OfferType.sell;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => MarketOffersScreen(initialType: offerType),
+          ),
+        );
+        return true;
+      case 'trades':
+      case '/trades':
+        tabs.setTab(0);
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TradeHistoryScreen()),
+        );
+        return true;
+      case 'verification':
+      case '/verification':
+      case 'kyc':
+      case '/kyc':
+        tabs.setTab(0);
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const VerificationFlowScreen()),
+        );
+        return true;
+      default:
+        return false;
+    }
   }
 
   @override

@@ -1,4 +1,6 @@
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Flutter SDK Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ 3rd-party packages Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -6,6 +8,7 @@ import 'package:flutter_phoenix/flutter_phoenix.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/app/config/app_config.dart';
+import 'package:next_fi/app/navigation/app_navigation_bridge.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/features/settings/presentation/viewmodels/settings_vm.dart';
 import 'package:next_fi/firebase_options.dart';
@@ -107,7 +110,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  static const TextScaler _kClampedTextScaler = TextScaler.linear(1.0);
   final TokenStorage _tokenStorage = TokenStorage();
 
   bool get _isRunningWidgetTest {
@@ -130,7 +132,7 @@ class _MyAppState extends State<MyApp> {
       onLocalTap: (payload) {
         if (payload != null && payload.isNotEmpty) {
           debugPrint('[LOCAL_NOTIF] Navigate to: $payload');
-          // Navigator.of(context).pushNamed(payload);
+          unawaited(AppNavigationBridge.open(payload));
         }
       },
     );
@@ -209,7 +211,12 @@ class _MyAppState extends State<MyApp> {
     final route = msg.data['route'];
     if (route is String && route.isNotEmpty) {
       debugPrint('[FCM] Navigate to: $route');
-      // Navigator.of(context).pushNamed(route);
+      unawaited(
+        AppNavigationBridge.open(
+          route,
+          payload: Map<String, dynamic>.from(msg.data),
+        ),
+      );
     }
   }
 
@@ -230,8 +237,12 @@ class _MyAppState extends State<MyApp> {
               home: const Home(),
               builder: (context, child) {
                 final mq = MediaQuery.of(context);
+                final boundedScaler = mq.textScaler.clamp(
+                  minScaleFactor: 0.92,
+                  maxScaleFactor: 1.12,
+                );
                 return MediaQuery(
-                  data: mq.copyWith(textScaler: _kClampedTextScaler),
+                  data: mq.copyWith(textScaler: boundedScaler),
                   child: NetworkStatusOverlay(
                     child: GlobalAnnouncementHost(
                       child: InactivityGuard(
