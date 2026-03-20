@@ -21,6 +21,7 @@ class WalletHomeState {
   final bool loadingWallet;
   final bool loadingBalances;
   final bool loadingReserves;
+  final bool hasHydratedBalances;
 
   final DateTime? lastBalancesAt;
   final DateTime? lastReservesAt;
@@ -40,6 +41,7 @@ class WalletHomeState {
     this.loadingWallet = false,
     this.loadingBalances = false,
     this.loadingReserves = false,
+    this.hasHydratedBalances = false,
     this.lastBalancesAt,
     this.lastReservesAt,
     this.hints = const [],
@@ -80,8 +82,8 @@ class WalletHomeState {
   }
 
   WalletHomeState copyWith({
-    String? address,
-    String? walletName,
+    Object? address = _noChange,
+    Object? walletName = _noChange,
     Object? balancesByAssetId = _noChange,
     double? xlmBaseReserve,
     double? xlmTrustlineReserve,
@@ -90,14 +92,17 @@ class WalletHomeState {
     bool? loadingWallet,
     bool? loadingBalances,
     bool? loadingReserves,
-    DateTime? lastBalancesAt,
-    DateTime? lastReservesAt,
+    bool? hasHydratedBalances,
+    Object? lastBalancesAt = _noChange,
+    Object? lastReservesAt = _noChange,
     List<IncomingHint>? hints,
     PriceWindow? selectedWindow,
   }) {
     return WalletHomeState(
-      address: address ?? this.address,
-      walletName: walletName ?? this.walletName,
+      address: identical(address, _noChange) ? this.address : address as String?,
+      walletName: identical(walletName, _noChange)
+          ? this.walletName
+          : walletName as String?,
       balancesByAssetId: identical(balancesByAssetId, _noChange)
           ? this.balancesByAssetId
           : _normalizeBalancesMap(balancesByAssetId),
@@ -108,8 +113,13 @@ class WalletHomeState {
       loadingWallet: loadingWallet ?? this.loadingWallet,
       loadingBalances: loadingBalances ?? this.loadingBalances,
       loadingReserves: loadingReserves ?? this.loadingReserves,
-      lastBalancesAt: lastBalancesAt ?? this.lastBalancesAt,
-      lastReservesAt: lastReservesAt ?? this.lastReservesAt,
+      hasHydratedBalances: hasHydratedBalances ?? this.hasHydratedBalances,
+      lastBalancesAt: identical(lastBalancesAt, _noChange)
+          ? this.lastBalancesAt
+          : lastBalancesAt as DateTime?,
+      lastReservesAt: identical(lastReservesAt, _noChange)
+          ? this.lastReservesAt
+          : lastReservesAt as DateTime?,
       hints: hints ?? this.hints,
       selectedWindow: selectedWindow ?? this.selectedWindow,
     );

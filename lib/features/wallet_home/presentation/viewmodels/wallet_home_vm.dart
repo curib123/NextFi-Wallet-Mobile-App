@@ -1,7 +1,9 @@
 // lib/features/wallet_home/view_model/wallet_home_vm.dart
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:next_fi/app/viewmodels/asset_vm.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/features/wallet_home/data/services/wallet_home_flow_service.dart';
@@ -139,6 +141,17 @@ class WalletHomeVM extends ChangeNotifier {
   final AssetVM _assetVM;
   final TokenStorage _tokenStorage;
   final WalletHomeFlowService _flowService;
+  static const FlutterSecureStorage _store = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: true,
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock,
+    ),
+  );
+  static const String _balancesCacheKeyPrefix =
+      'nextfi.wallet_home.balance_snapshot.v1.';
 
   WalletHomeState _state = const WalletHomeState();
   WalletHomeState get state => _state;
@@ -283,10 +296,13 @@ class WalletHomeVM extends ChangeNotifier {
           _state.copyWith(
             address: null,
             balancesByAssetId: const {},
+            hasHydratedBalances: false,
             xlmBaseReserve: 1.0,
             xlmTrustlineReserve: 0.0,
             xlmTotalReserve: 1.0,
             trustlineCount: 0,
+            lastBalancesAt: null,
+            lastReservesAt: null,
           ),
         );
         _lastBoundAddress = null;
@@ -297,8 +313,21 @@ class WalletHomeVM extends ChangeNotifier {
 
     if (_state.address == address && _lastBoundAddress == address) return;
 
+    final changed = _state.address != address;
     _lastBoundAddress = address;
-    _set(_state.copyWith(address: address));
+    _set(
+      _state.copyWith(
+        address: address,
+        balancesByAssetId: changed ? const {} : _state.balancesByAssetId,
+        hasHydratedBalances: changed ? false : _state.hasHydratedBalances,
+        xlmBaseReserve: changed ? 1.0 : _state.xlmBaseReserve,
+        xlmTrustlineReserve: changed ? 0.0 : _state.xlmTrustlineReserve,
+        xlmTotalReserve: changed ? 1.0 : _state.xlmTotalReserve,
+        trustlineCount: changed ? 0 : _state.trustlineCount,
+        lastBalancesAt: changed ? null : _state.lastBalancesAt,
+        lastReservesAt: changed ? null : _state.lastReservesAt,
+      ),
+    );
     _restartRealtime();
     _kickRefreshInBackground(force: true);
   }
@@ -310,7 +339,13 @@ class WalletHomeVM extends ChangeNotifier {
   Future<void> boot() async {
     if (_state.loadingWallet) return;
 
-    _set(_state.copyWith(loadingWallet: true, loadingBalances: true));
+    final shouldShowBalanceLoader = !_state.hasHydratedBalances;
+    _set(
+      _state.copyWith(
+        loadingWallet: true,
+        loadingBalances: shouldShowBalanceLoader,
+      ),
+    );
 
     if (_bootEventsArmed) _emit(const BootBalancesLoading());
 
@@ -326,7 +361,9 @@ class WalletHomeVM extends ChangeNotifier {
             walletName: name,
             address: null,
             balancesByAssetId: const {},
-            lastBalancesAt: DateTime.now(),
+            hasHydratedBalances: false,
+            lastBalancesAt: null,
+            lastReservesAt: null,
             loadingWallet: false,
             loadingBalances: false,
           ),
@@ -340,11 +377,25 @@ class WalletHomeVM extends ChangeNotifier {
       }
 
       final changed = _state.address != address;
-      _set(_state.copyWith(walletName: name, address: address));
+      _set(
+        _state.copyWith(
+          walletName: name,
+          address: address,
+          balancesByAssetId: changed ? const {} : _state.balancesByAssetId,
+          hasHydratedBalances: changed ? false : _state.hasHydratedBalances,
+          xlmBaseReserve: changed ? 1.0 : _state.xlmBaseReserve,
+          xlmTrustlineReserve: changed ? 0.0 : _state.xlmTrustlineReserve,
+          xlmTotalReserve: changed ? 1.0 : _state.xlmTotalReserve,
+          trustlineCount: changed ? 0 : _state.trustlineCount,
+          lastBalancesAt: changed ? null : _state.lastBalancesAt,
+          lastReservesAt: changed ? null : _state.lastReservesAt,
+        ),
+      );
       _lastBoundAddress = address;
 
       if (changed) _restartRealtime();
 
+      await _hydrateCachedSnapshot(address);
       await refresh(force: true);
 
       if (_bootEventsArmed) {
@@ -381,7 +432,10 @@ class WalletHomeVM extends ChangeNotifier {
     if (!force && !_isStale(_lastFetch, _minBalancesGap)) return;
 
     _balancesInFlight = true;
-    _set(_state.copyWith(loadingBalances: true));
+    final shouldShowLoader = !_state.hasHydratedBalances;
+    if (shouldShowLoader) {
+      _set(_state.copyWith(loadingBalances: true));
+    }
 
     try {
       final addr = _state.address!;
@@ -393,9 +447,11 @@ class WalletHomeVM extends ChangeNotifier {
       _set(
         _state.copyWith(
           balancesByAssetId: balancesByAssetId,
+          hasHydratedBalances: true,
           lastBalancesAt: now,
         ),
       );
+      unawaited(_persistCachedSnapshot());
 
       await _fetchReserves(addr);
     } catch (e) {
@@ -410,7 +466,9 @@ class WalletHomeVM extends ChangeNotifier {
       }
     } finally {
       _balancesInFlight = false;
-      _set(_state.copyWith(loadingBalances: false));
+      if (_state.loadingBalances) {
+        _set(_state.copyWith(loadingBalances: false));
+      }
     }
   }
 
@@ -431,6 +489,7 @@ class WalletHomeVM extends ChangeNotifier {
           lastReservesAt: DateTime.now(),
         ),
       );
+      unawaited(_persistCachedSnapshot());
     } catch (e) {
       debugPrint('Error fetching reserves: $e');
       _set(
@@ -750,6 +809,101 @@ class WalletHomeVM extends ChangeNotifier {
     refresh(force: force).catchError((e) {
       debugPrint('Background refresh error: $e');
     });
+  }
+
+  Future<void> _hydrateCachedSnapshot(String address) async {
+    try {
+      final raw = await _store.read(key: _cacheKeyForAddress(address));
+      if (raw == null || raw.trim().isEmpty) return;
+
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+
+      final balanceMap = _normalizeBalancesMap(decoded['balancesByAssetId']);
+      final lastBalancesAt = _parseDateTime(decoded['lastBalancesAt']);
+      final lastReservesAt = _parseDateTime(decoded['lastReservesAt']);
+      final hasSnapshot = balanceMap.isNotEmpty ||
+          lastBalancesAt != null ||
+          lastReservesAt != null;
+      if (!hasSnapshot) return;
+
+      _set(
+        _state.copyWith(
+          balancesByAssetId: balanceMap,
+          hasHydratedBalances: true,
+          lastBalancesAt: lastBalancesAt,
+          xlmBaseReserve: _toDouble(decoded['xlmBaseReserve']) ?? 1.0,
+          xlmTrustlineReserve:
+              _toDouble(decoded['xlmTrustlineReserve']) ?? 0.0,
+          xlmTotalReserve: _toDouble(decoded['xlmTotalReserve']) ?? 1.0,
+          trustlineCount: _toInt(decoded['trustlineCount']) ?? 0,
+          lastReservesAt: lastReservesAt,
+        ),
+      );
+    } catch (e) {
+      debugPrint('WalletHomeVM cache hydrate error: $e');
+    }
+  }
+
+  Future<void> _persistCachedSnapshot() async {
+    final address = (_state.address ?? '').trim();
+    if (address.isEmpty) return;
+
+    try {
+      await _store.write(
+        key: _cacheKeyForAddress(address),
+        value: jsonEncode({
+          'balancesByAssetId': _state.balancesByAssetId,
+          'xlmBaseReserve': _state.xlmBaseReserve,
+          'xlmTrustlineReserve': _state.xlmTrustlineReserve,
+          'xlmTotalReserve': _state.xlmTotalReserve,
+          'trustlineCount': _state.trustlineCount,
+          'lastBalancesAt': _state.lastBalancesAt?.toUtc().toIso8601String(),
+          'lastReservesAt': _state.lastReservesAt?.toUtc().toIso8601String(),
+        }),
+      );
+    } catch (e) {
+      debugPrint('WalletHomeVM cache persist error: $e');
+    }
+  }
+
+  String _cacheKeyForAddress(String address) =>
+      '$_balancesCacheKeyPrefix${address.trim()}';
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value is! String || value.trim().isEmpty) return null;
+    return DateTime.tryParse(value)?.toLocal();
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  int? _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  Map<String, double> _normalizeBalancesMap(dynamic value) {
+    if (value is Map<String, double>) {
+      return Map<String, double>.unmodifiable(value);
+    }
+
+    if (value is Map) {
+      final next = <String, double>{};
+      for (final entry in value.entries) {
+        final key = entry.key?.toString().trim();
+        if (key == null || key.isEmpty) continue;
+        next[key] = _toDouble(entry.value) ?? 0.0;
+      }
+      return Map<String, double>.unmodifiable(next);
+    }
+
+    return const <String, double>{};
   }
 }
 

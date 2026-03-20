@@ -137,7 +137,9 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
     final showAssetTileSkeleton =
         !assetsVM.hasCatalogData &&
         walletHomeAssetList.isEmpty &&
+        !s.hasHydratedBalances &&
         (allAssetList.isEmpty || s.loadingBalances);
+    final showHeaderLoader = s.loadingBalances && !s.hasHydratedBalances;
 
     final currencyFmt = NumberFormat.simpleCurrency(
       name: currency.fiat.toUpperCase(),
@@ -215,7 +217,7 @@ class _WalletHomeScreenState extends ConsumerState<WalletHomeScreen>
                   child: HeaderSection(
                     colors: colors,
                     currencyFmt: currencyFmt,
-                    loadingBalances: s.loadingBalances,
+                    loadingBalances: showHeaderLoader,
                     totalFiat: totalFiat,
                     lastBalancesAt: s.lastBalancesAt,
                     onSwap: _openHeaderScanner,

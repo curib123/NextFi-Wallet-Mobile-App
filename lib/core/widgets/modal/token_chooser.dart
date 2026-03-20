@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:next_fi/app/config/app_providers.dart';
-import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/app/theme/app_color.dart';
-import 'package:next_fi/core/widgets/asset/asset_remote_image.dart';
-import 'package:intl/intl.dart';
+import 'package:next_fi/core/models/asset_model.dart';
+import 'package:next_fi/core/widgets/asset/asset_logo.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
+import 'package:next_fi/features/wallet_home/presentation/screens/manage_wallet_assets_screen.dart';
 
 Future<void> showTokenSelector(
   BuildContext context,
@@ -16,35 +17,16 @@ Future<void> showTokenSelector(
   screenBuilder,
   String title = 'Select Asset',
 }) async {
-  final colors = AppColor.of(context);
   final assetVM = ProviderScope.containerOf(
     context,
     listen: false,
   ).read(assetVmProvider);
-  final assets = assetVM.assets;
 
   double balanceFor(AssetModel a) {
     if (balanceResolver != null) {
       return balanceResolver(a);
     }
     return 0.0;
-  }
-
-  String subtitleFor(AssetModel a) {
-    if (a.isNative) return '${a.name} - ${a.chain}';
-    final chainNet = '${a.chain}/${a.network}';
-    if ((a.assetCode ?? '').isNotEmpty && (a.issuer ?? '').isNotEmpty) {
-      return '${a.assetCode} - $chainNet';
-    }
-    if ((a.contract ?? '').isNotEmpty) {
-      return '${a.symbol} (contract) - $chainNet';
-    }
-    return '${a.name} - $chainNet';
-  }
-
-  String? logoFor(AssetModel a) {
-    if (a.primaryLogo.isNotEmpty) return a.primaryLogo;
-    return assetVM.logoFor(a.symbol);
   }
 
   void open(AssetModel a) {
@@ -59,183 +41,269 @@ Future<void> showTokenSelector(
   await showAppModalBottomSheet(
     context,
     builder: (ctx) => _TokenSelectorSheet(
-      colors: colors,
       title: title,
-      assets: assets,
+      assets: assetVM.walletHomeAssets,
+      allAssetCount: assetVM.assets.length,
       balanceFor: balanceFor,
-      subtitleFor: subtitleFor,
-      logoFor: logoFor,
       onSelect: open,
     ),
   );
 }
 
-class _TokenSelectorSheet extends StatefulWidget {
+class _TokenSelectorSheet extends ConsumerStatefulWidget {
   const _TokenSelectorSheet({
-    required this.colors,
     required this.title,
     required this.assets,
+    required this.allAssetCount,
     required this.balanceFor,
-    required this.subtitleFor,
-    required this.logoFor,
     required this.onSelect,
   });
 
-  final AppColor colors;
   final String title;
   final List<AssetModel> assets;
+  final int allAssetCount;
   final double Function(AssetModel) balanceFor;
-  final String Function(AssetModel) subtitleFor;
-  final String? Function(AssetModel) logoFor;
   final void Function(AssetModel) onSelect;
 
   @override
-  State<_TokenSelectorSheet> createState() => _TokenSelectorSheetState();
+  ConsumerState<_TokenSelectorSheet> createState() => _TokenSelectorSheetState();
 }
 
-class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _animController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
+class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
+  String? _selectedAssetId;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
-          CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-        );
-    _animController.forward();
+    _selectedAssetId = widget.assets.isEmpty ? null : widget.assets.first.id;
   }
 
   @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
-  }
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    final assets = ref.watch(assetVmProvider).walletHomeAssets;
+    final selectedAssetId = assets.any((asset) => asset.id == _selectedAssetId)
+        ? _selectedAssetId
+        : (assets.isEmpty ? null : assets.first.id);
+    final selectedAsset = selectedAssetId == null
+        ? null
+        : assets.firstWhere((asset) => asset.id == selectedAssetId);
 
-  Widget _buildHandle() {
-    return Container(
-      width: 40,
-      height: 4,
-      margin: const EdgeInsets.only(top: 12, bottom: 20),
-      decoration: BoxDecoration(
-        color: widget.colors.border.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(100),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
+    return AppModalBase(
+      maxHeightFactor: 0.5,
+      backgroundColor: c.background,
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: widget.colors.primaryGradient,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.colors.primary.withValues(alpha: 0.25),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              LucideIcons.coins,
-              color: AppColor.of(context).onPrimary,
-              size: 20,
-            ),
+          _Header(
+            title: widget.title,
+            visibleAssetCount: assets.length,
+            totalAssetCount: widget.allAssetCount,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(height: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.title,
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                    color: widget.colors.textPrimary,
-                    letterSpacing: -0.3,
+            child: assets.isEmpty
+                ? _EmptyState(
+                    onViewMore: () => _openManageAssets(context),
+                  )
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    itemCount: assets.length + 1,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      if (index == assets.length) {
+                        return _ViewMoreTile(
+                          onTap: () => _openManageAssets(context),
+                        );
+                      }
+
+                      final asset = assets[index];
+                      final selected = asset.id == selectedAssetId;
+                      return _SelectableTokenTile(
+                        asset: asset,
+                        balance: widget.balanceFor(asset),
+                        selected: selected,
+                        onTap: () {
+                          setState(() => _selectedAssetId = asset.id);
+                          widget.onSelect(asset);
+                        },
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${widget.assets.length} assets available',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: widget.colors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
           ),
+          if (selectedAsset != null) ...[
+            const SizedBox(height: 12),
+            _SelectedHint(
+              asset: selectedAsset,
+              balance: widget.balanceFor(selectedAsset),
+            ),
+          ],
         ],
       ),
     );
   }
 
+  Future<void> _openManageAssets(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ManageWalletAssetsScreen()),
+    );
+    if (!mounted) return;
+    final updatedAssets = ref.read(assetVmProvider).walletHomeAssets;
+    setState(() {
+      _selectedAssetId = updatedAssets.any((a) => a.id == _selectedAssetId)
+          ? _selectedAssetId
+          : (updatedAssets.isEmpty ? null : updatedAssets.first.id);
+    });
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.title,
+    required this.visibleAssetCount,
+    required this.totalAssetCount,
+  });
+
+  final String title;
+  final int visibleAssetCount;
+  final int totalAssetCount;
+
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-          ),
+    final c = AppColor.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
           decoration: BoxDecoration(
-            color: widget.colors.background,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColor.of(context).textPrimary.withValues(alpha: 0.15),
-                blurRadius: 24,
-                offset: const Offset(0, -4),
+            gradient: c.primaryGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            LucideIcons.coins,
+            color: c.onPrimary,
+            size: 19,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$visibleAssetCount shown · $totalAssetCount available',
+                style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectableTokenTile extends StatelessWidget {
+  const _SelectableTokenTile({
+    required this.asset,
+    required this.balance,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AssetModel asset;
+  final double balance;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? c.primary.withValues(alpha: 0.7)
+                  : c.border.withValues(alpha: 0.8),
+              width: selected ? 1.4 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: c.textPrimary.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
             children: [
-              _buildHandle(),
-              _buildHeader(),
-              const SizedBox(height: 16),
-              Flexible(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  shrinkWrap: true,
-                  itemCount: widget.assets.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) {
-                    final asset = widget.assets[i];
-                    final balance = widget.balanceFor(asset);
-                    return _TokenTile(
-                      colors: widget.colors,
-                      asset: asset,
-                      balance: balance,
-                      subtitle: widget.subtitleFor(asset),
-                      logoUrl: widget.logoFor(asset),
-                      onTap: () => widget.onSelect(asset),
-                    );
-                  },
+              AssetLogo(keyOrSymbol: asset.id, size: 40, radius: 12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      asset.symbol.toUpperCase(),
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      asset.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Balance: ${_formatBalance(balance)}',
+                      style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 11.8,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                selected
+                    ? LucideIcons.checkCircle2
+                    : LucideIcons.circle,
+                color: selected ? c.primary : c.textMuted,
+                size: 20,
               ),
             ],
           ),
@@ -243,177 +311,87 @@ class _TokenSelectorSheetState extends State<_TokenSelectorSheet>
       ),
     );
   }
+
+  String _formatBalance(double value) {
+    if (value == 0) return '0';
+    if (value.abs() >= 1000) {
+      return NumberFormat.compact().format(value);
+    }
+    if (value.abs() >= 1) {
+      return value.toStringAsFixed(4);
+    }
+    return value.toStringAsFixed(6);
+  }
 }
 
-class _TokenTile extends StatefulWidget {
-  const _TokenTile({
-    required this.colors,
-    required this.asset,
-    required this.balance,
-    required this.subtitle,
-    required this.logoUrl,
-    required this.onTap,
-  });
+class _ViewMoreTile extends StatelessWidget {
+  const _ViewMoreTile({required this.onTap});
 
-  final AppColor colors;
-  final AssetModel asset;
-  final double balance;
-  final String subtitle;
-  final String? logoUrl;
   final VoidCallback onTap;
 
   @override
-  State<_TokenTile> createState() => _TokenTileState();
-}
-
-class _TokenTileState extends State<_TokenTile> {
-  bool _isPressed = false;
-
-  String _formatBalance(double v) {
-    final formatter = NumberFormat.compact();
-    if (v >= 1000000) return formatter.format(v);
-    if (v >= 100) return v.toStringAsFixed(2);
-    if (v >= 1) return v.toStringAsFixed(4);
-    if (v > 0) return v.toStringAsFixed(6);
-    return '0.00';
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      onTap: widget.onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.all(14),
+    final c = AppColor.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: widget.colors.surface,
+          color: c.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _isPressed
-                ? widget.colors.primary.withValues(alpha: 0.3)
-                : widget.colors.border.withValues(alpha: 0.2),
-            width: _isPressed ? 2 : 1,
-          ),
-          boxShadow: _isPressed
-              ? [
-                  BoxShadow(
-                    color: widget.colors.primary.withValues(alpha: 0.1),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
+          boxShadow: [
+            BoxShadow(
+              color: c.textPrimary.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            // Logo
-            _TokenLogo(
-              colors: widget.colors,
-              logoUrl: widget.logoUrl,
-              isNative: widget.asset.isNative,
-              symbol: widget.asset.symbol,
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: c.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                LucideIcons.listPlus,
+                color: c.primary,
+                size: 18,
+              ),
             ),
-            const SizedBox(width: 14),
-
-            // Token info
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        widget.asset.symbol.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: widget.colors.textPrimary,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                      if (widget.asset.isNative) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: widget.colors.primaryGradient,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Native',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: AppColor.of(context).onPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
                   Text(
-                    widget.subtitle,
+                    'View more assets',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: widget.colors.textSecondary.withValues(alpha: 0.8),
+                      color: c.textPrimary,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Choose which assets appear in this selector.',
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12.2,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
             ),
-
-            // Balance & arrow
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _formatBalance(widget.balance),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: widget.colors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.colors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Select',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: widget.colors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        LucideIcons.arrowRight,
-                        size: 12,
-                        color: widget.colors.primary,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            Icon(
+              LucideIcons.chevronRight,
+              color: c.textSecondary,
+              size: 18,
             ),
           ],
         ),
@@ -422,96 +400,97 @@ class _TokenTileState extends State<_TokenTile> {
   }
 }
 
-class _TokenLogo extends StatelessWidget {
-  const _TokenLogo({
-    required this.colors,
-    required this.logoUrl,
-    required this.isNative,
-    required this.symbol,
+class _SelectedHint extends StatelessWidget {
+  const _SelectedHint({
+    required this.asset,
+    required this.balance,
   });
 
-  final AppColor colors;
-  final String? logoUrl;
-  final bool isNative;
-  final String symbol;
+  final AssetModel asset;
+  final double balance;
 
   @override
   Widget build(BuildContext context) {
-    const size = 44.0;
-
-    Widget fallback() {
-      final gradientColors = isNative
-          ? [colors.primary, colors.accent]
-          : [colors.textSecondary.withValues(alpha: 0.2), colors.border];
-
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradientColors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(size / 2),
-          boxShadow: isNative
-              ? [
-                  BoxShadow(
-                    color: colors.primary.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            symbol.isNotEmpty ? symbol[0].toUpperCase() : '?',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isNative
-                  ? AppColor.of(context).onPrimary
-                  : colors.textSecondary,
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (logoUrl == null || logoUrl!.isEmpty) {
-      return fallback();
-    }
-
+    final c = AppColor.of(context);
     return Container(
-      width: size,
-      height: size,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size / 2),
-        border: Border.all(
-          color: colors.border.withValues(alpha: 0.2),
-          width: 1.5,
-        ),
+        color: c.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(size / 2),
-        child: AssetRemoteImage(
-          url: logoUrl,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          fallback: fallback(),
-          placeholder: Center(
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colors.primary,
+      child: Row(
+        children: [
+          Icon(
+            LucideIcons.badgeCheck,
+            color: c.primary,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Selected: ${asset.symbol.toUpperCase()} · Balance ${_formatBalance(balance)}',
+              style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 12.4,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+
+  String _formatBalance(double value) {
+    if (value == 0) return '0';
+    if (value.abs() >= 1000) return NumberFormat.compact().format(value);
+    if (value.abs() >= 1) return value.toStringAsFixed(4);
+    return value.toStringAsFixed(6);
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onViewMore});
+
+  final VoidCallback onViewMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColor.of(context);
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            LucideIcons.coins,
+            color: c.textMuted,
+            size: 28,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'No wallet-home assets selected yet.',
+            style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Open asset management and choose what should appear here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: onViewMore,
+            child: const Text('View More Assets'),
+          ),
+        ],
       ),
     );
   }
