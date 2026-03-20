@@ -12,7 +12,6 @@ import 'package:shimmer/shimmer.dart';
 
 import 'package:next_fi/app/viewmodels/currency_vm.dart';
 import 'package:next_fi/features/receive/presentation/screens/receive_screen.dart';
-import 'package:next_fi/features/wallet_home/presentation/screens/manage_wallet_assets_screen.dart';
 import 'package:next_fi/features/wallet_home/presentation/viewmodels/wallet_home_state.dart';
 import 'package:next_fi/app/theme/app_color.dart';
 
@@ -199,89 +198,8 @@ class AssetWidget extends ConsumerWidget {
     final listView = ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8, bottom: 120),
-      itemCount: sortedAssets.length + 1,
+      itemCount: sortedAssets.length,
       itemBuilder: (context, index) {
-        if (index == sortedAssets.length) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ManageWalletAssetsScreen(),
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: colors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors.textPrimary.withValues(alpha: 0.05),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: colors.primary.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        LucideIcons.listPlus,
-                        color: colors.primary,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'View more assets',
-                            style: TextStyle(
-                              color: colors.textPrimary,
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Search assets and choose which ones appear on wallet home.',
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 12.2,
-                              fontWeight: FontWeight.w600,
-                              height: 1.25,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      LucideIcons.chevronRight,
-                      color: colors.textSecondary,
-                      size: 18,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
         final a = sortedAssets[index];
         final balance = _liveBalance(homeState, a);
         final pct = _pctFor(a, window);

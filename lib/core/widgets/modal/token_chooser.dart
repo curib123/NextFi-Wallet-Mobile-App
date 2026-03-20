@@ -7,7 +7,6 @@ import 'package:next_fi/app/theme/app_color.dart';
 import 'package:next_fi/core/models/asset_model.dart';
 import 'package:next_fi/core/widgets/asset/asset_logo.dart';
 import 'package:next_fi/core/widgets/modal/base/app_modal_base.dart';
-import 'package:next_fi/features/wallet_home/presentation/screens/manage_wallet_assets_screen.dart';
 
 Future<void> showTokenSelector(
   BuildContext context,
@@ -105,19 +104,13 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
           const SizedBox(height: 12),
           Expanded(
             child: assets.isEmpty
-                ? _EmptyState(onViewMore: () => _openManageAssets(context))
+                ? const _EmptyState()
                 : ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.zero,
-                    itemCount: assets.length + 1,
+                    itemCount: assets.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
-                      if (index == assets.length) {
-                        return _ViewMoreTile(
-                          onTap: () => _openManageAssets(context),
-                        );
-                      }
-
                       final asset = assets[index];
                       final selected = asset.id == selectedAssetId;
                       return _SelectableTokenTile(
@@ -142,19 +135,6 @@ class _TokenSelectorSheetState extends ConsumerState<_TokenSelectorSheet> {
         ],
       ),
     );
-  }
-
-  Future<void> _openManageAssets(BuildContext context) async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ManageWalletAssetsScreen()));
-    if (!mounted) return;
-    final updatedAssets = ref.read(assetVmProvider).walletHomeAssets;
-    setState(() {
-      _selectedAssetId = updatedAssets.any((a) => a.id == _selectedAssetId)
-          ? _selectedAssetId
-          : (updatedAssets.isEmpty ? null : updatedAssets.first.id);
-    });
   }
 }
 
@@ -317,74 +297,6 @@ class _SelectableTokenTile extends StatelessWidget {
   }
 }
 
-class _ViewMoreTile extends StatelessWidget {
-  const _ViewMoreTile({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = AppColor.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: c.textPrimary.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: c.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(LucideIcons.listPlus, color: c.primary, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'View more assets',
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Choose which assets appear in this selector.',
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12.2,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(LucideIcons.chevronRight, color: c.textSecondary, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SelectedHint extends StatelessWidget {
   const _SelectedHint({required this.asset, required this.balance});
 
@@ -428,9 +340,7 @@ class _SelectedHint extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onViewMore});
-
-  final VoidCallback onViewMore;
+  const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
@@ -442,7 +352,7 @@ class _EmptyState extends StatelessWidget {
           Icon(LucideIcons.coins, color: c.textMuted, size: 28),
           const SizedBox(height: 10),
           Text(
-            'No wallet-home assets selected yet.',
+            'No wallet assets available here yet.',
             style: TextStyle(
               color: c.textPrimary,
               fontSize: 14,
@@ -451,18 +361,13 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Open asset management and choose what should appear here.',
+            'This selector now follows the supported wallet assets only.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: c.textSecondary,
               fontSize: 12.4,
               fontWeight: FontWeight.w600,
             ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton(
-            onPressed: onViewMore,
-            child: const Text('View More Assets'),
           ),
         ],
       ),
